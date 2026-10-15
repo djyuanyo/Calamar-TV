@@ -1,4 +1,4 @@
-import { merge, featured, groups, webPlayback } from './catalog.js';
+import { merge, featured, groups, webPlayback, findChannel } from './catalog.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
@@ -189,7 +189,7 @@ function playSource(c, index) {
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
 let current = null;
 let pushed = false;
-const channelLink = (c) => `${location.origin}${location.pathname}#/canal/${encodeURIComponent(c.id)}`;
+const channelLink = (c) => `${location.origin}${location.pathname}#/canal/${encodeURIComponent(c.slug)}`;
 
 function open(c, fromRoute = false) {
   if (!c.playable) {
@@ -197,7 +197,7 @@ function open(c, fromRoute = false) {
     return;
   }
   if (!fromRoute) {
-    history.pushState(null, '', `#/canal/${encodeURIComponent(c.id)}`);
+    history.pushState(null, '', `#/canal/${encodeURIComponent(c.slug)}`);
     pushed = true;
   }
   if (player.hidden) returnFocus = document.activeElement;
@@ -230,20 +230,46 @@ function closePlayer() {
 }
 
 const copyButton = document.getElementById('player-copy');
+
+/** Copies text; resolves true only when the browser really accepted it. */
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* Fall back to the older method below. */
+    }
+  }
+  const box = el('textarea', { 'aria-hidden': 'true', style: 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px' });
+  box.value = text;
+  player.append(box);
+  box.focus();
+  box.select();
+  box.setSelectionRange(0, text.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  box.remove();
+  return ok;
+}
+
 copyButton.addEventListener('click', async () => {
   if (!current) return;
   const link = channelLink(current);
-  try {
-    await navigator.clipboard.writeText(link);
-  } catch {
-    const box = el('textarea', { readonly: true, style: 'position:fixed;opacity:0' }, link);
-    document.body.append(box);
-    box.select();
-    document.execCommand('copy');
-    box.remove();
+  if (await copyText(link)) {
+    copyButton.textContent = 'Enlace copiado';
+    setTimeout(() => (copyButton.textContent = 'Copiar enlace'), 2000);
+    return;
   }
-  copyButton.textContent = 'Enlace copiado';
-  setTimeout(() => (copyButton.textContent = 'Copiar enlace'), 2000);
+  // The browser refused: show the link selected so it can be copied by hand.
+  const field = el('input', { class: 'link-field', readonly: true, value: link, 'aria-label': 'Enlace del canal' });
+  playerStatus.replaceChildren('No se pudo copiar automáticamente. Copia este enlace: ', field);
+  field.focus();
+  field.select();
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
 document.addEventListener('keydown', (e) => {
@@ -278,7 +304,7 @@ async function route() {
   }
   if (page !== 'canal' && !player.hidden) hidePlayer();
   if (page === 'canal') {
-    const c = state.channels.find((x) => x.id === arg);
+    const c = findChannel(state.channels, arg);
     view.replaceChildren(
       ...(c && !c.playable
         ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
@@ -286,7 +312,8 @@ async function route() {
           ? home()
           : [el('p', { class: 'error' }, `No existe el canal «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
     );
-    if (c && c.playable && (player.hidden || current !== c)) open(c, true);
+    // A catalog refresh rebuilds the channel objects; compare ids so playback is not restarted.
+    if (c && c.playable && (player.hidden || !current || current.id !== c.id)) open(c, true);
     return;
   }
   const query = search.value.trim();

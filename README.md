@@ -43,7 +43,9 @@ Los canales TDT sin emisión directa (por ejemplo Atresmedia o Mediaset, protegi
 
 ## Enlace directo a un canal
 
-Cada canal tiene un enlace propio que abre directamente su reproductor en la web: `https://djyuanyo.github.io/Calamar-TV/#/canal/<slug>`. El slug es el identificador del canal (`la-1`, `teledeporte`, `24h`…; los canales añadidos desde el panel llevan uno generado, por ejemplo `mio-nombre-xxxx`). El reproductor tiene el botón **Copiar enlace**, y al abrir un canal desde la portada la dirección cambia a su enlace, de modo que se puede compartir y funciona con el botón Atrás. Un slug que no existe muestra un aviso; un canal sin emisión directa enlaza a su web oficial.
+Cada canal tiene un enlace propio que abre directamente su reproductor en la web: `https://djyuanyo.github.io/Calamar-TV/#/canal/<slug>`. El slug se genera solo a partir del nombre del canal, sin tildes ni símbolos: «Canal Sur Andalucía» → `canal-sur-andalucia`, «Movistar LaLiga TV» → `movistar-laliga-tv`. Si dos canales se llaman igual, el segundo termina en `-2`, el tercero en `-3`, etc. Si cambias el nombre de un canal, cambia su slug; los enlaces antiguos con el identificador interno (por ejemplo `mio-…`) siguen funcionando.
+
+El reproductor tiene el botón **Copiar enlace**. Si el navegador no permite copiar, muestra el enlace seleccionado para copiarlo a mano. Al abrir un canal desde la portada la dirección cambia a su enlace, de modo que se puede compartir y funciona con el botón Atrás. Un slug que no existe muestra un aviso; un canal sin emisión directa enlaza a su web oficial. Pruebas: `node --test tools/`.
 
 ## Mis canales (solo app)
 

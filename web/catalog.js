@@ -13,6 +13,11 @@ function validUrl(value) {
 
 const https = (value) => (typeof value === 'string' && value.startsWith('https://') ? value : '');
 
+/** Readable, URL-safe form of a name: "Canal Sur Andalucía" -> "canal-sur-andalucia". */
+export function slugify(text) {
+  return String(text).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'canal';
+}
+
 function channel(o, own) {
   const streams = [];
   for (const s of Array.isArray(o.streams) ? o.streams : []) {
@@ -22,6 +27,7 @@ function channel(o, own) {
   const group = String(o.group || '').trim() || (own ? OWN_GROUP : 'Otros');
   return {
     id: String(o.id || ''),
+    slug: '',
     name: String(o.name || 'Canal'),
     group,
     region: String(o.region || ''),
@@ -55,7 +61,21 @@ export function merge(tdt, custom) {
     ids.add(c.id);
     if (c.playable || c.web) out.push(c);
   }
+  // The link of every channel comes from its name; repeated names get -2, -3…
+  const used = new Set();
+  for (const c of out) {
+    const base = slugify(c.name);
+    let slug = base;
+    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    c.slug = slug;
+  }
   return out;
+}
+
+/** Finds a channel by the slug of its link; old links that used the internal id still work. */
+export function findChannel(channels, key) {
+  return channels.find((c) => c.slug === key) || channels.find((c) => c.id === key) || null;
 }
 
 export function featured(channels, custom, limit) {

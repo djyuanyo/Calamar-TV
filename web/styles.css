@@ -122,6 +122,11 @@ main { flex: 1; padding: 8px var(--gutter) 40px; outline: none; }
 .player video { flex: 1; width: 100%; min-height: 0; background: #000; }
 .player-status { margin: 0; padding: 10px var(--gutter); color: var(--accent); background: var(--bg); min-height: 1.5em; }
 
+.link-field {
+  width: min(520px, 100%); padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+}
+
 .foot { padding: 18px var(--gutter) 28px; color: var(--faint); font-size: 13px; border-top: 1px solid #161b21; }
 
 /* Admin */
