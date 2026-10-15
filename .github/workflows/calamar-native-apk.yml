@@ -72,12 +72,13 @@ jobs:
           gh release view "v$version" >/dev/null 2>&1 || gh release create "v$version" \
             --target "$GITHUB_SHA" --title "Calamar TV $version" \
             --notes "APK de Calamar TV $version para Android y Android TV. Instala Calamar-TV-$version.apk (firmada) para poder actualizar encima de versiones anteriores."
-          gh release upload "v$version" dist/*.apk --clobber
+          (cd dist && zip "Calamar-TV-$version-compilada.zip" *.apk)
+          gh release upload "v$version" dist/*.apk dist/*.zip --clobber
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
         continue-on-error: true
         with:
-          name: Calamar-TV-2.0.1-Android-TV
+          name: Calamar-TV-Android-TV
           retention-days: 3
           path: |
             app/build/outputs/apk/debug/*.apk
