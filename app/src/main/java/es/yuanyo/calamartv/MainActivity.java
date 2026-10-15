@@ -804,7 +804,6 @@ public class MainActivity extends Activity {
                 editChannel(-1);
               }
             });
-    add.setId(199999);
     add.setBackground(focusBackground(ACC));
     add.setTextColor(
         new android.content.res.ColorStateList(
