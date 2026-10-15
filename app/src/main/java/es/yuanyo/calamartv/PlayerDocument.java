@@ -9,7 +9,20 @@ import java.net.URL;
 
 /** Fresh HTTPS document fetch, using the system network stack rather than WebView. */
 public final class PlayerDocument {
-  public static final String USER_AGENT = "CalamarTV/1.3.0 (Android; Media3)";
+  public static final String USER_AGENT = "CalamarTV/1.3.1 (Android; Media3)";
+
+  public interface ConnectionFactory {
+    HttpURLConnection open(URL url) throws IOException;
+  }
+
+  public static final class HttpFailure extends IOException {
+    public final int status;
+
+    HttpFailure(int status) {
+      super("HTTP " + status);
+      this.status = status;
+    }
+  }
 
   public static final class Result {
     public final String html, url;
@@ -23,6 +36,10 @@ public final class PlayerDocument {
   private PlayerDocument() {}
 
   public static Result fetch(String address) throws IOException {
+    return fetch(address, url -> (HttpURLConnection) url.openConnection());
+  }
+
+  public static Result fetch(String address, ConnectionFactory connections) throws IOException {
     String current = address;
     for (int redirects = 0; redirects < 6; redirects++) {
       URI uri = URI.create(current);
@@ -30,7 +47,7 @@ public final class PlayerDocument {
           || uri.getHost() == null
           || uri.getUserInfo() != null)
         throw new IOException("Dirección de reproductor no compatible");
-      HttpURLConnection c = (HttpURLConnection) new URL(current).openConnection();
+      HttpURLConnection c = connections.open(new URL(current));
       try {
         c.setConnectTimeout(15000);
         c.setReadTimeout(15000);
@@ -46,7 +63,7 @@ public final class PlayerDocument {
           current = uri.resolve(location).toString();
           continue;
         }
-        if (code != 200) throw new IOException("El reproductor responde HTTP " + code);
+        if (code != 200) throw new HttpFailure(code);
         try (InputStream in = c.getInputStream();
             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
           byte[] buffer = new byte[8192];

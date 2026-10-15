@@ -25,12 +25,11 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
-import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,6 +45,9 @@ public final class NativePlayerActivity extends Activity {
   private WebView browser;
   private FrameLayout stage;
   private TextView status;
+  private NetworkTransport transport;
+  private String lastReport = "Aún no se ha consultado la fuente.";
+  private boolean diagnosing;
   private String pageUrl, documentUrl, currentUrl = "", title;
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
@@ -62,6 +64,7 @@ public final class NativePlayerActivity extends Activity {
       return;
     }
     documentUrl = pageUrl;
+    transport = NetworkTransport.get(this);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     LinearLayout layout = new LinearLayout(this);
     layout.setOrientation(LinearLayout.VERTICAL);
@@ -78,6 +81,7 @@ public final class NativePlayerActivity extends Activity {
         });
     button(controls, "Fuentes", this::chooseSource);
     button(controls, "Modo web", this::openWeb);
+    button(controls, "Diagnóstico", this::diagnose);
     button(controls, "Chrome / navegador", this::openBrowser);
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.addView(controls);
@@ -138,13 +142,15 @@ public final class NativePlayerActivity extends Activity {
     worker.execute(
         () -> {
           try {
-            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl);
+            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl, transport);
             List<VideoResolver.Source> found = VideoResolver.parse(document.html, document.url);
             handler.post(
                 () -> {
                   if (!active || request != generation) return;
                   resolving = false;
                   documentUrl = document.url;
+                  lastReport =
+                      reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
                   if (sources.isEmpty()) {
@@ -160,13 +166,20 @@ public final class NativePlayerActivity extends Activity {
                 () -> {
                   if (!active || request != generation) return;
                   resolving = false;
+                  String reason = ConnectionReport.describe(failure);
+                  lastReport = reportHeader() + "\nConsulta de página: " + reason;
                   if (player != null && player.isPlaying()) {
                     status.setText(
                         "No se pudo renovar. La emisión actual continúa; puedes pulsar Renovar.");
                   } else {
-                    openWeb();
                     status.setText(
-                        "No se pudo consultar la fuente. Prueba Modo web o Chrome / navegador.");
+                        "No se pudo consultar "
+                            + Uri.parse(pageUrl).getHost()
+                            + ": "
+                            + reason
+                            + ". Motor: "
+                            + transport.name()
+                            + ". Pulsa Diagnóstico.");
                   }
                 });
           }
@@ -188,12 +201,7 @@ public final class NativePlayerActivity extends Activity {
       return;
     }
     releasePlayer();
-    DefaultHttpDataSource.Factory http =
-        new DefaultHttpDataSource.Factory()
-            .setUserAgent(PlayerDocument.USER_AGENT)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-            .setDefaultRequestProperties(Collections.singletonMap("Referer", mediaReferer()));
+    DataSource.Factory http = transport.mediaFactory(mediaReferer());
     player =
         new ExoPlayer.Builder(this)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
@@ -212,13 +220,16 @@ public final class NativePlayerActivity extends Activity {
           @Override
           public void onPlaybackStateChanged(int state) {
             if (instance != player || !active) return;
-            if (state == Player.STATE_READY) status.setText("Reproductor nativo · " + source.label);
+            if (state == Player.STATE_READY)
+              status.setText("Reproductor nativo · " + source.label + " · " + transport.name());
             else if (state == Player.STATE_BUFFERING) status.setText("Cargando vídeo…");
           }
 
           @Override
           public void onPlayerError(PlaybackException error) {
             if (instance != player || !active) return;
+            lastReport +=
+                "\nVídeo: " + error.getErrorCodeName() + " · " + ConnectionReport.describe(error);
             status.setText("No se pudo reproducir (" + error.getErrorCodeName() + ").");
             refreshAutomatically("Reconectando con una fuente vigente…");
           }
@@ -265,6 +276,72 @@ public final class NativePlayerActivity extends Activity {
 
   private final Runnable renewalRequest = this::resolveFresh;
 
+  private String reportHeader() {
+    Uri page = Uri.parse(pageUrl);
+    return "Calamar TV 1.3.1\nAndroid API "
+        + android.os.Build.VERSION.SDK_INT
+        + "\nPágina: "
+        + page.getHost()
+        + page.getPath()
+        + "\nMotor: "
+        + transport.name();
+  }
+
+  private void diagnose() {
+    if (diagnosing) return;
+    diagnosing = true;
+    final int request = generation;
+    final String previous = lastReport;
+    status.setText("Comparando la conexión de los motores. Espera unos segundos…");
+    worker.execute(
+        () -> {
+          String report = previous + "\n\nPrueba sin cambiar la red del dispositivo:\n";
+          report += probe("Sistema", url -> (java.net.HttpURLConnection) url.openConnection());
+          if (transport.hasChromium()) report += "\n" + probe("Chromium / HttpEngine", transport);
+          final String result = report;
+          handler.post(
+              () -> {
+                diagnosing = false;
+                if (!active || generation != request) return;
+                lastReport = result;
+                status.setText("Diagnóstico disponible · Pulsa Copiar en la ventana.");
+                new AlertDialog.Builder(this)
+                    .setTitle("Diagnóstico de conexión")
+                    .setMessage(result)
+                    .setPositiveButton(
+                        "Copiar",
+                        (dialog, which) -> {
+                          android.content.ClipboardManager clipboard =
+                              (android.content.ClipboardManager)
+                                  getSystemService(CLIPBOARD_SERVICE);
+                          if (clipboard != null)
+                            clipboard.setPrimaryClip(
+                                android.content.ClipData.newPlainText(
+                                    "Diagnóstico Calamar TV", result));
+                          Toast.makeText(this, "Diagnóstico copiado", Toast.LENGTH_SHORT).show();
+                        })
+                    .setNegativeButton("Cerrar", null)
+                    .show();
+              });
+        });
+  }
+
+  private String probe(String name, PlayerDocument.ConnectionFactory factory) {
+    long start = android.os.SystemClock.elapsedRealtime();
+    try {
+      PlayerDocument.Result result = PlayerDocument.fetch(pageUrl, factory);
+      int count = VideoResolver.parse(result.html, result.url).size();
+      return name
+          + ": HTTP 200 · "
+          + count
+          + " fuentes · "
+          + (android.os.SystemClock.elapsedRealtime() - start)
+          + " ms";
+    } catch (Exception failure) {
+      return name + ": " + ConnectionReport.describe(failure);
+    }
+  }
+
   private void chooseSource() {
     if (sources.isEmpty()) {
       Toast.makeText(this, "Aún no se ha detectado una fuente", Toast.LENGTH_SHORT).show();
@@ -291,6 +368,7 @@ public final class NativePlayerActivity extends Activity {
     if (!active) return;
     ++generation;
     resolving = false;
+    diagnosing = false;
     handler.removeCallbacks(renewal);
     handler.removeCallbacks(renewalRequest);
     releasePlayer();
@@ -394,6 +472,7 @@ public final class NativePlayerActivity extends Activity {
     active = false;
     generation++;
     resolving = false;
+    diagnosing = false;
     handler.removeCallbacksAndMessages(null);
     clearWeb();
     releasePlayer();

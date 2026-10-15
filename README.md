@@ -46,3 +46,11 @@ Validación adicional: seis pruebas sobre deduplicación de canales, conservaci�
 La pantalla de reproducción es una actividad independiente. ExoPlayer se libera al salir o pasar al fondo; al volver se consulta una fuente vigente. Las consultas usan el transporte HTTPS de Android, distinto de WebView. Las respuestas que llegan después de cerrar, cambiar al modo web o iniciar otra consulta se descartan.
 
 La detección inicial de fuentes y su renovación tienen 8 pruebas unitarias adicionales (18 en total). Las pruebas y la compilación no sustituyen la comprobación de reproducción en el móvil/TV y red del usuario. El caso observado era `ERR_CONNECTION_RESET` en WebView, mientras Chrome reproducía la misma ruta sin VPN; el resultado de este nuevo transporte debe confirmarse allí.
+
+## Conexión desde 1.3.1
+
+En Android 14 o superior, la consulta de la página y la descarga del vídeo comparten HttpEngine, el transporte de Chromium integrado en Android, con HTTP/2 y QUIC habilitados. En equipos anteriores se conserva el transporte del sistema. No se cambian los DNS del dispositivo ni se añaden proxies, VPN o excepciones a la validación TLS. HttpEngine y Chrome pueden tener configuraciones distintas; esta actualización no afirma que su comportamiento sea idéntico.
+
+Si falla la consulta de la página, se muestra el motivo y el motor utilizado, manteniendo el error original en vez de abrir automáticamente una página WebView que podría ocultarlo. El botón Diagnóstico compara una consulta de la misma ruta con el sistema y con HttpEngine cuando está disponible. El informe se muestra localmente y se puede copiar; no incluye enlaces firmados, parámetros, cookies ni mensajes arbitrarios de excepciones, y no se envía a ningún servidor de diagnóstico.
+
+25 pruebas unitarias: se añaden pruebas del transporte inyectado, cierre de conexiones, límite de tamaño, rechazo de redirección a HTTP y clasificación de errores sin filtrar secretos. La reproducción sin VPN sigue pendiente de prueba en el dispositivo y red afectados.
