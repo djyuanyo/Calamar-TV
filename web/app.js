@@ -210,11 +210,15 @@ const playerSources = document.getElementById('player-sources');
 const playerLogo = document.getElementById('player-logo');
 let hls = null;
 let returnFocus = null;
+let playbackGeneration = 0;
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden });
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 function stop() {
+  playbackGeneration++;
+  video.onerror = null;
+  video.onplaying = null;
   if (hls) hls.destroy();
   hls = null;
   video.removeAttribute('src');
@@ -224,6 +228,7 @@ function stop() {
 
 function playSource(c, index) {
   stop();
+  const generation = playbackGeneration;
   const candidates = c.streams.map((url) => ({ url, how: webPlayback(url), expiry: streamExpiry(url) })).filter((s) => s.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
@@ -243,13 +248,21 @@ function playSource(c, index) {
     return;
   }
   const source = playable[index];
+  let failureHandled = false;
   const next = (data) => {
+    if (generation !== playbackGeneration || failureHandled) return;
+    failureHandled = true;
     if (index + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, index + 1);
     } else {
       const reason = data ? explainStreamError({ details: data.details, code: data.response && data.response.code }) : 'No se pudo reproducir esta emisión en el navegador.';
-      playerStatus.replaceChildren(`${reason} `, c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'Prueba en la app Calamar TV.');
+      const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
+        // Firebase may have delivered fresh URLs since playback began.
+        const latest = state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, 0);
+      } }, '↻ Reintentar');
+      playerStatus.replaceChildren(`${reason} `, retry, ' ', c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'En Android, prueba la aplicación Calamar TV.');
     }
   };
   playerStatus.textContent = 'Conectando…';
@@ -264,9 +277,11 @@ function playSource(c, index) {
     video.src = source.url;
   }
   controls.attach(hls);
-  video.onplaying = () => (playerStatus.textContent = '');
+  video.onplaying = () => { if (generation === playbackGeneration) playerStatus.textContent = ''; };
   video.onerror = () => next();
-  video.play().catch(() => (playerStatus.textContent = 'Pulsa ▶ para empezar.'));
+  video.play().catch(() => {
+    if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+  });
 }
 
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
