@@ -1,0 +1,29 @@
+name: Exportar APK release 2.0.1
+on:
+  push:
+    branches: ['codex/export-apk-2.0.1']
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Descargar la release compilada
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v2.0.1 --pattern 'Calamar-TV-2.0.1-sin-firmar.apk' --dir dist
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: Calamar-TV-2.0.1-release-export
+          retention-days: 1
+          path: dist/*.apk
+          if-no-files-found: error
+      - name: Preparar paquete ZIP de la compilación
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          zip Calamar-TV-2.0.1-compilacion.zip *.apk
+          gh release upload v2.0.1 Calamar-TV-2.0.1-compilacion.zip
