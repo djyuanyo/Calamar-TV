@@ -1,0 +1,29 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'es.yuanyo.calamartv'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'es.yuanyo.calamartv'
+        minSdk 21
+        targetSdk 35
+        versionCode 2
+        versionName '1.1.0'
+    }
+    if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
+        signingConfigs {
+            distribution {
+                storeFile file(System.getenv('CALAMAR_KEYSTORE_PATH'))
+                storePassword System.getenv('CALAMAR_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('CALAMAR_KEY_ALIAS')
+                keyPassword System.getenv('CALAMAR_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('CALAMAR_KEYSTORE_PATH')) signingConfig signingConfigs.distribution
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
