@@ -90,24 +90,69 @@ async function openEvent(id) {
     dialog.replaceChildren(node('button',{class:'ghost',type:'button',onclick:close},'← Volver a agenda'),
       node('h2',{},event.title || 'Partido'),
       node('p',{class:'football-meta'},(event.league || '')+' · '+displayTime(event.start_time)));
-    const sources = (Array.isArray(event.sources)?event.sources:[])
-      .filter(s=>s && s.type==='iframe' && safeUrl(s.url))
-      .sort((a,b)=>Number(b.source==='own')-Number(a.source==='own'));
-    if (!sources.length) {
+    const sources = (Array.isArray(event.sources) ? event.sources : [])
+      .filter(s => s && safeUrl(s.url))
+      .sort((a,b) => Number(b.source === 'own') - Number(a.source === 'own'));
+    const alternatives = [];
+    for (const source of sources) {
+      // When ZicoTV supplies a true media URL, use our HTML5/HLS player.
+      // URLs for embeds are HTML documents and must stay inside an iframe.
+      for (const stream of (Array.isArray(source.streams) ? source.streams : [])) {
+        if (safeUrl(stream.url) && /\\.(m3u8|mp4|webm)(?:[?#]|$)/i.test(new URL(stream.url).pathname)) {
+          alternatives.push({url:stream.url, name:(source.name || source.source)+' · '+stream.stream_no, kind:'media'});
+        }
+      }
+      if (source.type === 'iframe') alternatives.push({
+        url: source.url,
+        name: source.source === 'own' ? (source.name || 'ZicoTV') : 'Fuente '+source.source,
+        kind:'iframe'
+      });
+    }
+    if (!alternatives.length) {
       dialog.append(node('p',{},'Este partido no tiene fuentes disponibles.'));
       return;
     }
     const playerBox=node('div',{class:'football-frame-box'});
     const chooser=node('div',{class:'football-chooser'});
-    dialog.append(playerBox,chooser);
+    const notice=node('p',{class:'football-meta'},'Pulsa reproducir dentro del vídeo. Si una fuente no funciona, selecciona otra.');
+    const link=node('a',{class:'ghost',target:'_blank',rel:'noopener noreferrer'},'Abrir fuente en otra pestaña');
+    dialog.append(playerBox,chooser,notice,link);
+    let localHls = null;
+    function cleanup() {
+      if (localHls) {localHls.destroy();localHls=null;}
+      if (activeFrame) {activeFrame.src='about:blank';activeFrame=null;}
+      playerBox.replaceChildren();
+    }
+    const originalClose = close;
+    // Closing must stop HLS playback as well as embedded providers.
+    dialog.firstChild.addEventListener('click',cleanup);
     function select(i) {
-      if (activeFrame) activeFrame.src='about:blank';
-      const frame=node('iframe',{src:safeUrl(sources[i].url),title:'Emisión de '+(event.title || 'fútbol'),allow:'autoplay; fullscreen; picture-in-picture',allowfullscreen:'',referrerpolicy:'no-referrer'});
-      activeFrame=frame;
-      playerBox.replaceChildren(frame);
+      cleanup();
+      const chosen=alternatives[i];
+      link.href=safeUrl(chosen.url);
+      if (chosen.kind==='media') {
+        const video=node('video',{controls:'',playsinline:'',autoplay:''});
+        video.style.cssText='width:100%;height:100%;background:#000';
+        playerBox.append(video);
+        const url=safeUrl(chosen.url);
+        if (/\\.m3u8(?:[?#]|$)/i.test(new URL(url).pathname) && window.Hls && window.Hls.isSupported()) {
+          localHls=new window.Hls();
+          localHls.loadSource(url);
+          localHls.attachMedia(video);
+          localHls.on(window.Hls.Events.ERROR,(_event,data)=>{
+            if(data.fatal)notice.textContent='Error al reproducir la fuente. Prueba otra.';
+          });
+        } else video.src=url;
+        video.play().catch(()=>{notice.textContent='Pulsa ▶ para empezar la reproducción.';});
+      } else {
+        const frame=node('iframe',{src:safeUrl(chosen.url),title:'Emisión de '+(event.title || 'fútbol'),allow:'autoplay; fullscreen; picture-in-picture',allowfullscreen:'',referrerpolicy:'no-referrer'});
+        activeFrame=frame;
+        playerBox.append(frame);
+        notice.textContent='Reproductor ZicoTV integrado. Pulsa ▶ dentro del vídeo; si no carga, prueba otra fuente o ábrela aparte.';
+      }
       [...chooser.children].forEach((button,j)=>button.setAttribute('aria-pressed',String(i===j)));
     }
-    sources.forEach((s,i)=>chooser.append(node('button',{class:'ghost',type:'button',onclick:()=>select(i)},s.source==='own'?(s.name || 'Canal propio'):'Fuente '+(i+1))));
+    alternatives.forEach((s,i)=>chooser.append(node('button',{class:'ghost',type:'button',onclick:()=>select(i)},s.name)));
     select(0);
   } catch (e) {
     dialog.append(node('p',{class:'error'},'No se han podido consultar las fuentes. Inténtalo de nuevo.'));
