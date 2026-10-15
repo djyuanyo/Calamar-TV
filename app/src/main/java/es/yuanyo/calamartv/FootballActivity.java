@@ -60,21 +60,25 @@ public class FootballActivity extends Activity {
         browser.setVisibility(View.GONE);
       }
       @Override public void onHideCustomView() {
-        if (fullScreen == null) return;
-        stage.removeView(fullScreen);
-        fullScreen = null;
-        browser.setVisibility(View.VISIBLE);
-        if (fullScreenCallback != null) fullScreenCallback.onCustomViewHidden();
-        fullScreenCallback = null;
+        hideFullScreen();
       }
     });
     layout.addView(browser, new LinearLayout.LayoutParams(-1,0,1));
     browser.loadUrl(AGENDA);
   }
 
+  private void hideFullScreen() {
+    if (fullScreen == null) return;
+    stage.removeView(fullScreen);
+    fullScreen = null;
+    browser.setVisibility(View.VISIBLE);
+    if (fullScreenCallback != null) fullScreenCallback.onCustomViewHidden();
+    fullScreenCallback = null;
+  }
+
   @Override public void onBackPressed() {
     if (fullScreen != null) {
-      browser.getWebChromeClient().onHideCustomView();
+      hideFullScreen();
     } else if (browser != null && browser.canGoBack()) {
       browser.goBack();
     } else super.onBackPressed();
