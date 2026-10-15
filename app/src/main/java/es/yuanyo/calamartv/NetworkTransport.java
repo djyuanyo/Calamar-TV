@@ -1,94 +1,69 @@
 package es.yuanyo.calamartv;
 
 import android.content.Context;
-import android.os.Build;
 import androidx.media3.datasource.DataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
-import java.io.IOException;
+import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Collections;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.EnumMap;
+import okhttp3.OkHttpClient;
 
-/** One shared Chromium transport for document and media on Android 14+, platform on older TV. */
+/** The selected resolver covers the player page, media lists, segments and keys. */
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public final class NetworkTransport implements PlayerDocument.ConnectionFactory {
-  private static NetworkTransport shared;
-  private final Object engine;
-  private final ExecutorService callbacks = Executors.newCachedThreadPool();
-  private final String initialization;
+  private static final EnumMap<DnsProvider, NetworkTransport> CLIENTS =
+      new EnumMap<>(DnsProvider.class);
+  public final DnsProvider provider;
+  private final OkHttpClient client;
 
-  public static synchronized NetworkTransport get(Context context) {
-    if (shared == null) shared = new NetworkTransport(context.getApplicationContext());
-    return shared;
+  public static DnsProvider selected(Context context) {
+    return DnsProvider.fromPreference(
+        context
+            .getSharedPreferences("player-network", Context.MODE_PRIVATE)
+            .getString("dns_provider", DnsProvider.CLOUDFLARE.name()));
   }
 
-  private NetworkTransport(Context context) {
-    Object candidate = null;
-    String detail = "Sistema (HttpEngine no disponible)";
-    if (Build.VERSION.SDK_INT >= 34 && android.os.ext.SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7) {
-      try {
-        candidate = Api34.create(context);
-        detail = "Chromium / HttpEngine";
-      } catch (RuntimeException | LinkageError unavailable) {
-        detail = "Sistema; HttpEngine no disponible: " + unavailable.getClass().getSimpleName();
-      }
+  public static void select(Context context, DnsProvider provider) {
+    context
+        .getSharedPreferences("player-network", Context.MODE_PRIVATE)
+        .edit()
+        .putString("dns_provider", provider.name())
+        .apply();
+  }
+
+  public static synchronized NetworkTransport get(Context context) {
+    return get(selected(context));
+  }
+
+  public static synchronized NetworkTransport get(DnsProvider provider) {
+    NetworkTransport transport = CLIENTS.get(provider);
+    if (transport == null) {
+      transport = new NetworkTransport(provider);
+      CLIENTS.put(provider, transport);
     }
-    engine = candidate;
-    initialization = detail;
+    return transport;
+  }
+
+  private NetworkTransport(DnsProvider provider) {
+    this.provider = provider;
+    client = SecureDnsClients.create(provider);
   }
 
   public String name() {
-    return initialization;
-  }
-
-  public boolean hasChromium() {
-    return engine != null;
+    return "OkHttp · " + provider.label;
   }
 
   @Override
-  public HttpURLConnection open(URL url) throws IOException {
-    if (Build.VERSION.SDK_INT >= 34
-        && android.os.ext.SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7
-        && engine != null) return Api34.open(engine, url);
-    return (HttpURLConnection) url.openConnection();
+  public HttpURLConnection open(URL url) {
+    return new PlayerHttpConnection(url, client);
   }
 
   public DataSource.Factory mediaFactory(String referer) {
-    if (Build.VERSION.SDK_INT >= 34
-        && android.os.ext.SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7
-        && engine != null) return Api34.media(engine, callbacks, referer);
-    return new DefaultHttpDataSource.Factory()
-        .setUserAgent(PlayerDocument.USER_AGENT)
-        .setConnectTimeoutMs(15000)
-        .setReadTimeoutMs(15000)
-        .setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
-  }
-
-  // Keep new platform types isolated so old Android TV versions can load the outer class.
-  @android.annotation.TargetApi(34)
-  @androidx.annotation.RequiresExtension(extension = Build.VERSION_CODES.S, version = 7)
-  private static final class Api34 {
-    static Object create(Context context) {
-      return new android.net.http.HttpEngine.Builder(context)
-          .setEnableHttp2(true)
-          .setEnableQuic(true)
-          .setUserAgent(PlayerDocument.USER_AGENT)
-          .build();
-    }
-
-    static HttpURLConnection open(Object engine, URL url) throws IOException {
-      return (HttpURLConnection) ((android.net.http.HttpEngine) engine).openConnection(url);
-    }
-
-    static DataSource.Factory media(Object engine, ExecutorService executor, String referer) {
-      return new androidx.media3.datasource.HttpEngineDataSource.Factory(
-              (android.net.http.HttpEngine) engine, executor)
-          .setUserAgent(PlayerDocument.USER_AGENT)
-          .setConnectionTimeoutMs(15000)
-          .setReadTimeoutMs(15000)
-          .setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
-    }
+    OkHttpDataSource.Factory factory =
+        new OkHttpDataSource.Factory(client).setUserAgent(PlayerDocument.USER_AGENT);
+    if (referer != null && !referer.isEmpty())
+      factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
+    return factory;
   }
 }

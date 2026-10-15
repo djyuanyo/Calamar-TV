@@ -26,7 +26,6 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
@@ -50,10 +49,13 @@ public final class NativePlayerActivity extends Activity {
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
   private String pageUrl, documentUrl, currentUrl = "", title;
+
   /** A user-added media link, played as is without page lookup or renewal. */
   private String directUrl;
+
   /** All official alternatives for a direct channel; a failing one moves on to the next. */
   private final List<String> directUrls = new ArrayList<>();
+
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
   private boolean active, resolving, webMode;
@@ -86,6 +88,8 @@ public final class NativePlayerActivity extends Activity {
     layout.setFitsSystemWindows(true);
     LinearLayout controls = new LinearLayout(this);
     button(controls, "Volver", () -> finish());
+    button(controls, "DNS", this::chooseDns);
+    button(controls, "Diagnóstico", this::diagnose);
     if (directUrl != null) {
       button(
           controls,
@@ -105,7 +109,6 @@ public final class NativePlayerActivity extends Activity {
           });
       button(controls, "Fuentes", this::chooseSource);
       button(controls, "Modo web", this::openWeb);
-      button(controls, "Diagnóstico", this::diagnose);
       button(controls, "Chrome / navegador", this::openBrowser);
     }
     HorizontalScrollView scroll = new HorizontalScrollView(this);
@@ -142,6 +145,31 @@ public final class NativePlayerActivity extends Activity {
     row.addView(b);
   }
 
+  private void chooseDns() {
+    DnsProvider[] providers = DnsProvider.values();
+    String[] names = new String[providers.length];
+    for (int i = 0; i < providers.length; i++) names[i] = providers[i].label;
+    new AlertDialog.Builder(this)
+        .setTitle("DNS del reproductor")
+        .setSingleChoiceItems(
+            names,
+            transport.provider.ordinal(),
+            (dialog, index) -> {
+              NetworkTransport.select(this, providers[index]);
+              transport = NetworkTransport.get(this);
+              generation++;
+              resolving = false;
+              automaticAttempts = 0;
+              handler.removeCallbacks(renewal);
+              handler.removeCallbacks(renewalRequest);
+              releasePlayer();
+              dialog.dismiss();
+              resolveFresh();
+            })
+        .setNegativeButton("Cerrar", null)
+        .show();
+  }
+
   @Override
   protected void onStart() {
     super.onStart();
@@ -167,7 +195,7 @@ public final class NativePlayerActivity extends Activity {
   }
 
   private String engineName() {
-    return directUrl != null ? "Sistema" : transport.name();
+    return transport.name();
   }
 
   private void resolveFresh() {
@@ -251,14 +279,7 @@ public final class NativePlayerActivity extends Activity {
       return;
     }
     releasePlayer();
-    DataSource.Factory http =
-        directUrl != null
-            ? new DefaultHttpDataSource.Factory()
-                .setUserAgent(PlayerDocument.USER_AGENT)
-                .setConnectTimeoutMs(15000)
-                .setReadTimeoutMs(20000)
-                .setAllowCrossProtocolRedirects(true)
-            : transport.mediaFactory(mediaReferer());
+    DataSource.Factory http = transport.mediaFactory(directUrl != null ? null : mediaReferer());
     player =
         new ExoPlayer.Builder(this)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
@@ -342,12 +363,12 @@ public final class NativePlayerActivity extends Activity {
   private final Runnable renewalRequest = this::resolveFresh;
 
   private String reportHeader() {
-    Uri page = Uri.parse(pageUrl);
-    return "Calamar TV 2.0.0\nAndroid API "
+    Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
+    return "Calamar TV 2.0.1\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
-        + page.getPath()
+        + (directUrl != null ? "" : page.getPath())
         + "\nMotor: "
         + transport.name();
   }
@@ -362,7 +383,7 @@ public final class NativePlayerActivity extends Activity {
         () -> {
           String report = previous + "\n\nPrueba sin cambiar la red del dispositivo:\n";
           report += probe("Sistema", url -> (java.net.HttpURLConnection) url.openConnection());
-          if (transport.hasChromium()) report += "\n" + probe("Chromium / HttpEngine", transport);
+          report += "\n" + probe(transport.name(), transport);
           final String result = report;
           handler.post(
               () -> {
@@ -394,6 +415,17 @@ public final class NativePlayerActivity extends Activity {
   private String probe(String name, PlayerDocument.ConnectionFactory factory) {
     long start = android.os.SystemClock.elapsedRealtime();
     try {
+      if (directUrl != null) {
+        java.net.HttpURLConnection connection = factory.open(new java.net.URL(directUrl));
+        try {
+          connection.setConnectTimeout(10000);
+          connection.setReadTimeout(10000);
+          connection.setRequestProperty("Range", "bytes=0-1023");
+          return name + ": HTTP " + connection.getResponseCode();
+        } finally {
+          connection.disconnect();
+        }
+      }
       PlayerDocument.Result result = PlayerDocument.fetch(pageUrl, factory);
       int count = VideoResolver.parse(result.html, result.url).size();
       return name
@@ -550,4 +582,3 @@ public final class NativePlayerActivity extends Activity {
     super.onDestroy();
   }
 }
-

@@ -77,7 +77,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         continue-on-error: true
         with:
-          name: Calamar-TV-2.0.0-Android-TV
+          name: Calamar-TV-2.0.1-Android-TV
           retention-days: 3
           path: |
             app/build/outputs/apk/debug/*.apk

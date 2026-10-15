@@ -57,3 +57,13 @@ El workflow **Calamar TV · APK Android y TV** compila release y debug, pasa And
 Pruebas: `CatalogTest` (reglas del catálogo y el `data/tdt.json` real), `UserChannelsTest`, `VideoResolverTest`, `PlayerDocumentTest`, `ConnectionReportTest`, y `tools/test_sync_tdt.py` para el lector de TDTChannels (`python -m unittest discover -s tools -p 'test_*.py'`).
 
 La reproducción depende de cada emisora y de la red del usuario; las pruebas no sustituyen la comprobación en el dispositivo.
+
+## DNS propio del reproductor (2.0.1)
+
+El botón **DNS** permite elegir Cloudflare (por defecto), Google o el resolver del sistema. Cloudflare y Google usan DNS sobre HTTPS: las consultas de los dominios se envían cifradas al proveedor elegido. El arranque del resolver usa sus direcciones públicas conocidas, sin depender del DNS de Android para localizarlo. Los dominios del vídeo se resuelven normalmente; no se fijan direcciones de CDN ni se alteran tokens.
+
+La selección se guarda solo en la app. El mismo cliente OkHttp y resolver sirven la página del reproductor, los enlaces directos, las listas HLS, los segmentos y las claves del vídeo. Funciona desde Android 5.0, sin depender de HttpEngine. No modifica los ajustes DNS del teléfono ni de la TV. En los modos seguros no hay vuelta silenciosa al DNS del sistema; se puede elegir otro proveedor desde el botón DNS.
+
+Diagnóstico compara el acceso del sistema con el proveedor elegido y permite copiar un informe sin enlaces firmados o credenciales. El modo WebView y Chrome usan sus propios mecanismos de red; el DNS integrado se aplica a las consultas y reproducción nativas.
+
+Un reinicio de conexión (RESET) no demuestra por sí solo un fallo DNS. Este cambio debe probarse sin VPN en el dispositivo afectado; no puede corregir todos los posibles bloqueos o fallos del proveedor. Se mantienen el catálogo OTT, la web, los canales personales y las alternativas de la versión 2.0.
