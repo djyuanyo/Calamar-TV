@@ -59,6 +59,7 @@ public class FootballActivity extends Activity {
           if (trustedSource(page)) {
             Intent intent = new Intent(FootballActivity.this, NativePlayerActivity.class);
             intent.putExtra("page_url", page);
+            intent.putExtra("football_fallback", true);
             intent.putExtra("title", title == null ? "Partido de fútbol" : title);
             startActivity(intent);
           }
