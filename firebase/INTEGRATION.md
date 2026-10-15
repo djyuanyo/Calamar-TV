@@ -1,13 +1,11 @@
-# Integración pendiente de conectar Firebase MenciaMediaTV
+# Firebase de Calamar TV
 
-No desplegar estas reglas antes de leer y conservar las reglas existentes del proyecto. El archivo define únicamente la ruta nueva `/calamarCatalog/custom`.
+Proyecto existente: **MenciaMediaTV** (`menciamedia`, número `1038892679964`). Google habilitado; dominio `djyuanyo.github.io` autorizado. Aplicaciones separadas Calamar TV Web y Android/TV registradas. Android usa `es.yuanyo.calamartv`, con SHA-1 y SHA-256 del certificado de distribución.
 
-- Identidad: Firebase Authentication, Google; administración solo para `juanjocarrillo7@gmail.com` con correo verificado y proveedor Google. La autorización se aplica en las reglas, además de la interfaz.
-- Catálogo compartido: documento `/calamarCatalog/custom` con `json` (el formato de `data/custom.json`), `revision` incremental y `updatedAt` del servidor. Lectura pública de este documento concreto; sin listado, sin borrado y sin acceso concedido al resto del proyecto.
-- Escritura mediante transacciones con revisión esperada para evitar sobrescribir cambios de otro dispositivo.
-- Web: sustituir el acceso mediante token de GitHub por Google y leer el catálogo de Firebase con caché local y copia incluida como respaldo. Mantener la web publicada en GitHub Pages.
-- Android: añadir Administración con Google, editor del catálogo compartido e importación voluntaria desde Mis canales. Los canales locales no deben publicarse automáticamente. Conservar el DNS seguro y la reproducción de 2.0.1.
-- Configuración pendiente: identificador real del proyecto, aplicaciones registradas, configuración pública web/Android, OAuth web client ID, dominios autorizados, SHA-1/SHA-256 de la firma de distribución, estado de Authentication/Firestore y reglas existentes.
-- Pruebas antes del despliegue: lectura pública; rechazo de escritura anónima, cuenta distinta, correo no verificado y proveedor distinto; escritura correcta del administrador; rechazo de revisión obsoleta, campos extra y catálogo excesivo.
+Firestore Standard: `(default)`, Madrid (`europe-southwest1`), plan Spark. El documento público `calamarCatalog/custom` contiene `json` (formato de `data/custom.json`), `revision` incremental y `updatedAt` de servidor. Las reglas permiten obtener ese documento, sin listado, y escribir solo a `juanjocarrillo7@gmail.com` mediante Google con correo verificado. El resto de rutas conserva el cierre inicial.
 
-La configuración está preparada como borrador local; todavía no se ha aplicado al proyecto remoto ni publicado.
+El editor web usa Google en una ventana emergente. El editor nativo usa Credential Manager y Firebase Auth. En TV sin estos servicios puede administrarse desde el navegador. La lectura no requiere sesión. Las publicaciones usan transacciones; las listas locales no se importan sin una acción explícita.
+
+Solo se incluyen identificadores públicos de cliente. No se necesitan cuentas de servicio, claves privadas ni secretos OAuth en la APK o en GitHub. La firma de distribución se conserva fuera del repositorio y debe mantenerse en futuras APK.
+
+Pruebas: `npm install && npm test` con Node 24/JDK 21 en este directorio. Se ejecutan sobre `demo-calamar-tv`, aisladas de producción.

@@ -7,21 +7,23 @@ Plataforma OTT de canales en directo: la web y la app Android/TV muestran el mis
 | Parte | Dónde | Qué hace |
 | - | - | - |
 | Catálogo TDT | `data/tdt.json` | Canales españoles en abierto con sus emisiones oficiales `.m3u8`. Lo genera `tools/sync_tdt.py` a partir de [TDTChannels](https://github.com/LaQuay/TDTChannels) (atribución obligatoria, visible en la web y en la app). |
-| Catálogo propio | `data/custom.json` | Canales/eventos del administrador (`channels`), destacados de portada (`featured`) y canales TDT ocultos (`hidden`). |
+| Catálogo propio | Firestore `calamarCatalog/custom` (respaldo `data/custom.json`) | Canales/eventos del administrador (`channels`), destacados de portada (`featured`) y canales TDT ocultos (`hidden`). |
 | Web | `web/` | Sitio estático publicado en GitHub Pages: portada con destacado, filas por categoría, buscador, reproductor HLS (hls.js) y panel de administración. |
-| App | `app/` | Android 5.0+ y Android TV. Lee los mismos JSON publicados en `https://djyuanyo.github.io/Calamar-TV/data/`, los guarda en caché y lleva una copia incluida para funcionar sin conexión. Reproduce con Media3 ExoPlayer. |
+| App | `app/` | Android 7.0+ y Android TV. Lee el catálogo propio de Firebase en tiempo real y los JSON de TDT publicados en `https://djyuanyo.github.io/Calamar-TV/data/`, los guarda en caché y lleva una copia incluida para funcionar sin conexión. Reproduce con Media3 ExoPlayer. |
 
 `web/catalog.js` y `app/.../Catalog.java` aplican las mismas reglas (canales propios primero, ocultos fuera, destacados en el orden elegido, categorías en el mismo orden), así que la web y la app muestran lo mismo.
 
-El workflow **Calamar TV · Web y catálogo** actualiza `data/tdt.json` cada 6 horas y publica la web. Cada cambio en `web/` o `data/` en `main` (incluidos los del panel de administración) vuelve a publicarla en 1–2 minutos. La app consulta el catálogo al abrirse, al volver a primer plano, cada 10 minutos y con **↻ Actualizar**.
+El workflow **Calamar TV · Web y catálogo** actualiza `data/tdt.json` cada 6 horas y publica la web. Cada cambio en `web/` o `data/` en `main` (el panel de administración guarda directamente en Firebase) vuelve a publicarla en 1–2 minutos. La app consulta el catálogo al abrirse, al volver a primer plano, cada 10 minutos y con **↻ Actualizar**.
 
 ## Administración
 
 En la web: **Admin** (`#/admin`). Solo acepta la cuenta `juanjocarrillo7@gmail.com`.
 
-La web es estática, así que la protección real es un **token de GitHub** con permiso de escritura únicamente en este repositorio. La primera vez en cada navegador se introducen correo, una contraseña nueva y el token. El token se guarda cifrado en ese navegador con una clave derivada de la contraseña (PBKDF2 + AES-GCM). Las siguientes veces basta con correo y contraseña. Ninguna contraseña ni token se guarda en el repositorio, en la web publicada o en la APK.
+La web y la app usan **Continuar con Google**, con Firebase Authentication en el proyecto existente **MenciaMediaTV** (`menciamedia`). Las reglas de Firestore permiten editar únicamente a `juanjocarrillo7@gmail.com`, con correo verificado y sesión de Google. Las demás cuentas no obtienen permiso de escritura. No se necesita un token de GitHub ni una contraseña propia de Calamar TV.
 
-Crear el token: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Repository access: *Only select repositories* → `Calamar-TV`. Permissions → Repository → **Contents: Read and write**. Si el token se pierde o se filtra, revócalo allí y vuelve a configurar el navegador.
+En Android: **Administrar**. Incluye alta, edición y retirada de canales o eventos, categorías, logos, varias fuentes y destacados. **Publicar desde Mis canales** permite compartir cada canal local de forma voluntaria. En televisores sin Credential Manager/Google Play Services se ofrece abrir la administración web; la lectura del catálogo público no requiere iniciar sesión.
+
+Los cambios se guardan en el documento `calamarCatalog/custom` y se reciben automáticamente en la web y la app. Cada publicación usa una transacción con revisión para impedir que un dispositivo sobrescriba cambios recientes de otro. Los archivos de TDT y el catálogo incluido siguen disponibles como respaldo. Los identificadores de Firebase y de OAuth que aparecen en el cliente son públicos; no incluyen claves de servidor ni el secreto OAuth.
 
 Desde el panel se puede:
 
@@ -41,7 +43,7 @@ Los canales TDT sin emisión directa (por ejemplo Atresmedia o Mediaset, protegi
 
 ## Mis canales (solo app)
 
-La pestaña **Mis canales** de la app sigue disponible para enlaces privados que no se publican: se guardan solo en el dispositivo (`user-channels.json`).
+La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
 
 ## Puesta en marcha
 
@@ -52,7 +54,7 @@ La pestaña **Mis canales** de la app sigue disponible para enlaces privados que
 
 ## Compilación y pruebas
 
-El workflow **Calamar TV · APK Android y TV** compila release y debug, pasa Android Lint y las pruebas unitarias, comprueba que la APK incluye el catálogo y publica las APK como artefacto. Localmente: JDK 17, Gradle 8.9 y Android SDK 35, `gradle :app:assembleDebug :app:testDebugUnitTest`.
+El workflow **Calamar TV · APK Android y TV** compila release y debug, pasa Android Lint y las pruebas unitarias, comprueba que la APK incluye el catálogo y publica las APK y un ZIP de descarga en GitHub Releases. La APK de distribución debe llevar la firma persistente registrada en Firebase; la APK debug es solo para pruebas y no tiene esa identidad OAuth. Localmente: JDK 17, Gradle 8.9 y Android SDK 35, `gradle :app:assembleDebug :app:testDebugUnitTest`.
 
 Pruebas: `CatalogTest` (reglas del catálogo y el `data/tdt.json` real), `UserChannelsTest`, `VideoResolverTest`, `PlayerDocumentTest`, `ConnectionReportTest`, y `tools/test_sync_tdt.py` para el lector de TDTChannels (`python -m unittest discover -s tools -p 'test_*.py'`).
 
@@ -62,8 +64,14 @@ La reproducción depende de cada emisora y de la red del usuario; las pruebas no
 
 El botón **DNS** permite elegir Cloudflare (por defecto), Google o el resolver del sistema. Cloudflare y Google usan DNS sobre HTTPS: las consultas de los dominios se envían cifradas al proveedor elegido. El arranque del resolver usa sus direcciones públicas conocidas, sin depender del DNS de Android para localizarlo. Los dominios del vídeo se resuelven normalmente; no se fijan direcciones de CDN ni se alteran tokens.
 
-La selección se guarda solo en la app. El mismo cliente OkHttp y resolver sirven la página del reproductor, los enlaces directos, las listas HLS, los segmentos y las claves del vídeo. Funciona desde Android 5.0, sin depender de HttpEngine. No modifica los ajustes DNS del teléfono ni de la TV. En los modos seguros no hay vuelta silenciosa al DNS del sistema; se puede elegir otro proveedor desde el botón DNS.
+La selección se guarda solo en la app. El mismo cliente OkHttp y resolver sirven la página del reproductor, los enlaces directos, las listas HLS, los segmentos y las claves del vídeo. El resolver original funciona desde Android 5.0; desde 2.1.0 la app completa requiere Android 7.0 por los SDK actuales de Firebase. No depende de HttpEngine. No modifica los ajustes DNS del teléfono ni de la TV. En los modos seguros no hay vuelta silenciosa al DNS del sistema; se puede elegir otro proveedor desde el botón DNS.
 
 Diagnóstico compara el acceso del sistema con el proveedor elegido y permite copiar un informe sin enlaces firmados o credenciales. El modo WebView y Chrome usan sus propios mecanismos de red; el DNS integrado se aplica a las consultas y reproducción nativas.
 
 Un reinicio de conexión (RESET) no demuestra por sí solo un fallo DNS. Este cambio debe probarse sin VPN en el dispositivo afectado; no puede corregir todos los posibles bloqueos o fallos del proveedor. Se mantienen el catálogo OTT, la web, los canales personales y las alternativas de la versión 2.0.
+
+## Verificación de Firebase
+
+Las reglas publicadas están en `firebase/firestore.rules`; solo conceden lectura del documento público del catálogo y escritura a la cuenta indicada. El resto de rutas continúa cerrado. La base de datos Standard está en `europe-southwest1` (Madrid), con el plan Spark. GitHub Pages continúa siendo el alojamiento web.
+
+Pruebas aisladas con Node 24 y JDK 21: `cd firebase && npm install && npm test`. El emulador comprueba lectura pública limitada, rechazo de otras identidades, escrituras del administrador, revisiones, tamaño y marcas de tiempo. No modifica producción. La compilación Android sigue usando JDK 17.

@@ -3,6 +3,7 @@ import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
 import { ADMIN_EMAIL } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain } from './firebase.js';
 
+let saving = false;
 let file = null;
 let notice = '';
 let watching = false;
@@ -10,6 +11,8 @@ let fallbackLoaded = false;
 let fallback = { featured: [], hidden: [], channels: [] };
 async function loadFile() { file = await readCatalog(fallback); }
 async function saveFile() {
+  if (saving) throw new Error('Espera a que termine la publicación.');
+  saving = true;
   try {
     file.revision = await publishCatalog(file.data, file.revision);
     notice = 'Guardado. Los cambios ya están publicados para la web y la app.';
@@ -17,7 +20,7 @@ async function saveFile() {
     // Never keep an unsuccessful mutation in the editor or show it as published.
     try { await loadFile(); } catch { file = null; }
     throw error;
-  }
+  } finally { saving = false; }
 }
 
 function field(label, input, hint) {
@@ -81,6 +84,7 @@ function channelForm(existing, rerender) {
       class: 'form',
       onsubmit: async (e) => {
         e.preventDefault();
+        if (saving) return;
         try {
           const channel = {
             id: existing ? existing.id : `mio-${slug(name.value)}-${Date.now().toString(36)}`,
@@ -138,7 +142,7 @@ function ownList(rerender) {
               class: 'btn small danger',
               type: 'button',
               onclick: async () => {
-                if (!confirm(`¿Eliminar ${c.name}?`)) return;
+                if (saving || !confirm(`¿Eliminar ${c.name}?`)) return;
                 data.channels = data.channels.filter((x) => x.id !== c.id);
                 data.featured = data.featured.filter((id) => id !== c.id);
                 await guarded(() => saveFile(`admin: eliminar ${c.name}`), rerender);
@@ -183,8 +187,8 @@ function tdtTools(state, rerender) {
               el(
                 'div',
                 { class: 'actions' },
-                el('button', { class: 'btn small secondary', type: 'button', disabled: !c.playable && !star, onclick: () => { data.featured = star ? data.featured.filter((id) => id !== c.id) : [...data.featured, c.id]; guarded(() => saveFile(`admin: ${star ? 'quitar destacado' : 'destacar'} ${c.name}`), rerender); } }, star ? 'Quitar destacado' : 'Destacar'),
-                el('button', { class: 'btn small secondary', type: 'button', onclick: () => { data.hidden = hidden ? data.hidden.filter((id) => id !== c.id) : [...data.hidden, c.id]; guarded(() => saveFile(`admin: ${hidden ? 'mostrar' : 'ocultar'} ${c.name}`), rerender); } }, hidden ? 'Mostrar' : 'Ocultar'),
+                el('button', { class: 'btn small secondary', type: 'button', disabled: !c.playable && !star, onclick: () => { if (saving) return; data.featured = star ? data.featured.filter((id) => id !== c.id) : [...data.featured, c.id]; guarded(() => saveFile(`admin: ${star ? 'quitar destacado' : 'destacar'} ${c.name}`), rerender); } }, star ? 'Quitar destacado' : 'Destacar'),
+                el('button', { class: 'btn small secondary', type: 'button', onclick: () => { if (saving) return; data.hidden = hidden ? data.hidden.filter((id) => id !== c.id) : [...data.hidden, c.id]; guarded(() => saveFile(`admin: ${hidden ? 'mostrar' : 'ocultar'} ${c.name}`), rerender); } }, hidden ? 'Mostrar' : 'Ocultar'),
               ),
             );
           })

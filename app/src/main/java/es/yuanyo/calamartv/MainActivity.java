@@ -67,7 +67,8 @@ public class MainActivity extends Activity {
       updatedAt = tdt.optLong("updated_at");
     } catch (Exception ignored) {
     }
-    File t = new File(getFilesDir(), "catalog-tdt.json"), c = new File(getFilesDir(), "catalog-custom.json");
+    File t = new File(getFilesDir(), "catalog-tdt.json"),
+        c = new File(getFilesDir(), "catalog-custom.json");
     if (t.isFile() && c.isFile())
       try {
         JSONObject savedTdt = readJson(new FileInputStream(t));
@@ -79,7 +80,10 @@ public class MainActivity extends Activity {
       } catch (Exception ignored) {
       }
     JSONObject shared = SharedCatalog.cached(this);
-    if (shared != null) { custom = shared; sharedAvailable = true; }
+    if (shared != null) {
+      custom = shared;
+      sharedAvailable = true;
+    }
     channels = Catalog.merge(tdt, custom);
   }
 
@@ -207,7 +211,8 @@ public class MainActivity extends Activity {
                 load();
               }
             }));
-    addButton(nav, button("Administrar", v -> startActivity(new Intent(this, AdminActivity.class))));
+    addButton(
+        nav, button("Administrar", v -> startActivity(new Intent(this, AdminActivity.class))));
     HorizontalScrollView n = new HorizontalScrollView(this);
     n.setHorizontalScrollBarEnabled(false);
     n.addView(nav);
@@ -383,12 +388,10 @@ public class MainActivity extends Activity {
     art.addView(logo, lp);
     image(logo, c.logo);
     logo.setBackgroundColor(Color.TRANSPARENT);
-    TextView badge =
-        label(c.playable() ? "EN DIRECTO" : "SU WEB", 10, c.playable() ? BG : FG);
+    TextView badge = label(c.playable() ? "EN DIRECTO" : "SU WEB", 10, c.playable() ? BG : FG);
     badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     badge.setBackground(rounded(c.playable() ? ACC : 0xdd171a20, 0));
-    FrameLayout.LayoutParams bp =
-        new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+    FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
     art.addView(badge, bp);
     card.addView(art, new LinearLayout.LayoutParams(-1, dp(110)));
@@ -417,7 +420,8 @@ public class MainActivity extends Activity {
     h.setClipToPadding(false);
     LinearLayout r = row();
     r.setGravity(Gravity.TOP);
-    for (int i = 0; i < Math.min(a.size(), limit); i++) r.addView(card(a.get(i), wide() ? 200 : 170));
+    for (int i = 0; i < Math.min(a.size(), limit); i++)
+      r.addView(card(a.get(i), wide() ? 200 : 170));
     h.addView(r);
     list.addView(h);
   }
@@ -481,27 +485,37 @@ public class MainActivity extends Activity {
   protected void onPause() {
     super.onPause();
     handler.removeCallbacks(refresh);
-    if (sharedListener != null) { sharedListener.remove(); sharedListener = null; }
+    if (sharedListener != null) {
+      sharedListener.remove();
+      sharedListener = null;
+    }
   }
 
   protected void onResume() {
     super.onResume();
     handler.removeCallbacks(refresh);
     handler.post(refresh);
-    sharedListener = SharedCatalog.document(this).addSnapshotListener((snapshot, error) -> {
-      if (isFinishing() || error != null || snapshot == null || !snapshot.exists()
-          || snapshot.getMetadata().hasPendingWrites()) return;
-      try {
-        JSONObject next = SharedCatalog.decode(snapshot);
-        if (sharedAvailable && next.toString().equals(custom.toString())) return;
-        custom = next;
-        sharedAvailable = true;
-        SharedCatalog.cache(this, custom);
-        channels = Catalog.merge(tdt, custom);
-        renderFilters();
-        render();
-      } catch (Exception ignored) { }
-    });
+    sharedListener =
+        SharedCatalog.document(this)
+            .addSnapshotListener(
+                (snapshot, error) -> {
+                  if (isFinishing()
+                      || error != null
+                      || snapshot == null
+                      || !snapshot.exists()
+                      || snapshot.getMetadata().hasPendingWrites()) return;
+                  try {
+                    JSONObject next = SharedCatalog.decode(snapshot);
+                    if (sharedAvailable && next.toString().equals(custom.toString())) return;
+                    custom = next;
+                    sharedAvailable = true;
+                    SharedCatalog.cache(this, custom);
+                    channels = Catalog.merge(tdt, custom);
+                    renderFilters();
+                    render();
+                  } catch (Exception ignored) {
+                  }
+                });
   }
 
   protected void onDestroy() {
