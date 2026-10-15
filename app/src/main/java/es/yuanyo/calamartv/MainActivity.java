@@ -189,14 +189,18 @@ public class MainActivity extends Activity {
     mast.addView(tag);
     root.addView(mast);
     LinearLayout nav = row();
-    for (final String m : new String[] {"Inicio", "Canales", "Mis canales"}) {
+    for (final String m : new String[] {"Inicio", "Canales", "Fútbol", "Mis canales"}) {
       Button tab =
           button(
               m,
               new View.OnClickListener() {
                 public void onClick(View v) {
-                  mode = m;
-                  home();
+                  if ("Fútbol".equals(m)) {
+                    startActivity(new Intent(MainActivity.this, FootballActivity.class));
+                  } else {
+                    mode = m;
+                    home();
+                  }
                 }
               });
       if (mode.equals(m)) accent(tab);
