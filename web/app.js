@@ -1,4 +1,4 @@
-import { merge, featured, groups, webPlayback, findChannel } from './catalog.js';
+import { merge, featured, groups, webPlayback, findChannel, streamExpiry, explainStreamError } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
 
 const view = document.getElementById('view');
@@ -224,31 +224,39 @@ function stop() {
 
 function playSource(c, index) {
   stop();
-  const playable = c.streams.map((url) => ({ url, how: webPlayback(url) })).filter((s) => s.how.ok);
+  const candidates = c.streams.map((url) => ({ url, how: webPlayback(url), expiry: streamExpiry(url) })).filter((s) => s.how.ok);
+  // A signed link past its time cannot work, so do not even try it.
+  const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
   playerSources.replaceChildren(
     ...(playable.length > 1
       ? playable.map((s, i) => el('button', { class: 'ghost', type: 'button', 'aria-pressed': String(i === index), onclick: () => playSource(c, i) }, `Fuente ${i + 1}`))
       : []),
   );
+  if (candidates.length && !playable.length) {
+    const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
+    return;
+  }
   if (!playable.length) {
     const reason = webPlayback(c.streams[0] || '').reason || 'Sin fuente compatible';
     playerStatus.replaceChildren(`${reason}. Disponible en la app Calamar TV.`, c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial')) : '');
     return;
   }
   const source = playable[index];
-  const next = () => {
+  const next = (data) => {
     if (index + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, index + 1);
     } else {
-      playerStatus.replaceChildren('No se pudo reproducir en el navegador. ', c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'Prueba en la app Calamar TV.');
+      const reason = data ? explainStreamError({ details: data.details, code: data.response && data.response.code }) : 'No se pudo reproducir esta emisión en el navegador.';
+      playerStatus.replaceChildren(`${reason} `, c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'Prueba en la app Calamar TV.');
     }
   };
   playerStatus.textContent = 'Conectando…';
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
-      if (data.fatal) next();
+      if (data.fatal) next(data);
     });
     hls.loadSource(source.url);
     hls.attachMedia(video);

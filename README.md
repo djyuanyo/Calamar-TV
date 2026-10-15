@@ -64,6 +64,28 @@ El reproductor ocupa toda la ventana y tiene controles propios: reproducir/pausa
 
 Con ratón, un clic pausa y un doble clic alterna la pantalla completa. En pantallas táctiles, un toque muestra u oculta los controles y la pantalla completa se bloquea en horizontal cuando el navegador lo permite. En iPhone la pantalla completa usa el reproductor del sistema. El volumen elegido se recuerda en el navegador. Mientras el reproductor está abierto, el resto de la página queda inactivo para el teclado y los lectores de pantalla.
 
+## Cuando un canal no carga en la web
+
+El reproductor de la web dice por qué falla en lugar de quedarse en blanco:
+
+| Mensaje | Causa |
+| - | - |
+| «El enlace de este canal caducó el…» | El enlace lleva una marca de tiempo (`?token=…-1792097946-`, `?e=` o `?expires=`) y ya pasó. No se intenta la petición. Los enlaces con token duran pocas horas y hay que renovarlos en Administración. |
+| «El servidor rechaza este enlace…» | El servidor respondió 401 o 403: no autorizado o caducado. |
+| «El enlace ya no existe…» | 404 o 410. |
+| «El servidor del canal no permite cargarlo desde otra web (CORS)…» | La petición no obtuvo respuesta. Es lo que ve el navegador cuando el servidor del vídeo no añade `Access-Control-Allow-Origin` para otras webs, o está bloqueado en la red. La web no puede saltarse esto: solo lo arregla quien controla ese servidor. La app Android no tiene esta limitación. |
+| «La emisión no tiene un formato que el navegador entienda» / «El navegador no admite el vídeo…» | Lista o códecs que el navegador no puede reproducir. |
+
+Si un canal tiene varios enlaces, el reproductor prueba el siguiente cuando uno falla. Los enlaces con token caducado se saltan. Pruebas: `node --test tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs`.
+
+## Diseño y reproductor de la app (2.2.0)
+
+La app Android y Android TV sigue el mismo diseño que la web: cabecera con la marca, pestañas con la sección abierta subrayada en lima, canal destacado grande con selector de otros destacados (en tablet y TV), filas con tarjetas 16:9 y filtros de categoría en forma de píldora. Cada tarjeta tiene el color que sale de su nombre, con el **mismo cálculo que la web** (`Palette.hue` y `hue()` de `web/app.js`; una prueba lo comprueba con valores sacados de la web), así que un canal se ve igual en los dos sitios. Un canal sin logo muestra sus iniciales. El foco del mando se ve con un contorno lima. «Mis canales» usa las mismas tarjetas.
+
+El reproductor tiene el botón de **pantalla completa** en los controles de Media3: oculta el panel superior y las barras del sistema (también bajo la muesca), y en móviles gira a horizontal. En televisión no se bloquea la orientación. El botón Atrás sale de la pantalla completa antes de cerrar el reproductor, y si hay un error o se abre el modo web vuelve solo al panel para que se vea el mensaje y los botones. Una etiqueta «EN DIRECTO» aparece cuando la emisión es en directo. El panel superior tiene el botón Volver con icono, el título y las acciones (DNS, Diagnóstico, Renovar, Fuentes, Modo web, Chrome) como píldoras.
+
+Pruebas nuevas: `PaletteTest`. La interfaz de la app se comprobó con el compilador contra Android 15, pero no se ha probado en un dispositivo ni en un televisor.
+
 ## Mis canales (solo app)
 
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
