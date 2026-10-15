@@ -1,0 +1,5501 @@
+{
+ "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
+ "updated_at": 1792076779156,
+ "channels": [
+  {
+   "id": "la-1",
+   "name": "La 1",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/la1detve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/la-1/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/la1/la1_main_dvr.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "la-2",
+   "name": "La 2",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/la2detve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/la-2/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/la2/la2_main_dvr.m3u8",
+    "https://stream.ads.ottera.tv/playlist.m3u8?network_id=15618"
+   ],
+   "geo": true
+  },
+  {
+   "id": "cuatro",
+   "name": "Cuatro",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/cuatro/picture?width=200&height=200",
+   "web": "https://www.mediasetinfinity.es/directo/cuatro/",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "telecinco",
+   "name": "Telecinco",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/tele5/picture?width=200&height=200",
+   "web": "https://www.mediasetinfinity.es/directo/telecinco/",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "fdf",
+   "name": "FDF",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/factoriadeficcion/picture?width=200&height=200",
+   "web": "https://www.mitele.es/directo/fdf",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "energy",
+   "name": "Energy",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/E.EnergyTV/picture?width=200&height=200",
+   "web": "https://www.mitele.es/directo/energy",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "divinity",
+   "name": "Divinity",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/divinityes/picture?width=200&height=200",
+   "web": "https://www.mitele.es/directo/divinity",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "be-mad",
+   "name": "Be Mad",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/BeMadTV/picture?width=200&height=200",
+   "web": "https://www.mitele.es/directo/bemad",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "dmax",
+   "name": "DMAX",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/DMAXes/picture?width=200&height=200",
+   "web": "https://dmax.marca.com/en-directo",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-toro-tv",
+   "name": "El Toro TV",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/eltorotv.es/picture?width=200&height=200",
+   "web": "https://eltorotv.com/tv-en-directo",
+   "streams": [
+    "https://streaming-1.eltorotv.com/lb0/eltorotv-streaming-web/index.m3u8",
+    "https://edge-nodo-002.streaming.hitcloser.net/eltorotv-streaming-web/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "trece",
+   "name": "TRECE",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/TRECEtves/picture?width=200&height=200",
+   "web": "https://www.cope.es/directos/trece",
+   "streams": [
+    "https://play.cdn.enetres.net/091DB7AFBD77442B9BA2F141DCC182F5021/021/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "veo7",
+   "name": "VEO7",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/2067908827161198592/mqYsR_tf_200x200.png",
+   "web": "https://www.veo7.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "squirrel",
+   "name": "Squirrel",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1868605710218514432/98bLWAHa_200x200.jpg",
+   "web": "https://squirreltv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "squirrel2",
+   "name": "Squirrel2",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/2007038154994294784/NqJe7hvI_200x200.jpg",
+   "web": "https://squirrel2.tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "ten",
+   "name": "Ten",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/televisionten/picture?width=200&height=200",
+   "web": "https://tentv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "dkiss",
+   "name": "DKISS",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/DKissTV/picture?width=200&height=200",
+   "web": "https://www.dkiss.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "bom-cine",
+   "name": "BOM Cine",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1450728866377568257/B8HFyLJe_200x200.jpg",
+   "web": "https://www.bomcine.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rne-para-todos",
+   "name": "RNE para todos",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://graph.facebook.com/radionacionalrne/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/canales-lineales/rne-para-todos/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/6688753.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/rne/rne_para_todos_main.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "24h",
+   "name": "24h",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1634293543987453954/mb1Rzmso_200x200.jpg",
+   "web": "https://www.rtve.es/play/videos/directo/24h/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/1694255.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/24h/24h_main_dvr.m3u8",
+    "https://stream.ads.ottera.tv/playlist.m3u8?network_id=15621"
+   ],
+   "geo": true
+  },
+  {
+   "id": "euronews",
+   "name": "Euronews",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/es.euronews/picture?width=200&height=200",
+   "web": "https://es.euronews.com/live",
+   "streams": [
+    "https://euronews-live-spa-es.fast.rakuten.tv/v1/master/0547f18649bd788bec7b67b746e47670f558b6b2/production-LiveChannel-6571/bitok/eyJzdGlkIjoiMDA0YjY0NTMtYjY2MC00ZTZkLTlkNzEtMTk3YTM3ZDZhZWIxIiwibWt0IjoiZXMiLCJjaCI6NjU3MSwicHRmIjoxfQ==/26034/euronews-es.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "3catinfo",
+   "name": "3CatInfo",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1968163923477098496/blka6O_j_200x200.jpg",
+   "web": "https://www.3cat.cat/3cat/directes/3catinfo-tv/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/canal324-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/canal324-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/canal324-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-origin/canal324-hls/master.m3u8",
+    "https://directes-tv-int.3catdirectes.cat/live-content/canal324-hls/master.m3u8",
+    "https://directes-tv-int.3catdirectes.cat/live-origin/canal324-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "radio-nacional",
+   "name": "Radio Nacional",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/radionacionalrne/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/radio/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/6982891.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-5",
+   "name": "Radio 5",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1405097207339028480/H7nP_7Ti_200x200.jpg",
+   "web": "https://www.rtve.es/play/videos/programa/rne-e102/6982917/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/6982917.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "el-pais",
+   "name": "El País",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/elpais/picture?width=200&height=200",
+   "web": "https://elpais.com",
+   "streams": [
+    "https://d2epgk1fomaa1g.cloudfront.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/cc-9n8y4tw0bk3an/live/fast-channel-el-pais/fast-channel-el-pais.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-vanguardia",
+   "name": "La Vanguardia",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/LaVanguardia/picture?width=200&height=200",
+   "web": "https://www.lavanguardia.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cadena-ser",
+   "name": "Cadena SER",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/cadenaser/picture?width=200&height=200",
+   "web": "https://cadenaser.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "abc",
+   "name": "ABC",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/ABCes/picture?width=200&height=200",
+   "web": "https://www.abc.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-confidencial",
+   "name": "El Confidencial",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/elconfidencial/picture?width=200&height=200",
+   "web": "https://www.elconfidencial.com/television/",
+   "streams": [
+    "https://sis-global.prod.samsungtv.plus/v1/tvpprd/sc-bmo0niz694whx.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "el-mundo",
+   "name": "El Mundo",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/elmundo/picture?width=200&height=200",
+   "web": "https://www.elmundo.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-razon",
+   "name": "La Razón",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/larazon.es/picture?width=200&height=200",
+   "web": "https://www.larazon.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "okdiario",
+   "name": "Okdiario",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/okdiario/picture?width=200&height=200",
+   "web": "https://okdiario.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "agencia-efe",
+   "name": "Agencia EFE",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/AgenciaEFEnoticias/picture?width=200&height=200",
+   "web": "https://www.efe.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "onda-cero",
+   "name": "Onda Cero",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/ondacero/picture?width=200&height=200",
+   "web": "https://www.ondacero.es",
+   "streams": [
+    "https://atres-live.ondacero.es/h264/live/obs/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "el-debate",
+   "name": "El Debate",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/eldebatecom/picture?width=200&height=200",
+   "web": "https://www.eldebate.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "negocios-tv",
+   "name": "Negocios TV",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/Negociostele/picture?width=200&height=200",
+   "web": "https://www.negocios.com/directo",
+   "streams": [
+    "https://negociostv-negociostv-samsunges.amagi.tv/hls/amagi_hls_data_negociost-negociostv-samsunges/CDN/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "libertad-digital-tv",
+   "name": "Libertad Digital TV",
+   "group": "Informativos",
+   "region": "",
+   "logo": "https://graph.facebook.com/libertad.digital.tv/picture?width=200&height=200",
+   "web": "https://tv.libertaddigital.com/directo.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "teledeporte",
+   "name": "Teledeporte",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/teledeporteRTVE/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/tdp/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/tdp/tdp_main.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "gol",
+   "name": "GOL",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/goltv.es/picture?width=200&height=200",
+   "web": "https://www.goltelevision.com/en-directo/gol_live",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "esport3",
+   "name": "Esport3",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/Esport3/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/esport3/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/esport3-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-origin/esport3-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "etb-deportes-kirolak-360",
+   "name": "ETB Deportes (Kirolak 360)",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/deportes.eitb.kirolak/picture?width=200&height=200",
+   "web": "https://kirolakeitb.eus/es/kirolak-360/en-directo/",
+   "streams": [
+    "https://multimedia.eitb.eus/live-content/oka1hd-hls/master.m3u8",
+    "https://multimedia.eitb.eus/live-content/oka2hd-hls/master.m3u8",
+    "https://multimedia.eitb.eus/live-content/oka3hd-hls/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "aragon-deporte-1",
+   "name": "Aragón Deporte 1",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/aragondeporte/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69f82201907d412a7bc35c63",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "aragon-deporte-2",
+   "name": "Aragón Deporte 2",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/aragondeporte/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69f821f4154724838018ad62",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "vinx-tv",
+   "name": "Vinx TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/VinxTV/picture?width=200&height=200",
+   "web": "https://vinxtv.es/directo",
+   "streams": [
+    "https://live.enfoque.media:5443/live/streams/vinxtv.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ib3-esports",
+   "name": "IB3 Esports",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/EsportsIB3/picture?width=200&height=200",
+   "web": "https://ib3.org/directe",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "real-madrid-tv",
+   "name": "Real Madrid TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/RealMadrid/picture?width=200&height=200",
+   "web": "https://www.realmadrid.com/real-madrid-tv",
+   "streams": [
+    "https://rmtv.akamaized.net/hls/live/2043153/rmtv-es-web/master.m3u8",
+    "https://rmtv.akamaized.net/hls/live/2043154/rmtv-en-web/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "barca-play",
+   "name": "Barça Play",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/fcbarcelona/picture?width=200&height=200",
+   "web": "https://www.fcbarcelona.cat/ca/barca-play",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "top-barca",
+   "name": "Top Barça",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/fcbarcelona/picture?width=200&height=200",
+   "web": "https://www.rakuten.tv/es/live_channels/top-barca-es",
+   "streams": [
+    "https://amg17560-fcb-amg17560c2-samsung-es-9803.playouts.now.amagi.tv/ts-eu-w1-n2/playlist/amg17560-fcbarcelona-topbarcaspanish-samsunges/playlist.m3u8",
+    "https://amg17560-fcb-amg17560c3-lg-es-11383.playouts.now.amagi.tv/ts-eu-w1-n2/playlist/amg17560-fcbarcelona-topbarcacatala-lges/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "sevilla-fc",
+   "name": "Sevilla FC+",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/sevillafc/picture?width=200&height=200",
+   "web": "https://sevillafc.es/sevillafc/inicio",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "betis-tv",
+   "name": "Betis TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/realbetisbalompie/picture?width=200&height=200",
+   "web": "https://www.realbetisbalompie.es/rtvbetis/directo-tv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "real-sociedad-tv",
+   "name": "Real Sociedad TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/RealSociedadFutbol/picture?width=200&height=200",
+   "web": "https://www.realsociedad.eus/es/noticias",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rcd-espanyol-de-barcelona-tv",
+   "name": "RCD Espanyol de Barcelona TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/RCDEspanyol/picture?width=200&height=200",
+   "web": "https://www.rcdespanyol.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cadiz-cf-tv",
+   "name": "Cádiz CF TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/cadizclubdefutbol/picture?width=200&height=200",
+   "web": "https://tv.cadizcf.com/24h",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rcd-mallorca-tv",
+   "name": "RCD Mallorca TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/RCDMallorcaOficial/picture?width=200&height=200",
+   "web": "https://www.rcdmallorca.es/videos",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "villareal-cf-tv",
+   "name": "Villareal CF TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/villarrealcf/picture?width=200&height=200",
+   "web": "https://villarrealcf.es/v-play/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "marca",
+   "name": "MARCA",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/MARCA/picture?width=200&height=200",
+   "web": "https://www.marca.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "as",
+   "name": "AS",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://yt3.googleusercontent.com/ytc/AIdro_kKno7gC768MJ_rt67CNI107Zhs5157wEvhg2AQwkvQBgk=s200",
+   "web": "https://as.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "sport",
+   "name": "SPORT",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/sport.es/picture?width=200&height=200",
+   "web": "https://www.sport.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-partidazo-de-cope",
+   "name": "El Partidazo de COPE",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/elpartidazodecope/picture?width=200&height=200",
+   "web": "https://www.cope.es/programas/el-partidazo-de-cope/noticias/sigue-partidazo-cope-directo-canal-youtube-20250602_3162222.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tiempo-de-juego-cope",
+   "name": "Tiempo de Juego COPE",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/tiempodejuego/picture?width=200&height=200",
+   "web": "https://www.cope.es/programas/tiempo-de-juego/noticias/sigue-juego-directo-youtube-20250513_3149685.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "carrusel-deportivo-ser",
+   "name": "Carrusel Deportivo SER",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/carruseldeportivo/picture?width=200&height=200",
+   "web": "https://cadenaser.com/cadena-ser/carrusel-deportivo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-larguero-ser",
+   "name": "El Larguero SER",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/ellarguero/picture?width=200&height=200",
+   "web": "https://cadenaser.com/cadena-ser/el-larguero/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-chiringuito-inside",
+   "name": "El Chiringuito Inside",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/ElChiringuitoTV/picture?width=200&height=200",
+   "web": "https://www.mediasetinfinity.es/deportes/el-chiringuito/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-10-del-barca",
+   "name": "El 10 del Barça",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/TN6JuWH7_2QEyEgz81uzWfxjD4ZKqxGZhIPhJqa1lB1QwzXzKn6Fh9f_REUq-2oDElrZCZcYDw=s200",
+   "web": "https://xn--el10delbara-v9a.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "eleventv",
+   "name": "ElevenTV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://yt3.googleusercontent.com/X0bGxD-L9n15kflOHVOKwub0JtwK7blNF8V56Jag09rQ5W1SV4QsTIfy_APiUdAMRCx_9iopaw=s200",
+   "web": "https://www.youtube.com/channel/UCg3k7fq0Gy0mLpMb2nlQGQQ",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "futsalmafer-tv",
+   "name": "Futsalmafer.tv",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/futsalmafer.tv/picture?width=200&height=200",
+   "web": "https://canalsports.tv/directo-24-horas/",
+   "streams": [
+    "https://play.agenciastreaming.com:8081/futsalmafertv/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "okliga-tv",
+   "name": "OKLIGA TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/ytc/AKedOLRCpkRZNcBfZLGvM1SO_Qf77p_xtv6OnU26aa23Vw=s200",
+   "web": "https://www.okliga.tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "fedhielo-tv",
+   "name": "FedHielo TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/fedhielo/picture?width=200&height=200",
+   "web": "https://www.rfedh.es/fedhielo-tv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "real-federacion-espanola-de-patinaje",
+   "name": "Real Federación Española de Patinaje",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/FedPatinaje/picture?width=200&height=200",
+   "web": "https://www.fep.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "real-federacion-espanola-de-balonmano",
+   "name": "Real Federación Española de Balonmano",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/RFEBalonmano/picture?width=200&height=200",
+   "web": "https://www.rfebm.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cazaflix",
+   "name": "Cazaflix",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/cazaflixoficial/picture?width=200&height=200",
+   "web": "https://cazaflix.com/tv-directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "boing",
+   "name": "Boing",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/boinges/picture?width=200&height=200",
+   "web": "https://www.mitele.es/directo/boing",
+   "streams": [],
+   "geo": true
+  },
+  {
+   "id": "clan",
+   "name": "Clan",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/clantve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/clan/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/5466990.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/clan/clan_main_dvr.m3u8",
+    "https://stream.ads.ottera.tv/playlist.m3u8?network_id=15620"
+   ],
+   "geo": true
+  },
+  {
+   "id": "sx3",
+   "name": "SX3",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/SomSX3/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/sx3/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/super3-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/super3-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/super3-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-origin/super3-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "infantil-canal-extremadura",
+   "name": "Infantil (Canal Extremadura)",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/CanalExtremadura/picture?width=200&height=200",
+   "web": "https://www.canalextremadura.app/videos/354923-canal-tematico-infantil",
+   "streams": [
+    "https://cdn-canalextremadura.watchity.net/fast2/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "pequeradio-tv",
+   "name": "Pequeradio TV",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/Pequeradio/picture?width=200&height=200",
+   "web": "https://www.antenita.es",
+   "streams": [
+    "https://183.bozztv.com/ssh101/ssh101/pequeradiotv/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "disney-channel",
+   "name": "Disney Channel",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/DisneyChannelES/picture?width=200&height=200",
+   "web": "https://www.youtube.com/@disneychannelES/streams",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "wb-kids-latino",
+   "name": "WB Kids Latino",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/7p5v3VOAMjFKxxtcSri6Dz77EMz17GEmdpTtMJA_zYNgpLeGK8MrdUZmt4hoRPvXJEGwlyU0=s200",
+   "web": "https://www.youtube.com/wbkidslatino",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cartoon-network-latino",
+   "name": "Cartoon Network Latino",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/cartoonnetwork/picture?width=200&height=200",
+   "web": "https://www.cartoonnetwork.ca",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "nick-jr",
+   "name": "Nick Jr.",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1682087222537756680/BCh_FNy8_200x200.jpg",
+   "web": "https://www.youtube.com/@NickJrEspanol",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "pocoyo",
+   "name": "Pocoyó",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/pocoyo/picture?width=200&height=200",
+   "web": "https://www.pocoyo.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "bluey",
+   "name": "Bluey",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://graph.facebook.com/OfficialBlueyTV/picture?width=200&height=200",
+   "web": "https://www.bluey.tv/watch/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "lego-friends",
+   "name": "LEGO Friends",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/378800000257143498/6dbc45c353f641ef85ca51f75533a7e1_200x200.jpeg",
+   "web": "https://www.youtube.com/channel/UCP-Ng5SXUEt0VE-TXqRdL6g",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "talking-tom-and-friends",
+   "name": "Talking Tom and Friends",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/a/AATXAJwpm-5h1rjcPqno5uANZr75VhhCYKv4PS02gLUS0A=s200",
+   "web": "https://www.youtube.com/TomFriendsEs",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "little-baby-bum",
+   "name": "Little Baby Bum",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/a/AATXAJwn3r9U07S7ZOqoGZLUbuYHWiIqpE8xuLJsyg=s200",
+   "web": "https://www.youtube.com/user/LittleBabyBumEspanol",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "masha-y-el-oso",
+   "name": "Masha y el Oso",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://yt3.googleusercontent.com/gezE4GxPlSR2m2fQ16uL9qZKHhA8YXfHEOQ3-eLu8KadN55AzPSC9Z_ATsjesQBDrpuQXT_J1hY=s200",
+   "web": "https://www.youtube.com/@MashaOso",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "energeek-retro",
+   "name": "EnerGeek Retro",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/2088558300111556608/CrCydAjp_200x200.jpg",
+   "web": "https://neotv.energeek.cl/canal?slug=energeek",
+   "streams": [
+    "https://cl-2.backend.energeek.cl/bkp/egretroweb/index.m3u8?token=TDTCh4nnelsES",
+    "https://cl-2.backend.energeek.cl/bkp/egretro/mobile/index.m3u8?token=TDTCh4nnelsES"
+   ],
+   "geo": false
+  },
+  {
+   "id": "energeek-fan",
+   "name": "EnerGeek Fan",
+   "group": "Infantiles",
+   "region": "",
+   "logo": "https://cdn.energeek.cl/logos/EG-Fan-2025_pfp.png",
+   "web": "https://neotv.energeek.cl/canal?slug=energeek-fan",
+   "streams": [
+    "https://cl-2.backend.energeek.cl/bkp/egfanweb/index.m3u8?token=TDTCh4nnelsES",
+    "https://cl-2.backend.energeek.cl/bkp/egfan/mobile/index.m3u8?token=TDTCh4nnelsES"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-sur-andalucia",
+   "name": "Canal Sur Andalucía",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/canalsurradioytv/picture?width=200&height=200",
+   "web": "https://www.canalsurmas.es/videos/131772-canal-sur-andalucia",
+   "streams": [
+    "https://live-24-canalsur.interactvty.pro/9bb0f4edcb8946e79f5017ddca6c02b0/74cdbd1b401a7598ab8f3e9b5652c9909daa60dd4f6f96f28396a3f1cfd926f2.m3u8",
+    "https://dfk2a268yviz9.cloudfront.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/cc-ddiii1m6jt6of/CanalSurAndaluciaES.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-sur-2-accesible",
+   "name": "Canal Sur 2 Accesible",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/canalsurradioytv/picture?width=200&height=200",
+   "web": "https://www.canalsurmas.es/videos/77595-canal-sur-2-accesible",
+   "streams": [
+    "https://rtva-channel22.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-sur-mas-noticias",
+   "name": "Canal Sur Más Noticias",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/CanalSurNoticias/picture?width=200&height=200",
+   "web": "https://www.canalsurmas.es/videos/131524-canal-sur-mas-live-14",
+   "streams": [
+    "https://rtva-channel42.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-andalucia",
+   "name": "7TV Andalucía",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/andalucia/directo/20250718114601000917.html",
+   "streams": [
+    "https://especial7tv.gestec-video.com/hls/regional.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-almeria",
+   "name": "7TV Almería",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/almeria/almeria-7tv-directo/20250723091305001107.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVALMERIA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-cadiz",
+   "name": "7TV Cádiz",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz/cadiz-7tv-directo/20250723092939001110.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVCADIZ.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-cordoba",
+   "name": "7TV Córdoba",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cordoba/cordoba-7tv-directo/20250723094526001122.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVCORDOBA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-granada",
+   "name": "7TV Granada",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/granada/granada-7tv-directo/20250723120311001147.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVGRANADA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-huelva",
+   "name": "7TV Huelva",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/huelva/huelva-7tv-directo/20250723121506001159.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/regional.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-jaen",
+   "name": "7TV Jaén",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/jaen/jaen-7tv-directo/20250723123031001175.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVJAEN.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-malaga",
+   "name": "7TV Málaga",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/granada/granada-7tv-directo/20250723140142001188.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVMALAGA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-sevilla",
+   "name": "7TV Sevilla",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/sevilla/sevilla-7tv-directo/20250723144948001214.html",
+   "streams": [
+    "https://especial7tv.gestec-video.com/hls/7TVSEVILLA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-aljarafe",
+   "name": "7TV Aljarafe",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/sevilla-aljarafe/aljarafe-7tv-directo/20250731093841001361.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVALJARAFE.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-arcos",
+   "name": "7TV Arcos",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz-arcos/arcos-7tv-directo/20250731092124001344.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVARCOS.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-campo-de-gibraltar",
+   "name": "7TV Campo de Gibraltar",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz-campodegibraltar/campo-gibraltar-7tv-directo/20250731092253001346.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVALGECIRAS.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-linares",
+   "name": "7TV Linares",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/jaen-linares/linares-7tv-directo/20250731093604001357.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVLINARES.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-jerez",
+   "name": "7TV Jerez",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz-jerez/jerez-7tv-directo/20250731092738001352.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVJEREZ.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-san-fernando",
+   "name": "7TV San Fernando",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz-sanfernando/san-fernando-7tv-directo/20250724085255001240.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVSANFERNANDO.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7tv-rota",
+   "name": "7TV Rota",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
+   "web": "https://www.7tvandalucia.es/video/cadiz-rota/rota-7tv-directo/20250731112132001354.html",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/7TVROTA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "jerez-tv",
+   "name": "Jerez TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/jerez.television/picture?width=200&height=200",
+   "web": "https://jereztelevision.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "101tv-malaga",
+   "name": "101TV Málaga",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101tvmalaga/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/359",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101televisionlive/smil:malagaott.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-malaga-cofrade",
+   "name": "101TV Málaga Cofrade",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101tvmalaga/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/614",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:CofradeMalaga.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "almeria-24h-tv",
+   "name": "Almería 24h TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/107654981928274/picture?width=200&height=200",
+   "web": "https://www.almeria24htv.com",
+   "streams": [
+    "https://broadcast1.radioponiente.org/almeria24h_aac/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "onda-cadiz",
+   "name": "Onda Cádiz",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/ondacadiz/picture?width=200&height=200",
+   "web": "https://ondacadiz.es/television-directo",
+   "streams": [
+    "https://ondacadiztv.es:30443/octv/directo_multi/playlist.m3u8",
+    "https://ondacadiztv.es:30443/octv/24h/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "8tv-sierra-de-cadiz",
+   "name": "8TV Sierra de Cádiz",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/8tvcadiz/picture?width=200&height=200",
+   "web": "https://8cadiz.es/directo-sierra/",
+   "streams": [
+    "https://s.emisoras.tv:8081/sierradecadiz/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "8tv-chiclana",
+   "name": "8TV Chiclana",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/8tvcadiz/picture?width=200&height=200",
+   "web": "https://8cadiz.es/directo-chiclana/",
+   "streams": [
+    "https://s.emisoras.tv:8081/chiclana/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "8tv-la-janda",
+   "name": "8TV La Janda",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/8tvcadiz/picture?width=200&height=200",
+   "web": "https://8cadiz.es/directo-la-janda/",
+   "streams": [
+    "https://s.emisoras.tv:8081/lajanda/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tuya-la-janda-tv",
+   "name": "Tuya La Janda TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/tuyalajandatv/picture?width=200&height=200",
+   "web": "https://tuyatv.com",
+   "streams": [
+    "https://nimble.tuyapro.es/app/tv/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "onda-algeciras-tv",
+   "name": "Onda Algeciras TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/ondaalgecirastv/picture?width=200&height=200",
+   "web": "https://ondaalgecirastv.com/en-directo/",
+   "streams": [
+    "https://cloudtv.provideo.es/live/algecirastv-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ptv-malaga",
+   "name": "PTV Málaga",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/PTVMalaga/picture?width=200&height=200",
+   "web": "https://ptvtelecom.com/canales/malaga.html",
+   "streams": [
+    "https://streamer.zapitv.com/PTV-malaga/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "huelva-tv",
+   "name": "Huelva TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://pbs.twimg.com/profile_images/2016115597247918080/0fbRUb7v_200x200.jpg",
+   "web": "https://alacarta.huelvatv.com/directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "andalucia-cocina",
+   "name": "Andalucía Cocina",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.googleusercontent.com/ytc/APkrFKb6DZpbxOMbN_VANCdenLck4ceg7gxMk5tnkjmM=s200",
+   "web": "https://vivaespaña.tv/user/live-tv/ch201-andalucia-cocina/11",
+   "streams": [
+    "https://cloud.fastchannel.es/mic/manifiest/hls/acocina/acocina.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "andalucia-turismo",
+   "name": "Andalucía Turismo",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.googleusercontent.com/ytc/APkrFKYsl5e6jEIMtXIoTUHvkJqXxDfASrvQP_QFRRww=s200",
+   "web": "https://xn--vivaespaa-s6a.tv/user/live-tv/ch200-andalucia-turismo/12",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?&network_id=12685&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cordoba-tv",
+   "name": "Córdoba TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/cordobatvonline/picture?width=200&height=200",
+   "web": "https://www.cordoba-tv.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "teleonuba",
+   "name": "Teleonuba",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Teleonuba/picture?width=200&height=200",
+   "web": "https://www.teleonuba.es/en-directo/",
+   "streams": [
+    "https://5f71743aa95e4.streamlock.net:1936/Teleonuba/endirecto/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-sevilla",
+   "name": "101TV Sevilla",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101TVSevilla/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/362",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101televisionlive/smil:sevillaott.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-sevilla-cofrade",
+   "name": "101TV Sevilla Cofrade",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101TVSevilla/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/617",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:CofradeSevilla.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-granada",
+   "name": "101TV Granada",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101tvgranada/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/233",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:granada.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canalcosta",
+   "name": "CanalCosta",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/canalcosta/picture?width=200&height=200",
+   "web": "https://www.canalcostatv.es",
+   "streams": [
+    "https://5f71743aa95e4.streamlock.net:1936/CanalcostaTV/endirecto/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "condavision",
+   "name": "Condavisión",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/condavision/picture?width=200&height=200",
+   "web": "https://www.condavision.es",
+   "streams": [
+    "https://5f71743aa95e4.streamlock.net:1936/Condavision/endirecto/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "marbella-tv",
+   "name": "Marbella TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/RTVMarbella/picture?width=200&height=200",
+   "web": "https://rtvmarbella.tv/tv-en-directo/",
+   "streams": [
+    "https://streaming.rtvmarbella.tv/hls/streamingweb.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "m95-marbella",
+   "name": "M95 Marbella",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/m95tvmarbella/picture?width=200&height=200",
+   "web": "https://www.m95tvmarbella.es",
+   "streams": [
+    "https://limited2.todostreaming.es/live/m95-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "estepona-tv",
+   "name": "Estepona TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/esteponatelevision/picture?width=200&height=200",
+   "web": "https://television.estepona.es/tvendirecto/",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8022/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-45-tv",
+   "name": "Canal 45 TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/canal45television/picture?width=200&height=200",
+   "web": "https://www.canal45tv.com",
+   "streams": [
+    "https://nlb1-live.emitstream.com/hls/625csn5et2iszm9oze65/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "costa-noroeste-tv",
+   "name": "Costa Noroeste TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Costanoroestetv/picture?width=200&height=200",
+   "web": "https://www.costanoroestetv.net",
+   "streams": [
+    "https://limited31.todostreaming.es/live/noroestetv-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-malaga",
+   "name": "Canal Málaga",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/CanalMalagaRTVMunicipal/picture?width=200&height=200",
+   "web": "https://www.canalmalaga.es/videos/251314-directo-television",
+   "streams": [
+    "https://canalmalaga-tv-live.flumotion.com/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-antequera",
+   "name": "101TV Antequera",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/101tvAntequera/picture?width=200&height=200",
+   "web": "https://101play.tv/es/pl/440",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:antequera.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-cadiz",
+   "name": "101TV Cádiz",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.googleusercontent.com/dFDfeITvIVgSQQSNlgLw1WJ98Icuw-WlYJXNp31UhoABX3LOrJjXafo6a2H9EfhrA9Ah9e84=s200",
+   "web": "https://101play.tv/es/pl/569",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:CADIZ.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "101tv-costa-del-sol",
+   "name": "101TV Costa del Sol",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.googleusercontent.com/dFDfeITvIVgSQQSNlgLw1WJ98Icuw-WlYJXNp31UhoABX3LOrJjXafo6a2H9EfhrA9Ah9e84=s200",
+   "web": "https://101play.tv/es/pl/476",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/101weblive/smil:BENALMADENA.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "television-alhaurin",
+   "name": "Televisión Alhaurín",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Rtvalhaurin/picture?width=200&height=200",
+   "web": "https://rtvalhaurinelgrande.com",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=13354&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-donana",
+   "name": "Canal Doñana",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/donanacomunica/picture?width=200&height=200",
+   "web": "https://www.canaldonana.com",
+   "streams": [
+    "https://secure5.todostreaming.es/live/division-alm.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "uvitel-tv",
+   "name": "Uvitel TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/uviteltv/picture?width=200&height=200",
+   "web": "https://uvitelonline.com/en-directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "interalmeria-tv",
+   "name": "Interalmería TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Interalmeriatv/picture?width=200&height=200",
+   "web": "https://www.interalmeria.tv/directo/",
+   "streams": [
+    "https://interalmeria.tv/directo/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "axarquia-tv",
+   "name": "Axarquía TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/AxarquiaTV/picture?width=200&height=200",
+   "web": "https://www.youtube.com/channel/UC0N3U1saaQQWMt2rRPbU0DQ",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-luz-television",
+   "name": "Canal Luz Televisión",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/canalluztelevision/picture?width=200&height=200",
+   "web": "https://canalluztelevision.es/en-directo",
+   "streams": [
+    "https://5f71743aa95e4.streamlock.net:1936/CanalLuz/enDirecto/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "mas-jerez",
+   "name": "Más Jerez",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/masjerez/picture?width=200&height=200",
+   "web": "https://masjerez.com/programas-tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "almeria-tv",
+   "name": "Almería TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/AlmerTV/picture?width=200&height=200",
+   "web": "https://almeriatv.com",
+   "streams": [
+    "https://broadcast1.radioponiente.org/atv/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-san-roque",
+   "name": "Canal San Roque",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.googleusercontent.com/6SgTMpyVCJlMGBcip6gvloYy2u-BP4vY-H2paJ2zO471owJq_YcgPhUUB0tBaKIKlNUKzeRf=s200",
+   "web": "https://www.tv.multimediasanroque.com/videos/category/4520-directo",
+   "streams": [
+    "https://cdnlivevlc.codev8.net/aytosanroquelive/smil:channel1.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ptv-linares",
+   "name": "PTV Linares",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/tvlinares/picture?width=200&height=200",
+   "web": "https://www.ptvtelecom.com/canales/linares.html",
+   "streams": [
+    "https://streamer.zapitv.com/ptv-linarez/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ptv-sevilla",
+   "name": "PTV Sevilla",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/SevillaPTV/picture?width=200&height=200",
+   "web": "https://ptvtelecom.com/canales/sevilla.html",
+   "streams": [
+    "https://streamer.zapitv.com/PTV_sevilla/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "telequivir",
+   "name": "TeleQuivir",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/telequivirtv/picture?width=200&height=200",
+   "web": "https://vegadigital.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "telemotril",
+   "name": "Telemotril",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/telemotriltv/picture?width=200&height=200",
+   "web": "https://telemotril.com/telemotril-en-vivo/",
+   "streams": [
+    "https://5940924978228.streamlock.net/8431/8431/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "telecija",
+   "name": "Telécija",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/telecija.televisioncomarcal/picture?width=200&height=200",
+   "web": "https://ecijadigital.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rtv-tarifa",
+   "name": "RTV Tarifa",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/RTVTARIFA/picture?width=200&height=200",
+   "web": "https://www.youtube.com/@RTVTARIFA",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "torremolinos-tv",
+   "name": "Torremolinos TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/torremolinostv/picture?width=200&height=200",
+   "web": "https://torremolinostv.com/tv-en-directo/",
+   "streams": [
+    "https://cdnlivevlc.codev8.net/canaltorremolinoslive/smil:channel1.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tg7",
+   "name": "TG7",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/TG7tv/picture?width=200&height=200",
+   "web": "https://tg7.es",
+   "streams": [
+    "https://flu-01.hucame.es/TG7/index.fmp4.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "sal-tv",
+   "name": "Sal TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/SalTelevision/picture?width=200&height=200",
+   "web": "https://www.saltv.es/elementor-92444/",
+   "streams": [
+    "https://nimble.tuyapro.es/saltv/tv/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "manilva-tv",
+   "name": "Manilva TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/rtvmanilva/picture?width=200&height=200",
+   "web": "https://www.rtvmanilva.com/tvdirecto/",
+   "streams": [
+    "https://stream.castr.com/627a72d21914543be01c1720/live_e2ae1780dc2a11eca660b7b17b7952a5/tracks-v1a1/mono.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "fuengirola-tv",
+   "name": "Fuengirola TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/fuengirolatvoficial/picture?width=200&height=200",
+   "web": "https://fuengirolatv.com/directo-ftv/",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/FTV.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "9-la-loma-tv",
+   "name": "9 la Loma TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/9laloma/picture?width=200&height=200",
+   "web": "https://9laloma.tv/directo/",
+   "streams": [
+    "https://9laloma.tv/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ecija-comarca-tv",
+   "name": "Écija Comarca TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/ecijacomarcatelevision/picture?width=200&height=200",
+   "web": "https://areacomunicacion.ecija.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "mijas-3-40-tv",
+   "name": "Mijas 3.40 TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Mijas340TV/picture?width=200&height=200",
+   "web": "https://mijascomunicacion.com/mijas-340-tv-en-directo/",
+   "streams": [
+    "https://streaming004.gestec-video.com/hls/MIJAS.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ptv-granada",
+   "name": "PTV Granada",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/PTVGranada/picture?width=200&height=200",
+   "web": "https://ptvtelecom.com/canales/granada.html",
+   "streams": [
+    "https://streamer.zapitv.com/PTV-granada/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ptv-cordoba",
+   "name": "PTV Córdoba",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/PTVCOR/picture?width=200&height=200",
+   "web": "https://ptvtelecom.com/canales/cordoba.html",
+   "streams": [
+    "https://streamer.zapitv.com/PTV_CORDOBA/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-carmona",
+   "name": "TV Carmona",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/126011457417096/picture?width=200&height=200",
+   "web": "https://www.televisioncarmona.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "mira-tv",
+   "name": "MIRA TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/miratelevision/picture?width=200&height=200",
+   "web": "https://www.elmira.es/miratv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-coin",
+   "name": "Canal Coín",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/106272064368271/picture?width=200&height=200",
+   "web": "https://canalcoin.com/tv-directo/",
+   "streams": [
+    "https://canalcoin.garjim.es/hls/directo.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "diez-tv-andujar",
+   "name": "Diez TV Andújar",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/dieztv/picture?width=200&height=200",
+   "web": "https://dieztv.es/dieztv-andujar-directo/",
+   "streams": [
+    "https://streamtv2.elitecomunicacion.cloud:3305/live/10tvandujarlive.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "diez-tv-las-villas",
+   "name": "Diez TV Las Villas",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/dieztv/picture?width=200&height=200",
+   "web": "https://dieztv.es/dieztv-lasvillas-directo/",
+   "streams": [
+    "https://streaming.cloud.innovasur.es/mmj2/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "diez-tv-ubeda",
+   "name": "Diez TV Úbeda",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/dieztv/picture?width=200&height=200",
+   "web": "https://dieztv.es/dieztv-ubeda-directo/",
+   "streams": [
+    "https://streaming.cloud.innovasur.es/mmj/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cartaya-tv",
+   "name": "Cartaya TV",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/radiocartaya/picture?width=200&height=200",
+   "web": "https://www.radiocartaya.es",
+   "streams": [
+    "https://video3.lhdserver.es/cartayatv/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvm-cordoba",
+   "name": "TVM Córdoba",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/TVM.Cordoba/picture?width=200&height=200",
+   "web": "https://tvm.cordoba.es/live",
+   "streams": [
+    "https://d16pwlnz9msuji.cloudfront.net/wct-dad9c712-1c61-4a61-aeee-8be9f5c9e6e9/continuous/8fbfd2f5-30c2-4d48-a24e-73f5d35ba491/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "telegranada",
+   "name": "TeleGranada",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/Telegranada/picture?width=200&height=200",
+   "web": "https://artefm.es",
+   "streams": [
+    "https://telegranada.es/hls/stream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "huelva-conecta",
+   "name": "Huelva Conecta",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.ggpht.com/dQxpHlPEeQ6XTzXJu7eJa36C7nT7TjxecHbznRDwEqWmdV5Upl8VMafZMHhCfToJGcdTcy1_bJA=s200",
+   "web": "https://huelvaconecta.com",
+   "streams": [
+    "https://servidor.islahostingla.com:3542/live/huelvaconecta3live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "music-tv-granada",
+   "name": "Music TV Granada",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSoBxvKI5aUExkO9mNDloNQ8ADAvcaRNMvPSzD2J81vIdO6oqZ1N7R-yWKK&s=10",
+   "web": "https://musictvgranada.com",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8032/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cofradias-24h",
+   "name": "Cofradías 24h",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://yt3.ggpht.com/eM_41EMbfLT9omch7MIGSlwg71gjSrsrPpS7TuBlFjYXLrC5pIIx8zx9SJ0q2Gvf2Gj3nblYFAw=s200",
+   "web": "https://www.youtube.com/@LIBETELTV",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-andalucia",
+   "name": "Parlamento de Andalucía",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/parlamentodeandalucia.es/picture?width=200&height=200",
+   "web": "https://www.parlamentodeandalucia.es/stream/canal4.html",
+   "streams": [
+    "https://stream1.parlamentodeandalucia.es/realizacion1/realizacion1/playlist.m3u8",
+    "https://stream2.parlamentodeandalucia.es/realizacion2/realizacion2/playlist.m3u8",
+    "https://stream2.parlamentodeandalucia.es/realizacion3/realizacion3/playlist.m3u8",
+    "https://stream2.parlamentodeandalucia.es/realizacion4/realizacion4/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "junta-de-andalucia",
+   "name": "Junta de Andalucía",
+   "group": "Autonómicos",
+   "region": "Andalucía",
+   "logo": "https://graph.facebook.com/AndaluciaJunta/picture?width=200&height=200",
+   "web": "https://www.juntadeandalucia.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "aragon-tv",
+   "name": "Aragón TV",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/AragonTV/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69934178aea15ae34fa39ad0",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "aragon-noticias-accesible",
+   "name": "Aragón Noticias Accesible",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/AragonNoticias/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69f8215ba762c9b1ab324ac8",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-tiempo-en-aragon-aragonplay",
+   "name": "El Tiempo en Aragón (AragonPlay)",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/AragonPlayTV/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/699341cfc03fcc0e33b898c3",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-campo-es-nuestro-aragonplay",
+   "name": "El Campo es Nuestro (AragonPlay)",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/AragonPlayTV/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/6a35c996fe712a63795dc1a3",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "antena-aragon",
+   "name": "Antena Aragón",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://yt3.ggpht.com/ytc/AL5GRJWC1oJVC1hgcGBN1OHnroVVoe_pcgLvGJWvOA8aGQ=s200",
+   "web": "https://diarioaragones.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "calamocha-tv",
+   "name": "Calamocha TV",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/CalamochaTV/picture?width=200&height=200",
+   "web": "https://www.mijilocatv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-25-barbastro-tv",
+   "name": "Canal 25 Barbastro TV",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/tvbarbastro/picture?width=200&height=200",
+   "web": "https://www.canal25tv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "altoaragon-television",
+   "name": "Altoaragón Televisión",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/AltoaragonTV/picture?width=200&height=200",
+   "web": "https://altoaragontelevision.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cortes-de-aragon",
+   "name": "Cortes de Aragón",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/@cortesdearagon/picture?width=200&height=200",
+   "web": "https://www.cortesaragon.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-aragon",
+   "name": "Gobierno de Aragón",
+   "group": "Autonómicos",
+   "region": "Aragón",
+   "logo": "https://graph.facebook.com/GobAragon/picture?width=200&height=200",
+   "web": "https://www.aragon.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-canaria-rtvc",
+   "name": "TV Canaria (RTVC)",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/RadioTelevisionCanaria/picture?width=200&height=200",
+   "web": "https://www.canariasplay.es/videos/314784-rtvc-en-directo",
+   "streams": [
+    "https://d1oyt3v08gcy18.cloudfront.net/index-events.m3u8",
+    "https://rtvclive.flumotion.cloud/rtvc1live/smil:channel1PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-1-canarias",
+   "name": "La 1 Canarias",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/la1detve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/tve-canarias/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/can/la1_can_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-2-canarias",
+   "name": "La 2 Canarias",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/la2detve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/tve-canarias/la-2-can/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/can/la2_can_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "24h-canarias",
+   "name": "24h Canarias",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://pbs.twimg.com/profile_images/1634293543987453954/mb1Rzmso_200x200.jpg",
+   "web": "https://www.rtve.es/play/videos/directo/tve-canarias/24-h-can/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/5473142.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/can/24h_can_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-4-tenerife",
+   "name": "Canal 4 Tenerife",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/CANAL4TENERIFE/picture?width=200&height=200",
+   "web": "https://www.canal4tenerife.tv/directo/",
+   "streams": [
+    "https://videoserver.tmcreativos.com:19360/hkbpjryheu/hkbpjryheu.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "mirame-tv",
+   "name": "Mírame TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/mirametvcom/picture?width=200&height=200",
+   "web": "https://mirametv.com",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=13696&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "grancanariatv-com",
+   "name": "GranCanariaTV.com",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://pbs.twimg.com/profile_images/1274358153921138695/yLxVSp3h_200x200.jpg",
+   "web": "https://www.grancanariatv.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tenerife-plus-tv",
+   "name": "Tenerife Plus TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://pbs.twimg.com/profile_images/1881490196564164608/p0cGwxKE_200x200.jpg",
+   "web": "https://www.tenerifeplus.tv",
+   "streams": [
+    "https://k20.usastreams.com:8081/tenerifeplus/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "atlantico-television",
+   "name": "Atlántico Televisión",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://pbs.twimg.com/profile_images/1779498186727456768/bIHqyk7p_200x200.jpg",
+   "web": "https://www.atlanticotelevision.com/en-vivo-tv/",
+   "streams": [
+    "https://live.atlanticotelevision.com/hls/hi/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "lancelot-tv",
+   "name": "Lancelot TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/LancelotTelevision/picture?width=200&height=200",
+   "web": "https://www.lancelot.tv/directo/",
+   "streams": [
+    "https://5c0956165db0b.streamlock.net:8090/directo/_definst_/lancelot.television/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "nortevision",
+   "name": "NORTEvisión",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/aljoamyvisual/picture?width=200&height=200",
+   "web": "https://nortevision.es/directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "ahora-tv",
+   "name": "Ahora TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/ahoratvtenerife/picture?width=200&height=200",
+   "web": "https://ahoratelevision.es",
+   "streams": [
+    "https://tv.mediacp.eu/hls/ahoratv/ahoratv.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtv-mogan",
+   "name": "RTV Mogán",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/radiotelevisionmogan/picture?width=200&height=200",
+   "web": "https://www.mogan.es/45-radio-television-de-mogan/3382-ver-television-mogan",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8028/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "noroeste-tv",
+   "name": "Noroeste TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/noroestetvladesiempre/picture?width=200&height=200",
+   "web": "https://sites.google.com/view/noroestetv/inicio",
+   "streams": [
+    "https://stream.castr.com/5d1f649bed75c92e40481734/live_19364d50fbcd11ed91bd012c3488eabc/index.fmp4.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "fuerteventura-tv",
+   "name": "Fuerteventura TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://yt3.ggpht.com/qj92f7GsPI7R-YCYzsFj5mDoSCduHSgh8lwCWHFXbHAx6rNmLsB78RZlmfiqbjYzQdNh1Fj9sQ=s200",
+   "web": "https://fuerteventuratelevision.com",
+   "streams": [
+    "https://5c0956165db0b.streamlock.net/ftv/directo/.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "factoria-de-carnaval",
+   "name": "Factoría de Carnaval",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://pbs.twimg.com/profile_images/1498617906560737281/iOri7Ujk_200x200.jpg",
+   "web": "https://multicarnaval.com",
+   "streams": [
+    "https://eu1.servers10.com:8081/8116/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-calima-tv",
+   "name": "Radio Calima TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/calimafm/picture?width=200&height=200",
+   "web": "https://calima.fm/es/",
+   "streams": [
+    "https://nrvideo1.newradio.it:443/calimafm/calimafm/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "afortunadas-tv",
+   "name": "Afortunadas TV",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/afortunadastv/picture?width=200&height=200",
+   "web": "https://afortunadastv.com/en-vivo/",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8108/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-10",
+   "name": "Canal 10",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/Canal10Television/picture?width=200&height=200",
+   "web": "https://canal10-television.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-canarias",
+   "name": "Parlamento de Canarias",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/parlamentodecanarias/picture?width=200&height=200",
+   "web": "https://www.parcan.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-canarias",
+   "name": "Gobierno de Canarias",
+   "group": "Autonómicos",
+   "region": "Canarias",
+   "logo": "https://graph.facebook.com/PRES.Gobcan/picture?width=200&height=200",
+   "web": "https://www.gobiernodecanarias.org/presidencia/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cantabria-tv",
+   "name": "Cantabria TV",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/vegavisiontvcantabria/picture?width=200&height=200",
+   "web": "https://www.cantabriatv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "saja-nansa-tv",
+   "name": "Saja Nansa TV",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/ondaoccidental/picture?width=200&height=200",
+   "web": "https://www.ondaoccidental.es/sajanansatv/",
+   "streams": [
+    "https://streamlov.alsolnet.com/sajanansatv/live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "11-tv-cantabria",
+   "name": "11 TV Cantabria",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/11TvCantabria/picture?width=200&height=200",
+   "web": "https://www.11tv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "popular-tv-cantabria",
+   "name": "Popular TV Cantabria",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/populartvcantabria/picture?width=200&height=200",
+   "web": "https://populartvcantabria.com/en-directo/",
+   "streams": [
+    "https://limited12.todostreaming.es/live/ptvcantabria-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "de-laredu-lin-tv",
+   "name": "De Laredu Lin TV",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/delaredulintv/picture?width=200&height=200",
+   "web": "https://delaredulintv.com/television-online/",
+   "streams": [
+    "https://eu1.servers10.com:8081/8034/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tevecan-9",
+   "name": "Tevecan 9",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://static.wixstatic.com/media/4d3432_610170cea6c747a986bbea4137f5c15f~mv2.png/v1/fill/w_200,h_200,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/mosca%20logo%209_transparente.png",
+   "web": "https://closeradio.tv/jarbhouse/",
+   "streams": [
+    "https://streamlov.alsolnet.com/jarbhouse/live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-cantabria",
+   "name": "Parlamento de Cantabria",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/parlamentodecantabria/picture?width=200&height=200",
+   "web": "https://parlamento-cantabria.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-cantabria",
+   "name": "Gobierno de Cantabria",
+   "group": "Autonómicos",
+   "region": "Cantabria",
+   "logo": "https://graph.facebook.com/gobcantabria/picture?width=200&height=200",
+   "web": "https://www.cantabria.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "castilla-la-mancha-media-cmm",
+   "name": "Castilla-La Mancha Media (CMM)",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/CMMediaes/picture?width=200&height=200",
+   "web": "https://www.cmmedia.es/play/en-directo/tv",
+   "streams": [
+    "https://cdnapisec.kaltura.com/p/2288691/sp/228869100/playManifest/entryId/1_gnz6ity9/protocol/https/format/applehttp/a.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "castilla-la-mancha-radio-cmm",
+   "name": "Castilla-La Mancha Radio (CMM)",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/RadioCLMes/picture?width=200&height=200",
+   "web": "https://www.cmmedia.es/play/en-directo/radio/emision-visual-radio-c-lm.html",
+   "streams": [
+    "https://cdnapisec.kaltura.com/p/2288691/sp/228869100/playManifest/entryId/1_fmx3e3sd/protocol/https/format/applehttp/a.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "vision-6-tv",
+   "name": "Visión 6 TV",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/104927246235553/picture?width=200&height=200",
+   "web": "https://www.visionseis.tv/tv-online-vision-seis/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-hellin",
+   "name": "TV Hellín",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/tvhellin/picture?width=200&height=200",
+   "web": "https://televisionhellin.com/tvhellindirecto.html",
+   "streams": [
+    "https://5940924978228.streamlock.net/directohellin/directohellin/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "guada-tv-media",
+   "name": "Guada TV Media",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/GuadaTV.TV/picture?width=200&height=200",
+   "web": "https://www.guadatv.tv/streaming/",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=12689&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canalimagen-almansa",
+   "name": "CanalImagen Almansa",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/TvAlmansa/picture?width=200&height=200",
+   "web": "https://zonacliente.almatelecom.es/videos/canalimagen",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "ciudad-real-tv",
+   "name": "Ciudad Real TV",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/1765736930414544/picture?width=200&height=200",
+   "web": "https://www.ciudadreal.es/servicios-municipales/cr-tv.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "alcarria-tv",
+   "name": "Alcarria TV",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/AlcarriaTV/picture?width=200&height=200",
+   "web": "https://www.alcarria.tv/ver-en-directo/",
+   "streams": [
+    "https://cls.alcarria.tv/live/alcarriatv-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "imas-tv",
+   "name": "Imás TV",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/television.imas/picture?width=200&height=200",
+   "web": "https://imastv.es/directo-tv/",
+   "streams": [
+    "https://secure3.todostreaming.es/live/imastv-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-4-mancha",
+   "name": "Canal 4 Mancha",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/canal4villarrobledo/picture?width=200&height=200",
+   "web": "https://villarrobledonoticias.com/canal-4-mancha/",
+   "streams": [
+    "https://5924d3ad0efcf.streamlock.net/canal4/canal4live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-2000",
+   "name": "Canal 2000",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/canal2000/picture?width=200&height=200",
+   "web": "https://www.canal2000.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "teletoledo",
+   "name": "TeleToledo",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://pbs.twimg.com/profile_images/1307981912586301441/LloEFyxw_200x200.jpg",
+   "web": "https://www.teletoledo.es",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=12688&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cortes-de-castilla-la-mancha",
+   "name": "Cortes de Castilla-La Mancha",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/cortesclm/picture?width=200&height=200",
+   "web": "https://www.cortesclm.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-castilla-la-mancha",
+   "name": "Gobierno de Castilla-La Mancha",
+   "group": "Autonómicos",
+   "region": "Castilla-La Mancha",
+   "logo": "https://graph.facebook.com/juntadecastillalamancha/picture?width=200&height=200",
+   "web": "https://www.castillalamancha.es/actualidad/sala-prensa",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-7-cyltv",
+   "name": "La 7 (CyLTV)",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/cyltv/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/d3badef6-d229-4a27-9609-03df3d17ca3/la7/la7",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-avila",
+   "name": "La 8 Ávila",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://pbs.twimg.com/profile_images/1364545643319087104/7qp4nrtS_200x200.jpg",
+   "web": "https://www.cyltvplay.es/player/8ff2818d-60f4-43dd-a76f-7e43644e51d/la8av/la-8-avila",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-bierzo",
+   "name": "La 8 Bierzo",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/La8Bierzo/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/f10db0a9-9d70-4c22-a331-54f18e37a50/la8bi/la-8-bierzo",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-burgos",
+   "name": "La 8 Burgos",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/La8Burgos/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/f6b3c206-798e-4ef9-aad7-beb4c0369b0/la8bu/la-8-burgos",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-leon",
+   "name": "La 8 León",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://pbs.twimg.com/profile_images/1367754156711288839/c01QAS89_200x200.jpg",
+   "web": "https://www.cyltvplay.es/player/9981645e-51e3-4959-90ac-8e73efcfd15/la8le/la-8-leon",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-palencia",
+   "name": "La 8 Palencia",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/La8Palencia/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/873e0dae-6224-4e3a-8c60-acf7b56e2cc/la8pa/la-8-palencia",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-salamanca",
+   "name": "La 8 Salamanca",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/la8salamanca/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/4b93450f-34f7-4301-9dc1-d43b076f117/la8sa/la-8-salamanca",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-segovia",
+   "name": "La 8 Segovia",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/la8segovia/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/cd2029ac-aea3-4f48-accf-14caed70a33/la8se/la-8-segovia",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-soria",
+   "name": "La 8 Soria",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/La8Soria/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/36864735-715b-4d21-b934-242d3ace2e4/la8so/la-8-soria",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-valladolid",
+   "name": "La 8 Valladolid",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/la8valladolid/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/b2970950-0f6d-434f-a0ee-4159a270bf7/la8va/la-8-valladolid",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-8-zamora",
+   "name": "La 8 Zamora",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/la8zamora/picture?width=200&height=200",
+   "web": "https://www.cyltvplay.es/player/e176f0c7-3c25-4892-98be-98fea180e8e/la8za/la-8-zamora",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "987-tv",
+   "name": "987 TV",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/987tv/picture?width=200&height=200",
+   "web": "https://987tv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-9-soria",
+   "name": "Canal 9 Soria",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://yt3.googleusercontent.com/bzfZTJFvCaU6Y2POjGx53sbw30F6AlrQnpiledpjZtw-F_xyBcTOgyhZ-AgrP6rrVG6qlhrsE38=s200",
+   "web": "https://canal9soria.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-54",
+   "name": "Canal 54",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/Canal54Burgos/picture?width=200&height=200",
+   "web": "https://www.canal54.es/directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-aranda",
+   "name": "TV Aranda",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/575943555801687/picture?width=200&height=200",
+   "web": "https://www.telearanda.es",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=12686&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "telemedina-canal-9",
+   "name": "Telemedina Canal 9",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/telemedinacanal9/picture?width=200&height=200",
+   "web": "https://www.lavozdemedinadigital.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cortes-de-castilla-y-leon",
+   "name": "Cortes de Castilla y León",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/cortesdecastillayleon/picture?width=200&height=200",
+   "web": "https://www.ccyl.es/Home/Inicio",
+   "streams": [
+    "https://directo.ccyl.es/Hemiciclo/smil:Hemiciclo.smil/playlist.m3u8",
+    "https://directo.ccyl.es/CortesDeLeon/smil:CortesDeLeon.smil/playlist.m3u8?DVR",
+    "https://directo.ccyl.es/CamposDeCastilla/smil:CamposDeCastilla.smil/playlist.m3u8",
+    "https://directo.ccyl.es/CastilloDeFuensaldana/smil:CastilloDeFuensaldana.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "junta-castilla-y-leon",
+   "name": "Junta Castilla y León",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/juntadecastillayleon/picture?width=200&height=200",
+   "web": "https://www.jcyl.es/web/jcyltv.html",
+   "streams": [
+    "https://16escalones-live2.flumotion.com/chunks.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv3",
+   "name": "TV3",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://pbs.twimg.com/profile_images/1269286508625891328/rVes9BS__200x200.png",
+   "web": "https://www.3cat.cat/3cat/directes/tv3/",
+   "streams": [
+    "https://directes3-tv-cat.3catdirectes.cat/live-content/tv3-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "33",
+   "name": "33",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/Canal33/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/33/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/c33-super3-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/c33-super3-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/c33-super3-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-origin/c33-super3-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-exclusiu-1",
+   "name": "3Cat Exclusiu 1",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/oca1/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/oca1-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/oca1-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-exclusiu-2",
+   "name": "3Cat Exclusiu 2",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/oca2/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/oca2-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/oca2-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-exclusiu-3",
+   "name": "3Cat Exclusiu 3",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/oca3/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/oca3-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/oca3-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-exclusiu-4",
+   "name": "3Cat Exclusiu 4",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/oca4/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/oca4-hls/master.m3u8",
+    "https://directes-tv-cat.3catdirectes.cat/live-origin/oca4-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-anime",
+   "name": "3Cat Anime",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/tem2/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/tem2-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/tem2-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-doraemon",
+   "name": "3Cat Doraemon",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/fc3/",
+   "streams": [
+    "https://fast-tailor.3catdirectes.cat/v1/channel/doraemon/hls.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-cameres-del-temps",
+   "name": "3Cat Càmeres del temps",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/3CatInfoElTemps/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/beauties/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/beauties-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/beauties-hls/master.m3u8",
+    "https://directes-tv-int.3catdirectes.cat/live-content/beauties-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-joc-de-cartes",
+   "name": "3Cat Joc de Cartes",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/fc2/",
+   "streams": [
+    "https://fast-tailor.3catdirectes.cat/v1/channel/joc-de-cartes/hls.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-plats-bruts",
+   "name": "3Cat Plats bruts",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/fc1/",
+   "streams": [
+    "https://fast-tailor.3catdirectes.cat/v1/channel/ccma-channel2/hls.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-vinagreta",
+   "name": "3Cat Vinagreta",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/fc4/",
+   "streams": [
+    "https://fast-tailor.3catdirectes.cat/v1/channel/vinagreta/hls.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "3cat-verdi-classics",
+   "name": "3Cat Verdi Clàssics",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/som3Cat/picture?width=200&height=200",
+   "web": "https://www.3cat.cat/3cat/directes/tem1/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/tem1-hls/master.m3u8",
+    "https://directes-tv-es.3catdirectes.cat/live-content/tem1-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "la-1-catalunya",
+   "name": "La 1 Catalunya",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/la1detve/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/videos/directo/tve-catalunya/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/cat/la1_cat_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-2-cat",
+   "name": "La 2 Cat",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTz-PTZCuOfGtshG9A9z2phYEL97ppHhD0cug&s",
+   "web": "https://www.rtve.es/play/videos/directo/tve-catalunya/la-2-cat/",
+   "streams": [
+    "https://rtvelivestream.rtve.es/rtvesec/cat/la2_cat_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "24h-catalunya",
+   "name": "24h Catalunya",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://pbs.twimg.com/profile_images/1634293543987453954/mb1Rzmso_200x200.jpg",
+   "web": "https://www.rtve.es/play/videos/directo/tve-catalunya/24h-cat/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/4952053.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/cat/24h_cat_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-4",
+   "name": "Ràdio 4",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://pbs.twimg.com/profile_images/1849411372498530304/xy9er_VU_200x200.jpg",
+   "web": "https://www.rtve.es/play/radio/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/6982935.m3u8",
+    "https://rtvelivestream.rtve.es/rtvesec/rne/rne_r4_cam_main_dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "bon-dia-tv",
+   "name": "Bon Dia TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://www.bondiatv.org/img/icon/apple-touch-icon.png",
+   "web": "https://www.3cat.cat/bondiatv/",
+   "streams": [
+    "https://directes-tv-cat.3catdirectes.cat/live-content/bondia-hls/master.m3u8",
+    "https://directes-tv-int.3catdirectes.cat/live-content/bondia-hls/master.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "beteve",
+   "name": "betevé",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/betevecat/picture?width=200&height=200",
+   "web": "https://beteve.cat/en-directe/",
+   "streams": [
+    "https://cdnapisec.kaltura.com/p/2346171/sp/234617100/playManifest/entryId/1_vfibi2fe/protocol/https/format/applehttp/a.m3u8?referrer=aHR0cHM6Ly9iZXRldmUuY2F0"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-terres-de-l-ebre",
+   "name": "Canal Terres de l'Ebre",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/canal.terresdelebre/picture?width=200&height=200",
+   "web": "https://canalte.cat",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-9-tv",
+   "name": "El 9 TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/el9nou/picture?width=200&height=200",
+   "web": "https://el9nou.cat/el9tv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-21-ebre",
+   "name": "Canal 21 Ebre",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/Canal21Ebre/picture?width=200&height=200",
+   "web": "https://www.canal21ebre.com/inici/en-directe/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-reus",
+   "name": "Canal Reus",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/canalreus.cat/picture?width=200&height=200",
+   "web": "https://canalreus.cat/directe/",
+   "streams": [
+    "https://ingest2-video.streaming-pro.com/creus/stream/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "emporda-tv",
+   "name": "Empordà TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/empordatv/picture?width=200&height=200",
+   "web": "https://www.empordadigital.cat/directe/",
+   "streams": [
+    "https://video3.lhdserver.es/empordatv2/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-terrassa",
+   "name": "Canal Terrassa",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/canalterrassa/picture?width=200&height=200",
+   "web": "https://terrassadigital.cat/directe/",
+   "streams": [
+    "https://ingest2-video.streaming-pro.com/canalterrassa/stream/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tac-12",
+   "name": "TAC 12",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tacdotze/picture?width=200&height=200",
+   "web": "https://www.tac12.tv/en-directe",
+   "streams": [
+    "https://ingest1-video.streaming-pro.com/tac12_ABR/stream/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvmataro",
+   "name": "tvmataró",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvmataro/picture?width=200&height=200",
+   "web": "https://www.tvmataro.cat/sp/programacio",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "lleida-tv",
+   "name": "Lleida TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/LleidaTV/picture?width=200&height=200",
+   "web": "https://ott.lleidatv.cat/ca/pl/6",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/lleidatvlive/smil:live.smil/playlist.m3u8?DVR",
+    "https://liveingesta118.cdnmedia.tv/lleidatvlive/smil:lleidatvocasional.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-blau-tv",
+   "name": "Canal Blau TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/CanalBlau/picture?width=200&height=200",
+   "web": "https://canalblau.tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-costa-brava",
+   "name": "TV Costa Brava",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvcostabrava/picture?width=200&height=200",
+   "web": "https://www.tvcostabrava.com/canals-online",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/costabravatvlive/smil:live.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-xarxa",
+   "name": "La Xarxa",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/laxarxa/picture?width=200&height=200",
+   "web": "https://laxarxames.cat/directe",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "olot-televisio",
+   "name": "Olot Televisió",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/olotelevisio/picture?width=200&height=200",
+   "web": "https://www.olot.tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "l-hospitalet-tv",
+   "name": "L'Hospitalet TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/lhdigital/picture?width=200&height=200",
+   "web": "https://lhdigital.cat/en-directe/",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/tvhospitaletlive/smil:tvhospitalet.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cugat-tv",
+   "name": "Cugat TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/cugatmedia/picture?width=200&height=200",
+   "web": "https://www.cugat.cat/tv-directe/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "penedes-tv",
+   "name": "Penedès TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/rtvvilafranca/picture?width=200&height=200",
+   "web": "https://www.rtvvilafranca.cat/penedes-televisio-en-directe/",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/rtvvilafrancalive/smil:live.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-4-tv-catalunya",
+   "name": "Canal 4 TV Catalunya",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/GRUP4COM/picture?width=200&height=200",
+   "web": "https://www.grup4.com",
+   "streams": [
+    "https://5caf24a595d94.streamlock.net:1937/8014/8014/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-taronja-central",
+   "name": "Canal Taronja Central",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/taronja.cat/picture?width=200&height=200",
+   "web": "https://www.central.canaltaronja.cat",
+   "streams": [
+    "https://ingest1-video.streaming-pro.com/canaltaronja/central/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtv-el-vendrell",
+   "name": "RTV El Vendrell",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/rtvelvendrell/picture?width=200&height=200",
+   "web": "https://www.rtvelvendrell.cat/directes/televisio/",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/tvvendrelllive/smil:directe.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-bergueda",
+   "name": "TV Berguedà",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/televisiodelbergueda/picture?width=200&height=200",
+   "web": "https://tvbergueda.cat",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-taronja-anoia",
+   "name": "Canal Taronja Anoia",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/canaltaronjaanoia/picture?width=200&height=200",
+   "web": "https://www.anoia.canaltaronja.cat",
+   "streams": [
+    "https://ingest1-video.streaming-pro.com/canaltaronja/anoia/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "votv",
+   "name": "VOTV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/votv.cat/picture?width=200&height=200",
+   "web": "https://votv.cat/votv-en-directe/",
+   "streams": [
+    "https://ingest2-video.streaming-pro.com/votv/streaming_web/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-10-emporda",
+   "name": "Canal 10 Empordà",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/canal10emporda/picture?width=200&height=200",
+   "web": "https://www.canal10.cat/endirecte",
+   "streams": [
+    "https://ventdelnord.tv:8080/escala/directe.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-taronja-osona-i-moianes",
+   "name": "Canal Taronja Osona i Moianés",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/TaronjaTV/picture?width=200&height=200",
+   "web": "https://www.osona.canaltaronja.cat",
+   "streams": [
+    "https://ingest1-video.streaming-pro.com/canaltaronja/osona/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "bdn-badalona-tv",
+   "name": "BDN Badalona TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://pbs.twimg.com/profile_images/1993636082642976768/7YX0mFB8_200x200.jpg",
+   "web": "https://www.bdncom.cat/ca",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/badalonatvlive/smil:live.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvgirona",
+   "name": "TVGirona",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvgirona/picture?width=200&height=200",
+   "web": "https://tvgirona.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "pirineus-tv",
+   "name": "Pirineus TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/PirineusTV/picture?width=200&height=200",
+   "web": "https://www.pirineustv.cat",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rtv-cardedeu",
+   "name": "RTV Cardedeu",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/TelevisioCardedeu/picture?width=200&height=200",
+   "web": "https://www.rtvc.cat/tele/",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/tvcardedeulive/smil:rtmp01.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "valles-visio",
+   "name": "Vallès Visió",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvvallesvisio/picture?width=200&height=200",
+   "web": "https://vallesvisio.cat",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-sabadell-valles",
+   "name": "TV Sabadell - Vallès",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvsabadellvalles/picture?width=200&height=200",
+   "web": "https://www.sabadell.canaltaronja.cat/sabadell-valles/directe/",
+   "streams": [
+    "https://ingest1-video.streaming-pro.com/canaltaronja/sabadell/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "banyoles-televisio",
+   "name": "Banyoles Televisió",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/banyolestelevisio/picture?width=200&height=200",
+   "web": "https://banyolestv.cat",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "piera-tv",
+   "name": "Piera TV",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://yt3.ggpht.com/Yo_LIch5OT5hTA24FMlshk7MtHpuUbVoOd8U2HJGw6el7-cCkAhH8_ISKmww17wHn37FCOF_rg=s200",
+   "web": "https://piera.practic.cat",
+   "streams": [
+    "https://5d776b1861da1.streamlock.net/piera/smil:piera.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-del-ripolles",
+   "name": "TV del Ripollès",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/televisiodelripolles/picture?width=200&height=200",
+   "web": "https://laxarxames.cat/player/8047",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "etv",
+   "name": "etv",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/etv.llobregat/picture?width=200&height=200",
+   "web": "https://www.etv.cat",
+   "streams": [
+    "https://liveingesta318.cdnmedia.tv/tvetvlive/smil:rtmp01.smil/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-sant-cugat",
+   "name": "TV Sant Cugat",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/tvsantcugat/picture?width=200&height=200",
+   "web": "https://www.tvsantcugat.cat/cobertura/directe-tv-hd/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "22tv-televisio-de-solsona",
+   "name": "22TV Televisió de Solsona",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://yt3.ggpht.com/ovQWWhA18AZmmjp34yMreDiMViVWDNDV4goBCru2tkA0_MClFvT-j63WIKKooNwotM9ZAlri=s200",
+   "web": "https://22cabletv.wordpress.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-parlament",
+   "name": "Canal Parlament",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/parlamentcat/picture?width=200&height=200",
+   "web": "https://parlament.cat/ext/f?p=700:1",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "govern-de-la-generalitat-de-catalunya",
+   "name": "Govern de la Generalitat de Catalunya",
+   "group": "Autonómicos",
+   "region": "Cataluña",
+   "logo": "https://graph.facebook.com/governcat/picture?width=200&height=200",
+   "web": "https://govern.cat/gov",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "ceuta-tv",
+   "name": "Ceuta TV",
+   "group": "Autonómicos",
+   "region": "Ceuta",
+   "logo": "https://graph.facebook.com/CeutaTV/picture?width=200&height=200",
+   "web": "https://www.ceutatv.com/estaticas/ceuta-tv-en-directo.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rtvce",
+   "name": "RTVCE",
+   "group": "Autonómicos",
+   "region": "Ceuta",
+   "logo": "https://graph.facebook.com/RTVCE/picture?width=200&height=200",
+   "web": "https://www.ceutaplay.es/pages/live",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "el-faro",
+   "name": "El Faro",
+   "group": "Autonómicos",
+   "region": "Ceuta",
+   "logo": "https://graph.facebook.com/ElFarodeCeuta/picture?width=200&height=200",
+   "web": "https://elfarodeceuta.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "telemadrid",
+   "name": "Telemadrid",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/telemadrid/picture?width=200&height=200",
+   "web": "https://www.tlmad.es/pages/live/telemadrid",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "laotra",
+   "name": "LaOtra",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://pbs.twimg.com/profile_images/1279727978268839938/jSZUiboT_200x200.jpg",
+   "web": "https://www.tlmad.es/pages/live/laotra",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-red",
+   "name": "Canal Red",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/canalredtelevision/picture?width=200&height=200",
+   "web": "https://canalred.tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "teleganes",
+   "name": "Teleganés",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/1423419417957760/picture?width=200&height=200",
+   "web": "https://www.teleganes.com/en-directo/",
+   "streams": [
+    "https://live.emitstream.com/hls/5z6oj7ziwxzfnj78vg2m/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "distrito-tv",
+   "name": "Distrito TV",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/2004860103163343/picture?width=200&height=200",
+   "web": "https://distritotv.es",
+   "streams": [
+    "https://live.emitstream.com/hls/3mn7wpcv7hbmxmdzaxap/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "dejate-de-historias-tv",
+   "name": "Déjate de Historias TV",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/DejateDeHistoriasTV/picture?width=200&height=200",
+   "web": "https://dejatedehistorias.es/directo/",
+   "streams": [
+    "https://limited44.todostreaming.es/live/dejatedeh-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "onda-madrid-101-3",
+   "name": "Onda Madrid 101.3",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/ondamadridradio/picture?width=200&height=200",
+   "web": "https://www.tlmad.es/pages/live/onda-madrid-1013",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "estutele",
+   "name": "EsTuTele",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://yt3.googleusercontent.com/MluWU445ZXOKY1jqzwSoUAkqCKgvEvSfXWEADGhpHNdYpyssfwHkAsz8RlBnkSO1vT_iPVmaIg=s200",
+   "web": "https://estutele.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-33-madrid",
+   "name": "Canal 33 Madrid",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://yt3.googleusercontent.com/nMLOOCMI7LojDKtlKoYXJEmVin-_lbR4Y-TgAdQ7RvJvuinOI109sFGIl_HwbqlWn3g7qMDH=s200",
+   "web": "https://www.canal33.info",
+   "streams": [
+    "https://media2.streambrothers.com:1936/8140/8140/.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "iprotv",
+   "name": "iPROtv",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/iprotvspain/picture?width=200&height=200",
+   "web": "https://iprotv.es",
+   "streams": [
+    "https://59ec5453559f0.streamlock.net/iprotv/iprotv/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "lira-tv",
+   "name": "LIRA TV",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/liratvlive/picture?width=200&height=200",
+   "web": "https://liratv.es",
+   "streams": [
+    "https://cloud2.streaminglivehd.com:1936/liratv/liratv/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "asamblea-de-madrid",
+   "name": "Asamblea de Madrid",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/asambleamadrid/picture?width=200&height=200",
+   "web": "https://www.asambleamadrid.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-la-comunidad-de-madrid",
+   "name": "Gobierno de la Comunidad de Madrid",
+   "group": "Autonómicos",
+   "region": "C. de Madrid",
+   "logo": "https://graph.facebook.com/ComunidadMadrid/picture?width=200&height=200",
+   "web": "https://www.comunidad.madrid",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "navarra-tv",
+   "name": "Navarra TV",
+   "group": "Autonómicos",
+   "region": "C. Foral de Navarra",
+   "logo": "https://graph.facebook.com/NavarraTelevision/picture?width=200&height=200",
+   "web": "https://www.navarratelevision.es/Directo",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "xaloa-telebista",
+   "name": "Xaloa Telebista",
+   "group": "Autonómicos",
+   "region": "C. Foral de Navarra",
+   "logo": "https://graph.facebook.com/xaloatb/picture?width=200&height=200",
+   "web": "https://xaloatelebista.eus/zuzenean/",
+   "streams": [
+    "https://streaming.mediacast.pro/live/xaloa/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-navarra",
+   "name": "Parlamento de Navarra",
+   "group": "Autonómicos",
+   "region": "C. Foral de Navarra",
+   "logo": "https://pbs.twimg.com/profile_images/1517046445030924289/r4OIw84T_200x200.jpg",
+   "web": "https://www.parlamentodenavarra.es",
+   "streams": [
+    "https://broadcasting.parlamentodenavarra.es/live/canal1/playlist.m3u8?DVR",
+    "https://broadcasting.parlamentodenavarra.es/live/canal2/playlist.m3u8?DVR",
+    "https://broadcasting.parlamentodenavarra.es/live/canal3/playlist.m3u8?DVR"
+   ],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-navarra",
+   "name": "Gobierno de Navarra",
+   "group": "Autonómicos",
+   "region": "C. Foral de Navarra",
+   "logo": "https://graph.facebook.com/GobiernoNavarra/picture?width=200&height=200",
+   "web": "https://www.navarra.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "a-punt",
+   "name": "À Punt",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/apuntmedia/picture?width=200&height=200",
+   "web": "https://www.apuntmedia.es/directe/directe-tv_136_1392524.html",
+   "streams": [
+    "https://fastly.live.brightcove.com/1846756479408303045/eu-central-1/6057955885001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZWFxNWh4LmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNjA1Nzk1NTg4NTAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI2MDU3OTU1ODg1MDAxIl0sImp0aSI6IjE4NDY3NTY0Nzk0MDgzMDMwNDUifQ.o6wb_VA-TVxl3ERgr7FKLlaTjY7smErmsf73QAydySE/playlist-hls-dvr.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "8-la-marina-tv",
+   "name": "8 La Marina TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/8lamarinatelevision/picture?width=200&height=200",
+   "web": "https://8lamarinatv.com",
+   "streams": [
+    "https://streaming005.gestec-video.com/hls/canal24.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "intercomarcal-tv",
+   "name": "Intercomarcal TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/Intercomarcal.Television/picture?width=200&height=200",
+   "web": "https://www.intercomarcal.com",
+   "streams": [
+    "https://streamingtvi.gestec-video.com/hls/tvixa.m3u8",
+    "https://streamingtvi.gestec-video.com/hls/tvixa1.m3u8",
+    "https://streamingtvi.gestec-video.com/hls/tvixa3.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7-televalencia",
+   "name": "7 TeleValencia",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://pbs.twimg.com/profile_images/1876660632478437376/rbEqYeqC_200x200.jpg",
+   "web": "https://7televalencia.com/directo-7televalencia/",
+   "streams": [
+    "https://play.cdn.enetres.net/9E9557EFCEBB43A89CEC8FBD3C500247022/028/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "la-8-mediterraneo",
+   "name": "La 8 Mediterráneo",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/la8mediterraneo/picture?width=200&height=200",
+   "web": "https://laocho.tv/tv-en-directo/",
+   "streams": [
+    "https://newscript.gestec-video.com/hls/8TVEVENTOS.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "teleelx",
+   "name": "TeleElx",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/teleelx/picture?width=200&height=200",
+   "web": "https://teleelx.es/directo/",
+   "streams": [
+    "https://tvdirecto.teleelx.es/stream/teleelx.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ribera-tv",
+   "name": "Ribera TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/grup.televisio/picture?width=200&height=200",
+   "web": "https://www.riberatelevisio.com/en-directe/",
+   "streams": [
+    "https://common01.todostreaming.es/live/ribera-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "maestrat-tv",
+   "name": "Maestrat TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/maestrat.tv/picture?width=200&height=200",
+   "web": "https://www.maestrat.tv/directe",
+   "streams": [
+    "https://stream.maestrat.tv/hls/stream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "alacanti-tv",
+   "name": "Alacantí TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/alacantitv/picture?width=200&height=200",
+   "web": "https://www.alacantitv.com/en-directo/",
+   "streams": [
+    "https://streaming01.gestec-video.com/hls/artequatreAlacanti.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "informacion-tv",
+   "name": "Información TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/informaciontv.es/picture?width=200&height=200",
+   "web": "https://www.informacion.es/videos/informaciontv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "elche-7-tv",
+   "name": "Elche 7 TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/Elche7HD/picture?width=200&height=200",
+   "web": "https://elche7tv.es/tv-en-directo/",
+   "streams": [
+    "https://elche7tv.gestec-video.com/hls/canal2.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tva",
+   "name": "tvA",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/tvArtequatre/picture?width=200&height=200",
+   "web": "https://www.tv-a.es",
+   "streams": [
+    "https://streaming007.gestec-video.com/hls/artequatreTVA.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "12tv-alicante",
+   "name": "12TV Alicante",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/12tv.es/picture?width=200&height=200",
+   "web": "https://www.12tv.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-castello",
+   "name": "TV Castelló",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/TelevisiondeCastellon/picture?width=200&height=200",
+   "web": "https://tvcs.tv/en-directe/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "levante-tv",
+   "name": "Levante TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/levantetv/picture?width=200&height=200",
+   "web": "https://www.levante-emv.com/videos/levante-tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "burriana-teve",
+   "name": "Burriana TeVe",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/burrianateve/picture?width=200&height=200",
+   "web": "https://burrianateve.com/directe/",
+   "streams": [
+    "https://stream.burrianateve.com:8443/hls/abr_burrianateve/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-4-la-vall",
+   "name": "TV 4 La Vall",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/TV4LaVall/picture?width=200&height=200",
+   "web": "https://valldeuxo.gestec-video.com/lavall.php",
+   "streams": [
+    "https://valldeuxo.gestec-video.com/hls/lavall.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-56",
+   "name": "Canal 56",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/canal56televisio/picture?width=200&height=200",
+   "web": "https://canal56.com/online/",
+   "streams": [
+    "https://videos.canal56.com/directe/stream/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tele-safor",
+   "name": "Tele Safor",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/Telesaforcom/picture?width=200&height=200",
+   "web": "https://telesafor.com",
+   "streams": [
+    "https://video.telesafor.com/hls/video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "univers-tv",
+   "name": "Univers TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/UniversValenciaDigital/picture?width=200&height=200",
+   "web": "https://www.universvalencia.es",
+   "streams": [
+    "https://cloud2.streaminglivehd.com:1936/universfaller/universfaller/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-almassora",
+   "name": "TV Almassora",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/tvalmassora/picture?width=200&height=200",
+   "web": "https://www.tvalmassora.com/en-directo/en-directo-television-almassora/",
+   "streams": [
+    "https://play.turesportmedia.com/hls/abr_tvalmassora/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "punt-3-vall-uixo",
+   "name": "Punt 3 Vall Uixó",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/Punt3Television/picture?width=200&height=200",
+   "web": "https://www.punt3.es/Directo/",
+   "streams": [
+    "https://bit.controlstreams.com:5443/LiveApp/streams/punt3.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tevequatre-tv",
+   "name": "Tevequatre TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://pbs.twimg.com/profile_images/438700741801177088/MdnaVxtC_200x200.png",
+   "web": "https://teve4.com/directe/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "onda-15-tv",
+   "name": "Onda 15 TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://pbs.twimg.com/profile_images/452144347593465856/NWj5Y9hn_200x200.png",
+   "web": "https://onda15.es",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8034/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-3-biar",
+   "name": "Canal 3 Biar",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://yt3.googleusercontent.com/ytc/AIdro_nQt5rluj5KRX0HGcMvHLxSUJuhjZe4Y1GfuA0NjpHf5Q=s200",
+   "web": "https://canal3biar.es/directe/",
+   "streams": [
+    "https://avantstreaming.es/hls/canal3hd.m3u8",
+    "https://avantstreaming.es/hls/canal3.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-bocairent-tv",
+   "name": "Ràdio Bocairent TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/radiobocairent/picture?width=200&height=200",
+   "web": "https://radiobocairent.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "ciudades-del-ocio-tv",
+   "name": "Ciudades Del Ocio TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/CiudadesDelOcioTV/picture?width=200&height=200",
+   "web": "https://www.ciudadesdelocio.tv",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8024/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "onda-valencia",
+   "name": "Onda Valencia",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://yt3.googleusercontent.com/aAS5uJNDnPz53xkeUbZ_1NaV8TJv35qhoFcmmE9UgIkpquYpNUOP6bRLwcB5WUcznnQdubdO=s200",
+   "web": "https://www.ondavalencia.es/en-directo/onda-valencia-tv",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8116/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "une-vinalopo",
+   "name": "Une Vinalopó",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/UneVinalopo/picture?width=200&height=200",
+   "web": "https://www.unevinalopo.es/directo/",
+   "streams": [
+    "https://streamingtvi.gestec-video.com/hls/unesd.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "enguera-tv",
+   "name": "Enguera TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/engueratelevision/picture?width=200&height=200",
+   "web": "https://www.enguera.es/content/enguera-tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "33tv",
+   "name": "33TV",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/33Television/picture?width=200&height=200",
+   "web": "https://33tv.es",
+   "streams": [
+    "https://limited43.todostreaming.es/live/simbana-livestream.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "corts-valencianes",
+   "name": "Corts Valencianes",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/cortsval/picture?width=200&height=200",
+   "web": "https://mediateca.cortsvalencianes.es/library/lives/",
+   "streams": [
+    "https://streamserver3.seneca.tv/cval_live/cdn_enc_3/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "generalitat-valenciana",
+   "name": "Generalitat Valenciana",
+   "group": "Autonómicos",
+   "region": "C. Valenciana",
+   "logo": "https://graph.facebook.com/generalitatvalenciana/picture?width=200&height=200",
+   "web": "https://www.gva.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "canal-extremadura",
+   "name": "Canal Extremadura",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/CanalExtremadura/picture?width=200&height=200",
+   "web": "https://www.canalextremadura.app/videos/182630-canal-video-24h",
+   "streams": [
+    "https://d2ymuyhevki1a1.cloudfront.net/wct-ddd2992e-86fc-4611-a491-7f392259e9ba/continuous/9be76611-d2cd-474d-bf19-ef702ba31b02/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "toros-canal-extremadura",
+   "name": "Toros (Canal Extremadura)",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/CanalExtremadura/picture?width=200&height=200",
+   "web": "https://www.canalextremadura.app/videos/289341-canal-tem%C3%A1tico-toros-canal-extremadura",
+   "streams": [
+    "https://cdn-canalextremadura.watchity.net/fast1/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "semos-asina-canal-extremadura",
+   "name": "Semos asina (Canal Extremadura)",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/CanalExtremadura/picture?width=200&height=200",
+   "web": "https://www.canalextremadura.app/videos/350407-canal-tem%C3%A1tico-semos-asina-canal-extremadura",
+   "streams": [
+    "https://cdn-canalextremadura.watchity.net/fast3/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-extremena",
+   "name": "TV Extremeña",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/TELEVISIONEXTREMENA/picture?width=200&height=200",
+   "web": "https://www.xn--televisionextremea-30b.com/directo/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "asamblea-de-extremadura",
+   "name": "Asamblea de Extremadura",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/AsambleaExtremadura/picture?width=200&height=200",
+   "web": "https://www.asambleaex.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "junta-de-extremadura",
+   "name": "Junta de Extremadura",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/JuntaDeExtremadura/picture?width=200&height=200",
+   "web": "https://www.juntaex.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tvg",
+   "name": "TVG",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/CRTVG/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76475-tvg",
+   "streams": [
+    "https://crtvg-europa.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-2",
+   "name": "TVG 2",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/CRTVG/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/77550-tv-g2",
+   "streams": [
+    "https://crtvg-tvg2.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-xabarin",
+   "name": "TVG Xabarin",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/oxabarinclub/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76534-xabarin-tv",
+   "streams": [
+    "https://crtvg-infantil-schlive.flumotion.cloud/crtvglive/smil:channel5PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-pequerrech-s",
+   "name": "TVG Pequerrech@s",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/oxabarinclub/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76535-xabarin-r1",
+   "streams": [
+    "https://crtvg-xabarinr1-schlive.flumotion.cloud/crtvglive/smil:channel6PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-cativ-s",
+   "name": "TVG Cativ@s",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/oxabarinclub/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76536-xabarin-tv2",
+   "streams": [
+    "https://crtvg-xabarinr2-schlive.flumotion.cloud/crtvglive/smil:channel7PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-mocin-s",
+   "name": "TVG Mociñ@s",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/oxabarinclub/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76537-xabarin-tv3",
+   "streams": [
+    "https://crtvg-xabarinr3-schlive.flumotion.cloud/crtvglive/smil:channel8PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-eventos",
+   "name": "TVG Eventos",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/CRTVG/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/category/11998-directos",
+   "streams": [
+    "https://crtvg-events1.flumotion.cloud/playlist.m3u8",
+    "https://crtvg-events2.flumotion.cloud/playlist.m3u8",
+    "https://crtvg-events3.flumotion.cloud/playlist.m3u8",
+    "https://crtvg-events4.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-mira-radio-galega",
+   "name": "TVG Mira Radio Galega",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/CRTVG/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/76478-mira-rg",
+   "streams": [
+    "https://crtvg-mirarg-schlive.flumotion.cloud/crtvglive/smil:channel1PRG.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tvg-universo-castelao",
+   "name": "TVG Universo Castelao",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/CRTVG/picture?width=200&height=200",
+   "web": "https://www.agalega.gal/videos/315378-universo-castelao",
+   "streams": [
+    "https://crtvg-universo-castelao-schlive.flumotion.cloud/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tv-ferrol",
+   "name": "TV Ferrol",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/tvferrol/picture?width=200&height=200",
+   "web": "https://tvferrol.es/es/contenido.php?c=4",
+   "streams": [
+    "https://directo.tvferrol.es/tv.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "televigo",
+   "name": "TeleVigo",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/televigo/picture?width=200&height=200",
+   "web": "https://www.televigo.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "telemino",
+   "name": "Telemiño",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/teleminho/picture?width=200&height=200",
+   "web": "https://www.laregion.es/teleminho/",
+   "streams": [
+    "https://laregionlive.flumotion.cloud/laregionlive/smil:channel1.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "hermes-tv",
+   "name": "Hermes TV",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/491789551017784/picture?width=200&height=200",
+   "web": "https://hermesvigo.com/directo-tv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "anove-tv",
+   "name": "Anove TV",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/anove.tv/picture?width=200&height=200",
+   "web": "https://anove.gal",
+   "streams": [
+    "https://cloud.streamingconnect.tv/hls/anove/anove.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "auria-tv",
+   "name": "Auria TV",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://yt3.ggpht.com/a-/AAuE7mBbJ5XfzqqDgg1IkOk23GJ6JZntYZtYT-n1CA=s200",
+   "web": "https://www.auria.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-galicia",
+   "name": "Parlamento de Galicia",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/parlamentodegalicia/picture?width=200&height=200",
+   "web": "https://www.es.parlamentodegalicia.es/EmisionDirecto/",
+   "streams": [
+    "https://pgalicia-live.akamaized.net/hls/live/2040697/pleno/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "xunta-de-galicia",
+   "name": "Xunta de Galicia",
+   "group": "Autonómicos",
+   "region": "Galicia",
+   "logo": "https://graph.facebook.com/@xuntadegalicia/picture?width=200&height=200",
+   "web": "https://www.xunta.gal/video-en-directo",
+   "streams": [
+    "https://xuntalive.akamaized.net/hls/live/2032287/streamxunta/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ib3-global",
+   "name": "IB3 Global",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://graph.facebook.com/IB3org/picture?width=200&height=200",
+   "web": "https://ib3.org/directe",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tef",
+   "name": "TEF",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://graph.facebook.com/TEFTV/picture?width=200&height=200",
+   "web": "https://teftv.com/la-tef-en-directe/",
+   "streams": [
+    "https://tef.servertv.online:3268/live/teflive.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-4-tv-mallorca",
+   "name": "Canal 4 TV Mallorca",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://graph.facebook.com/GRUP4COM/picture?width=200&height=200",
+   "web": "https://www.grup4.com",
+   "streams": [
+    "https://5caf24a595d94.streamlock.net:1937/8110/8110/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "fibwi-tv",
+   "name": "Fibwi TV",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://graph.facebook.com/FibwiTV/picture?width=200&height=200",
+   "web": "https://fibwi.live/es/tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "parlament-de-les-illes-balears",
+   "name": "Parlament de les Illes Balears",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://pbs.twimg.com/profile_images/1628713790303879168/hOxkqhuJ_200x200.jpg",
+   "web": "https://www.parlamentib.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "govern-de-les-illes-balears",
+   "name": "Govern de les Illes Balears",
+   "group": "Autonómicos",
+   "region": "Illes Balears",
+   "logo": "https://graph.facebook.com/GovernIllesBalears/picture?width=200&height=200",
+   "web": "https://www.caib.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tv-rioja",
+   "name": "TV Rioja",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://pbs.twimg.com/profile_images/1777371033835569152/vuHm8KUZ_200x200.jpg",
+   "web": "https://www.larioja.com/tvr/directo-20210408161442-nt.html",
+   "streams": [
+    "https://5924d3ad0efcf.streamlock.net/riojatv/riojatvlive/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "7-la-rioja",
+   "name": "7 La Rioja",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://graph.facebook.com/7riojatv/picture?width=200&height=200",
+   "web": "https://www.7rioja.tv/Directo",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "parlamento-de-la-rioja",
+   "name": "Parlamento de La Rioja",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://graph.facebook.com/ParlamentodeLaRioja/picture?width=200&height=200",
+   "web": "https://mediateca.parlamento-larioja.org/live",
+   "streams": [
+    "https://media.parlamento-larioja.org/live/parlarioja/playlist.m3u8",
+    "https://media.parlamento-larioja.org/live/parlarioja_subtitulado/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cocina-familiar",
+   "name": "Cocina Familiar",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://graph.facebook.com/cocinafamiliarjr/picture?width=200&height=200",
+   "web": "https://cocina-familiar.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "gobierno-de-la-rioja",
+   "name": "Gobierno de La Rioja",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://graph.facebook.com/lariojaorg/picture?width=200&height=200",
+   "web": "https://actualidad.larioja.org/tv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "melilla-tv",
+   "name": "Melilla TV",
+   "group": "Autonómicos",
+   "region": "Melilla",
+   "logo": "https://graph.facebook.com/TelevisionMelilla/picture?width=200&height=200",
+   "web": "https://tvmelilla.es/directo.php",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "popular-tv-melilla",
+   "name": "Popular TV Melilla",
+   "group": "Autonómicos",
+   "region": "Melilla",
+   "logo": "https://graph.facebook.com/PopularTelevisionMelilla/picture?width=200&height=200",
+   "web": "https://populartvmelilla.com",
+   "streams": [
+    "https://5940924978228.streamlock.net/8009/ngrp:8009_all/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb-1",
+   "name": "ETB 1",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/eitb/picture?width=200&height=200",
+   "web": "https://etbon.eus/ch/etb-1",
+   "streams": [
+    "https://cdn1.etbon.eus/etb1/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb-2",
+   "name": "ETB 2",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/eitb/picture?width=200&height=200",
+   "web": "https://etbon.eus/ch/etb-2",
+   "streams": [
+    "https://cdn1.etbon.eus/etb2/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb1-on",
+   "name": "ETB1 ON",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://etbon.eus/ch/etb-1on",
+   "streams": [
+    "https://cdn1.etbon.eus/etb1on/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb2-on",
+   "name": "ETB2 ON",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://etbon.eus/ch/etb-2on",
+   "streams": [
+    "https://cdn1.etbon.eus/etb2on/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb-eventos-1",
+   "name": "ETB Eventos 1",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/eitb/picture?width=200&height=200",
+   "web": "https://etbon.eus/ch/oca-1",
+   "streams": [
+    "https://cdn1.etbon.eus/oc1/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "etb-eventos-2",
+   "name": "ETB Eventos 2",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/eitb/picture?width=200&height=200",
+   "web": "https://etbon.eus/ch/oca-2",
+   "streams": [
+    "https://cdn1.etbon.eus/oc2/index.m3u8"
+   ],
+   "geo": true
+  },
+  {
+   "id": "el-conquistador-etb-on",
+   "name": "El Conquistador (ETB On)",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://www.etbon.eus/ch/el-conquistador",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "herri-txiki-etb-on",
+   "name": "Herri Txiki (ETB On)",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://www.etbon.eus/ch/herri-txiki",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "vaya-semanita-etb-on",
+   "name": "Vaya Semanita (ETB On)",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://www.etbon.eus/ch/vaya-semanita",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "vascos-por-el-mundo-etb-on",
+   "name": "Vascos por el mundo (ETB On)",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://etbon.eus/ch/vascos-por-el-mundo",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "euskadi-meteo-etb-on",
+   "name": "Euskadi Meteo (ETB On)",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
+   "web": "https://www.etbon.eus/ch/euskadi-meteo",
+   "streams": [
+    "https://cdn1.etbon.eus/meteo/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tele-7",
+   "name": "Tele 7",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/Tele7Radio7/picture?width=200&height=200",
+   "web": "https://tele7.tv/tele-7-en-directo/",
+   "streams": [
+    "https://ingest2-video.streaming-pro.com/tele7_ABR/stream/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "hamaika-tv",
+   "name": "Hamaika TV",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/HamaikaTb/picture?width=200&height=200",
+   "web": "https://www.hamaika.eus/zuzenean",
+   "streams": [
+    "https://cdn3.wowza.com/1/RERMR282dnU5eE5Z/OHY0dVFs/hls/live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "guka-tb",
+   "name": "GUKA TB",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/guka.eus/picture?width=200&height=200",
+   "web": "https://guka.eus/telebista/zuzenekoa",
+   "streams": [
+    "https://streaming.ukt.eus/hls/test.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "goiena-eus",
+   "name": "Goiena Eus",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/goiena.eus/picture?width=200&height=200",
+   "web": "https://goiena.eus/telebista/zuzenekoa",
+   "streams": [
+    "https://zuzenean.goienamedia.eus/goiena-telebista.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "durangaldeko-tv",
+   "name": "Durangaldeko TV",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/dotbDurangaldekoTelebista/picture?width=200&height=200",
+   "web": "https://dotb.eus/tbkanala/",
+   "streams": [
+    "https://live.emitstream.com/hls/5f9asjsehd7gmyxsdpzu/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "goierri-irrati-tv",
+   "name": "Goierri Irrati TV",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/GoierriIrratiTelebista/picture?width=200&height=200",
+   "web": "https://gitb.eus/telebista/zuzenekoa",
+   "streams": [
+    "https://streaming.gitb.eus/hls/z.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "28-kanala",
+   "name": "28 Kanala",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/28kanala/picture?width=200&height=200",
+   "web": "https://28kanala.eus/telebista/zuzenekoa",
+   "streams": [
+    "https://streaming.28kanala.eus/hls/z.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "oizmendi-tb",
+   "name": "Oizmendi TB",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/oizmenditelebista/picture?width=200&height=200",
+   "web": "https://www.oizmendi.eus/zuzenean/",
+   "streams": [
+    "https://zuzenean.oizmendi.eus/hls/z.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "telebilbao",
+   "name": "TeleBilbao",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/312994995454199/picture?width=200&height=200",
+   "web": "https://www.telebilbao.es/directo/",
+   "streams": [
+    "https://player.telebilbao.es/hls/web-public/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "urola-tb",
+   "name": "Urola TB",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/urolatelebista/picture?width=200&height=200",
+   "web": "https://www.urolatelebista.com",
+   "streams": [
+    "https://5940924978228.streamlock.net/j_Directo2/j_Directo2/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "eusko-legebiltzarra",
+   "name": "Eusko Legebiltzarra",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/legebiltzarra/picture?width=200&height=200",
+   "web": "https://www.legebiltzarra.eus",
+   "streams": [
+    "https://bideoak.legebiltzarra.eus/zuzenean/stream-3_channel-1/playlist.m3u8",
+    "https://bideoak.legebiltzarra.eus/zuzenean/stream-3_channel-2/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "eusko-jaurlaritza",
+   "name": "Eusko Jaurlaritza",
+   "group": "Autonómicos",
+   "region": "País Vasco",
+   "logo": "https://graph.facebook.com/EuskoJaurlaritza/picture?width=200&height=200",
+   "web": "https://www.euskadi.eus/gobierno-vasco/inicio/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tpa7",
+   "name": "TPA7",
+   "group": "Autonómicos",
+   "region": "P. de Asturias",
+   "logo": "https://graph.facebook.com/RTPAoficial/picture?width=200&height=200",
+   "web": "https://www.rtpa.es/tpa-television",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "junta-general-del-principado-de-asturias",
+   "name": "Junta General del Principado de Asturias",
+   "group": "Autonómicos",
+   "region": "P. de Asturias",
+   "logo": "https://pbs.twimg.com/profile_images/2030898420681232384/TBZNbHLJ_200x200.jpg",
+   "web": "https://www.jgpa.es/emision-en-directo",
+   "streams": [
+    "https://wmserver.jgpa.es/live/_definst_/livestream2/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "gobierno-del-principado-de-asturias",
+   "name": "Gobierno del Principado de Asturias",
+   "group": "Autonómicos",
+   "region": "P. de Asturias",
+   "logo": "https://graph.facebook.com/gobiernodeasturias/picture?width=200&height=200",
+   "web": "https://actualidad.asturias.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-7",
+   "name": "La 7",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/la7tele/picture?width=200&height=200",
+   "web": "https://www.la7tv.es/video/a-la-carta/7tv-en-directo/20220810150726000939.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-7-2",
+   "name": "La 7+",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/la7tele/picture?width=200&height=200",
+   "web": "https://www.la7tv.es/video/a-la-carta/la-7/20221004091316003030.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "popular-tv-murcia",
+   "name": "Popular TV Murcia",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://pbs.twimg.com/profile_images/2049481726964187136/w67cmHGs_200x200.jpg",
+   "web": "https://populartvrm.com/directo",
+   "streams": [
+    "https://stream-us-east-1.getpublica.com/playlist.m3u8?network_id=12690&live=1"
+   ],
+   "geo": false
+  },
+  {
+   "id": "canal-1-mar-menor-torre-pacheco",
+   "name": "Canal 1 Mar Menor Torre Pacheco",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/tuwebtv/picture?width=200&height=200",
+   "web": "https://www.tuwebtv.es/directo.php",
+   "streams": [
+    "https://directo.tuwebtv.es/canal1.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "arabi-tv",
+   "name": "Arabí TV",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/arabitvyecla/picture?width=200&height=200",
+   "web": "https://www.arabitv.es/en-directo/",
+   "streams": [
+    "https://streamtv2.elitecomunicacion.cloud:3628/live/arabitv2025live.m3u8",
+    "https://servidor.islahostingla.com:3548/live/arabitvlive.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "asamblea-regional-de-murcia",
+   "name": "Asamblea Regional de Murcia",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/asambleamurcia/picture?width=200&height=200",
+   "web": "https://www.asambleamurcia.es",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "consejo-de-gobierno-de-la-region-de-murcia",
+   "name": "Consejo de Gobierno de la Región de Murcia",
+   "group": "Autonómicos",
+   "region": "R. de Murcia",
+   "logo": "https://graph.facebook.com/RegiondeMurciaRM/picture?width=200&height=200",
+   "web": "https://www.carm.es",
+   "streams": [
+    "https://crmlive.redctnet.es/liveedge/ConsejoGob/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-3-espana",
+   "name": "Radio 3 España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/radio3/picture?width=200&height=200",
+   "web": "https://www.rtve.es/play/radio/",
+   "streams": [
+    "https://ztnr.rtve.es/ztnr/6982918.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "sol-musica-espana",
+   "name": "Sol Música España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/solmusica/picture?width=200&height=200",
+   "web": "https://amcchannels.es/sol-musica",
+   "streams": [
+    "https://d2glyu450vvghm.cloudfront.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/cc-21u4g5cjglv02/sm.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cafe-del-mar-ibiza-espana",
+   "name": "Café del Mar Ibiza España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/cafedelmaribizaofficialpage/picture?width=200&height=200",
+   "web": "https://cafedelmar.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "activa-tv-espana",
+   "name": "Activa TV España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/activafm.radiomusical/picture?width=200&height=200",
+   "web": "https://www.emisorasmusicales.net/activa-tv/",
+   "streams": [
+    "https://streamtv.mediasector.es/hls/activatv/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "molahits-tv-espana",
+   "name": "Molahits TV España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/molahitstv/picture?width=200&height=200",
+   "web": "https://www.molatv.cat",
+   "streams": [
+    "https://ventdelnord.tv:8080/mola/directe.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "verbena-tv-espana",
+   "name": "Verbena TV España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1463159511133442059/uVV15n4k_200x200.jpg",
+   "web": "https://verbenafm.com",
+   "streams": [
+    "https://streamtv2.elitecomunicacion.cloud:3144/live/verbenatvlive.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "cadena-elite-espana",
+   "name": "Cadena Elite España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/cadena.elitegranada/picture?width=200&height=200",
+   "web": "https://www.cadenaelite.es",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8004/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "spektra-tv-espana",
+   "name": "Spektra TV España",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/spektramusictv/picture?width=200&height=200",
+   "web": "https://spektratv.com",
+   "streams": [
+    "https://cloudvideo.servers10.com:8081/8026/tracks-v1a1/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "eurovision-song-contest",
+   "name": "Eurovision Song Contest",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/EurovisionSongContest/picture?width=200&height=200",
+   "web": "https://www.eurovision.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "energeek-radio-chile",
+   "name": "EnerGeek Radio Chile",
+   "group": "Música",
+   "region": "",
+   "logo": "https://cdn.energeek.cl/logos/EG-Radio-2025_pfp.png",
+   "web": "https://energeek.cl/radio-en-vivo/",
+   "streams": [
+    "https://cl-2.backend.energeek.cl/bkp/egradioweb/index.m3u8?token=TDTCh4nnelsES",
+    "https://cl-2.backend.energeek.cl/bkp/egradio/mobile/index.m3u8?token=TDTCh4nnelsES"
+   ],
+   "geo": false
+  },
+  {
+   "id": "conexion-berazategui-argentina",
+   "name": "Conexión Berazategui Argentina",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/conexionberaok/picture?width=200&height=200",
+   "web": "https://www.conexionberazategui.com.ar/tvenvivo/",
+   "streams": [
+    "https://lbgo.bozztv.com/ssh101/ssh101/conexionbera/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-italia-tv",
+   "name": "Radio Italia TV",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/radioitalia/picture?width=200&height=200",
+   "web": "https://www.radioitalia.it/radioitaliatv",
+   "streams": [
+    "https://radioitaliatv.akamaized.net/hls/live/2093117/RadioitaliaTV/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-italia",
+   "name": "RTL 102.5 Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/1/radiovisione",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S97044836/tbbP8T1ZRPBL/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-radio-freccia-italia",
+   "name": "RTL Radio Freccia Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/17/radiofreccia-radiovisione/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S3160845/0tuSetc8UFkF/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-zeta-italia",
+   "name": "RTL Zeta Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/18/radio-zeta-radiovisione/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S9346184/XEx1LqlYbNic/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-best-italia",
+   "name": "RTL 102.5 Best Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/2/rtl-1025-best-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S76960628/OEPHRUIctA0M/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-disco-italia",
+   "name": "RTL 102.5 Disco Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/21/rtl-1025-doc-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S51100361/0Fb4R3k82b5Z/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-caliente-italia",
+   "name": "RTL 102.5 Caliente Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/44/rtl-1025-caliente-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S8448465/zTYa1Z5Op9ue/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-bro-sis-italia",
+   "name": "RTL 102.5 Bro&Sis Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/16/bro-and-sis-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S75007890/MUGHuxc9dQ3b/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-napule-italia",
+   "name": "RTL 102.5 Napulè Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/20/rtl-1025-napule-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S27134503/0f9AhuwKlhnZ/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rtl-102-5-traffic-italia",
+   "name": "RTL 102.5 Traffic Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RTL102.5/picture?width=200&height=200",
+   "web": "https://play.rtl.it/live/35/rtl-1025-news-tv/",
+   "streams": [
+    "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S38122967/2lyQRIAAGgRR/playlist_video.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "rds-social-tv-italia",
+   "name": "RDS Social TV Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/rds.grandisuccessi/picture?width=200&height=200",
+   "web": "https://www.rds.it/rds-social-tv",
+   "streams": [
+    "https://stream.rdstv.radio/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "m2o-italia",
+   "name": "m2o Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/radiom2o/picture?width=200&height=200",
+   "web": "https://www.m2o.it/m2o-tv/",
+   "streams": [
+    "https://4c4b867c89244861ac216426883d1ad0.msvdn.net/live/S62628868/uhdWBlkC1AoO/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radio-capital-italia",
+   "name": "Radio Capital Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RadioCapitalfm/picture?width=200&height=200",
+   "web": "https://www.capital.it/tv/",
+   "streams": [
+    "https://4c4b867c89244861ac216426883d1ad0.msvdn.net/live/S35394734/Z6U2wGoDYANk/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "70-80-s-italia",
+   "name": "70-80's Italia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://play-lh.googleusercontent.com/OwKy6Ef_hOsjuSYtgh5aOHndFs2uo9evgrrjO4DYiOwXiAtWtSZiFMWY_OIcLU170NA=w200",
+   "web": "https://www.70-80.it/tv-player/",
+   "streams": [
+    "https://585b674743bbb.streamlock.net/9050/9050/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "on-tv-portugal",
+   "name": "On TV Portugal",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/ONFM93.8/picture?width=200&height=200",
+   "web": "https://www.onfm.pt",
+   "streams": [
+    "https://5ce9406b73c33.streamlock.net/ONFM/livestream/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "kronehit-austria",
+   "name": "Kronehit Austria",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/kronehit/picture?width=200&height=200",
+   "web": "https://www.kronehit.at",
+   "streams": [
+    "https://bitcdn-kronehit.bitmovin.com/v2/hls/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "qmusic-paises-bajos",
+   "name": "QMusic Países Bajos",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/QmusicNL/picture?width=200&height=200",
+   "web": "https://qmusic.nl/live/kijk",
+   "streams": [
+    "https://stream.qmusic.nl/qmusic/videohls.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ocko-chequia",
+   "name": "Ocko Chequia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/tvocko/picture?width=200&height=200",
+   "web": "https://ocko.tv/zive",
+   "streams": [
+    "https://ocko-live.ssl.cdn.cra.cz/channels/ocko/playlist/cze/live_hq.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "star-chequia",
+   "name": "Star Chequia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/ockostar/picture?width=200&height=200",
+   "web": "https://ocko.tv/zive?channel=star",
+   "streams": [
+    "https://ocko-live.ssl.cdn.cra.cz/channels/ocko_gold/playlist/cze/live_hq.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "expres-chequia",
+   "name": "Expres Chequia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/OckoExpres/picture?width=200&height=200",
+   "web": "https://ocko.tv/zive?channel=expres",
+   "streams": [
+    "https://ocko-live.ssl.cdn.cra.cz/channels/ocko_expres/playlist/cze/live_hq.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "retro-music-tv-chequia",
+   "name": "Retro Music TV Chequia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/retromusic/picture?width=200&height=200",
+   "web": "https://retromusic.cz/#retro_tv",
+   "streams": [
+    "https://stream.mediawork.cz/retrotv/retrotvHQ1/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "4fun-tv-polonia",
+   "name": "4FUN TV Polonia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/4FUN.TV/picture?width=200&height=200",
+   "web": "https://4fun.tv",
+   "streams": [
+    "https://stream.4fun.tv:8888/hls/4f_high/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "number1-fm-turquia",
+   "name": "Number1 FM Turquía",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/Number1FM/picture?width=200&height=200",
+   "web": "https://www.numberone.com.tr/2015/12/18/nr1-tv-canli-yayin/",
+   "streams": [
+    "https://b01c02nl.mediatriple.net/videoonlylive/mtkgeuihrlfwlive/broadcast_5c9e17cd59e8b.smil/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "power-tv-turquia",
+   "name": "Power TV Turquía",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/powerapp/picture?width=200&height=200",
+   "web": "https://www.powerapp.com.tr/tvs/power-tvs/powertv/",
+   "streams": [
+    "https://livetv.powerapp.com.tr/powerTV/powerhd.smil/playlists.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "nrg91-grecia",
+   "name": "NRG91 Grecia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/KGxBhcmGT-UX_3Hhnfw7Gwnypyn4XzUQ3_OElJuNKllBcZmE58-z_FpozwfIxl9fA7z9RPnVBwE=s200",
+   "web": "https://nrg91.gr/nrgtv.html",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "rock-tv-rumania",
+   "name": "Rock TV Rumanía",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/rockfmro/picture?width=200&height=200",
+   "web": "https://www.rockfm.ro/rocktv",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "cmc-croacia",
+   "name": "CMC Croacia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/CroatianMusicChannel/picture?width=200&height=200",
+   "web": "https://cmc.com.hr/program/cmc-tv-stream/",
+   "streams": [
+    "https://stream.cmctv.hr:49998/cmc/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "sky-folk-macedonia",
+   "name": "Sky Folk Macedonia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/skyfolk.mk/picture?width=200&height=200",
+   "web": "https://skyfolk.mk",
+   "streams": [
+    "https://eu.live.skyfolk.mk/live.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "ru-tv-rusia",
+   "name": "RU.TV Rusia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/NRCQpVxbetuJyjtPjotQ4H7rq3nfFm0J2VEc2aBs7XQV7-lBFqZMfu2tGZNGOfl7TPPdQjCMxQ=s200",
+   "web": "https://ok.ru/videoembed/230273326594?nochat=1&autoplay=1",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "tropical-moon-tv",
+   "name": "Tropical Moon TV",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/tropicalmoonfm/picture?width=200&height=200",
+   "web": "https://tropicalmoontv.com/player/player.php",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "vm-latino-costa-rica",
+   "name": "VM Latino Costa Rica",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/vmlatinocr/picture?width=200&height=200",
+   "web": "https://vmlatino.com/en-vivo/",
+   "streams": [
+    "https://59ef525c24caa.streamlock.net/vmtv/vmlatino/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "venus-media-paraguay",
+   "name": "Venus Media Paraguay",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/ytc/AIdro_nZWMwLdm_Ag4eNCbhhowHXvSupNE-bCpsLWmZte1tLLq8=s200",
+   "web": "https://www.venus.com.py/envivo",
+   "streams": [
+    "https://copaco.desdeparaguay.net/venusmedia/venusmedia_alt/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "top-latino-tv-peru",
+   "name": "Top Latino TV Perú",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/toplatinotv/picture?width=200&height=200",
+   "web": "https://toplatino.net/tv/",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "la-mega-mundial-usa",
+   "name": "La Mega Mundial USA",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/lamegaworldwide/picture?width=200&height=200",
+   "web": "https://www.lamegamundial.com",
+   "streams": [
+    "https://server80.servistreaming.com:3477/stream/play.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "retro-plus-tv-chile",
+   "name": "Retro Plus TV Chile",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/retroplustv/picture?width=200&height=200",
+   "web": "https://www.retroplustv.com/#se%C3%B1ales",
+   "streams": [
+    "https://scl.edge.grupoz.cl/retroplustvuno/live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "portal-foxmix-chile",
+   "name": "Portal Foxmix Chile",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/ytc/AAUvwnj90kC8kqjZ69oiVT718JUs9iedB5o1w9cKfApo=s200",
+   "web": "https://www.portalfoxmix.cl/tv/",
+   "streams": [
+    "https://panel.tvstream.cl:1936/8040/8040/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "30a-music-usa",
+   "name": "30A Music USA",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/30atv/picture?width=200&height=200",
+   "web": "https://30a-tv.com/30a/30a-tv-music-channel/",
+   "streams": [
+    "https://30a-tv.com/feeds/ceftech/30atvmusic.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "spirit-tv-usa",
+   "name": "Spirit TV USA",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/MySpirittv/picture?width=200&height=200",
+   "web": "https://myspirit.tv",
+   "streams": [
+    "https://cdnlive.myspirit.tv/LS-ATL-43240-2/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "radiou-tv-usa",
+   "name": "RadioU TV USA",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/RadioU/picture?width=200&height=200",
+   "web": "https://radiou.com/tv/",
+   "streams": [
+    "https://1826200335.rsc.cdn77.org/1826200335/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "dance-tv-estonia",
+   "name": "Dance TV Estonia",
+   "group": "Música",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1268129322730127364/OJlQBZpS_200x200.jpg",
+   "web": "https://www.dancetv.net",
+   "streams": [
+    "https://m1b2.worldcast.tv/dancetelevisionone/2/dancetelevisionone.m3u8",
+    "https://m1b2.worldcast.tv/dancetelevisiontwo/2/dancetelevisiontwo.m3u8",
+    "https://m2b2.worldcast.tv:7443/dancetelevisionthree/2/dancetelevisionthree.m3u8",
+    "https://m2b2.worldcast.tv:7443/dancetelevisionfour/2/dancetelevisionfour.m3u8",
+    "https://m2b2.worldcast.tv:7443/dancetelevisionfive/2/dancetelevisionfive.m3u8",
+    "https://mbit1.worldcast.tv:9443/dancetelevisionsix/multibit.m3u8",
+    "https://mbit1.worldcast.tv:9443/dancetelevisionseven/multibit.m3u8",
+    "https://mbit1.worldcast.tv:9443/dancetelevisioneight/multibit.m3u8",
+    "https://mbit1.worldcast.tv:9443/dancetelevisionnine/multibit.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "v2beat-tv",
+   "name": "V2Beat TV",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/vtwobeat/picture?width=200&height=200",
+   "web": "https://www.vibee.tv/webpage-player/",
+   "streams": [
+    "https://abr.de1se01.v2beat.live/playlist.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "tomorrowland-tv",
+   "name": "Tomorrowland TV",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/tomorrowland/picture?width=200&height=200",
+   "web": "https://oneworldradio.tomorrowland.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "the-k-pop-corea-del-sur",
+   "name": "The K-POP Corea del Sur",
+   "group": "Música",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/2059096893515542528/2cuVWylU_200x200.jpg",
+   "web": "https://www.bigc.im",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "beautiful-piano-music",
+   "name": "Beautiful Piano Music",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/SoothingRelaxation/picture?width=200&height=200",
+   "web": "https://soothingrelaxation.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "chillhop-music",
+   "name": "Chillhop Music",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.googleusercontent.com/v8reVXm00qDDniedUMk1nNVBt5ykecsy8qByQmsPmVl1xh9ZlgiGnGQAH72h0gKKcygFWjHcgEw=s200",
+   "web": "https://chillhop.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "college-music",
+   "name": "College Music",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/collegemusic/picture?width=200&height=200",
+   "web": "https://collegemusic.co.uk",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "lofi-hip-hop-beats-music",
+   "name": "LoFi Hip-Hop Beats Music",
+   "group": "Música",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1155872804786466817/z1k1zxIi_200x200.jpg",
+   "web": "https://stzzzy.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "the-good-life-radio",
+   "name": "The Good Life Radio",
+   "group": "Música",
+   "region": "",
+   "logo": "https://yt3.ggpht.com/a/AATXAJw_0O4Q7vmQvtqUOGDFHS3GQZaH2OKMnc3_1itvxg=s200",
+   "web": "https://www.youtube.com/channel/UChs0pSaEoNLV4mevBFGaoKA",
+   "streams": [],
+   "geo": false
+  }
+ ]
+}

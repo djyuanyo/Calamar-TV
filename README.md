@@ -1,74 +1,59 @@
-# Calamar TV · Android y Android TV
+# Calamar TV · Web, Android y Android TV
 
-App nativa independiente, con identidad Calamar TV e inspiración visual en plataformas deportivas: portada con evento destacado, carruseles con imágenes y escudos, filtros por deporte, directos, agenda por días y canales. Navegación táctil y con foco visible para mando. No utiliza marcas ni recursos de DAZN.
+Plataforma OTT de canales en directo: la web y la app Android/TV muestran el mismo catálogo, formado por los canales de TDT en abierto y por los canales y eventos que añade el administrador.
 
-## Instalación y compilación
+## Cómo está organizado
 
-Requiere Android 5.0 o posterior. En Android TV aparece en el lanzador de TV.
+| Parte | Dónde | Qué hace |
+| - | - | - |
+| Catálogo TDT | `data/tdt.json` | Canales españoles en abierto con sus emisiones oficiales `.m3u8`. Lo genera `tools/sync_tdt.py` a partir de [TDTChannels](https://github.com/LaQuay/TDTChannels) (atribución obligatoria, visible en la web y en la app). |
+| Catálogo propio | `data/custom.json` | Canales/eventos del administrador (`channels`), destacados de portada (`featured`) y canales TDT ocultos (`hidden`). |
+| Web | `web/` | Sitio estático publicado en GitHub Pages: portada con destacado, filas por categoría, buscador, reproductor HLS (hls.js) y panel de administración. |
+| App | `app/` | Android 5.0+ y Android TV. Lee los mismos JSON publicados en `https://djyuanyo.github.io/Calamar-TV/data/`, los guarda en caché y lleva una copia incluida para funcionar sin conexión. Reproduce con Media3 ExoPlayer. |
 
-Para compilar: JDK 17, Gradle 8.9 y Android SDK 35. Abrir esta carpeta en Android Studio o ejecutar `gradle :app:assembleDebug` desde aquí. La APK se genera en `app/build/outputs/apk/debug/`.
+`web/catalog.js` y `app/.../Catalog.java` aplican las mismas reglas (canales propios primero, ocultos fuera, destacados en el orden elegido, categorías en el mismo orden), así que la web y la app muestran lo mismo.
 
-El workflow **Calamar TV · APK Android y TV** compila esta carpeta en GitHub Actions y publica la APK como artefacto descargable en cada ejecución. Funciona por cambios en esta carpeta o manualmente desde Actions. Este repositorio contiene exclusivamente la app nativa Calamar TV.
+El workflow **Calamar TV · Web y catálogo** actualiza `data/tdt.json` cada 6 horas y publica la web. Cada cambio en `web/` o `data/` en `main` (incluidos los del panel de administración) vuelve a publicarla en 1–2 minutos. La app consulta el catálogo al abrirse, al volver a primer plano, cada 10 minutos y con **↻ Actualizar**.
 
-## API y reproducción
+## Administración
 
-Datos: `https://bp.zicotv.cc/api/v1/events`. Horas mostradas en Europe/Madrid. Actualización cada 60 segundos mientras la app está activa. La agenda se agrupa por fecha y se ordena por hora; Inicio prioriza directos y próximos encuentros.
+En la web: **Admin** (`#/admin`). Solo acepta la cuenta `juanjocarrillo7@gmail.com`.
 
-Los canales se deduplican a partir de las fuentes `own` presentes en los eventos. La API no documenta un catálogo completo independiente. Las imágenes y escudos proceden de los campos de los eventos. Si fallan, se mantiene el fondo de la tarjeta y sus textos.
+La web es estática, así que la protección real es un **token de GitHub** con permiso de escritura únicamente en este repositorio. La primera vez en cada navegador se introducen correo, una contraseña nueva y el token. El token se guarda cifrado en ese navegador con una clave derivada de la contraseña (PBKDF2 + AES-GCM). Las siguientes veces basta con correo y contraseña. Ninguna contraseña ni token se guarda en el repositorio, en la web publicada o en la APK.
 
-La reproducción usa Media3 ExoPlayer (HLS, DASH y vídeo directo). Al abrir una fuente se consulta de nuevo su página HTTPS y se leen las fuentes publicadas (`ZT_SOURCES` o etiquetas HTML de vídeo). El enlace temporal se mantiene en memoria y no se guarda en GitHub ni en la caché del catálogo. El modo web permite detectar solicitudes de vídeo compatibles cuando la página necesita JavaScript.
+Crear el token: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Repository access: *Only select repositories* → `Calamar-TV`. Permissions → Repository → **Contents: Read and write**. Si el token se pierde o se filtra, revócalo allí y vuelve a configurar el navegador.
 
-Hay controles nativos, selector de CDN, renovación manual y reintentos automáticos limitados. Si la URL publica una marca de caducidad reconocible, se vuelve a consultar la página unos 30 segundos antes. Una URL directa sin página de origen no permite obtener un token nuevo. La renovación puede producir una breve reconexión al directo; no se promete continuidad sin cortes.
+Desde el panel se puede:
 
-Se omiten fuentes marcadas como bloqueadas. No se incluyen credenciales de clientes ni se modifican firmas o comprobaciones TLS. Algunas fuentes pueden depender de cookies, DRM o lógica específica del proveedor y requerir el modo web o navegador. El botón Chrome / navegador abre exactamente la misma página de origen.
+- Añadir, editar y eliminar canales o eventos con nombre, categoría, logo y uno o varios enlaces (uno por línea). Si hay varios, se prueban en orden.
+- Destacar canales en la portada y ocultar canales TDT.
 
+Qué reproduce cada sitio:
 
-## Firma de futuras actualizaciones
+| Enlace | Web | App |
+| - | - | - |
+| `https://…/….m3u8` | Sí, si el servidor permite reproducirlo desde otra web (CORS) | Sí |
+| `.mp4` / `.webm` por https | Sí | Sí |
+| `.ts`, enlaces `http://`, `.mpd` | No (el navegador no lo admite o lo bloquea en una web https) | Sí |
+| Página de un reproductor (`https://…/player/4`) | No (el navegador no deja leer otra web) | Sí: obtiene la fuente actual y la renueva antes de caducar |
 
-Las APK debug de CI son para pruebas. Su certificado puede cambiar entre máquinas/ejecuciones. Para actualizar una instalación conservando sus datos, todas las versiones deben usar la misma clave.
+Los canales TDT sin emisión directa (por ejemplo Atresmedia o Mediaset, protegidas por la cadena) aparecen como **SU WEB** y abren la web oficial. Algunas emisiones solo funcionan desde España. El administrador es responsable de que los enlaces que publica sean propios o estén autorizados.
 
-El workflow admite firma release mediante estos secretos de GitHub: `CALAMAR_KEYSTORE_BASE64`, `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave de la APK entregada se conserva fuera del repositorio y no se sube a Git. Configurar esos secretos con esa misma clave para distribuir actualizaciones compatibles. No incluir claves ni contraseñas en el código.
+## Mis canales (solo app)
 
-## Validación
+La pestaña **Mis canales** de la app sigue disponible para enlaces privados que no se publican: se guardan solo en el dispositivo (`user-channels.json`).
 
-La APK 1.1.0 se ha compilado con Android API 35, convertido a DEX y firmado con comprobación criptográfica. El manifiesto declara móvil y Android TV y no requiere pantalla táctil. La ejecución en dispositivo, el foco del mando y la reproducción de terceros requieren prueba real. El workflow añade Android Lint a las compilaciones con Gradle.
+## Puesta en marcha
 
-## Contenido y caché desde 1.2.0
+1. GitHub Pages solo publica repositorios privados con un plan de pago. Para el plan gratuito, haz público el repositorio (Settings → General → Danger Zone → Change visibility). El catálogo y la web no contienen credenciales; revisa igualmente el historial antes de hacerlo.
+2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+3. Ejecuta el workflow **Calamar TV · Web y catálogo** (Actions → Run workflow). La web queda en `https://djyuanyo.github.io/Calamar-TV/`.
+4. Para firmar la app y poder actualizarla, añade en Settings → Secrets and variables → Actions los secretos `CALAMAR_KEYSTORE_BASE64`, `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave se guarda fuera del repositorio. Todas las versiones deben firmarse con la misma; la primera APK firmada obliga a desinstalar una vez la versión de pruebas.
 
-La app incluye una captura real de 369 eventos y 62 canales de la API, fechada el 15/10/2026. Se muestra inmediatamente al instalar, mientras se solicita la agenda actual. Los estados del contenido inicial o guardado se identifican como pendientes de actualización; no se presentan como confirmaciones en vivo.
+## Compilación y pruebas
 
-Cada descarga válida se guarda en el almacenamiento privado. Si falla la conexión o el servidor devuelve una respuesta inválida, se mantienen los datos disponibles y se muestra el motivo. El catálogo de canales propios se conserva aunque una respuesta válida no contenga eventos. Los canales detectados pueden dejar de estar disponibles en el proveedor. No se incluye un catálogo de canales obtenido de otra API.
+El workflow **Calamar TV · APK Android y TV** compila release y debug, pasa Android Lint y las pruebas unitarias, comprueba que la APK incluye el catálogo y publica las APK como artefacto. Localmente: JDK 17, Gradle 8.9 y Android SDK 35, `gradle :app:assembleDebug :app:testDebugUnitTest`.
 
-Validación adicional: seis pruebas sobre deduplicación de canales, conservación del catálogo con agenda vacía, actualización de metadatos, guardado/lectura de caché y rechazo de respuestas inválidas. GitHub Actions ejecuta también las pruebas de datos.
+Pruebas: `CatalogTest` (reglas del catálogo y el `data/tdt.json` real), `UserChannelsTest`, `VideoResolverTest`, `PlayerDocumentTest`, `ConnectionReportTest`, y `tools/test_sync_tdt.py` para el lector de TDTChannels (`python -m unittest discover -s tools -p 'test_*.py'`).
 
-## Reproducción nativa desde 1.3.0
-
-La pantalla de reproducción es una actividad independiente. ExoPlayer se libera al salir o pasar al fondo; al volver se consulta una fuente vigente. Las consultas usan el transporte HTTPS de Android, distinto de WebView. Las respuestas que llegan después de cerrar, cambiar al modo web o iniciar otra consulta se descartan.
-
-La detección inicial de fuentes y su renovación tienen 8 pruebas unitarias adicionales (18 en total). Las pruebas y la compilación no sustituyen la comprobación de reproducción en el móvil/TV y red del usuario. El caso observado era `ERR_CONNECTION_RESET` en WebView, mientras Chrome reproducía la misma ruta sin VPN; el resultado de este nuevo transporte debe confirmarse allí.
-
-## Conexión desde 1.3.1
-
-En Android 14 o superior, la consulta de la página y la descarga del vídeo comparten HttpEngine, el transporte de Chromium integrado en Android, con HTTP/2 y QUIC habilitados. En equipos anteriores se conserva el transporte del sistema. No se cambian los DNS del dispositivo ni se añaden proxies, VPN o excepciones a la validación TLS. HttpEngine y Chrome pueden tener configuraciones distintas; esta actualización no afirma que su comportamiento sea idéntico.
-
-Si falla la consulta de la página, se muestra el motivo y el motor utilizado, manteniendo el error original en vez de abrir automáticamente una página WebView que podría ocultarlo. El botón Diagnóstico compara una consulta de la misma ruta con el sistema y con HttpEngine cuando está disponible. El informe se muestra localmente y se puede copiar; no incluye enlaces firmados, parámetros, cookies ni mensajes arbitrarios de excepciones, y no se envía a ningún servidor de diagnóstico.
-
-25 pruebas unitarias: se añaden pruebas del transporte inyectado, cierre de conexiones, límite de tamaño, rechazo de redirección a HTTP y clasificación de errores sin filtrar secretos. La reproducción sin VPN sigue pendiente de prueba en el dispositivo y red afectados.
-
-## Mis canales desde 1.4.0
-
-La app abre en **Mis canales**, una lista propia de enlaces de vídeo. Pulsa **+ Añadir canal** e introduce un nombre y un enlace directo `http://` o `https://` (MPEG-TS `.ts`, HLS `.m3u8`, DASH `.mpd` o vídeo `.mp4`). Al pulsar el canal se reproduce directamente en ExoPlayer, sin consultar ninguna página intermedia. Mantén pulsado un canal (también con el mando) para reproducirlo, editarlo o eliminarlo.
-
-Los canales se guardan solo en el almacenamiento privado de la app (`user-channels.json`). No se suben a GitHub, no se incluyen en la APK y no hay copia de seguridad en la nube. Para admitir enlaces `http://` se permite el tráfico sin cifrar. Las secciones Inicio, En directo, Agenda y Canales siguen disponibles.
-
-Si un enlace falla, se reintenta automáticamente hasta tres veces en dos minutos; después se puede pulsar **Reintentar**. Cada usuario es responsable de que los enlaces que añade sean legales y estén autorizados.
-
-7 pruebas unitarias nuevas cubren la validación de enlaces, el tipo de contenido, alta, edición y borrado, la lectura de archivos dañados y el guardado (32 en total).
-
-## Páginas de reproductor en Mis canales desde 1.4.1
-
-Además de enlaces de vídeo, un canal puede ser la página `https://` de un reproductor (por ejemplo `https://…/api/player/4`). Al abrirlo, la app consulta la página, lee la fuente `.m3u8` que publica en ese momento y la reproduce en ExoPlayer. Si la URL lleva una caducidad reconocible, se vuelve a consultar la página unos 30 segundos antes y se cambia a la fuente nueva sin intervención. No se genera ni modifica ningún token: solo se usa lo que la página publica. Si la red bloquea el dominio de la página, la consulta falla igual que en el navegador o reproductor afectados.
-
-La web no puede hacer esto por sí sola: el navegador no permite leer páginas de otro dominio (CORS), así que haría falta un servidor intermedio.
-
-8 pruebas en `UserChannelsTest` (33 en total).
+La reproducción depende de cada emisora y de la red del usuario; las pruebas no sustituyen la comprobación en el dispositivo.

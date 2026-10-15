@@ -6,8 +6,8 @@ android {
         applicationId 'es.yuanyo.calamartv'
         minSdk 21
         targetSdk 35
-        versionCode 8
-        versionName '1.4.1'
+        versionCode 9
+        versionName '2.0.0'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {
@@ -25,6 +25,8 @@ android {
             if (System.getenv('CALAMAR_KEYSTORE_PATH')) signingConfig signingConfigs.distribution
         }
     }
+    // The same catalog the web publishes is bundled as the offline fallback.
+    sourceSets { main { assets.srcDirs += rootProject.file('data') } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
 

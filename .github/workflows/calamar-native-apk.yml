@@ -2,9 +2,9 @@ name: Calamar TV · APK Android y TV
 on:
   workflow_dispatch:
   push:
-    paths: ['app/**', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
   pull_request:
-    paths: ['app/**', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
 permissions:
   contents: read
 jobs:
@@ -28,21 +28,17 @@ jobs:
             cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt 2>/dev/null || true
             exit 1
           }
-      - name: Verificar contenido real de la APK release
+      - name: Verificar el catálogo incluido en la APK release
         run: |
           python - <<'PY'
-          import glob, gzip, json, zipfile
+          import glob, json, zipfile
           apk = glob.glob('app/build/outputs/apk/release/*.apk')[0]
           with zipfile.ZipFile(apk) as archive:
-              if 'assets/events-initial.json' in archive.namelist():
-                  payload = archive.read('assets/events-initial.json')
-              else:
-                  payload = gzip.decompress(archive.read('assets/events-initial.json.gz'))
-          data = json.loads(payload)
-          events = data['data']
-          channels = {s.get('player_url', s.get('url')) for e in events for s in e.get('sources', []) if s.get('source') == 'own'}
-          assert events and channels, 'La APK no contiene la agenda y el catálogo iniciales'
-          print(f'APK release verificada: {len(events)} eventos, {len(channels)} canales')
+              tdt = json.loads(archive.read('assets/tdt.json'))
+              custom = json.loads(archive.read('assets/custom.json'))
+          playable = [c for c in tdt['channels'] if c.get('streams')]
+          assert len(playable) >= 40 and isinstance(custom.get('channels'), list), 'Catálogo incompleto en la APK'
+          print(f"APK release verificada: {len(tdt['channels'])} canales TDT, {len(playable)} reproducibles")
           PY
       - name: Preparar firma de distribución si está configurada
         if: github.event_name != 'pull_request'
@@ -62,7 +58,7 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: Calamar-TV-1.4.1-Android-TV
+          name: Calamar-TV-2.0.0-Android-TV
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
