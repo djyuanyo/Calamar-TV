@@ -41,6 +41,10 @@ Qué reproduce cada sitio:
 
 Los canales TDT sin emisión directa (por ejemplo Atresmedia o Mediaset, protegidas por la cadena) aparecen como **SU WEB** y abren la web oficial. Algunas emisiones solo funcionan desde España. El administrador es responsable de que los enlaces que publica sean propios o estén autorizados.
 
+## Enlace directo a un canal
+
+Cada canal tiene un enlace propio que abre directamente su reproductor en la web: `https://djyuanyo.github.io/Calamar-TV/#/canal/<slug>`. El slug es el identificador del canal (`la-1`, `teledeporte`, `24h`…; los canales añadidos desde el panel llevan uno generado, por ejemplo `mio-nombre-xxxx`). El reproductor tiene el botón **Copiar enlace**, y al abrir un canal desde la portada la dirección cambia a su enlace, de modo que se puede compartir y funciona con el botón Atrás. Un slug que no existe muestra un aviso; un canal sin emisión directa enlaza a su web oficial.
+
 ## Mis canales (solo app)
 
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.

@@ -186,12 +186,22 @@ function playSource(c, index) {
   video.play().catch(() => (playerStatus.textContent = 'Pulsa ▶ para empezar.'));
 }
 
-function open(c) {
+// Every channel has a link of its own: its id is the slug (#/canal/la-1).
+let current = null;
+let pushed = false;
+const channelLink = (c) => `${location.origin}${location.pathname}#/canal/${encodeURIComponent(c.id)}`;
+
+function open(c, fromRoute = false) {
   if (!c.playable) {
     window.open(c.web, '_blank', 'noopener');
     return;
   }
-  returnFocus = document.activeElement;
+  if (!fromRoute) {
+    history.pushState(null, '', `#/canal/${encodeURIComponent(c.id)}`);
+    pushed = true;
+  }
+  if (player.hidden) returnFocus = document.activeElement;
+  current = c;
   playerTitle.textContent = c.name;
   player.hidden = false;
   document.body.style.overflow = 'hidden';
@@ -199,12 +209,42 @@ function open(c) {
   playSource(c, 0);
 }
 
-function closePlayer() {
+function hidePlayer() {
   stop();
+  current = null;
   player.hidden = true;
   document.body.style.overflow = '';
   if (returnFocus) returnFocus.focus();
 }
+
+function closePlayer() {
+  hidePlayer();
+  if (!location.hash.startsWith('#/canal/')) return;
+  if (pushed) {
+    pushed = false;
+    history.back();
+  } else {
+    history.replaceState(null, '', '#/');
+    route();
+  }
+}
+
+const copyButton = document.getElementById('player-copy');
+copyButton.addEventListener('click', async () => {
+  if (!current) return;
+  const link = channelLink(current);
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {
+    const box = el('textarea', { readonly: true, style: 'position:fixed;opacity:0' }, link);
+    document.body.append(box);
+    box.select();
+    document.execCommand('copy');
+    box.remove();
+  }
+  copyButton.textContent = 'Enlace copiado';
+  setTimeout(() => (copyButton.textContent = 'Copiar enlace'), 2000);
+});
 document.getElementById('player-close').addEventListener('click', closePlayer);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !player.hidden) closePlayer();
@@ -235,6 +275,19 @@ async function route() {
       view.replaceChildren(el('p', { class: 'error' }, `No se pudo cargar el catálogo (${e.message}). Recarga la página.`));
       return;
     }
+  }
+  if (page !== 'canal' && !player.hidden) hidePlayer();
+  if (page === 'canal') {
+    const c = state.channels.find((x) => x.id === arg);
+    view.replaceChildren(
+      ...(c && !c.playable
+        ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
+        : c
+          ? home()
+          : [el('p', { class: 'error' }, `No existe el canal «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
+    );
+    if (c && c.playable && (player.hidden || current !== c)) open(c, true);
+    return;
   }
   const query = search.value.trim();
   view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : home()));
