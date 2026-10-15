@@ -278,7 +278,9 @@ document.addEventListener('keydown', (e) => {
 
 // ---- Routing ---------------------------------------------------------------------------------
 
+let routeVersion = 0;
 async function route() {
+  const version = ++routeVersion;
   const previousFootball = document.querySelector('#football-view');
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
@@ -287,18 +289,23 @@ async function route() {
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
   if (page !== 'futbol' && previousFootball) {
     const mod = await import('./football.js');
+    if (version !== routeVersion) return;
     mod.leaveFootball();
   }
   if (page === 'futbol') {
     if (!player.hidden) hidePlayer();
     const mod = await import('./football.js');
+    if (version !== routeVersion || !location.hash.startsWith('#/futbol')) return;
     await mod.renderFootball(view);
     return;
   }
   if (page === 'admin') {
     try {
       const admin = await import('./admin.js');
-      view.replaceChildren(...(await admin.render(state)));
+      if (version !== routeVersion) return;
+      const nodes = await admin.render(state);
+      if (version !== routeVersion) return;
+      view.replaceChildren(...nodes);
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el acceso de Google. Comprueba la conexión y recarga.'));
     }
@@ -309,10 +316,13 @@ async function route() {
     try {
       await loadCatalog();
     } catch (e) {
+      if (version !== routeVersion) return;
       view.replaceChildren(el('p', { class: 'error' }, `No se pudo cargar el catálogo (${e.message}). Recarga la página.`));
       return;
     }
   }
+  // A slower initial catalog request must never overwrite a newly selected tab.
+  if (version !== routeVersion) return;
   if (page !== 'canal' && !player.hidden) hidePlayer();
   if (page === 'canal') {
     const c = findChannel(state.channels, arg);
