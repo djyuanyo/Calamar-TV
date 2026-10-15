@@ -64,3 +64,11 @@ Los canales se guardan solo en el almacenamiento privado de la app (`user-channe
 Si un enlace falla, se reintenta automáticamente hasta tres veces en dos minutos; después se puede pulsar **Reintentar**. Cada usuario es responsable de que los enlaces que añade sean legales y estén autorizados.
 
 7 pruebas unitarias nuevas cubren la validación de enlaces, el tipo de contenido, alta, edición y borrado, la lectura de archivos dañados y el guardado (32 en total).
+
+## Páginas de reproductor en Mis canales desde 1.4.1
+
+Además de enlaces de vídeo, un canal puede ser la página `https://` de un reproductor (por ejemplo `https://…/api/player/4`). Al abrirlo, la app consulta la página, lee la fuente `.m3u8` que publica en ese momento y la reproduce en ExoPlayer. Si la URL lleva una caducidad reconocible, se vuelve a consultar la página unos 30 segundos antes y se cambia a la fuente nueva sin intervención. No se genera ni modifica ningún token: solo se usa lo que la página publica. Si la red bloquea el dominio de la página, la consulta falla igual que en el navegador o reproductor afectados.
+
+La web no puede hacer esto por sí sola: el navegador no permite leer páginas de otro dominio (CORS), así que haría falta un servidor intermedio.
+
+8 pruebas en `UserChannelsTest` (33 en total).

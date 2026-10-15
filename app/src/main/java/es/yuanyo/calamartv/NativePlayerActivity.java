@@ -325,7 +325,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(pageUrl);
-    return "Calamar TV 1.4.0\nAndroid API "
+    return "Calamar TV 1.4.1\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
