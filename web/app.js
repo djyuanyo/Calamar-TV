@@ -2,6 +2,8 @@ import { merge, featured, groups, webPlayback } from './catalog.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
+let sharedStarted = false;
+let sharedValue = null;
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
 export async function fetchJson(path) {
@@ -13,8 +15,18 @@ export async function fetchJson(path) {
 export async function loadCatalog() {
   const [tdt, custom] = await Promise.all([fetchJson('data/tdt.json'), fetchJson('data/custom.json')]);
   state.tdt = tdt;
-  state.custom = custom;
-  state.channels = merge(tdt, custom);
+  state.custom = sharedValue || custom;
+  state.channels = merge(tdt, state.custom);
+  if (!sharedStarted) {
+    sharedStarted = true;
+    // Keep the bundled catalog usable even if Firebase cannot be reached.
+    import('./firebase.js').then(({ watchCatalog }) => watchCatalog(custom, ({ data }) => {
+      sharedValue = data;
+      state.custom = data;
+      state.channels = merge(state.tdt, data);
+      if (!location.hash.startsWith('#/admin')) route();
+    }, () => {})).catch(() => {});
+  }
   return state;
 }
 
@@ -211,7 +223,7 @@ async function route() {
       const admin = await import('./admin.js');
       view.replaceChildren(...(await admin.render(state)));
     } catch {
-      view.replaceChildren(el('p', { class: 'error' }, 'No se pudo cargar la administración. Comprueba la conexión y recarga.'));
+      view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el acceso de Google. Comprueba la conexión y recarga.'));
     }
     return;
   }

@@ -9,5 +9,7 @@ local.properties
 
 node_modules/
 *-debug.log
+.firebase/
+firebase/package-lock.json
 __pycache__/
 *.pyc
