@@ -54,3 +54,13 @@ En Android 14 o superior, la consulta de la página y la descarga del vídeo com
 Si falla la consulta de la página, se muestra el motivo y el motor utilizado, manteniendo el error original en vez de abrir automáticamente una página WebView que podría ocultarlo. El botón Diagnóstico compara una consulta de la misma ruta con el sistema y con HttpEngine cuando está disponible. El informe se muestra localmente y se puede copiar; no incluye enlaces firmados, parámetros, cookies ni mensajes arbitrarios de excepciones, y no se envía a ningún servidor de diagnóstico.
 
 25 pruebas unitarias: se añaden pruebas del transporte inyectado, cierre de conexiones, límite de tamaño, rechazo de redirección a HTTP y clasificación de errores sin filtrar secretos. La reproducción sin VPN sigue pendiente de prueba en el dispositivo y red afectados.
+
+## Mis canales desde 1.4.0
+
+La app abre en **Mis canales**, una lista propia de enlaces de vídeo. Pulsa **+ Añadir canal** e introduce un nombre y un enlace directo `http://` o `https://` (MPEG-TS `.ts`, HLS `.m3u8`, DASH `.mpd` o vídeo `.mp4`). Al pulsar el canal se reproduce directamente en ExoPlayer, sin consultar ninguna página intermedia. Mantén pulsado un canal (también con el mando) para reproducirlo, editarlo o eliminarlo.
+
+Los canales se guardan solo en el almacenamiento privado de la app (`user-channels.json`). No se suben a GitHub, no se incluyen en la APK y no hay copia de seguridad en la nube. Para admitir enlaces `http://` se permite el tráfico sin cifrar. Las secciones Inicio, En directo, Agenda y Canales siguen disponibles.
+
+Si un enlace falla, se reintenta automáticamente hasta tres veces en dos minutos; después se puede pulsar **Reintentar**. Cada usuario es responsable de que los enlaces que añade sean legales y estén autorizados.
+
+7 pruebas unitarias nuevas cubren la validación de enlaces, el tipo de contenido, alta, edición y borrado, la lectura de archivos dañados y el guardado (32 en total).
