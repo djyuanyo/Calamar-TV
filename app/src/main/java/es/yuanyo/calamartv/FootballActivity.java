@@ -1,6 +1,8 @@
 package es.yuanyo.calamartv;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -45,9 +47,23 @@ public class FootballActivity extends Activity {
     browser.getSettings().setAllowFileAccess(false);
     browser.getSettings().setAllowContentAccess(false);
     browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
+    browser.getSettings().setUserAgentString(browser.getSettings().getUserAgentString() + " CalamarTVAndroid");
     browser.setWebViewClient(new WebViewClient() {
       @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
         String url = request.getUrl().toString();
+        if (request.isForMainFrame() && "calamar-tv".equals(request.getUrl().getScheme())
+            && "football-play".equals(request.getUrl().getHost())) {
+          Uri target = request.getUrl();
+          String page = target.getQueryParameter("url");
+          String title = target.getQueryParameter("title");
+          if (trustedSource(page)) {
+            Intent intent = new Intent(FootballActivity.this, NativePlayerActivity.class);
+            intent.putExtra("page_url", page);
+            intent.putExtra("title", title == null ? "Partido de fútbol" : title);
+            startActivity(intent);
+          }
+          return true;
+        }
         return !url.startsWith("https://");
       }
     });
@@ -65,6 +81,17 @@ public class FootballActivity extends Activity {
     });
     layout.addView(browser, new LinearLayout.LayoutParams(-1,0,1));
     browser.loadUrl(AGENDA);
+  }
+
+  // Only explicitly documented ZicoTV and embed provider hosts can launch native playback.
+  private boolean trustedSource(String value) {
+    if (value == null) return false;
+    try {
+      Uri u = Uri.parse(value);
+      String host = u.getHost();
+      return "https".equalsIgnoreCase(u.getScheme()) &&
+          ("bp.zicotv.cc".equalsIgnoreCase(host) || "embedsports.top".equalsIgnoreCase(host));
+    } catch (RuntimeException error) { return false; }
   }
 
   private void hideFullScreen() {
