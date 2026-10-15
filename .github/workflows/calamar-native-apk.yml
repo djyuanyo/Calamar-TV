@@ -24,7 +24,7 @@ jobs:
           gradle-version: '8.9'
       - name: Compilar APK de prueba
         run: |
-          gradle --no-daemon :app:assembleDebug :app:lintDebug || {
+          gradle --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest || {
             cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt 2>/dev/null || true
             exit 1
           }
@@ -46,7 +46,7 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: Calamar-TV-1.1.0-Android-TV
+          name: Calamar-TV-1.2.0-Android-TV
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk

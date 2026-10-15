@@ -20,6 +20,8 @@ public class MainActivity extends Activity {
   LinearLayout root, list, filters;
   TextView message;
   JSONArray events = new JSONArray();
+  JSONArray channelCatalog = new JSONArray();
+  String dataOrigin = "Sin datos", loadError = "";
   String sport = "Todos", mode = "Inicio";
   boolean busy = false;
   long lastUpdate = 0;
@@ -48,6 +50,7 @@ public class MainActivity extends Activity {
   public void onCreate(Bundle b) {
     super.onCreate(b);
     getWindow().addFlags(128);
+    restoreContent();
     home();
     load();
     handler.postDelayed(refresh, 60000);
@@ -239,44 +242,96 @@ public class MainActivity extends Activity {
     }
   }
 
+  boolean freshContent() {
+    return dataOrigin.equals("En línea") && System.currentTimeMillis() - lastUpdate < 180000;
+  }
+
+  void restoreContent() {
+    try {
+      JSONObject initial =
+          EventData.decode(
+              EventData.read(
+                  new java.util.zip.GZIPInputStream(getAssets().open("events-initial.json.gz"))));
+      events = initial.getJSONArray("data");
+      lastUpdate = initial.optLong("updated_at");
+      channelCatalog = EventData.mergeChannels(new JSONArray(), events, lastUpdate);
+      dataOrigin = "Contenido inicial";
+    } catch (Exception ignored) {
+    }
+    File file = new File(getFilesDir(), "events-cache.json");
+    if (file.isFile())
+      try {
+        JSONObject saved = EventData.decode(EventData.read(new FileInputStream(file)));
+        if (saved.optLong("updated_at") >= lastUpdate) {
+          events = saved.getJSONArray("data");
+          lastUpdate = saved.optLong("updated_at");
+          channelCatalog = saved.optJSONArray("channels");
+          if (channelCatalog == null)
+            channelCatalog = EventData.mergeChannels(new JSONArray(), events, lastUpdate);
+          dataOrigin = "Datos guardados";
+        }
+      } catch (Exception ignored) {
+      }
+  }
+
   void load() {
     if (busy) return;
     busy = true;
-    if (web == null && message != null) message.setText("Actualizando…");
-    new AsyncTask<Void, Void, JSONArray>() {
+    loadError = "";
+    if (web == null && message != null) message.setText(dataOrigin + " · Actualizando eventos…");
+    new AsyncTask<Void, Void, JSONObject>() {
       String error;
 
-      protected JSONArray doInBackground(Void... v) {
+      protected JSONObject doInBackground(Void... v) {
         try {
           HttpURLConnection c =
               (HttpURLConnection) new URL("https://bp.zicotv.cc/api/v1/events").openConnection();
-          c.setConnectTimeout(15000);
-          c.setReadTimeout(20000);
+          c.setConnectTimeout(10000);
+          c.setReadTimeout(15000);
           c.setRequestProperty("Accept", "application/json");
+          c.setRequestProperty("User-Agent", "CalamarTV/1.2.0 (Android; API client)");
           try {
-            InputStream in = c.getInputStream();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] b = new byte[8192];
-            int n;
-            while ((n = in.read(b)) != -1) out.write(b, 0, n);
-            in.close();
-            return new JSONObject(out.toString("UTF-8")).getJSONArray("data");
+            int status = c.getResponseCode();
+            if (status != 200) throw new IOException("HTTP " + status);
+            JSONObject result = EventData.decode(EventData.read(c.getInputStream()));
+            long now = System.currentTimeMillis();
+            JSONArray channels =
+                EventData.mergeChannels(channelCatalog, result.getJSONArray("data"), now);
+            result.put("channels", channels).put("updated_at", now);
+            try {
+              EventData.save(new File(getFilesDir(), "events-cache.json"), result);
+            } catch (IOException cacheError) {
+              android.util.Log.w("CalamarTV", "No se pudo guardar caché", cacheError);
+            }
+            return result;
           } finally {
             c.disconnect();
           }
         } catch (Exception e) {
-          error = "No se pudo actualizar. Comprueba tu conexión y pulsa Actualizar.";
+          if (e instanceof java.net.UnknownHostException)
+            error = "No se encuentra el servidor de ZicoTV";
+          else if (e instanceof java.net.SocketTimeoutException)
+            error = "ZicoTV tarda en responder";
+          else if (e instanceof javax.net.ssl.SSLException)
+            error = "Error de conexión segura con ZicoTV";
+          else if (e.getMessage() != null && e.getMessage().startsWith("HTTP "))
+            error = "ZicoTV responde " + e.getMessage();
+          else error = "No se pudo descargar la agenda";
           return null;
         }
       }
 
-      protected void onPostExecute(JSONArray a) {
+      protected void onPostExecute(JSONObject result) {
         busy = false;
         if (isFinishing()) return;
-        if (a != null) {
-          events = a;
-          lastUpdate = System.currentTimeMillis();
+        if (result != null) {
+          events = result.optJSONArray("data");
+          channelCatalog = result.optJSONArray("channels");
+          lastUpdate = result.optLong("updated_at");
+          dataOrigin = "En línea";
         }
+        loadError =
+            error == null ? "" : error + " · Pulsa Actualizar. Se mantienen los datos disponibles.";
         if (web == null) {
           View focused = getCurrentFocus();
           int focusId = focused != null ? focused.getId() : View.NO_ID;
@@ -286,7 +341,6 @@ public class MainActivity extends Activity {
             View replacement = root.findViewById(focusId);
             if (replacement != null) replacement.requestFocus();
           }
-          if (error != null) message.setText(error);
         }
       }
     }.execute();
@@ -294,11 +348,11 @@ public class MainActivity extends Activity {
 
   long time(JSONObject e) {
     try {
-      String timestamp = e.optString("start_time").replaceAll("Z$", "+0000")
-          .replaceAll("([+-]\\d{2}):(\\d{2})$", "$1$2");
-      return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
-          .parse(timestamp)
-          .getTime();
+      String timestamp =
+          e.optString("start_time")
+              .replaceAll("Z$", "+0000")
+              .replaceAll("([+-]\\d{2}):(\\d{2})$", "$1$2");
+      return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).parse(timestamp).getTime();
     } catch (Exception x) {
       return Long.MAX_VALUE;
     }
@@ -343,6 +397,7 @@ public class MainActivity extends Activity {
 
   String state(JSONObject e) {
     String s = e.optString("status");
+    if (s.equals("live") && !freshContent()) return "ESTADO POR ACTUALIZAR";
     return s.equals("live")
         ? "EN DIRECTO"
         : s.equals("finished")
@@ -363,16 +418,23 @@ public class MainActivity extends Activity {
       else if (s.equals("scheduled")) next.add(e);
       else past.add(e);
     }
+    SimpleDateFormat stamp = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());
+    stamp.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
     message.setText(
-        (busy ? "Actualizando · " : "")
-            + "HORA PENINSULAR  /  "
+        dataOrigin
+            + (busy ? " · Actualizando" : "")
+            + "  /  "
             + all.size()
-            + " EVENTOS"
-            + (lastUpdate > 0
-                ? "  /  ACTUALIZADO "
-                    + new SimpleDateFormat("HH:mm", Locale.getDefault())
-                        .format(new Date(lastUpdate))
-                : ""));
+            + " eventos  /  "
+            + channelCatalog.length()
+            + " canales"
+            + (lastUpdate > 0 ? "  /  " + stamp.format(new Date(lastUpdate)) : "")
+            + " · Hora peninsular"
+            + (loadError.isEmpty() ? "" : "\n" + loadError));
+    if (mode.equals("Canales")) {
+      channels(all);
+      return;
+    }
     if (all.isEmpty()) {
       heading(busy ? "Buscando el próximo gran partido" : "Sin eventos disponibles", null);
       list.addView(
@@ -392,7 +454,9 @@ public class MainActivity extends Activity {
       return;
     }
     if (mode.equals("En directo")) {
-      heading("El deporte está pasando ahora", now.size() + " directos");
+      heading(
+          freshContent() ? "El deporte está pasando ahora" : "Directos · estado por actualizar",
+          now.size() + " eventos");
       if (now.isEmpty())
         list.addView(label("No hay eventos en directo para este deporte.", 16, 0xffa4acb7));
       else grid(now);
@@ -401,7 +465,7 @@ public class MainActivity extends Activity {
     if (!now.isEmpty()) hero(now.get(0));
     else if (!next.isEmpty()) hero(next.get(0));
     if (!now.isEmpty()) {
-      heading("En directo", now.size() + " eventos");
+      heading(freshContent() ? "En directo" : "Directos · por actualizar", now.size() + " eventos");
       carousel(now);
     }
     if (!next.isEmpty()) {
@@ -521,7 +585,9 @@ public class MainActivity extends Activity {
     content.addView(label(e.optString("league") + "  ·  " + date(e), 13, 0xffd1d6de));
     Button watch =
         button(
-            e.optString("status").equals("live") ? "▶  Ver ahora" : "▶  Ver fuentes",
+            freshContent() && e.optString("status").equals("live")
+                ? "▶  Ver ahora"
+                : "▶  Ver fuentes",
             new View.OnClickListener() {
               public void onClick(View v) {
                 choose(e);
@@ -637,6 +703,16 @@ public class MainActivity extends Activity {
 
   void channels(ArrayList<JSONObject> all) {
     TreeMap<String, JSONObject[]> channels = new TreeMap<String, JSONObject[]>();
+    for (int k = 0; k < channelCatalog.length(); k++) {
+      JSONObject item = channelCatalog.optJSONObject(k);
+      if (item == null) continue;
+      JSONObject source = item.optJSONObject("source"), event = item.optJSONObject("event");
+      if (source == null || event == null) continue;
+      if (!sport.equals("Todos") && !sport.equals(event.optString("sport_category"))) continue;
+      channels.put(
+          source.optString("name", "Canal") + source.optString("url"),
+          new JSONObject[] {source, event});
+    }
     HashSet<String> seen = new HashSet<String>();
     for (JSONObject e : all) {
       JSONArray src = e.optJSONArray("sources");
@@ -645,12 +721,14 @@ public class MainActivity extends Activity {
         JSONObject s = src.optJSONObject(i);
         if (s == null || !s.optString("source").equals("own")) continue;
         String u = s.optString("player_url", s.optString("url"));
-        if (u.startsWith("https://") && seen.add(u))
+        if (u.startsWith("https://")
+            && seen.add(u)
+            && !channels.containsKey(s.optString("name", "Canal") + u))
           channels.put(s.optString("name", "Canal") + u, new JSONObject[] {s, e});
       }
     }
     heading("Tus canales deportivos", channels.size() + " canales");
-    list.addView(label("Canales presentes en la agenda del proveedor", 12, 0xffa4acb7));
+    list.addView(label("Catálogo guardado de canales detectados en la API", 12, 0xffa4acb7));
     int cols = wide() ? 3 : 2,
         width = (getResources().getConfiguration().screenWidthDp - (wide() ? 56 : 24)) / cols - 14,
         i = 0;
@@ -676,7 +754,11 @@ public class MainActivity extends Activity {
       c.addView(name);
       c.addView(
           label(
-              entry[0].optBoolean("is_streaming") ? "● EMITIENDO" : "ESTADO SIN CONFIRMAR",
+              freshContent()
+                      && System.currentTimeMillis() - entry[0].optLong("catalog_seen_at") < 180000
+                      && entry[0].optBoolean("is_streaming")
+                  ? "● EMITIENDO"
+                  : "ESTADO SIN CONFIRMAR",
               10,
               entry[0].optBoolean("is_streaming") ? ACC : 0xffa4acb7));
       c.setOnClickListener(

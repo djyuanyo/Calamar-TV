@@ -27,3 +27,11 @@ El workflow admite firma release mediante estos secretos de GitHub: `CALAMAR_KEY
 ## Validación
 
 La APK 1.1.0 se ha compilado con Android API 35, convertido a DEX y firmado con comprobación criptográfica. El manifiesto declara móvil y Android TV y no requiere pantalla táctil. La ejecución en dispositivo, el foco del mando y la reproducción de terceros requieren prueba real. El workflow añade Android Lint a las compilaciones con Gradle.
+
+## Contenido y caché desde 1.2.0
+
+La app incluye una captura real de 369 eventos y 62 canales de la API, fechada el 15/10/2026. Se muestra inmediatamente al instalar, mientras se solicita la agenda actual. Los estados del contenido inicial o guardado se identifican como pendientes de actualización; no se presentan como confirmaciones en vivo.
+
+Cada descarga válida se guarda en el almacenamiento privado. Si falla la conexión o el servidor devuelve una respuesta inválida, se mantienen los datos disponibles y se muestra el motivo. El catálogo de canales propios se conserva aunque una respuesta válida no contenga eventos. Los canales detectados pueden dejar de estar disponibles en el proveedor. No se incluye un catálogo de canales obtenido de otra API.
+
+Validación adicional: seis pruebas sobre deduplicación de canales, conservación del catálogo con agenda vacía, actualización de metadatos, guardado/lectura de caché y rechazo de respuestas inválidas. GitHub Actions ejecuta también las pruebas de datos.
