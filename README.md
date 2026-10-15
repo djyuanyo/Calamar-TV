@@ -35,3 +35,9 @@ La app incluye una captura real de 369 eventos y 62 canales de la API, fechada e
 Cada descarga válida se guarda en el almacenamiento privado. Si falla la conexión o el servidor devuelve una respuesta inválida, se mantienen los datos disponibles y se muestra el motivo. El catálogo de canales propios se conserva aunque una respuesta válida no contenga eventos. Los canales detectados pueden dejar de estar disponibles en el proveedor. No se incluye un catálogo de canales obtenido de otra API.
 
 Validación adicional: seis pruebas sobre deduplicación de canales, conservación del catálogo con agenda vacía, actualización de metadatos, guardado/lectura de caché y rechazo de respuestas inválidas. GitHub Actions ejecuta también las pruebas de datos.
+
+## Reproducción desde 1.2.1
+
+Los canales propios abren directamente el reproductor oficial `/api/player/ID` como documento principal de WebView. Así conserva su origen real y las cookies de primera parte, en vez de quedar dentro de un iframe alojado en un dominio ficticio. No se modifican los enlaces de vídeo ni se desactivan comprobaciones TLS. Las fuentes externas conservan la integración iframe indicada por la API.
+
+Se añade el botón Web oficial para comparar el mismo canal en el navegador del dispositivo y mensajes con el dominio y código de error cuando WebView informa de un fallo de conexión o HTTP en el reproductor o la lista HLS. Esta corrección elimina una diferencia de integración; no confirma por sí sola la causa del comportamiento con VPN. La comprobación sin VPN requiere probar el mismo canal en el dispositivo y red afectados.

@@ -248,18 +248,16 @@ public class MainActivity extends Activity {
 
   InputStream openInitialContent() throws IOException {
     // Android packaging may transparently unpack .gz assets and remove that suffix.
-    try { return getAssets().open("events-initial.json"); }
-    catch (IOException plainMissing) {
+    try {
+      return getAssets().open("events-initial.json");
+    } catch (IOException plainMissing) {
       return new java.util.zip.GZIPInputStream(getAssets().open("events-initial.json.gz"));
     }
   }
 
   void restoreContent() {
     try {
-      JSONObject initial =
-          EventData.decode(
-              EventData.read(
-                  openInitialContent()));
+      JSONObject initial = EventData.decode(EventData.read(openInitialContent()));
       events = initial.getJSONArray("data");
       lastUpdate = initial.optLong("updated_at");
       channelCatalog = EventData.mergeChannels(new JSONArray(), events, lastUpdate);
@@ -819,6 +817,8 @@ public class MainActivity extends Activity {
       Toast.makeText(this, "Fuente no compatible", Toast.LENGTH_LONG).show();
       return;
     }
+    final boolean officialPlayer = PlayerAddress.isOfficialPlayer(s.optString("source"), url);
+    final String playerUrl = url;
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setBackgroundColor(BG);
@@ -852,13 +852,38 @@ public class MainActivity extends Activity {
                 choose(e);
               }
             }));
-    root.addView(bar);
+    if (officialPlayer)
+      addButton(
+          bar,
+          button(
+              "Web oficial",
+              new View.OnClickListener() {
+                public void onClick(View v) {
+                  try {
+                    startActivity(
+                        new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(PlayerAddress.officialChannel(playerUrl))));
+                  } catch (android.content.ActivityNotFoundException noBrowser) {
+                    Toast.makeText(
+                            MainActivity.this, "No hay navegador instalado", Toast.LENGTH_SHORT)
+                        .show();
+                  }
+                }
+              }));
+    HorizontalScrollView playerControls = new HorizontalScrollView(this);
+    playerControls.setHorizontalScrollBarEnabled(false);
+    playerControls.addView(bar);
+    root.addView(playerControls);
+    final TextView playerStatus = label("Conectando con el reproductor…", 12, 0xffa4acb7);
+    root.addView(playerStatus);
     root.addView(text(s.optString("name", e.optString("title")), 18));
     web = new WebView(this);
     root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
     WebSettings settings = web.getSettings();
     settings.setJavaScriptEnabled(true);
     settings.setDomStorageEnabled(true);
+    android.webkit.CookieManager.getInstance().setAcceptCookie(true);
     try {
       WebSettings.class
           .getMethod("setMediaPlaybackRequiresUserGesture", boolean.class)
@@ -870,8 +895,54 @@ public class MainActivity extends Activity {
     settings.setSupportMultipleWindows(false);
     web.setWebViewClient(
         new WebViewClient() {
+          boolean failed = false;
+
           public boolean shouldOverrideUrlLoading(WebView w, String u) {
             return !u.startsWith("https://");
+          }
+
+          public void onPageStarted(WebView w, String u, Bitmap icon) {
+            failed = false;
+            playerStatus.setText("Conectando con el reproductor…");
+          }
+
+          public void onPageFinished(WebView w, String u) {
+            android.webkit.CookieManager.getInstance().flush();
+            if (!failed) playerStatus.setText("Reproductor cargado · Pulsa ▶ para reproducir");
+          }
+
+          public void onReceivedError(WebView w, int code, String description, String failedUrl) {
+            failed = true;
+            playerStatus.setText(
+                "No se pudo cargar el reproductor (error "
+                    + code
+                    + "). Pulsa Reconectar o Web oficial.");
+          }
+
+          @android.annotation.TargetApi(23)
+          public void onReceivedError(
+              WebView w, WebResourceRequest request, WebResourceError error) {
+            if (request.isForMainFrame() || request.getUrl().getPath().contains(".m3u8")) {
+              failed = true;
+              playerStatus.setText(
+                  "Error de conexión con "
+                      + request.getUrl().getHost()
+                      + " ("
+                      + error.getErrorCode()
+                      + "). Pulsa Reconectar o Web oficial.");
+            }
+          }
+
+          @android.annotation.TargetApi(23)
+          public void onReceivedHttpError(
+              WebView w, WebResourceRequest request, WebResourceResponse response) {
+            if (request.isForMainFrame() || request.getUrl().getPath().contains(".m3u8")) {
+              failed = true;
+              playerStatus.setText(
+                  "El servidor de vídeo responde HTTP "
+                      + response.getStatusCode()
+                      + ". Pulsa Reconectar o Web oficial.");
+            }
           }
         });
     web.setWebChromeClient(
@@ -887,17 +958,23 @@ public class MainActivity extends Activity {
             hideCustom();
           }
         });
-    web.loadDataWithBaseURL(
-        "https://calamar-tv.invalid/",
-        "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body"
-            + " style='margin:0;background:black'><iframe src='"
-            + android.text.TextUtils.htmlEncode(url)
-            + "' allow='autoplay; fullscreen; picture-in-picture' allowfullscreen referrerpolicy='"
-            + (s.optString("referrer_policy").equals("origin") ? "origin" : "no-referrer")
-            + "' style='border:0;width:100%;height:100%'></iframe></body></html>",
-        "text/html",
-        "UTF-8",
-        null);
+    if (officialPlayer) {
+      // Keep ZicoTV's actual origin and its first-party session; no invented parent origin.
+      web.loadUrl(playerUrl);
+    } else {
+      web.loadDataWithBaseURL(
+          "https://calamar-tv.invalid/",
+          "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body"
+              + " style='margin:0;background:black'><iframe src='"
+              + android.text.TextUtils.htmlEncode(url)
+              + "' allow='autoplay; fullscreen; picture-in-picture' allowfullscreen"
+              + " referrerpolicy='"
+              + (s.optString("referrer_policy").equals("origin") ? "origin" : "no-referrer")
+              + "' style='border:0;width:100%;height:100%'></iframe></body></html>",
+          "text/html",
+          "UTF-8",
+          null);
+    }
     web.requestFocus();
   }
 
