@@ -262,7 +262,23 @@ function playSource(c, index) {
         const latest = state.channels.find((item) => item.id === c.id) || c;
         playSource(latest, 0);
       } }, '↻ Reintentar');
-      playerStatus.replaceChildren(`${reason} `, retry, ' ', c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'En Android, prueba la aplicación Calamar TV.');
+      // Direct navigation may work even when hls.js fetches from GitHub Pages are
+      // rejected by CORS or by the origin policy of the upstream CDN.
+      // Use a real link instead of trying to proxy or bypass access controls.
+      const direct = el('a', {
+        class: 'ghost',
+        href: source.url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        referrerpolicy: 'no-referrer',
+      }, '▶ Abrir emisión directamente');
+      playerStatus.replaceChildren(
+        `${reason} `,
+        retry,
+        ' ',
+        direct,
+        c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
+      );
     }
   };
   playerStatus.textContent = 'Conectando…';
