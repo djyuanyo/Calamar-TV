@@ -29,8 +29,6 @@ public class MainActivity extends Activity {
   String mode = "Inicio", group = "Todos", origin = "Catálogo incluido", loadError = "";
   long updatedAt = 0;
   boolean busy = false;
-  boolean sharedAvailable = false;
-  com.google.firebase.firestore.ListenerRegistration sharedListener;
   final LruCache<String, Bitmap> images =
       new LruCache<String, Bitmap>(12 * 1024 * 1024) {
         protected int sizeOf(String k, Bitmap b) {
@@ -79,11 +77,6 @@ public class MainActivity extends Activity {
         origin = "Catálogo guardado";
       } catch (Exception ignored) {
       }
-    JSONObject shared = SharedCatalog.cached(this);
-    if (shared != null) {
-      custom = shared;
-      sharedAvailable = true;
-    }
     channels = Catalog.merge(tdt, custom);
   }
 
@@ -138,7 +131,7 @@ public class MainActivity extends Activity {
         if (isFinishing()) return;
         if (result != null) {
           tdt = result[0];
-          if (!sharedAvailable) custom = result[1];
+          custom = result[1];
           channels = Catalog.merge(tdt, custom);
           updatedAt = System.currentTimeMillis();
           origin = "En línea";
@@ -212,7 +205,7 @@ public class MainActivity extends Activity {
               }
             }));
     addButton(
-        nav, button("Administrar", v -> startActivity(new Intent(this, AdminActivity.class))));
+        nav, button("Administrar", v -> openWeb(ADMIN_URL)));
     HorizontalScrollView n = new HorizontalScrollView(this);
     n.setHorizontalScrollBarEnabled(false);
     n.addView(nav);
@@ -485,37 +478,12 @@ public class MainActivity extends Activity {
   protected void onPause() {
     super.onPause();
     handler.removeCallbacks(refresh);
-    if (sharedListener != null) {
-      sharedListener.remove();
-      sharedListener = null;
-    }
   }
 
   protected void onResume() {
     super.onResume();
     handler.removeCallbacks(refresh);
     handler.post(refresh);
-    sharedListener =
-        SharedCatalog.document(this)
-            .addSnapshotListener(
-                (snapshot, error) -> {
-                  if (isFinishing()
-                      || error != null
-                      || snapshot == null
-                      || !snapshot.exists()
-                      || snapshot.getMetadata().hasPendingWrites()) return;
-                  try {
-                    JSONObject next = SharedCatalog.decode(snapshot);
-                    if (sharedAvailable && next.toString().equals(custom.toString())) return;
-                    custom = next;
-                    sharedAvailable = true;
-                    SharedCatalog.cache(this, custom);
-                    channels = Catalog.merge(tdt, custom);
-                    renderFilters();
-                    render();
-                  } catch (Exception ignored) {
-                  }
-                });
   }
 
   protected void onDestroy() {
