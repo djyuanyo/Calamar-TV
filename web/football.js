@@ -100,7 +100,7 @@ async function openEvent(id) {
       // When ZicoTV supplies a true media URL, use our HTML5/HLS player.
       // URLs for embeds are HTML documents and must stay inside an iframe.
       for (const stream of (Array.isArray(source.streams) ? source.streams : [])) {
-        if (safeUrl(stream.url) && /\\.(m3u8|mp4|webm)(?:[?#]|$)/i.test(new URL(stream.url).pathname)) {
+        if (safeUrl(stream.url) && /\.(m3u8|mp4|webm)(?:[?#]|$)/i.test(new URL(stream.url).pathname)) {
           alternatives.push({url:stream.url, name:(source.name || source.source)+' · '+stream.stream_no, kind:'media'});
         }
       }
@@ -152,7 +152,7 @@ async function openEvent(id) {
         video.style.cssText='width:100%;height:100%;background:#000';
         playerBox.append(video);
         const url=safeUrl(chosen.url);
-        if (/\\.m3u8(?:[?#]|$)/i.test(new URL(url).pathname) && window.Hls && window.Hls.isSupported()) {
+        if (/\.m3u8(?:[?#]|$)/i.test(new URL(url).pathname) && window.Hls && window.Hls.isSupported()) {
           localHls=new window.Hls();
           localHls.loadSource(url);
           localHls.attachMedia(video);
