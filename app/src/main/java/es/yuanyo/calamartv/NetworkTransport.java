@@ -26,8 +26,8 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
 
   private NetworkTransport(Context context) {
     Object candidate = null;
-    String detail = "Sistema (Android anterior a 14)";
-    if (Build.VERSION.SDK_INT >= 34) {
+    String detail = "Sistema (HttpEngine no disponible)";
+    if (Build.VERSION.SDK_INT >= 34 && android.os.ext.SdkExtensions.getExtensionVersion(31) >= 7) {
       try {
         candidate = Api34.create(context);
         detail = "Chromium / HttpEngine";
@@ -49,13 +49,16 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
 
   @Override
   public HttpURLConnection open(URL url) throws IOException {
-    if (Build.VERSION.SDK_INT >= 34 && engine != null) return Api34.open(engine, url);
+    if (Build.VERSION.SDK_INT >= 34
+        && android.os.ext.SdkExtensions.getExtensionVersion(31) >= 7
+        && engine != null) return Api34.open(engine, url);
     return (HttpURLConnection) url.openConnection();
   }
 
   public DataSource.Factory mediaFactory(String referer) {
-    if (Build.VERSION.SDK_INT >= 34 && engine != null)
-      return Api34.media(engine, callbacks, referer);
+    if (Build.VERSION.SDK_INT >= 34
+        && android.os.ext.SdkExtensions.getExtensionVersion(31) >= 7
+        && engine != null) return Api34.media(engine, callbacks, referer);
     return new DefaultHttpDataSource.Factory()
         .setUserAgent(PlayerDocument.USER_AGENT)
         .setConnectTimeoutMs(15000)
@@ -65,6 +68,7 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
 
   // Keep new platform types isolated so old Android TV versions can load the outer class.
   @android.annotation.TargetApi(34)
+  @androidx.annotation.RequiresExtension(extension = 31, version = 7)
   private static final class Api34 {
     static Object create(Context context) {
       return new android.net.http.HttpEngine.Builder(context)
