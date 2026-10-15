@@ -246,12 +246,20 @@ public class MainActivity extends Activity {
     return dataOrigin.equals("En línea") && System.currentTimeMillis() - lastUpdate < 180000;
   }
 
+  InputStream openInitialContent() throws IOException {
+    // Android packaging may transparently unpack .gz assets and remove that suffix.
+    try { return getAssets().open("events-initial.json"); }
+    catch (IOException plainMissing) {
+      return new java.util.zip.GZIPInputStream(getAssets().open("events-initial.json.gz"));
+    }
+  }
+
   void restoreContent() {
     try {
       JSONObject initial =
           EventData.decode(
               EventData.read(
-                  new java.util.zip.GZIPInputStream(getAssets().open("events-initial.json.gz"))));
+                  openInitialContent()));
       events = initial.getJSONArray("data");
       lastUpdate = initial.optLong("updated_at");
       channelCatalog = EventData.mergeChannels(new JSONArray(), events, lastUpdate);
