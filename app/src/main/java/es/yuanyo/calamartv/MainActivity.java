@@ -294,8 +294,10 @@ public class MainActivity extends Activity {
 
   long time(JSONObject e) {
     try {
-      return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
-          .parse(e.optString("start_time"))
+      String timestamp = e.optString("start_time").replaceAll("Z$", "+0000")
+          .replaceAll("([+-]\\d{2}):(\\d{2})$", "$1$2");
+      return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
+          .parse(timestamp)
           .getTime();
     } catch (Exception x) {
       return Long.MAX_VALUE;
