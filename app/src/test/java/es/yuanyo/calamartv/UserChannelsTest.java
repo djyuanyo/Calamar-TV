@@ -34,6 +34,16 @@ public class UserChannelsTest {
   }
 
   @Test
+  public void playerPagesAreResolvedInsteadOfPlayedDirectly() {
+    assertTrue(UserChannels.isPage("https://example.com/api/player/4"));
+    assertTrue(UserChannels.isPage("https://example.com/watch?id=4"));
+    assertFalse(UserChannels.isPage("https://example.com/live/index.m3u8?token=x"));
+    assertFalse(UserChannels.isPage("https://example.com/live/1.TS"));
+    assertFalse(UserChannels.isPage("http://example.com:8880/live/a/b/1"));
+    assertFalse(UserChannels.isPage("no es un enlace"));
+  }
+
+  @Test
   public void addEditAndRemoveKeepOrder() throws Exception {
     JSONArray list = UserChannels.add(new JSONArray(), "Uno", "http://example.com/1.ts");
     list = UserChannels.add(list, " ", "http://example.com/2.ts");

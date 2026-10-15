@@ -41,6 +41,23 @@ public final class UserChannels {
     }
   }
 
+  /**
+   * True for an https page that publishes its own video sources (for example a web player). Such
+   * channels are resolved and renewed from the page instead of being played as a media file.
+   */
+  public static boolean isPage(String address) {
+    String url = normalize(address);
+    if (url == null) return false;
+    try {
+      URI uri = new URI(url);
+      if (!"https".equalsIgnoreCase(uri.getScheme())) return false;
+      String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(Locale.ROOT);
+      return !path.matches(".*\\.(ts|m3u8|m3u|mpd|mp4|webm|mkv)$");
+    } catch (Exception invalid) {
+      return false;
+    }
+  }
+
   public static JSONArray add(JSONArray channels, String name, String address)
       throws JSONException {
     return put(channels, -1, name, address);

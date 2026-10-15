@@ -791,8 +791,9 @@ public class MainActivity extends Activity {
     heading("Mis canales", userChannels.length() + " canales");
     list.addView(
         label(
-            "Añade enlaces directos de vídeo (.ts, .m3u8, .mpd, .mp4). Se guardan solo en este"
-                + " dispositivo. Mantén pulsado un canal para editarlo o eliminarlo.",
+            "Añade enlaces de vídeo (.ts, .m3u8, .mpd, .mp4) o la página https de un reproductor:"
+                + " la app obtiene su fuente actual y la renueva al caducar. Se guardan solo en"
+                + " este dispositivo. Mantén pulsado un canal para editarlo o eliminarlo.",
             12,
             0xffa4acb7));
     LinearLayout actions = row();
@@ -966,7 +967,8 @@ public class MainActivity extends Activity {
       return;
     }
     android.content.Intent intent = new android.content.Intent(this, NativePlayerActivity.class);
-    intent.putExtra("media_url", address.trim());
+    // A player page is re-read for a current source and renewed before its token expires.
+    intent.putExtra(UserChannels.isPage(address) ? "page_url" : "media_url", address.trim());
     intent.putExtra("title", name);
     startActivity(intent);
   }
