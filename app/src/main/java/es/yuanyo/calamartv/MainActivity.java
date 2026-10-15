@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
 
   LinearLayout row() {
     LinearLayout r = new LinearLayout(this);
-    r.setOrientation(0);
+    r.setOrientation(LinearLayout.HORIZONTAL);
     r.setGravity(Gravity.CENTER_VERTICAL);
     return r;
   }
@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
 
   void home() {
     root = new LinearLayout(this);
-    root.setOrientation(1);
+    root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(dp(wide() ? 28 : 12), dp(12), dp(wide() ? 28 : 12), 0);
     root.setBackgroundColor(BG);
     root.setFitsSystemWindows(true);
@@ -192,7 +192,7 @@ public class MainActivity extends Activity {
     ScrollView scroll = new ScrollView(this);
     scroll.setClipToPadding(false);
     list = new LinearLayout(this);
-    list.setOrientation(1);
+    list.setOrientation(LinearLayout.VERTICAL);
     list.setPadding(0, 0, 0, dp(28));
     scroll.addView(list);
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -510,7 +510,7 @@ public class MainActivity extends Activity {
             new int[] {0xf50b0d10, 0xb00b0d10, 0x250b0d10}));
     frame.addView(shade, new FrameLayout.LayoutParams(-1, -1));
     LinearLayout content = new LinearLayout(this);
-    content.setOrientation(1);
+    content.setOrientation(LinearLayout.VERTICAL);
     content.setGravity(Gravity.BOTTOM);
     content.setPadding(dp(18), dp(18), dp(18), dp(18));
     content.addView(label(state(e) + "  /  " + sportName(e.optString("sport_category")), 12, ACC));
@@ -544,7 +544,7 @@ public class MainActivity extends Activity {
   View eventCard(final JSONObject e, int width) {
     LinearLayout c = new LinearLayout(this);
     c.setId(100000 + e.optInt("id"));
-    c.setOrientation(1);
+    c.setOrientation(LinearLayout.VERTICAL);
     c.setPadding(dp(2), dp(2), dp(2), dp(10));
     focusable(c);
     c.addView(art(e, 135));
@@ -607,7 +607,7 @@ public class MainActivity extends Activity {
       }
       LinearLayout c = new LinearLayout(this);
       c.setId(100000 + e.optInt("id"));
-      c.setOrientation(1);
+      c.setOrientation(LinearLayout.VERTICAL);
       c.setPadding(dp(10), dp(9), dp(10), dp(9));
       focusable(c);
       c.addView(
@@ -663,7 +663,7 @@ public class MainActivity extends Activity {
       }
       LinearLayout c = new LinearLayout(this);
       c.setId(200000 + Math.abs(entry[0].optString("url").hashCode() % 1000000));
-      c.setOrientation(1);
+      c.setOrientation(LinearLayout.VERTICAL);
       c.setGravity(Gravity.CENTER);
       c.setPadding(dp(10), dp(18), dp(10), dp(18));
       focusable(c);
@@ -726,11 +726,11 @@ public class MainActivity extends Activity {
     }
     String url = s.optString("player_url", s.optString("url"));
     if (!url.startsWith("https://")) {
-      Toast.makeText(this, "Fuente no compatible", 1).show();
+      Toast.makeText(this, "Fuente no compatible", Toast.LENGTH_LONG).show();
       return;
     }
     root = new LinearLayout(this);
-    root.setOrientation(1);
+    root.setOrientation(LinearLayout.VERTICAL);
     root.setBackgroundColor(BG);
     root.setFitsSystemWindows(true);
     setContentView(root);
