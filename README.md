@@ -64,6 +64,20 @@ El reproductor ocupa toda la ventana y tiene controles propios: reproducir/pausa
 
 Con ratón, un clic pausa y un doble clic alterna la pantalla completa. En pantallas táctiles, un toque muestra u oculta los controles y la pantalla completa se bloquea en horizontal cuando el navegador lo permite. En iPhone la pantalla completa usa el reproductor del sistema. El volumen elegido se recuerda en el navegador. Mientras el reproductor está abierto, el resto de la página queda inactivo para el teclado y los lectores de pantalla.
 
+## Cuando un canal no carga en la web
+
+El reproductor de la web dice por qué falla en lugar de quedarse en blanco:
+
+| Mensaje | Causa |
+| - | - |
+| «El enlace de este canal caducó el…» | El enlace lleva una marca de tiempo (`?token=…-1792097946-`, `?e=` o `?expires=`) y ya pasó. No se intenta la petición. Los enlaces con token duran pocas horas y hay que renovarlos en Administración. |
+| «El servidor rechaza este enlace…» | El servidor respondió 401 o 403: no autorizado o caducado. |
+| «El enlace ya no existe…» | 404 o 410. |
+| «El servidor del canal no permite cargarlo desde otra web (CORS)…» | La petición no obtuvo respuesta. Es lo que ve el navegador cuando el servidor del vídeo no añade `Access-Control-Allow-Origin` para otras webs, o está bloqueado en la red. La web no puede saltarse esto: solo lo arregla quien controla ese servidor. La app Android no tiene esta limitación. |
+| «La emisión no tiene un formato que el navegador entienda» / «El navegador no admite el vídeo…» | Lista o códecs que el navegador no puede reproducir. |
+
+Si un canal tiene varios enlaces, el reproductor prueba el siguiente cuando uno falla. Los enlaces con token caducado se saltan. Pruebas: `node --test tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs`.
+
 ## Mis canales (solo app)
 
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.

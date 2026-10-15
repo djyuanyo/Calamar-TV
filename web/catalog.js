@@ -104,6 +104,40 @@ export function groups(channels) {
   return map;
 }
 
+/**
+ * When a signed link stops working, in ms since the epoch, or null when the link says nothing.
+ * Reads ?e= or ?expires= and a 10-digit time inside ?token= (the same hints as VideoResolver.java).
+ */
+export function streamExpiry(url) {
+  let params;
+  try {
+    params = new URL(url).searchParams;
+  } catch {
+    return null;
+  }
+  const epoch = (text) => {
+    const seconds = Number(text);
+    return Number.isInteger(seconds) && seconds >= 1e9 && seconds < 1e10 ? seconds * 1000 : null;
+  };
+  for (const key of ['e', 'expires']) {
+    const value = params.get(key);
+    if (value !== null && epoch(value) !== null) return epoch(value);
+  }
+  const token = params.get('token');
+  const match = token && /(?:^|-)(\d{10})(?:-|$)/.exec(token);
+  return match ? epoch(match[1]) : null;
+}
+
+/** A plain-language reason for a fatal hls.js error. `code` is the HTTP status, 0 or missing when the request never got an answer. */
+export function explainStreamError({ details = '', code = 0 } = {}) {
+  if (code === 401 || code === 403) return 'El servidor rechaza este enlace: no está autorizado o ya caducó.';
+  if (code === 404 || code === 410) return 'El enlace ya no existe en el servidor.';
+  if (/load/i.test(details)) return 'El servidor del canal no permite cargarlo desde otra web (CORS), no responde o está bloqueado en tu red.';
+  if (/parsing/i.test(details)) return 'La emisión no tiene un formato que el navegador entienda.';
+  if (/codec|buffer/i.test(details)) return 'El navegador no admite el vídeo de esta emisión.';
+  return 'No se pudo reproducir esta emisión en el navegador.';
+}
+
 /** How the browser can play a URL: 'hls', 'video', or a reason it needs the app. */
 export function webPlayback(url) {
   let u;
