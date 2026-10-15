@@ -113,18 +113,13 @@ public final class UserChannels {
   public static JSONArray load(File file) {
     if (!file.isFile()) return new JSONArray();
     try {
-      return decode(EventData.read(new FileInputStream(file)));
+      return decode(Io.read(new FileInputStream(file)));
     } catch (IOException unreadable) {
       return new JSONArray();
     }
   }
 
   public static void save(File file, JSONArray channels) throws IOException {
-    File temporary = new File(file.getPath() + ".tmp");
-    try (FileOutputStream out = new FileOutputStream(temporary)) {
-      out.write(channels.toString().getBytes("UTF-8"));
-      out.getFD().sync();
-    }
-    if (!temporary.renameTo(file)) throw new IOException("No se pudieron guardar los canales");
+    Io.save(file, channels.toString());
   }
 }

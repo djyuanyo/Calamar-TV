@@ -52,6 +52,8 @@ public final class NativePlayerActivity extends Activity {
   private String pageUrl, documentUrl, currentUrl = "", title;
   /** A user-added media link, played as is without page lookup or renewal. */
   private String directUrl;
+  /** All official alternatives for a direct channel; a failing one moves on to the next. */
+  private final List<String> directUrls = new ArrayList<>();
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
   private boolean active, resolving, webMode;
@@ -62,7 +64,14 @@ public final class NativePlayerActivity extends Activity {
     super.onCreate(state);
     pageUrl = getIntent().getStringExtra("page_url");
     title = getIntent().getStringExtra("title");
-    directUrl = UserChannels.normalize(getIntent().getStringExtra("media_url"));
+    ArrayList<String> urls = getIntent().getStringArrayListExtra("media_urls");
+    if (urls == null) urls = new ArrayList<>();
+    urls.add(0, getIntent().getStringExtra("media_url"));
+    for (String candidate : urls) {
+      String url = UserChannels.normalize(candidate);
+      if (url != null && !directUrls.contains(url)) directUrls.add(url);
+    }
+    directUrl = directUrls.isEmpty() ? null : directUrls.get(0);
     if (directUrl != null) pageUrl = null;
     else if (pageUrl == null || !pageUrl.startsWith("https://")) {
       finish();
@@ -85,6 +94,7 @@ public final class NativePlayerActivity extends Activity {
             automaticAttempts = 0;
             playDirect();
           });
+      if (directUrls.size() > 1) button(controls, "Fuentes", this::chooseSource);
     } else {
       button(
           controls,
@@ -144,11 +154,16 @@ public final class NativePlayerActivity extends Activity {
     if (!active) return;
     handler.removeCallbacks(renewalRequest);
     sources.clear();
-    sources.add(new VideoResolver.Source(title == null ? "Mi canal" : title, directUrl));
-    selection = 0;
-    status.setText("Conectando con " + Uri.parse(directUrl).getHost() + "…");
+    String name = title == null ? "Mi canal" : title;
+    for (int i = 0; i < directUrls.size(); i++)
+      sources.add(
+          new VideoResolver.Source(
+              directUrls.size() > 1 ? name + " · fuente " + (i + 1) : name, directUrls.get(i)));
+    selection = Math.min(selection, sources.size() - 1);
+    VideoResolver.Source source = sources.get(selection);
+    status.setText("Conectando con " + Uri.parse(source.url).getHost() + "…");
     releasePlayer();
-    playSource(sources.get(0));
+    playSource(source);
   }
 
   private String engineName() {
@@ -310,7 +325,10 @@ public final class NativePlayerActivity extends Activity {
       automaticAttempts = 0;
       attemptWindow = now;
     }
-    if (++automaticAttempts > 3 || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
+    // Direct channels with alternatives try each source before giving up.
+    if (directUrl != null && directUrls.size() > 1) selection = (selection + 1) % directUrls.size();
+    int limit = Math.max(3, directUrls.size());
+    if (++automaticAttempts > limit || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
       status.setText(
           directUrl != null
               ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Reintentar."
@@ -325,7 +343,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(pageUrl);
-    return "Calamar TV 1.4.1\nAndroid API "
+    return "Calamar TV 2.0.0\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()

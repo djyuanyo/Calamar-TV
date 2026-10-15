@@ -1,0 +1,49 @@
+name: Calamar TV · Web y catálogo
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'data/**', 'tools/sync_tdt.py', '.github/workflows/web.yml']
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: calamar-web
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Probar el lector de TDTChannels
+        run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: Actualizar canales TDT
+        if: github.event_name != 'push'
+        run: |
+          python tools/sync_tdt.py || echo "::warning::No se pudo actualizar TDTChannels; se publica el catálogo anterior"
+          if ! git diff --quiet -- data/tdt.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/tdt.json
+            git commit -m "Actualizar canales TDT"
+            git push
+          fi
+      - name: Montar la web
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          cp -r data _site/data
+          python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
