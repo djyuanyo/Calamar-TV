@@ -1,4 +1,5 @@
 import { merge, featured, groups, webPlayback, findChannel } from './catalog.js';
+import { initControls, icon } from './player-controls.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
@@ -47,18 +48,32 @@ function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
+/** A stable hue per channel so every card gets its own colour without any artwork. */
+function hue(name) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return h;
+}
+
 function logo(c, cls) {
-  if (!c.logo) return el('span', { class: 'initials' }, initials(c.name));
-  const img = el('img', { src: c.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', class: cls });
-  img.addEventListener('error', () => img.replaceWith(el('span', { class: 'initials' }, initials(c.name))));
+  const fallback = () => el('span', { class: `initials ${cls || ''}`.trim() }, initials(c.name));
+  if (!c.logo) return fallback();
+  const img = el('img', { src: c.logo, alt: '', loading: cls ? 'eager' : 'lazy', referrerpolicy: 'no-referrer', class: cls });
+  img.addEventListener('error', () => img.replaceWith(fallback()));
   return img;
 }
 
 function card(c) {
   return el(
     'button',
-    { class: 'card', type: 'button', onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
-    el('span', { class: 'art' }, logo(c), el('span', { class: c.playable ? 'badge live' : 'badge' }, c.playable ? 'EN DIRECTO' : 'SU WEB')),
+    { class: 'card', type: 'button', style: `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
+    el(
+      'span',
+      { class: 'art' },
+      logo(c),
+      el('span', { class: c.playable ? 'badge live' : 'badge' }, c.playable ? 'EN DIRECTO' : 'SU WEB'),
+      c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
+    ),
     el('span', { class: 'name' }, c.name),
     el('span', { class: 'sub' }, c.region || c.group),
   );
@@ -68,29 +83,83 @@ function sectionHead(title, aside) {
   return el('div', { class: 'section-head' }, el('h2', {}, title), aside);
 }
 
+/** A horizontal row of cards with previous/next arrows on devices that have a pointer. */
+function rail(items, { wide = false, limit = 40 } = {}) {
+  const track = el('div', { class: wide ? 'rail wide' : 'rail' }, items.slice(0, limit).map(card));
+  const button = (dir, label) => el('button', { class: `rail-btn ${dir}`, type: 'button', 'aria-label': label, hidden: true }, icon(dir === 'prev' ? 'left' : 'right'));
+  const prev = button('prev', 'Anteriores');
+  const next = button('next', 'Siguientes');
+  const sync = () => {
+    prev.hidden = track.scrollLeft < 8;
+    next.hidden = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
+  };
+  const step = (dir) => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  prev.addEventListener('click', () => step(-1));
+  next.addEventListener('click', () => step(1));
+  track.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(track);
+  requestAnimationFrame(sync);
+  return el('div', { class: 'rail-wrap' }, prev, track, next);
+}
+
+function heroSection(list, index = 0) {
+  const c = list[index];
+  const picks =
+    list.length > 1
+      ? el(
+          'div',
+          { class: 'hero-picks', role: 'group', 'aria-label': 'Canales destacados' },
+          list.slice(0, 6).map((p, i) =>
+            el(
+              'button',
+              {
+                class: 'pick',
+                type: 'button',
+                title: p.name,
+                'aria-label': p.name,
+                'aria-pressed': String(i === index),
+                onclick: () => {
+                  const next = heroSection(list, i);
+                  section.replaceWith(next);
+                  section = next;
+                  next.querySelectorAll('.pick')[i].focus();
+                },
+              },
+              logo(p),
+            ),
+          ),
+        )
+      : null;
+  let section = el(
+    'section',
+    { class: 'hero', style: `--h:${hue(c.name)}`, 'aria-label': 'Canal destacado' },
+    el('div', { class: 'hero-bg' }),
+    logo(c, 'hero-art'),
+    el(
+      'div',
+      { class: 'hero-body' },
+      el('span', { class: 'live-pill' }, 'EN DIRECTO'),
+      el('h1', {}, c.name),
+      el('p', { class: 'hero-meta' }, [c.group, c.region, c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
+      el(
+        'div',
+        { class: 'hero-actions' },
+        el('button', { class: 'btn lg', type: 'button', onclick: () => open(c) }, icon('play'), 'Ver ahora'),
+        el('a', { class: 'btn secondary lg', href: '#/canales' }, 'Todos los canales'),
+      ),
+    ),
+    picks,
+  );
+  return section;
+}
+
 function home() {
   const list = featured(state.channels, state.custom, 8);
   const nodes = [];
-  if (list[0]) {
-    const c = list[0];
-    nodes.push(
-      el(
-        'section',
-        { class: 'hero' },
-        logo(c),
-        el('span', { class: 'kicker' }, `● EN DIRECTO / ${c.group}`),
-        el('h1', {}, c.name),
-        el('p', {}, c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'),
-        el('button', { class: 'btn', type: 'button', onclick: () => open(c) }, '▶ Ver ahora'),
-      ),
-    );
-  }
-  if (list.length > 1) nodes.push(sectionHead('Destacados'), el('div', { class: 'row' }, list.slice(1).map(card)));
+  if (list[0]) nodes.push(heroSection(list));
+  if (list.length > 1) nodes.push(sectionHead('Destacados'), rail(list.slice(1), { wide: true }));
   for (const [group, channels] of groups(state.channels)) {
-    nodes.push(
-      sectionHead(group, el('a', { href: `#/canales/${encodeURIComponent(group)}` }, `Ver ${channels.length} canales`)),
-      el('div', { class: 'row' }, channels.slice(0, 40).map(card)),
-    );
+    nodes.push(sectionHead(group, el('a', { href: `#/canales/${encodeURIComponent(group)}` }, `Ver ${channels.length} canales`)), rail(channels));
   }
   return nodes;
 }
@@ -138,14 +207,19 @@ const video = document.getElementById('video');
 const playerTitle = document.getElementById('player-title');
 const playerStatus = document.getElementById('player-status');
 const playerSources = document.getElementById('player-sources');
+const playerLogo = document.getElementById('player-logo');
 let hls = null;
 let returnFocus = null;
+const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden });
+// While the player is open nothing behind it can be reached with the keyboard or a screen reader.
+const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 function stop() {
   if (hls) hls.destroy();
   hls = null;
   video.removeAttribute('src');
   video.load();
+  controls.reset();
 }
 
 function playSource(c, index) {
@@ -181,7 +255,8 @@ function playSource(c, index) {
   } else {
     video.src = source.url;
   }
-  video.onplaying = () => (playerStatus.textContent = `En directo · ${c.name}${c.geo ? ' · solo desde España' : ''}`);
+  controls.attach(hls);
+  video.onplaying = () => (playerStatus.textContent = '');
   video.onerror = () => next();
   video.play().catch(() => (playerStatus.textContent = 'Pulsa ▶ para empezar.'));
 }
@@ -203,17 +278,23 @@ function open(c, fromRoute = false) {
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
   playerTitle.textContent = c.name;
+  playerLogo.hidden = !c.logo;
+  if (c.logo) playerLogo.src = c.logo;
   player.hidden = false;
   document.body.style.overflow = 'hidden';
+  for (const n of behind()) n.inert = true;
+  controls.wake();
   document.getElementById('player-close').focus();
   playSource(c, 0);
 }
 
 function hidePlayer() {
+  if (controls.isFullscreen()) controls.leaveFullscreen();
   stop();
   current = null;
   player.hidden = true;
   document.body.style.overflow = '';
+  for (const n of behind()) n.inert = false;
   if (returnFocus) returnFocus.focus();
 }
 
@@ -272,9 +353,6 @@ copyButton.addEventListener('click', async () => {
   field.select();
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !player.hidden) closePlayer();
-});
 
 // ---- Routing ---------------------------------------------------------------------------------
 
@@ -312,7 +390,7 @@ async function route() {
     return;
   }
   if (!state.tdt) {
-    view.replaceChildren(el('p', { class: 'status' }, 'Cargando canales…'));
+    view.replaceChildren(el('div', { class: 'skeleton-hero', 'aria-hidden': 'true' }), el('p', { class: 'status', role: 'status' }, 'Cargando canales…'));
     try {
       await loadCatalog();
     } catch (e) {
@@ -326,6 +404,8 @@ async function route() {
   if (page !== 'canal' && !player.hidden) hidePlayer();
   if (page === 'canal') {
     const c = findChannel(state.channels, arg);
+    // Moving from an open channel to one that cannot be played here must not leave the old one running.
+    if ((!c || !c.playable) && !player.hidden) hidePlayer();
     view.replaceChildren(
       ...(c && !c.playable
         ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
@@ -347,7 +427,10 @@ search.addEventListener('input', () => {
   typing = setTimeout(route, 180);
 });
 window.addEventListener('hashchange', () => {
+  // A new section starts at the top, but closing the player must leave the page where it was.
+  const closingPlayer = !player.hidden;
   search.value = '';
+  if (!closingPlayer && !location.hash.startsWith('#/canal/')) window.scrollTo(0, 0);
   route();
 });
 route();

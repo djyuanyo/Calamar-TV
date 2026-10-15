@@ -47,6 +47,23 @@ Cada canal tiene un enlace propio que abre directamente su reproductor en la web
 
 El reproductor tiene el botón **Copiar enlace**. Si el navegador no permite copiar, muestra el enlace seleccionado para copiarlo a mano. Al abrir un canal desde la portada la dirección cambia a su enlace, de modo que se puede compartir y funciona con el botón Atrás. Un slug que no existe muestra un aviso; un canal sin emisión directa enlaza a su web oficial. Pruebas: `node --test tools/catalog_slugs.test.mjs`.
 
+## Diseño y reproductor de la web
+
+La web sigue el estilo de las plataformas deportivas de streaming: cabecera fija con sección activa subrayada, canal destacado a pantalla completa con selector, filas con flechas, tarjetas 16:9 y filtros fijos en la página de canales. Los colores de cada tarjeta salen del nombre del canal; no se usan marcas ni imágenes de terceros.
+
+El reproductor ocupa toda la ventana y tiene controles propios: reproducir/pausar, volumen, **pantalla completa**, imagen en imagen, selector de calidad (cuando la emisión ofrece varias), etiqueta «DIRECTO» con salto al directo, y barra de progreso solo en vídeos que no son en directo. Los controles se ocultan solos tras unos segundos y reaparecen al mover el ratón, tocar la pantalla o usar el teclado.
+
+| Tecla | Acción |
+| - | - |
+| `Espacio` o `K` | Reproducir / pausar |
+| `F` | Pantalla completa |
+| `M` | Silenciar |
+| `↑` `↓` | Volumen |
+| `←` `→` | Retroceder / avanzar 10 s (solo en vídeos que no son en directo) |
+| `Esc` | Cierra el menú de calidad; en pantalla completa sale de ella (lo hace el navegador); si no, cierra el reproductor |
+
+Con ratón, un clic pausa y un doble clic alterna la pantalla completa. En pantallas táctiles, un toque muestra u oculta los controles y la pantalla completa se bloquea en horizontal cuando el navegador lo permite. En iPhone la pantalla completa usa el reproductor del sistema. El volumen elegido se recuerda en el navegador. Mientras el reproductor está abierto, el resto de la página queda inactivo para el teclado y los lectores de pantalla.
+
 ## Mis canales (solo app)
 
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
