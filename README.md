@@ -16,7 +16,12 @@ Datos: `https://bp.zicotv.cc/api/v1/events`. Horas mostradas en Europe/Madrid. A
 
 Los canales se deduplican a partir de las fuentes `own` presentes en los eventos. La API no documenta un catálogo completo independiente. Las imágenes y escudos proceden de los campos de los eventos. Si fallan, se mantiene el fondo de la tarjeta y sus textos.
 
-La reproducción usa la URL oficial devuelta por la API, en iframe con WebView. Respeta `referrer_policy`. Incluye selección de fuentes, reconexión manual y pantalla completa. No extrae ni almacena m3u8 temporales y no garantiza continuidad si el proveedor interrumpe una emisión. Los anuncios y restricciones corresponden al proveedor. No incluye tokens de clientes.
+La reproducción usa Media3 ExoPlayer (HLS, DASH y vídeo directo). Al abrir una fuente se consulta de nuevo su página HTTPS y se leen las fuentes publicadas (`ZT_SOURCES` o etiquetas HTML de vídeo). El enlace temporal se mantiene en memoria y no se guarda en GitHub ni en la caché del catálogo. El modo web permite detectar solicitudes de vídeo compatibles cuando la página necesita JavaScript.
+
+Hay controles nativos, selector de CDN, renovación manual y reintentos automáticos limitados. Si la URL publica una marca de caducidad reconocible, se vuelve a consultar la página unos 30 segundos antes. Una URL directa sin página de origen no permite obtener un token nuevo. La renovación puede producir una breve reconexión al directo; no se promete continuidad sin cortes.
+
+Se omiten fuentes marcadas como bloqueadas. No se incluyen credenciales de clientes ni se modifican firmas o comprobaciones TLS. Algunas fuentes pueden depender de cookies, DRM o lógica específica del proveedor y requerir el modo web o navegador. El botón Chrome / navegador abre exactamente la misma página de origen.
+
 
 ## Firma de futuras actualizaciones
 
@@ -36,8 +41,8 @@ Cada descarga válida se guarda en el almacenamiento privado. Si falla la conexi
 
 Validación adicional: seis pruebas sobre deduplicación de canales, conservación del catálogo con agenda vacía, actualización de metadatos, guardado/lectura de caché y rechazo de respuestas inválidas. GitHub Actions ejecuta también las pruebas de datos.
 
-## Reproducción desde 1.2.1
+## Reproducción nativa desde 1.3.0
 
-Los canales propios abren directamente el reproductor oficial `/api/player/ID` como documento principal de WebView. Así conserva su origen real y las cookies de primera parte, en vez de quedar dentro de un iframe alojado en un dominio ficticio. No se modifican los enlaces de vídeo ni se desactivan comprobaciones TLS. Las fuentes externas conservan la integración iframe indicada por la API.
+La pantalla de reproducción es una actividad independiente. ExoPlayer se libera al salir o pasar al fondo; al volver se consulta una fuente vigente. Las consultas usan el transporte HTTPS de Android, distinto de WebView. Las respuestas que llegan después de cerrar, cambiar al modo web o iniciar otra consulta se descartan.
 
-Se añade el botón Web oficial para comparar el mismo canal en el navegador del dispositivo y mensajes con el dominio y código de error cuando WebView informa de un fallo de conexión o HTTP en el reproductor o la lista HLS. Esta corrección elimina una diferencia de integración; no confirma por sí sola la causa del comportamiento con VPN. La comprobación sin VPN requiere probar el mismo canal en el dispositivo y red afectados.
+La detección inicial de fuentes y su renovación tienen 8 pruebas unitarias adicionales (18 en total). Las pruebas y la compilación no sustituyen la comprobación de reproducción en el móvil/TV y red del usuario. El caso observado era `ERR_CONNECTION_RESET` en WebView, mientras Chrome reproducía la misma ruta sin VPN; el resultado de este nuevo transporte debe confirmarse allí.
