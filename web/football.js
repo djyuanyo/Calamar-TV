@@ -5,6 +5,7 @@ let events = [];
 let refreshTimer = null;
 let currentId = null;
 let activeFrame = null;
+let stopPlayback = null;
 
 function node(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
@@ -78,6 +79,7 @@ async function openEvent(id) {
   root.append(dialog);
   async function close() {
     currentId = null;
+    if (stopPlayback) {stopPlayback();stopPlayback=null;}
     if (activeFrame) {activeFrame.src='about:blank';activeFrame=null;}
     dialog.remove();
   }
@@ -123,13 +125,28 @@ async function openEvent(id) {
       if (activeFrame) {activeFrame.src='about:blank';activeFrame=null;}
       playerBox.replaceChildren();
     }
-    const originalClose = close;
-    // Closing must stop HLS playback as well as embedded providers.
-    dialog.firstChild.addEventListener('click',cleanup);
+    stopPlayback = cleanup;
+    const android = navigator.userAgent.includes('CalamarTVAndroid');
+    let currentSelection = -1;
     function select(i) {
       cleanup();
+      currentSelection = i;
       const chosen=alternatives[i];
       link.href=safeUrl(chosen.url);
+      // Native Android can inspect the provider page through the existing
+      // NativePlayerActivity. No cross-origin iframe inspection is attempted on web.
+      if (android && chosen.kind === 'iframe') {
+        let nativeButton=chooser.querySelector('[data-native-player]');
+        if (!nativeButton) {
+          nativeButton=node('button',{class:'ghost',type:'button','data-native-player':'1'},'▶ Probar reproductor nativo');
+          chooser.append(nativeButton);
+        }
+        nativeButton.onclick=()=>{location.href='calamar-tv://football-play?url='+encodeURIComponent(chosen.url)+'&title='+encodeURIComponent(event.title || 'Partido');};
+        nativeButton.hidden=false;
+      } else {
+        const nativeButton=chooser.querySelector('[data-native-player]');
+        if(nativeButton)nativeButton.hidden=true;
+      }
       if (chosen.kind==='media') {
         const video=node('video',{controls:'',playsinline:'',autoplay:''});
         video.style.cssText='width:100%;height:100%;background:#000';
@@ -140,9 +157,19 @@ async function openEvent(id) {
           localHls.loadSource(url);
           localHls.attachMedia(video);
           localHls.on(window.Hls.Events.ERROR,(_event,data)=>{
-            if(data.fatal)notice.textContent='Error al reproducir la fuente. Prueba otra.';
+            if(data.fatal){
+              notice.textContent='La fuente directa falló. Cambiando al reproductor del proveedor…';
+              const fallback=alternatives.findIndex((item,index)=>index !== i && item.kind==='iframe');
+              if(fallback>=0)select(fallback);
+              else notice.textContent='No se pudo reproducir. Prueba otra fuente.';
+            }
           });
         } else video.src=url;
+        video.onerror=()=>{
+          const fallback=alternatives.findIndex((item,index)=>index !== i && item.kind==='iframe');
+          if(fallback>=0)select(fallback);
+          else notice.textContent='No se pudo reproducir esta fuente.';
+        };
         video.play().catch(()=>{notice.textContent='Pulsa ▶ para empezar la reproducción.';});
       } else {
         const frame=node('iframe',{src:safeUrl(chosen.url),title:'Emisión de '+(event.title || 'fútbol'),allow:'autoplay; fullscreen; picture-in-picture',allowfullscreen:'',referrerpolicy:'no-referrer'});
@@ -180,4 +207,4 @@ export async function renderFootball(view) {
   await update();
   refreshTimer=setTimeout(function tick(){ if(root.isConnected){update();refreshTimer=setTimeout(tick,60000);} },60000);
 }
-export function leaveFootball(){if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=null;currentId=null;if(activeFrame){activeFrame.src='about:blank';activeFrame=null;}}
+export function leaveFootball(){if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=null;currentId=null;if(stopPlayback){stopPlayback();stopPlayback=null;}if(activeFrame){activeFrame.src='about:blank';activeFrame=null;}}
