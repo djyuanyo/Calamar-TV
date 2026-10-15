@@ -193,7 +193,7 @@ public final class NativePlayerActivity extends Activity {
             .setUserAgent(PlayerDocument.USER_AGENT)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(15000)
-            .setDefaultRequestProperties(Collections.singletonMap("Referer", documentUrl));
+            .setDefaultRequestProperties(Collections.singletonMap("Referer", mediaReferer()));
     player =
         new ExoPlayer.Builder(this)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
@@ -240,6 +240,12 @@ public final class NativePlayerActivity extends Activity {
     if (VideoResolver.isMedia(pageUrl)) return; // There is no page to re-resolve for a raw URL.
     long delay = VideoResolver.renewalDelay(address, System.currentTimeMillis());
     if (delay >= 0) handler.postDelayed(renewal, Math.max(15000L, delay));
+  }
+
+  private String mediaReferer() {
+    Uri page = Uri.parse(documentUrl);
+    // Signed page credentials must not be sent to a different CDN in the Referer.
+    return page.getScheme() + "://" + page.getEncodedAuthority() + "/";
   }
 
   private void refreshAutomatically(String message) {
@@ -292,6 +298,7 @@ public final class NativePlayerActivity extends Activity {
     webMode = true;
     playerView.setVisibility(View.GONE);
     browser = new WebView(this);
+    final int browserGeneration = generation;
     browser.getSettings().setJavaScriptEnabled(true);
     browser.getSettings().setDomStorageEnabled(true);
     browser.getSettings().setAllowFileAccess(false);
@@ -309,13 +316,17 @@ public final class NativePlayerActivity extends Activity {
               WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
             if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
-              handler.post(() -> detected(url));
+              handler.post(
+                  () -> {
+                    if (generation == browserGeneration) detected(url);
+                  });
             }
             return null;
           }
 
           @Override
           public void onPageFinished(WebView view, String url) {
+            if (!active || !webMode || generation != browserGeneration || browser != view) return;
             documentUrl = url;
             view.evaluateJavascript(
                 "(function(){var v=document.querySelector('video');return"
@@ -323,7 +334,7 @@ public final class NativePlayerActivity extends Activity {
                 value -> {
                   try {
                     String candidate = new org.json.JSONArray("[" + value + "]").optString(0);
-                    detected(candidate);
+                    if (generation == browserGeneration) detected(candidate);
                   } catch (Exception ignored) {
                   }
                 });
@@ -395,3 +406,4 @@ public final class NativePlayerActivity extends Activity {
     super.onDestroy();
   }
 }
+
