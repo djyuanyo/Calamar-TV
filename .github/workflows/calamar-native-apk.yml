@@ -28,6 +28,22 @@ jobs:
             cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt 2>/dev/null || true
             exit 1
           }
+      - name: Verificar contenido real de la APK release
+        run: |
+          python - <<'PY'
+          import glob, gzip, json, zipfile
+          apk = glob.glob('app/build/outputs/apk/release/*.apk')[0]
+          with zipfile.ZipFile(apk) as archive:
+              if 'assets/events-initial.json' in archive.namelist():
+                  payload = archive.read('assets/events-initial.json')
+              else:
+                  payload = gzip.decompress(archive.read('assets/events-initial.json.gz'))
+          data = json.loads(payload)
+          events = data['data']
+          channels = {s.get('player_url', s.get('url')) for e in events for s in e.get('sources', []) if s.get('source') == 'own'}
+          assert events and channels, 'La APK no contiene la agenda y el catálogo iniciales'
+          print(f'APK release verificada: {len(events)} eventos, {len(channels)} canales')
+          PY
       - name: Preparar firma de distribución si está configurada
         if: github.event_name != 'pull_request'
         env:
