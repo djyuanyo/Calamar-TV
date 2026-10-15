@@ -3,13 +3,20 @@ package es.yuanyo.calamartv;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -18,6 +25,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -43,8 +51,10 @@ public final class NativePlayerActivity extends Activity {
   private ExoPlayer player;
   private PlayerView playerView;
   private WebView browser;
+  private LinearLayout root, panel;
   private FrameLayout stage;
-  private TextView status;
+  private TextView status, livePill;
+  private boolean fullscreen;
   private NetworkTransport transport;
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
@@ -83,12 +93,38 @@ public final class NativePlayerActivity extends Activity {
     documentUrl = directUrl != null ? directUrl : pageUrl;
     transport = NetworkTransport.get(this);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    LinearLayout layout = new LinearLayout(this);
-    layout.setOrientation(LinearLayout.VERTICAL);
-    layout.setBackgroundColor(0xff0b0d10);
-    layout.setFitsSystemWindows(true);
+    root = new LinearLayout(this);
+    root.setOrientation(LinearLayout.VERTICAL);
+    root.setBackgroundColor(Ui.BG);
+    root.setFitsSystemWindows(true);
+    panel = new LinearLayout(this);
+    panel.setOrientation(LinearLayout.VERTICAL);
+
+    LinearLayout top = new LinearLayout(this);
+    top.setGravity(Gravity.CENTER_VERTICAL);
+    top.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 14), 0);
+    ImageButton back = new ImageButton(this);
+    back.setImageDrawable(Ui.icon(Ui.Icon.BACK, Ui.FG, Ui.dp(this, 24)));
+    back.setBackground(Ui.focusFill(this, Color.TRANSPARENT, 0x33ffffff, Ui.ACC, 999, 0));
+    back.setContentDescription("Volver");
+    back.setOnClickListener(v -> finish());
+    top.addView(back, new LinearLayout.LayoutParams(Ui.dp(this, 46), Ui.dp(this, 46)));
+    TextView heading = new TextView(this);
+    heading.setText(title == null ? "Calamar TV" : title);
+    heading.setTextColor(Ui.FG);
+    heading.setTextSize(19);
+    heading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+    heading.setSingleLine(true);
+    heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    heading.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 10), 0);
+    top.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+    livePill = Ui.livePill(this, "EN DIRECTO", 11);
+    livePill.setVisibility(View.GONE);
+    top.addView(livePill);
+    panel.addView(top);
+
     LinearLayout controls = new LinearLayout(this);
-    button(controls, "Volver", () -> finish());
+    controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
     button(controls, "DNS", this::chooseDns);
     button(controls, "Diagnóstico", this::diagnose);
     if (directUrl != null) {
@@ -113,37 +149,116 @@ public final class NativePlayerActivity extends Activity {
       button(controls, "Chrome / navegador", this::openBrowser);
     }
     HorizontalScrollView scroll = new HorizontalScrollView(this);
+    scroll.setHorizontalScrollBarEnabled(false);
     scroll.addView(controls);
-    layout.addView(scroll);
-    TextView heading = new TextView(this);
-    heading.setText(title == null ? "Calamar TV" : title);
-    heading.setTextColor(Color.WHITE);
-    heading.setTextSize(19);
-    heading.setPadding(16, 8, 16, 8);
-    layout.addView(heading);
+    panel.addView(scroll);
     status = new TextView(this);
-    status.setTextColor(0xffd6ff00);
-    status.setPadding(16, 4, 16, 10);
-    layout.addView(status);
+    status.setTextColor(Ui.ACC);
+    status.setTextSize(13);
+    status.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 16), Ui.dp(this, 10));
+    panel.addView(status);
+    root.addView(panel);
+
     stage = new FrameLayout(this);
     playerView = new PlayerView(this);
     playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
     playerView.setKeepScreenOn(true);
     playerView.setControllerAutoShow(true);
     playerView.setControllerShowTimeoutMs(4000);
+    // The controller's own full screen button: it hides the panel and the system bars.
+    playerView.setFullscreenButtonClickListener(on -> setFullscreen(on));
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
-    layout.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
-    setContentView(layout);
+    root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
+    setContentView(root);
   }
 
   private void button(LinearLayout row, String text, Runnable action) {
-    Button b = new Button(this);
-    b.setText(text);
-    b.setTextColor(Color.WHITE);
-    b.setAllCaps(false);
+    Button b = Ui.pill(this, text, Ui.Kind.SURFACE, true);
     b.setFocusable(true);
     b.setOnClickListener(v -> action.run());
-    row.addView(b);
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(this, 40));
+    p.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+    row.addView(b, p);
+  }
+
+  // ---- Full screen ----------------------------------------------------------------------------
+
+  private boolean isTelevision() {
+    return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK)
+        == Configuration.UI_MODE_TYPE_TELEVISION;
+  }
+
+  /** Full screen: the panel and the system bars go away, and a phone turns to landscape. */
+  private void setFullscreen(boolean on) {
+    if (fullscreen == on) return; // The controller reports back what we set; this stops the echo.
+    fullscreen = on;
+    panel.setVisibility(on ? View.GONE : View.VISIBLE);
+    root.setFitsSystemWindows(!on);
+    applySystemBars(on);
+    if (!isTelevision()) {
+      setRequestedOrientation(
+          on
+              ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+              : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+    }
+    playerView.setFullscreenButtonState(on);
+    root.requestApplyInsets();
+  }
+
+  @SuppressWarnings("deprecation") // setSystemUiVisibility is the way before Android 11.
+  private void applySystemBars(boolean immersive) {
+    Window window = getWindow();
+    if (Build.VERSION.SDK_INT >= 28) {
+      WindowManager.LayoutParams attributes = window.getAttributes();
+      attributes.layoutInDisplayCutoutMode =
+          immersive
+              ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+              : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+      window.setAttributes(attributes);
+    }
+    if (Build.VERSION.SDK_INT >= 30) {
+      WindowInsetsController controller = window.getInsetsController();
+      if (controller == null) return;
+      if (immersive) {
+        controller.setSystemBarsBehavior(
+            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsets.Type.systemBars());
+      } else {
+        controller.show(WindowInsets.Type.systemBars());
+      }
+    } else {
+      window
+          .getDecorView()
+          .setSystemUiVisibility(
+              immersive
+                  ? View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_FULLSCREEN
+                      | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                  : View.SYSTEM_UI_FLAG_VISIBLE);
+    }
+  }
+
+  /** Something the viewer has to read: the panel is hidden in full screen, so leave it first. */
+  private void problem(String text) {
+    status.setText(text);
+    setFullscreen(false);
+  }
+
+  @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    // The system shows its bars again when another app was in front; hide them once more.
+    if (hasFocus && fullscreen) applySystemBars(true);
+  }
+
+  @Override
+  @SuppressWarnings("deprecation")
+  public void onBackPressed() {
+    if (fullscreen) setFullscreen(false);
+    else super.onBackPressed();
   }
 
   private void chooseDns() {
@@ -254,7 +369,7 @@ public final class NativePlayerActivity extends Activity {
                     openWeb();
                     status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
                   } else {
-                    status.setText(
+                    problem(
                         "No se pudo consultar "
                             + Uri.parse(pageUrl).getHost()
                             + ": "
@@ -272,7 +387,7 @@ public final class NativePlayerActivity extends Activity {
     if (!active) return;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {
-      status.setText("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");
+      problem("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");
       return;
     }
     clearWeb();
@@ -302,9 +417,10 @@ public final class NativePlayerActivity extends Activity {
           @Override
           public void onPlaybackStateChanged(int state) {
             if (instance != player || !active) return;
-            if (state == Player.STATE_READY)
+            if (state == Player.STATE_READY) {
               status.setText("Reproductor nativo · " + source.label + " · " + engineName());
-            else if (state == Player.STATE_BUFFERING) status.setText("Cargando vídeo…");
+              livePill.setVisibility(instance.isCurrentMediaItemLive() ? View.VISIBLE : View.GONE);
+            } else if (state == Player.STATE_BUFFERING) status.setText("Cargando vídeo…");
           }
 
           @Override
@@ -312,7 +428,7 @@ public final class NativePlayerActivity extends Activity {
             if (instance != player || !active) return;
             lastReport +=
                 "\nVídeo: " + error.getErrorCodeName() + " · " + ConnectionReport.describe(error);
-            status.setText("No se pudo reproducir (" + error.getErrorCodeName() + ").");
+            problem("No se pudo reproducir (" + error.getErrorCodeName() + ").");
             refreshAutomatically("Reconectando con una fuente vigente…");
           }
         });
@@ -359,7 +475,7 @@ public final class NativePlayerActivity extends Activity {
         status.setText("La fuente directa falló. Modo web del proveedor.");
         return;
       }
-      status.setText(
+      problem(
           directUrl != null
               ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Reintentar."
               : "No se pudo recuperar la emisión. Pulsa Renovar, Fuentes o Modo web.");
@@ -373,7 +489,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
-    return "Calamar TV 2.0.1\nAndroid API "
+    return "Calamar TV 2.2.0\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
@@ -472,6 +588,7 @@ public final class NativePlayerActivity extends Activity {
 
   private void openWeb() {
     if (!active) return;
+    setFullscreen(false); // The web page has no controller, so the panel must be there.
     ++generation;
     resolving = false;
     diagnosing = false;
@@ -557,6 +674,7 @@ public final class NativePlayerActivity extends Activity {
   }
 
   private void releasePlayer() {
+    if (livePill != null) livePill.setVisibility(View.GONE);
     if (player != null) {
       playerView.setPlayer(null);
       player.release();

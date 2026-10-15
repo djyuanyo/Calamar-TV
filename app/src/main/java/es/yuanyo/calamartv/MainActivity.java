@@ -20,7 +20,7 @@ public class MainActivity extends Activity {
   /** Published by GitHub Pages from data/ in this repository (see .github/workflows/web.yml). */
   static final String CATALOG_BASE = "https://djyuanyo.github.io/Calamar-TV/data/";
 
-  final int BG = 0xff0b0d10, FG = 0xfff5f5f5, ACC = 0xffd6ff00, MUTED = 0xffa4acb7;
+  final int FG = Ui.FG, MUTED = Ui.MUTED;
   LinearLayout root, list, filters;
   TextView message;
   JSONObject tdt = new JSONObject(), custom = new JSONObject();
@@ -171,28 +171,47 @@ public class MainActivity extends Activity {
 
   // ---- Layout --------------------------------------------------------------------------------
 
+  int gutter() {
+    return wide() ? 28 : 14;
+  }
+
   void home() {
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
-    root.setPadding(dp(wide() ? 28 : 12), dp(12), dp(wide() ? 28 : 12), 0);
-    root.setBackgroundColor(BG);
+    root.setPadding(dp(gutter()), 0, dp(gutter()), 0);
+    root.setBackgroundColor(Ui.BG);
     root.setFitsSystemWindows(true);
     setContentView(root);
-    getWindow().setStatusBarColor(BG);
-    getWindow().setNavigationBarColor(BG);
+    getWindow().setStatusBarColor(Ui.BG);
+    getWindow().setNavigationBarColor(Ui.BG);
+
     LinearLayout mast = row();
-    TextView brand = text("CALAMAR / TV", wide() ? 23 : 21);
-    brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    mast.setPadding(0, dp(10), 0, dp(2));
+    mast.addView(Ui.brandMark(this, 28), new LinearLayout.LayoutParams(dp(28), dp(28)));
+    TextView brand = Ui.brandText(this, wide() ? 18 : 16);
+    brand.setPadding(dp(10), 0, 0, 0);
     mast.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-    TextView tag = label("TDT EN DIRECTO", 11, ACC);
-    tag.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    mast.addView(tag);
+    Button refreshButton =
+        Ui.pill(this, "↻", Ui.Kind.SURFACE, true);
+    refreshButton.setContentDescription("Actualizar el catálogo");
+    refreshButton.setOnClickListener(
+        new View.OnClickListener() {
+          public void onClick(View v) {
+            load();
+          }
+        });
+    addButton(mast, refreshButton);
+    Button admin = Ui.pill(this, "Administrar", Ui.Kind.GHOST, true);
+    admin.setOnClickListener(v -> startActivity(new Intent(this, AdminActivity.class)));
+    addButton(mast, admin);
     root.addView(mast);
+
     LinearLayout nav = row();
     for (final String m : new String[] {"Inicio", "Canales", "Fútbol", "Mis canales"}) {
-      Button tab =
-          button(
+      nav.addView(
+          tab(
               m,
+              mode.equals(m),
               new View.OnClickListener() {
                 public void onClick(View v) {
                   if ("Fútbol".equals(m)) {
@@ -202,21 +221,8 @@ public class MainActivity extends Activity {
                     home();
                   }
                 }
-              });
-      if (mode.equals(m)) accent(tab);
-      addButton(nav, tab);
+              }));
     }
-    addButton(
-        nav,
-        button(
-            "↻ Actualizar",
-            new View.OnClickListener() {
-              public void onClick(View v) {
-                load();
-              }
-            }));
-    addButton(
-        nav, button("Administrar", v -> startActivity(new Intent(this, AdminActivity.class))));
     HorizontalScrollView n = new HorizontalScrollView(this);
     n.setHorizontalScrollBarEnabled(false);
     n.addView(nav);
@@ -226,7 +232,8 @@ public class MainActivity extends Activity {
     h.setHorizontalScrollBarEnabled(false);
     h.addView(filters);
     root.addView(h);
-    message = label("", 11, 0xff89929e);
+    message = label("", 11, Ui.FAINT);
+    message.setPadding(0, dp(4), 0, dp(2));
     root.addView(message);
     ScrollView scroll = new ScrollView(this);
     scroll.setClipToPadding(false);
@@ -239,12 +246,28 @@ public class MainActivity extends Activity {
     render();
   }
 
-  void accent(Button b) {
-    b.setTextColor(
-        new android.content.res.ColorStateList(
-            new int[][] {new int[] {android.R.attr.state_focused}, new int[] {}},
-            new int[] {FG, BG}));
-    b.setBackground(focusBackground(ACC));
+  /** A section tab: bold capitals, with a lime bar under the one that is open. */
+  View tab(String label, boolean active, View.OnClickListener l) {
+    LinearLayout t = new LinearLayout(this);
+    t.setOrientation(LinearLayout.VERTICAL);
+    t.setFocusable(true);
+    t.setClickable(true);
+    t.setBackground(Ui.focusFill(this, Color.TRANSPARENT, 0x1fffffff, Ui.ACC, 8, 0));
+    TextView tv = new TextView(this);
+    tv.setText(label.toUpperCase(new Locale("es", "ES")));
+    tv.setTextSize(13);
+    tv.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    tv.setLetterSpacing(0.06f);
+    tv.setTextColor(active ? Ui.FG : Ui.MUTED);
+    tv.setPadding(dp(14), dp(12), dp(14), dp(9));
+    t.addView(tv);
+    View bar = new View(this);
+    bar.setBackground(Ui.shape(this, active ? Ui.ACC : Color.TRANSPARENT, 2, 0, 0));
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(3));
+    bp.setMargins(dp(10), 0, dp(10), 0);
+    t.addView(bar, bp);
+    t.setOnClickListener(l);
+    return t;
   }
 
   void renderFilters() {
@@ -255,30 +278,34 @@ public class MainActivity extends Activity {
     names.add("Todos");
     names.addAll(Catalog.groups(channels).keySet());
     for (final String g : names) {
-      Button b =
-          button(
-              g,
-              new View.OnClickListener() {
-                public void onClick(View v) {
-                  group = g;
-                  renderFilters();
-                  render();
-                }
-              });
+      Button b = Ui.pill(this, g, g.equals(group) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+      b.setOnClickListener(
+          new View.OnClickListener() {
+            public void onClick(View v) {
+              group = g;
+              renderFilters();
+              render();
+            }
+          });
       b.setId(1000 + Math.abs(g.hashCode() % 90000));
-      if (g.equals(group)) b.setTextColor(ACC);
       addButton(filters, b);
     }
   }
 
   void heading(String title, String sub) {
     LinearLayout r = row();
+    View bar = new View(this);
+    bar.setBackground(Ui.shape(this, Ui.ACC, 2, 0, 0));
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(4), dp(20));
+    bp.setMargins(dp(2), 0, dp(6), 0);
+    r.addView(bar, bp);
     TextView t = text(title, wide() ? 22 : 20);
     t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    t.setPadding(dp(6), dp(7), dp(12), dp(7));
     r.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
-    if (sub != null) r.addView(label(sub, 12, 0xff89929e));
+    if (sub != null) r.addView(label(sub, 12, Ui.FAINT));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-    p.setMargins(0, dp(17), 0, dp(5));
+    p.setMargins(0, dp(18), 0, dp(4));
     list.addView(r, p);
   }
 
@@ -299,7 +326,7 @@ public class MainActivity extends Activity {
       grid();
     } else {
       List<Catalog.Channel> featured = Catalog.featured(channels, custom, 8);
-      if (!featured.isEmpty()) hero(featured.get(0));
+      if (!featured.isEmpty()) hero(featured);
       if (featured.size() > 1) {
         heading("Destacados", null);
         carousel(featured.subList(1, featured.size()), 40);
@@ -334,77 +361,168 @@ public class MainActivity extends Activity {
     list.addView(note);
   }
 
-  void hero(final Catalog.Channel c) {
-    FrameLayout frame = new FrameLayout(this);
-    frame.setBackground(
-        new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xff11151b, 0xff1d2a12}));
-    ImageView logo = new ImageView(this);
-    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-    FrameLayout.LayoutParams lp =
-        new FrameLayout.LayoutParams(dp(wide() ? 200 : 120), dp(wide() ? 200 : 120));
-    lp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-    lp.setMargins(0, 0, dp(24), 0);
+  LinearLayout.LayoutParams heroParams() {
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 300));
+    p.setMargins(0, dp(12), 0, dp(4));
+    return p;
+  }
+
+  /** The featured channel, large, with a row of the other featured ones to pick from. */
+  void hero(List<Catalog.Channel> picks) {
+    list.addView(heroView(picks, 0), heroParams());
+  }
+
+  View heroView(final List<Catalog.Channel> picks, final int index) {
+    final Catalog.Channel c = picks.get(index);
+    final FrameLayout frame = new FrameLayout(this);
+    frame.setBackground(Ui.heroBackground(this, Palette.hue(c.name)));
+    frame.setClipToOutline(true);
+
+    int size = wide() ? 190 : 96;
+    Ui.LogoView logo = new Ui.LogoView(this, c.name, 20);
+    FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(size), dp(size));
+    lp.gravity = wide() ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Gravity.END | Gravity.TOP);
+    lp.setMargins(0, wide() ? 0 : dp(18), dp(wide() ? 48 : 18), 0);
     frame.addView(logo, lp);
     image(logo, c.logo);
-    logo.setBackgroundColor(Color.TRANSPARENT);
+
+    View scrim = new View(this);
+    scrim.setBackground(
+        new GradientDrawable(
+            wide() ? GradientDrawable.Orientation.LEFT_RIGHT : GradientDrawable.Orientation.BOTTOM_TOP,
+            new int[] {0xf00b0d10, 0x8c0b0d10, 0x000b0d10}));
+    frame.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+
     LinearLayout content = new LinearLayout(this);
     content.setOrientation(LinearLayout.VERTICAL);
     content.setGravity(Gravity.BOTTOM);
-    content.setPadding(dp(18), dp(18), dp(18), dp(18));
-    content.addView(label("● EN DIRECTO  /  " + c.group, 12, ACC));
-    TextView title = text(c.name, wide() ? 34 : 27);
+    content.setPadding(dp(20), dp(20), dp(20), dp(20));
+    TextView pill = Ui.livePill(this, "EN DIRECTO", 11);
+    content.addView(pill, new LinearLayout.LayoutParams(-2, -2));
+    TextView title = new TextView(this);
+    title.setText(c.name);
+    title.setTextColor(Ui.FG);
+    title.setTextSize(wide() ? 38 : 28);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setLetterSpacing(-0.02f);
     title.setMaxLines(2);
+    title.setPadding(0, dp(8), 0, 0);
     content.addView(title);
-    content.addView(
-        label(c.own ? "Canal de Calamar TV" : "Emisión oficial en abierto", 13, 0xffd1d6de));
-    Button watch =
-        button(
-            "▶  Ver ahora",
+    TextView meta = new TextView(this);
+    StringBuilder line = new StringBuilder(c.group);
+    if (!c.region.isEmpty()) line.append(" · ").append(c.region);
+    line.append(" · ").append(c.own ? "Canal de Calamar TV" : "Emisión oficial en abierto");
+    meta.setText(line);
+    meta.setTextColor(0xffd6dbe2);
+    meta.setTextSize(14);
+    meta.setPadding(0, dp(4), 0, dp(14));
+    content.addView(meta);
+    LinearLayout actions = row();
+    Button watch = Ui.pill(this, "Ver ahora", Ui.Kind.ACCENT, false);
+    watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
+    watch.setCompoundDrawablePadding(dp(8));
+    watch.setOnClickListener(
+        new View.OnClickListener() {
+          public void onClick(View v) {
+            open(c);
+          }
+        });
+    LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, dp(48));
+    wp.setMargins(0, 0, dp(10), 0);
+    actions.addView(watch, wp);
+    Button all = Ui.pill(this, "Todos los canales", Ui.Kind.SURFACE, false);
+    all.setOnClickListener(
+        new View.OnClickListener() {
+          public void onClick(View v) {
+            mode = "Canales";
+            group = "Todos";
+            home();
+          }
+        });
+    actions.addView(all, new LinearLayout.LayoutParams(-2, dp(48)));
+    content.addView(actions);
+    frame.addView(content, new FrameLayout.LayoutParams(-1, -1));
+
+    if (picks.size() > 1 && wide()) {
+      LinearLayout row = row();
+      for (int i = 0; i < Math.min(picks.size(), 6); i++) {
+        final int pick = i;
+        FrameLayout thumb = new FrameLayout(this);
+        thumb.setTag("pick" + i);
+        thumb.setFocusable(true);
+        thumb.setClickable(true);
+        thumb.setContentDescription(picks.get(i).name);
+        thumb.setBackground(
+            Ui.focusFill(
+                this,
+                0x1affffff,
+                0x33ffffff,
+                Ui.ACC,
+                10,
+                i == index ? Ui.ACC : 0));
+        thumb.setAlpha(i == index ? 1f : 0.75f);
+        Ui.LogoView small = new Ui.LogoView(this, picks.get(i).name, 6);
+        FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER);
+        thumb.addView(small, sp);
+        image(small, picks.get(i).logo);
+        thumb.setOnClickListener(
             new View.OnClickListener() {
               public void onClick(View v) {
-                open(c);
+                int at = list.indexOfChild(frame);
+                if (at < 0) return;
+                list.removeViewAt(at);
+                View next = heroView(picks, pick);
+                list.addView(next, at, heroParams());
+                View focus = next.findViewWithTag("pick" + pick);
+                if (focus != null) focus.requestFocus();
               }
             });
-    accent(watch);
-    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, dp(46));
-    bp.setMargins(dp(12), dp(14), 0, 0);
-    content.addView(watch, bp);
-    frame.addView(content, new FrameLayout.LayoutParams(-1, -1));
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(wide() ? 280 : 250));
-    p.setMargins(0, dp(12), 0, dp(4));
-    list.addView(frame, p);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(68), dp(44));
+        tp.setMargins(dp(4), 0, dp(4), 0);
+        row.addView(thumb, tp);
+      }
+      FrameLayout.LayoutParams rp =
+          new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.BOTTOM);
+      rp.setMargins(0, 0, dp(40), dp(18));
+      frame.addView(row, rp);
+    }
+    return frame;
   }
 
+  /** A 16:9 card: colour from the name, logo, live badge, then the name and its category. */
   View card(final Catalog.Channel c, int width) {
     LinearLayout card = new LinearLayout(this);
     card.setId(100000 + Math.abs(c.id.hashCode() % 800000));
     card.setOrientation(LinearLayout.VERTICAL);
-    card.setPadding(dp(2), dp(2), dp(2), dp(10));
-    focusable(card);
+    card.setPadding(dp(3), dp(3), dp(3), dp(8));
+    card.setFocusable(true);
+    card.setClickable(true);
+    Ui.scaleOnFocus(card, 1.03f);
+
     FrameLayout art = new FrameLayout(this);
-    art.setBackground(rounded(0xff202731, 0));
-    ImageView logo = new ImageView(this);
-    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-    FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
-    lp.setMargins(dp(22), dp(16), dp(22), dp(16));
-    art.addView(logo, lp);
+    art.setBackground(Ui.artBackground(this, Palette.hue(c.name), 12));
+    art.setDuplicateParentStateEnabled(true);
+    int artHeight = Math.round(dp(width) * 9f / 16f);
+    int logoSize = Math.round(artHeight * 0.58f);
+    Ui.LogoView logo = new Ui.LogoView(this, c.name, 10);
+    art.addView(logo, new FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER));
     image(logo, c.logo);
-    logo.setBackgroundColor(Color.TRANSPARENT);
-    TextView badge = label(c.playable() ? "EN DIRECTO" : "SU WEB", 10, c.playable() ? BG : FG);
-    badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    badge.setBackground(rounded(c.playable() ? ACC : 0xdd171a20, 0));
+    TextView badge = c.playable() ? Ui.livePill(this, "EN DIRECTO", 9) : Ui.tag(this, "SU WEB", 9);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
     art.addView(badge, bp);
-    card.addView(art, new LinearLayout.LayoutParams(-1, dp(110)));
+    card.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
+
     TextView name = text(c.name, 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setSingleLine(true);
+    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    name.setPadding(dp(2), dp(8), dp(2), 0);
     card.addView(name);
-    TextView sub = label(c.region.isEmpty() ? c.group : c.region, 12, MUTED);
+    TextView sub = label(c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
     sub.setSingleLine(true);
+    sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
     card.setOnClickListener(
         new View.OnClickListener() {
@@ -413,7 +531,7 @@ public class MainActivity extends Activity {
           }
         });
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
-    p.setMargins(dp(5), dp(4), dp(8), dp(8));
+    p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
   }
@@ -425,15 +543,18 @@ public class MainActivity extends Activity {
     LinearLayout r = row();
     r.setGravity(Gravity.TOP);
     for (int i = 0; i < Math.min(a.size(), limit); i++)
-      r.addView(card(a.get(i), wide() ? 200 : 170));
+      r.addView(card(a.get(i), wide() ? 230 : 172));
     h.addView(r);
     list.addView(h);
   }
 
+  int gridWidth(int columns) {
+    return (getResources().getConfiguration().screenWidthDp - 2 * gutter()) / columns - 10;
+  }
+
   void grid() {
     int columns = wide() ? 4 : 2;
-    int width =
-        (getResources().getConfiguration().screenWidthDp - (wide() ? 56 : 24)) / columns - 15;
+    int width = gridWidth(columns);
     for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels).entrySet()) {
       if (!group.equals("Todos") && !group.equals(e.getKey())) continue;
       heading(e.getKey(), e.getValue().size() + " canales");
@@ -443,7 +564,12 @@ public class MainActivity extends Activity {
       for (Catalog.Channel c : regionSorted(e.getValue())) {
         if (!c.region.isEmpty() && !c.region.equals(region)) {
           region = c.region;
-          list.addView(label(region.toUpperCase(new Locale("es", "ES")), 12, ACC));
+          TextView regionLabel =
+              label(region.toUpperCase(new Locale("es", "ES")), 12, Ui.ACC);
+          regionLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+          regionLabel.setLetterSpacing(0.1f);
+          regionLabel.setPadding(dp(4), dp(16), 0, dp(4));
+          list.addView(regionLabel);
           i = 0;
         }
         if (i++ % columns == 0) {
@@ -553,44 +679,8 @@ public class MainActivity extends Activity {
     return v;
   }
 
-  GradientDrawable rounded(int color, int border) {
-    GradientDrawable g = new GradientDrawable();
-    g.setColor(color);
-    g.setCornerRadius(dp(9));
-    if (border != 0) g.setStroke(dp(2), border);
-    return g;
-  }
-
-  StateListDrawable focusBackground(int normal) {
-    StateListDrawable s = new StateListDrawable();
-    s.addState(new int[] {android.R.attr.state_focused}, rounded(0xff30352a, ACC));
-    s.addState(new int[] {android.R.attr.state_pressed}, rounded(0xff30352a, ACC));
-    s.addState(new int[] {}, rounded(normal, 0));
-    return s;
-  }
-
-  void focusable(View v) {
-    v.setFocusable(true);
-    v.setClickable(true);
-    v.setBackground(focusBackground(0xff191d23));
-    v.setOnFocusChangeListener(
-        new View.OnFocusChangeListener() {
-          public void onFocusChange(View w, boolean f) {
-            w.animate().scaleX(f ? 1.015f : 1f).scaleY(f ? 1.015f : 1f).setDuration(120).start();
-          }
-        });
-  }
-
   Button button(String t, View.OnClickListener l) {
-    Button b = new Button(this);
-    b.setText(t);
-    b.setTextSize(14);
-    b.setTextColor(FG);
-    b.setAllCaps(false);
-    b.setBackground(focusBackground(0xff1b2027));
-    b.setPadding(dp(17), dp(6), dp(17), dp(6));
-    b.setMinHeight(0);
-    b.setMinimumHeight(0);
+    Button b = Ui.pill(this, t, Ui.Kind.SURFACE, true);
     b.setOnClickListener(l);
     return b;
   }
@@ -609,7 +699,6 @@ public class MainActivity extends Activity {
   }
 
   void image(final ImageView view, final String url) {
-    view.setBackgroundColor(0xff202731);
     if (url == null || !url.startsWith("https://")) return;
     Bitmap cached = images.get(url);
     if (cached != null) {
@@ -665,31 +754,28 @@ public class MainActivity extends Activity {
 
   void myChannels() {
     heading("Mis canales", userChannels.length() + " canales");
-    list.addView(
+    TextView help =
         label(
             "Añade enlaces de vídeo (.ts, .m3u8, .mpd, .mp4) o la página https de un reproductor:"
                 + " la app obtiene su fuente actual y la renueva al caducar. Se guardan solo en"
                 + " este dispositivo. Mantén pulsado un canal para editarlo o eliminarlo.",
             12,
-            0xffa4acb7));
+            Ui.MUTED);
+    help.setPadding(dp(4), 0, dp(4), dp(6));
+    list.addView(help);
     LinearLayout actions = row();
-    Button add =
-        button(
-            "+  Añadir canal",
-            new View.OnClickListener() {
-              public void onClick(View v) {
-                editChannel(-1);
-              }
-            });
-    add.setBackground(focusBackground(ACC));
-    add.setTextColor(
-        new android.content.res.ColorStateList(
-            new int[][] {new int[] {android.R.attr.state_focused}, new int[] {}},
-            new int[] {FG, BG}));
-    addButton(actions, add);
+    Button add = Ui.pill(this, "+  Añadir canal", Ui.Kind.ACCENT, false);
+    add.setOnClickListener(
+        new View.OnClickListener() {
+          public void onClick(View v) {
+            editChannel(-1);
+          }
+        });
+    LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, dp(46));
+    ap.setMargins(dp(4), dp(4), dp(4), dp(8));
+    actions.addView(add, ap);
     list.addView(actions);
-    int cols = wide() ? 3 : 2,
-        width = (getResources().getConfiguration().screenWidthDp - (wide() ? 56 : 24)) / cols - 14;
+    int cols = wide() ? 4 : 2, width = gridWidth(cols);
     LinearLayout r = null;
     for (int i = 0; i < userChannels.length(); i++) {
       final int index = i;
@@ -703,17 +789,29 @@ public class MainActivity extends Activity {
       LinearLayout c = new LinearLayout(this);
       c.setId(300000 + i);
       c.setOrientation(LinearLayout.VERTICAL);
-      c.setGravity(Gravity.CENTER);
-      c.setPadding(dp(10), dp(18), dp(10), dp(18));
-      focusable(c);
-      c.addView(label("▶", 28, ACC));
-      TextView name = text(channel.optString("name"), 16);
+      c.setPadding(dp(3), dp(3), dp(3), dp(8));
+      c.setFocusable(true);
+      c.setClickable(true);
+      Ui.scaleOnFocus(c, 1.03f);
+      FrameLayout art = new FrameLayout(this);
+      art.setBackground(Ui.artBackground(this, Palette.hue(channel.optString("name")), 12));
+      art.setDuplicateParentStateEnabled(true);
+      ImageView play = new ImageView(this);
+      int artHeight = Math.round(dp(width) * 9f / 16f);
+      int playSize = Math.round(artHeight * 0.4f);
+      play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.ACC, playSize));
+      art.addView(play, new FrameLayout.LayoutParams(playSize, playSize, Gravity.CENTER));
+      c.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
+      TextView name = text(channel.optString("name"), 15);
       name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      name.setGravity(Gravity.CENTER);
-      name.setMinLines(2);
+      name.setSingleLine(true);
+      name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      name.setPadding(dp(2), dp(8), dp(2), 0);
       c.addView(name);
-      TextView host = label(Uri.parse(channel.optString("url")).getHost(), 10, 0xffa4acb7);
+      TextView host = label(Uri.parse(channel.optString("url")).getHost(), 12, Ui.MUTED);
       host.setSingleLine(true);
+      host.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      host.setPadding(dp(2), 0, dp(2), 0);
       c.addView(host);
       c.setOnClickListener(
           new View.OnClickListener() {
@@ -729,7 +827,7 @@ public class MainActivity extends Activity {
             }
           });
       LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
-      p.setMargins(dp(5), dp(5), dp(5), dp(5));
+      p.setMargins(dp(4), dp(4), dp(6), dp(6));
       r.addView(c, p);
     }
   }
