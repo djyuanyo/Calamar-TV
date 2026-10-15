@@ -279,11 +279,22 @@ document.addEventListener('keydown', (e) => {
 // ---- Routing ---------------------------------------------------------------------------------
 
 async function route() {
+  const previousFootball = document.querySelector('#football-view');
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
+  if (page !== 'futbol' && previousFootball) {
+    const mod = await import('./football.js');
+    mod.leaveFootball();
+  }
+  if (page === 'futbol') {
+    if (!player.hidden) hidePlayer();
+    const mod = await import('./football.js');
+    await mod.renderFootball(view);
+    return;
+  }
   if (page === 'admin') {
     try {
       const admin = await import('./admin.js');
