@@ -58,7 +58,7 @@ public final class NativePlayerActivity extends Activity {
 
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
-  private boolean active, resolving, webMode;
+  private boolean active, resolving, webMode, footballFallback;
   private final Runnable renewal = () -> refreshAutomatically("Renovando la fuente…");
 
   @Override
@@ -66,6 +66,7 @@ public final class NativePlayerActivity extends Activity {
     super.onCreate(state);
     pageUrl = getIntent().getStringExtra("page_url");
     title = getIntent().getStringExtra("title");
+    footballFallback = getIntent().getBooleanExtra("football_fallback", false);
     ArrayList<String> urls = getIntent().getStringArrayListExtra("media_urls");
     if (urls == null) urls = new ArrayList<>();
     urls.add(0, getIntent().getStringExtra("media_url"));
@@ -249,6 +250,9 @@ public final class NativePlayerActivity extends Activity {
                   if (player != null && player.isPlaying()) {
                     status.setText(
                         "No se pudo renovar. La emisión actual continúa; puedes pulsar Renovar.");
+                  } else if (footballFallback) {
+                    openWeb();
+                    status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
                   } else {
                     status.setText(
                         "No se pudo consultar "
@@ -350,6 +354,11 @@ public final class NativePlayerActivity extends Activity {
     if (directUrl != null && directUrls.size() > 1) selection = (selection + 1) % directUrls.size();
     int limit = Math.max(3, directUrls.size());
     if (++automaticAttempts > limit || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
+      if (footballFallback && directUrl == null) {
+        openWeb();
+        status.setText("La fuente directa falló. Modo web del proveedor.");
+        return;
+      }
       status.setText(
           directUrl != null
               ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Reintentar."
