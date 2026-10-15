@@ -42,6 +42,8 @@ jobs:
           mkdir -p _site
           cp -r web/. _site/
           cp -r data _site/data
+          # Every deploy loads as a whole: without this a browser can mix new and cached old files.
+          python tools/version_assets.py _site "${GITHUB_SHA::12}"
           python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

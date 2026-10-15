@@ -76,6 +76,8 @@ El reproductor de la web dice por qué falla en lugar de quedarse en blanco:
 | «El servidor del canal no permite cargarlo desde otra web (CORS)…» | La petición no obtuvo respuesta. Es lo que ve el navegador cuando el servidor del vídeo no añade `Access-Control-Allow-Origin` para otras webs, o está bloqueado en la red. La web no puede saltarse esto: solo lo arregla quien controla ese servidor. La app Android no tiene esta limitación. |
 | «La emisión no tiene un formato que el navegador entienda» / «El navegador no admite el vídeo…» | Lista o códecs que el navegador no puede reproducir. |
 
+Al publicar, `tools/version_assets.py` añade `?v=<commit>` a cada script, hoja de estilos e importación local de la web. GitHub Pages deja los ficheros en caché unos 10 minutos. Sin versión, un navegador podía mezclar el `app.js` nuevo con un `catalog.js` antiguo y la web se quedaba en «Cargando canales…» hasta que caducara la caché. Con versión, cada publicación se carga entera. Pruebas: `tools/test_version_assets.py`.
+
 Si un canal tiene varios enlaces, el reproductor prueba el siguiente cuando uno falla. Los enlaces con token caducado se saltan. Pruebas: `node --test tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs`.
 
 ## Diseño y reproductor de la app (2.2.0)
