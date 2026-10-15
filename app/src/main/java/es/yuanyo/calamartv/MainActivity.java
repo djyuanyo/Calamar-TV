@@ -4,6 +4,7 @@ import android.app.*;
 import android.content.res.Configuration;
 import android.graphics.*;
 import android.graphics.drawable.*;
+import android.net.Uri;
 import android.os.*;
 import android.util.LruCache;
 import android.view.*;
@@ -20,8 +21,9 @@ public class MainActivity extends Activity {
   TextView message;
   JSONArray events = new JSONArray();
   JSONArray channelCatalog = new JSONArray();
+  JSONArray userChannels = new JSONArray();
   String dataOrigin = "Sin datos", loadError = "";
-  String sport = "Todos", mode = "Inicio";
+  String sport = "Todos", mode = "Mis canales";
   boolean busy = false;
   long lastUpdate = 0;
   final LruCache<String, Bitmap> images =
@@ -47,6 +49,7 @@ public class MainActivity extends Activity {
     super.onCreate(b);
     getWindow().addFlags(128);
     restoreContent();
+    userChannels = UserChannels.load(userChannelFile());
     home();
     load();
     handler.postDelayed(refresh, 60000);
@@ -149,7 +152,7 @@ public class MainActivity extends Activity {
     mast.addView(tag);
     root.addView(mast);
     LinearLayout nav = row();
-    for (final String m : new String[] {"Inicio", "En directo", "Agenda", "Canales"}) {
+    for (final String m : new String[] {"Mis canales", "Inicio", "En directo", "Agenda", "Canales"}) {
       Button tab =
           button(
               m,
@@ -212,6 +215,7 @@ public class MainActivity extends Activity {
 
   void renderFilters() {
     filters.removeAllViews();
+    if (mode.equals("Mis canales")) return;
     TreeSet<String> sports = new TreeSet<String>();
     for (int i = 0; i < events.length(); i++) {
       JSONObject e = events.optJSONObject(i);
@@ -433,6 +437,10 @@ public class MainActivity extends Activity {
             + (lastUpdate > 0 ? "  /  " + stamp.format(new Date(lastUpdate)) : "")
             + " · Hora peninsular"
             + (loadError.isEmpty() ? "" : "\n" + loadError));
+    if (mode.equals("Mis canales")) {
+      myChannels();
+      return;
+    }
     if (mode.equals("Canales")) {
       channels(all);
       return;
@@ -773,6 +781,195 @@ public class MainActivity extends Activity {
       p.setMargins(dp(5), dp(5), dp(5), dp(5));
       r.addView(c, p);
     }
+  }
+
+  File userChannelFile() {
+    return new File(getFilesDir(), "user-channels.json");
+  }
+
+  void myChannels() {
+    heading("Mis canales", userChannels.length() + " canales");
+    list.addView(
+        label(
+            "Añade enlaces directos de vídeo (.ts, .m3u8, .mpd, .mp4). Se guardan solo en este"
+                + " dispositivo. Mantén pulsado un canal para editarlo o eliminarlo.",
+            12,
+            0xffa4acb7));
+    LinearLayout actions = row();
+    Button add =
+        button(
+            "+  Añadir canal",
+            new View.OnClickListener() {
+              public void onClick(View v) {
+                editChannel(-1);
+              }
+            });
+    add.setId(199999);
+    add.setBackground(focusBackground(ACC));
+    add.setTextColor(
+        new android.content.res.ColorStateList(
+            new int[][] {new int[] {android.R.attr.state_focused}, new int[] {}},
+            new int[] {FG, BG}));
+    addButton(actions, add);
+    list.addView(actions);
+    int cols = wide() ? 3 : 2,
+        width = (getResources().getConfiguration().screenWidthDp - (wide() ? 56 : 24)) / cols - 14;
+    LinearLayout r = null;
+    for (int i = 0; i < userChannels.length(); i++) {
+      final int index = i;
+      final JSONObject channel = userChannels.optJSONObject(i);
+      if (channel == null) continue;
+      if (i % cols == 0) {
+        r = row();
+        r.setGravity(Gravity.TOP);
+        list.addView(r);
+      }
+      LinearLayout c = new LinearLayout(this);
+      c.setId(300000 + i);
+      c.setOrientation(LinearLayout.VERTICAL);
+      c.setGravity(Gravity.CENTER);
+      c.setPadding(dp(10), dp(18), dp(10), dp(18));
+      focusable(c);
+      c.addView(label("▶", 28, ACC));
+      TextView name = text(channel.optString("name"), 16);
+      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      name.setGravity(Gravity.CENTER);
+      name.setMinLines(2);
+      c.addView(name);
+      TextView host = label(Uri.parse(channel.optString("url")).getHost(), 10, 0xffa4acb7);
+      host.setSingleLine(true);
+      c.addView(host);
+      c.setOnClickListener(
+          new View.OnClickListener() {
+            public void onClick(View v) {
+              playDirect(channel.optString("name"), channel.optString("url"));
+            }
+          });
+      c.setOnLongClickListener(
+          new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+              channelOptions(index);
+              return true;
+            }
+          });
+      LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+      p.setMargins(dp(5), dp(5), dp(5), dp(5));
+      r.addView(c, p);
+    }
+  }
+
+  void channelOptions(final int index) {
+    JSONObject channel = userChannels.optJSONObject(index);
+    if (channel == null) return;
+    new AlertDialog.Builder(this)
+        .setTitle(channel.optString("name"))
+        .setItems(
+            new String[] {"Reproducir", "Editar", "Eliminar"},
+            new android.content.DialogInterface.OnClickListener() {
+              public void onClick(android.content.DialogInterface d, int n) {
+                JSONObject current = userChannels.optJSONObject(index);
+                if (current == null) return;
+                if (n == 0) playDirect(current.optString("name"), current.optString("url"));
+                else if (n == 1) editChannel(index);
+                else confirmRemove(index);
+              }
+            })
+        .setNegativeButton("Volver", null)
+        .show();
+  }
+
+  void confirmRemove(final int index) {
+    JSONObject channel = userChannels.optJSONObject(index);
+    if (channel == null) return;
+    new AlertDialog.Builder(this)
+        .setMessage("¿Eliminar " + channel.optString("name") + "?")
+        .setPositiveButton(
+            "Eliminar",
+            new android.content.DialogInterface.OnClickListener() {
+              public void onClick(android.content.DialogInterface d, int n) {
+                storeChannels(UserChannels.remove(userChannels, index));
+              }
+            })
+        .setNegativeButton("Cancelar", null)
+        .show();
+  }
+
+  void editChannel(final int index) {
+    JSONObject existing = index >= 0 ? userChannels.optJSONObject(index) : null;
+    LinearLayout form = new LinearLayout(this);
+    form.setOrientation(LinearLayout.VERTICAL);
+    form.setPadding(dp(20), dp(8), dp(20), 0);
+    final EditText name = new EditText(this);
+    name.setHint("Nombre del canal");
+    name.setSingleLine(true);
+    name.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+    final EditText url = new EditText(this);
+    url.setHint("http://servidor:puerto/ruta/canal.ts");
+    url.setSingleLine(true);
+    url.setInputType(
+        android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+    if (existing != null) {
+      name.setText(existing.optString("name"));
+      url.setText(existing.optString("url"));
+    }
+    form.addView(name);
+    form.addView(url);
+    final AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle(existing == null ? "Añadir canal" : "Editar canal")
+            .setView(form)
+            .setPositiveButton("Guardar", null)
+            .setNegativeButton("Cancelar", null)
+            .create();
+    dialog.setOnShowListener(
+        new android.content.DialogInterface.OnShowListener() {
+          public void onShow(android.content.DialogInterface d) {
+            dialog
+                .getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(
+                    new View.OnClickListener() {
+                      public void onClick(View v) {
+                        String address = url.getText().toString();
+                        if (UserChannels.normalize(address) == null) {
+                          url.setError("Introduce un enlace que empiece por http:// o https://");
+                          return;
+                        }
+                        try {
+                          String title = name.getText().toString();
+                          storeChannels(
+                              index < 0
+                                  ? UserChannels.add(userChannels, title, address)
+                                  : UserChannels.replace(userChannels, index, title, address));
+                          dialog.dismiss();
+                        } catch (JSONException invalid) {
+                          url.setError("Enlace no válido");
+                        }
+                      }
+                    });
+          }
+        });
+    dialog.show();
+  }
+
+  void storeChannels(JSONArray updated) {
+    try {
+      UserChannels.save(userChannelFile(), updated);
+      userChannels = updated;
+    } catch (IOException e) {
+      Toast.makeText(this, "No se pudieron guardar los canales", Toast.LENGTH_LONG).show();
+    }
+    render();
+  }
+
+  void playDirect(String name, String address) {
+    if (UserChannels.normalize(address) == null) {
+      Toast.makeText(this, "Enlace no válido", Toast.LENGTH_LONG).show();
+      return;
+    }
+    android.content.Intent intent = new android.content.Intent(this, NativePlayerActivity.class);
+    intent.putExtra("media_url", address.trim());
+    intent.putExtra("title", name);
+    startActivity(intent);
   }
 
   void choose(final JSONObject e) {

@@ -26,6 +26,7 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
@@ -49,6 +50,8 @@ public final class NativePlayerActivity extends Activity {
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
   private String pageUrl, documentUrl, currentUrl = "", title;
+  /** A user-added media link, played as is without page lookup or renewal. */
+  private String directUrl;
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
   private boolean active, resolving, webMode;
@@ -59,11 +62,13 @@ public final class NativePlayerActivity extends Activity {
     super.onCreate(state);
     pageUrl = getIntent().getStringExtra("page_url");
     title = getIntent().getStringExtra("title");
-    if (pageUrl == null || !pageUrl.startsWith("https://")) {
+    directUrl = UserChannels.normalize(getIntent().getStringExtra("media_url"));
+    if (directUrl != null) pageUrl = null;
+    else if (pageUrl == null || !pageUrl.startsWith("https://")) {
       finish();
       return;
     }
-    documentUrl = pageUrl;
+    documentUrl = directUrl != null ? directUrl : pageUrl;
     transport = NetworkTransport.get(this);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     LinearLayout layout = new LinearLayout(this);
@@ -72,17 +77,27 @@ public final class NativePlayerActivity extends Activity {
     layout.setFitsSystemWindows(true);
     LinearLayout controls = new LinearLayout(this);
     button(controls, "Volver", () -> finish());
-    button(
-        controls,
-        "Renovar",
-        () -> {
-          automaticAttempts = 0;
-          resolveFresh();
-        });
-    button(controls, "Fuentes", this::chooseSource);
-    button(controls, "Modo web", this::openWeb);
-    button(controls, "Diagnóstico", this::diagnose);
-    button(controls, "Chrome / navegador", this::openBrowser);
+    if (directUrl != null) {
+      button(
+          controls,
+          "Reintentar",
+          () -> {
+            automaticAttempts = 0;
+            playDirect();
+          });
+    } else {
+      button(
+          controls,
+          "Renovar",
+          () -> {
+            automaticAttempts = 0;
+            resolveFresh();
+          });
+      button(controls, "Fuentes", this::chooseSource);
+      button(controls, "Modo web", this::openWeb);
+      button(controls, "Diagnóstico", this::diagnose);
+      button(controls, "Chrome / navegador", this::openBrowser);
+    }
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.addView(controls);
     layout.addView(scroll);
@@ -121,11 +136,31 @@ public final class NativePlayerActivity extends Activity {
   protected void onStart() {
     super.onStart();
     active = true;
-    if (pageUrl != null) resolveFresh();
+    if (directUrl != null) playDirect();
+    else if (pageUrl != null) resolveFresh();
+  }
+
+  private void playDirect() {
+    if (!active) return;
+    handler.removeCallbacks(renewalRequest);
+    sources.clear();
+    sources.add(new VideoResolver.Source(title == null ? "Mi canal" : title, directUrl));
+    selection = 0;
+    status.setText("Conectando con " + Uri.parse(directUrl).getHost() + "…");
+    releasePlayer();
+    playSource(sources.get(0));
+  }
+
+  private String engineName() {
+    return directUrl != null ? "Sistema" : transport.name();
   }
 
   private void resolveFresh() {
     if (!active || resolving) return;
+    if (directUrl != null) {
+      playDirect();
+      return;
+    }
     webMode = false;
     clearWeb();
     resolving = true;
@@ -188,7 +223,7 @@ public final class NativePlayerActivity extends Activity {
 
   private void playSource(VideoResolver.Source source) {
     if (!active) return;
-    long expiry = VideoResolver.expiryMillis(source.url);
+    long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {
       status.setText("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");
       return;
@@ -201,7 +236,14 @@ public final class NativePlayerActivity extends Activity {
       return;
     }
     releasePlayer();
-    DataSource.Factory http = transport.mediaFactory(mediaReferer());
+    DataSource.Factory http =
+        directUrl != null
+            ? new DefaultHttpDataSource.Factory()
+                .setUserAgent(PlayerDocument.USER_AGENT)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(20000)
+                .setAllowCrossProtocolRedirects(true)
+            : transport.mediaFactory(mediaReferer());
     player =
         new ExoPlayer.Builder(this)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
@@ -221,7 +263,7 @@ public final class NativePlayerActivity extends Activity {
           public void onPlaybackStateChanged(int state) {
             if (instance != player || !active) return;
             if (state == Player.STATE_READY)
-              status.setText("Reproductor nativo · " + source.label + " · " + transport.name());
+              status.setText("Reproductor nativo · " + source.label + " · " + engineName());
             else if (state == Player.STATE_BUFFERING) status.setText("Cargando vídeo…");
           }
 
@@ -238,6 +280,7 @@ public final class NativePlayerActivity extends Activity {
     String path = Uri.parse(source.url).getPath();
     if (path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+    if ("ts".equals(UserChannels.kind(source.url))) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
     player.setMediaItem(item.build());
     player.prepare();
@@ -248,7 +291,8 @@ public final class NativePlayerActivity extends Activity {
 
   private void scheduleRenewal(String address) {
     handler.removeCallbacks(renewal);
-    if (VideoResolver.isMedia(pageUrl)) return; // There is no page to re-resolve for a raw URL.
+    // There is no page to re-resolve for a raw URL.
+    if (directUrl != null || VideoResolver.isMedia(pageUrl)) return;
     long delay = VideoResolver.renewalDelay(address, System.currentTimeMillis());
     if (delay >= 0) handler.postDelayed(renewal, Math.max(15000L, delay));
   }
@@ -266,8 +310,11 @@ public final class NativePlayerActivity extends Activity {
       automaticAttempts = 0;
       attemptWindow = now;
     }
-    if (++automaticAttempts > 3 || VideoResolver.isMedia(pageUrl)) {
-      status.setText("No se pudo recuperar la emisión. Pulsa Renovar, Fuentes o Modo web.");
+    if (++automaticAttempts > 3 || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
+      status.setText(
+          directUrl != null
+              ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Reintentar."
+              : "No se pudo recuperar la emisión. Pulsa Renovar, Fuentes o Modo web.");
       return;
     }
     status.setText(message);
@@ -278,7 +325,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(pageUrl);
-    return "Calamar TV 1.3.1\nAndroid API "
+    return "Calamar TV 1.4.0\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
