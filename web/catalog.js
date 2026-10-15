@@ -130,6 +130,8 @@ export function streamExpiry(url) {
 
 /** A plain-language reason for a fatal hls.js error. `code` is the HTTP status, 0 or missing when the request never got an answer. */
 export function explainStreamError({ details = '', code = 0 } = {}) {
+  if ((code === 401 || code === 403) && /frag|key/i.test(details))
+    return 'El servidor entrega la lista de la emisión pero rechaza el vídeo cuando se pide desde esta web.';
   if (code === 401 || code === 403) return 'El servidor rechaza este enlace: no está autorizado o ya caducó.';
   if (code === 404 || code === 410) return 'El enlace ya no existe en el servidor.';
   if (/load/i.test(details)) return 'El servidor del canal no permite cargarlo desde otra web (CORS), no responde o está bloqueado en tu red.';

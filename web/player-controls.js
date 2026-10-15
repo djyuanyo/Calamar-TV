@@ -128,6 +128,13 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
   let hlsLive = null;
   const isLive = () => (hls && hlsLive !== null ? hlsLive : !Number.isFinite(video.duration));
   const refreshTime = () => {
+    // Without a source there is nothing live and no progress to show.
+    // currentSrc keeps the last URL after the source is removed; the src attribute does not.
+    if (!hls && !video.getAttribute('src')) {
+      root.classList.remove('is-live');
+      els.live.hidden = els.pill.hidden = els.seek.hidden = els.time.hidden = true;
+      return;
+    }
     const live = isLive();
     root.classList.toggle('is-live', live);
     els.live.hidden = !live;
@@ -371,6 +378,10 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
     reset() {
       hls = null;
       hlsLive = null;
+      // A stopped player shows the play icon, but no big play button: there is nothing to play.
+      els.play.replaceChildren(icon('play'));
+      els.play.setAttribute('aria-label', 'Reproducir');
+      root.classList.remove('is-paused');
       closeMenu();
       els.quality.hidden = true;
       root.classList.remove('is-buffering', 'idle');

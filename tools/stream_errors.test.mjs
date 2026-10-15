@@ -29,6 +29,9 @@ test('a link already past its time is recognised as expired', () => {
 
 test('errors are explained in plain language', () => {
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 403 }), /rechaza.*caducó/);
+  assert.match(explainStreamError({ details: 'fragLoadError', code: 403 }), /lista.*rechaza el vídeo/);
+  assert.match(explainStreamError({ details: 'keyLoadError', code: 401 }), /rechaza el vídeo/);
+  assert.match(explainStreamError({ details: 'levelLoadError', code: 403 }), /no está autorizado/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 401 }), /rechaza/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 404 }), /ya no existe/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 410 }), /ya no existe/);

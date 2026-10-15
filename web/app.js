@@ -243,12 +243,19 @@ function playSource(c, index) {
     return;
   }
   const source = playable[index];
+  let done = false;
+  let started = false;
+  let refused = 0;
   const next = (data) => {
+    if (done) return;
+    done = true;
     if (index + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, index + 1);
     } else {
       const reason = data ? explainStreamError({ details: data.details, code: data.response && data.response.code }) : 'No se pudo reproducir esta emisión en el navegador.';
+      // Nothing is left to try: stop, so the player stops showing loading, pause and live.
+      stop();
       playerStatus.replaceChildren(`${reason} `, c.web ? el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial') : 'Prueba en la app Calamar TV.');
     }
   };
@@ -256,7 +263,11 @@ function playSource(c, index) {
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
-      if (data.fatal) next(data);
+      if (data.fatal) return next(data);
+      // hls.js can keep a stream open while the server refuses every piece of video; before anything
+      // has played, a few refusals in a row mean this source will not work.
+      const code = data.response && data.response.code;
+      if (!started && (code === 401 || code === 403) && /frag|key/i.test(data.details || '') && ++refused >= 3) next(data);
     });
     hls.loadSource(source.url);
     hls.attachMedia(video);
@@ -264,9 +275,15 @@ function playSource(c, index) {
     video.src = source.url;
   }
   controls.attach(hls);
-  video.onplaying = () => (playerStatus.textContent = '');
+  video.onplaying = () => {
+    started = true;
+    playerStatus.textContent = '';
+  };
   video.onerror = () => next();
-  video.play().catch(() => (playerStatus.textContent = 'Pulsa ▶ para empezar.'));
+  video.play().catch((error) => {
+    // Only a blocked autoplay needs this hint; stopping a failed source also rejects play().
+    if (!done && error && error.name === 'NotAllowedError') playerStatus.textContent = 'Pulsa ▶ para empezar.';
+  });
 }
 
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
