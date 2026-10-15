@@ -64,6 +64,14 @@ El reproductor ocupa toda la ventana y tiene controles propios: reproducir/pausa
 
 Con ratón, un clic pausa y un doble clic alterna la pantalla completa. En pantallas táctiles, un toque muestra u oculta los controles y la pantalla completa se bloquea en horizontal cuando el navegador lo permite. En iPhone la pantalla completa usa el reproductor del sistema. El volumen elegido se recuerda en el navegador. Mientras el reproductor está abierto, el resto de la página queda inactivo para el teclado y los lectores de pantalla.
 
+## Diseño y reproductor de la app (2.2.0)
+
+La app Android y Android TV sigue el mismo diseño que la web: cabecera con la marca, pestañas con la sección abierta subrayada en lima, canal destacado grande con selector de otros destacados (en tablet y TV), filas con tarjetas 16:9 y filtros de categoría en forma de píldora. Cada tarjeta tiene el color que sale de su nombre, con el **mismo cálculo que la web** (`Palette.hue` y `hue()` de `web/app.js`; una prueba lo comprueba con valores sacados de la web), así que un canal se ve igual en los dos sitios. Un canal sin logo muestra sus iniciales. El foco del mando se ve con un contorno lima. «Mis canales» usa las mismas tarjetas.
+
+El reproductor tiene el botón de **pantalla completa** en los controles de Media3: oculta el panel superior y las barras del sistema (también bajo la muesca), y en móviles gira a horizontal. En televisión no se bloquea la orientación. El botón Atrás sale de la pantalla completa antes de cerrar el reproductor, y si hay un error o se abre el modo web vuelve solo al panel para que se vea el mensaje y los botones. Una etiqueta «EN DIRECTO» aparece cuando la emisión es en directo. El panel superior tiene el botón Volver con icono, el título y las acciones (DNS, Diagnóstico, Renovar, Fuentes, Modo web, Chrome) como píldoras.
+
+Pruebas nuevas: `PaletteTest`. La interfaz de la app se comprobó con el compilador contra Android 15, pero no se ha probado en un dispositivo ni en un televisor.
+
 ## Mis canales (solo app)
 
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
