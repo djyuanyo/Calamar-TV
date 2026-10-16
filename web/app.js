@@ -1,4 +1,4 @@
-import { merge, featured, groups, webPlayback, findChannel, streamExpiry, explainStreamError } from './catalog.js';
+import { merge, featured, groups, webPlayback, findChannel, streamExpiry, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
 
 const view = document.getElementById('view');
@@ -256,7 +256,22 @@ function playSource(c, index) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, index + 1);
     } else {
-      const reason = data ? explainStreamError({ details: data.details, code: data.response && data.response.code }) : 'No se pudo reproducir esta emisión en el navegador.';
+      // A fatal network error is no longer a buffering state. Keep the failure
+      // visible and stop outstanding requests until the user retries.
+      if (hls) hls.stopLoad();
+      video.pause();
+      player.classList.remove('is-buffering');
+      const failure = {
+        details: data?.details || '',
+        code: data?.response?.code || 0,
+        url: data?.url || data?.frag?.url || source.url,
+        expiry: source.expiry,
+      };
+      const reason = data ? explainStreamError(failure) : 'No se pudo reproducir esta emisión en el navegador.';
+      const report = streamFailureReport(failure);
+      const diagnosis = el('details', {}, el('summary', {}, 'Ver detalle del fallo'),
+        el('p', {}, `${report.stage} · ${report.code ? `HTTP ${report.code}` : 'Sin respuesta HTTP'}${report.host ? ` · ${report.host}` : ''}`),
+        report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
         // Firebase may have delivered fresh URLs since playback began.
         const latest = state.channels.find((item) => item.id === c.id) || c;
@@ -278,6 +293,7 @@ function playSource(c, index) {
         ' ',
         direct,
         c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
+        diagnosis,
       );
     }
   };

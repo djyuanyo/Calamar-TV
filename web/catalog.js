@@ -129,13 +129,29 @@ export function streamExpiry(url) {
 }
 
 /** A plain-language reason for a fatal hls.js error. `code` is the HTTP status, 0 or missing when the request never got an answer. */
-export function explainStreamError({ details = '', code = 0 } = {}) {
-  if (code === 401 || code === 403) return 'El servidor rechaza este enlace: no está autorizado o ya caducó.';
+export function explainStreamError({ details = '', code = 0, expiry = null, now = Date.now() } = {}) {
+  if (code === 401 || code === 403) {
+    if (expiry && expiry > now) return `El servidor rechaza la solicitud (HTTP ${code}), aunque el token todavía no ha caducado.`;
+    if (expiry && expiry <= now) return `El enlace ha caducado y el servidor rechaza la solicitud (HTTP ${code}).`;
+    return 'El servidor rechaza este enlace: no está autorizado o ya caducó.';
+  }
   if (code === 404 || code === 410) return 'El enlace ya no existe en el servidor.';
   if (/load/i.test(details)) return 'El servidor del canal no permite cargarlo desde otra web (CORS), no responde o está bloqueado en tu red.';
   if (/parsing/i.test(details)) return 'La emisión no tiene un formato que el navegador entienda.';
   if (/codec|buffer/i.test(details)) return 'El navegador no admite el vídeo de esta emisión.';
   return 'No se pudo reproducir esta emisión en el navegador.';
+}
+
+/** Only non-secret fields are returned; response text and URL queries may contain tokens. */
+export function streamFailureReport({ details = '', code = 0, url = '', expiry = null } = {}) {
+  const stage = /^manifest/i.test(details) ? 'Lista principal'
+    : /^level|^audioTrack|^subtitleTrack/i.test(details) ? 'Lista de vídeo o audio'
+    : /^frag/i.test(details) ? 'Fragmento de vídeo'
+    : /^key/i.test(details) ? 'Clave de la emisión' : 'Reproducción';
+  let host = '';
+  try { host = new URL(url).hostname; } catch { /* No URL is safer than a raw invalid address. */ }
+  return { stage, code: Number.isInteger(code) && code > 0 ? code : null, host,
+    expiresAt: Number.isFinite(expiry) && expiry > 0 ? new Date(expiry).toISOString() : null };
 }
 
 /** How the browser can play a URL: 'hls', 'video', or a reason it needs the app. */

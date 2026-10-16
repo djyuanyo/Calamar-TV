@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { explainStreamError, streamExpiry } from '../web/catalog.js';
+import { explainStreamError, streamExpiry, streamFailureReport } from '../web/catalog.js';
 
 const at = (iso) => Date.parse(iso);
 
@@ -40,4 +40,22 @@ test('errors are explained in plain language', () => {
   assert.match(explainStreamError({ details: 'bufferAddCodecError' }), /no admite/);
   assert.match(explainStreamError({}), /No se pudo reproducir/);
   assert.match(explainStreamError(), /No se pudo reproducir/);
+});
+
+test('a server rejection does not mislabel a still-valid token as expired', () => {
+  const now = at('2026-10-16T06:43:00Z');
+  const expiry = 1792143608 * 1000;
+  assert.match(explainStreamError({ code: 403, expiry, now }), /HTTP 403.*todavía no ha caducado/);
+  assert.match(explainStreamError({ code: 401, expiry, now }), /HTTP 401.*todavía no ha caducado/);
+  assert.match(explainStreamError({ code: 403, expiry, now: expiry + 1 }), /ha caducado/);
+});
+
+test('diagnostic distinguishes failed playlists and fragments without disclosing tokens', () => {
+  const expiry = 1792143608 * 1000;
+  const report = streamFailureReport({ details: 'levelLoadError', code: 403,
+    url: 'https://cdn.example/live/mono.m3u8?token=private-secret', expiry });
+  assert.deepEqual(report, { stage: 'Lista de vídeo o audio', code: 403, host: 'cdn.example', expiresAt: '2026-10-16T09:40:08.000Z' });
+  assert.equal(JSON.stringify(report).includes('private-secret'), false);
+  assert.equal(streamFailureReport({ details: 'fragLoadError' }).stage, 'Fragmento de vídeo');
+  assert.equal(streamFailureReport({ details: 'manifestLoadError', url: 'invalid' }).host, '');
 });
