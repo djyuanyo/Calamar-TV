@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-16T03:15:56.570492+00:00",
-  "total": 350,
+  "updated_at": "2026-10-16T08:21:38.435372+00:00",
+  "total": 353,
   "data": [
     {
       "id": 72388,
@@ -657,7 +657,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Tomás Adolfo Ducó",
       "start_time": "2026-10-16T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -671,7 +671,7 @@
       "league": "Copa Colombia",
       "venue": "Estadio Metropolitano de Techo",
       "start_time": "2026-10-16T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1165,6 +1165,20 @@
       "has_stream": true
     },
     {
+      "id": 99279,
+      "title": "FC Eindhoven vs. Vitesse",
+      "home_team": "FC Eindhoven",
+      "away_team": "Vitesse",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Keuken Kampioen Divisie",
+      "venue": null,
+      "start_time": "2026-10-16T20:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 52429,
       "title": "Leganés vs Córdoba",
       "home_team": "Leganés",
@@ -1229,6 +1243,20 @@
       "away_team_badge": null,
       "sport_category": "Soccer",
       "league": "POLSKA: Betclic 1. Liga",
+      "venue": null,
+      "start_time": "2026-10-16T20:30:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 99280,
+      "title": "Eintracht Frankfurt vs. FC Cologne",
+      "home_team": "Eintracht Frankfurt",
+      "away_team": "FC Cologne",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Bundesliga",
       "venue": null,
       "start_time": "2026-10-16T20:30:00+02:00",
       "status": "scheduled",
@@ -4665,20 +4693,6 @@
       "has_stream": false
     },
     {
-      "id": 99250,
-      "title": "PSG W - OL Lyonnes W",
-      "home_team": "PSG W",
-      "away_team": "OL Lyonnes W",
-      "home_team_badge": null,
-      "away_team_badge": null,
-      "sport_category": "Soccer",
-      "league": "FRANCJA: Premiere Ligue Women",
-      "venue": null,
-      "start_time": "2026-10-17T21:00:00+02:00",
-      "status": "scheduled",
-      "has_stream": true
-    },
-    {
       "id": 99251,
       "title": "Penafiel - Leca",
       "home_team": "Penafiel",
@@ -4703,6 +4717,34 @@
       "league": "HISZPANIA: LaLiga",
       "venue": null,
       "start_time": "2026-10-17T21:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 99281,
+      "title": "Valencia vs. Athletic Club",
+      "home_team": "Valencia",
+      "away_team": "Athletic Club",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "LaLiga",
+      "venue": null,
+      "start_time": "2026-10-17T21:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 99250,
+      "title": "PSG W - OL Lyonnes W",
+      "home_team": "PSG W",
+      "away_team": "OL Lyonnes W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "FRANCJA: Premiere Ligue Women",
+      "venue": null,
+      "start_time": "2026-10-17T21:05:00+02:00",
       "status": "scheduled",
       "has_stream": true
     },
