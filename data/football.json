@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-16T13:22:48.558476+00:00",
+  "updated_at": "2026-10-16T17:33:45.304825+00:00",
   "total": 354,
   "data": [
     {
@@ -727,7 +727,7 @@
       "league": "Australian A-League",
       "venue": "Allianz Stadium Sydney",
       "start_time": "2026-10-16T11:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -769,7 +769,7 @@
       "league": "Chinese Super League",
       "venue": "Zhengzhou Hanghai Stadium",
       "start_time": "2026-10-16T13:35:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -783,7 +783,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Prince Mohamed bin Fahd Stadium",
       "start_time": "2026-10-16T15:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -797,7 +797,7 @@
       "league": "Indian Super League",
       "venue": "Jawaharlal Nehru Stadium",
       "start_time": "2026-10-16T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -811,7 +811,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Prince Turki bin Abdul Aziz Stadium",
       "start_time": "2026-10-16T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -825,7 +825,7 @@
       "league": "Serbian Super Liga",
       "venue": "EFBET Stadion Surdulica",
       "start_time": "2026-10-16T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -839,7 +839,7 @@
       "league": "Rumanía: Superliga",
       "venue": null,
       "start_time": "2026-10-16T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -853,7 +853,7 @@
       "league": "Eslovaquia: 2. liga",
       "venue": null,
       "start_time": "2026-10-16T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -867,7 +867,7 @@
       "league": "Chequia: Segunda División",
       "venue": null,
       "start_time": "2026-10-16T17:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -881,7 +881,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Stadion Miejski im Henryka Reymana",
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -895,7 +895,7 @@
       "league": "Croatian First Football League",
       "venue": "Stadion Kranjčevićeva",
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -909,7 +909,7 @@
       "league": "CAF Champions League",
       "venue": "Kigali Pelé Stadium",
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -923,7 +923,7 @@
       "league": "CAF Champions League",
       "venue": "",
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -937,7 +937,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -951,7 +951,7 @@
       "league": "German 2. Bundesliga",
       "venue": "Holstein-Stadion",
       "start_time": "2026-10-16T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -965,7 +965,7 @@
       "league": "German 2. Bundesliga",
       "venue": "LEAG Energie Stadion",
       "start_time": "2026-10-16T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -979,7 +979,7 @@
       "league": "Danish Superliga",
       "venue": "CASA Arena Horsens",
       "start_time": "2026-10-16T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -993,7 +993,7 @@
       "league": "Swedish Allsvenskan",
       "venue": "Grimsta IP",
       "start_time": "2026-10-16T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1007,7 +1007,7 @@
       "league": "Turkish Super Lig",
       "venue": "Çorum Şehir Stadyumu",
       "start_time": "2026-10-16T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1021,7 +1021,7 @@
       "league": "Spanish Primera Federación Group 2",
       "venue": "Estadio Municipal Cartagonova",
       "start_time": "2026-10-16T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1035,7 +1035,7 @@
       "league": "Austrian Bundesliga",
       "venue": "Allianz Stadion Vienna",
       "start_time": "2026-10-16T19:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
