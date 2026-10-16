@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-15T23:58:21.981997+00:00",
+  "updated_at": "2026-10-16T03:15:56.570492+00:00",
   "total": 350,
   "data": [
     {
@@ -265,7 +265,7 @@
       "league": "EUROPA: Liga Europy - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T18:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -279,7 +279,7 @@
       "league": "EUROPA: Liga Konferencji - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T18:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -293,7 +293,7 @@
       "league": "EUROPA: Liga Europy - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T18:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -307,7 +307,7 @@
       "league": "EUROPA: Liga Konferencji - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T18:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -321,7 +321,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Abdullah Sports City",
       "start_time": "2026-10-15T20:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -601,7 +601,7 @@
       "league": "EUROPA: Liga Europy - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T21:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -629,7 +629,7 @@
       "league": "EUROPA: Liga Konferencji - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-15T21:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -643,7 +643,7 @@
       "league": "ARGENTYNA: Reserve League - Clausura",
       "venue": null,
       "start_time": "2026-10-16T00:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -685,7 +685,7 @@
       "league": "Copa Libertadores",
       "venue": "Estadio Jorge Luis Hirschi",
       "start_time": "2026-10-16T02:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -699,7 +699,7 @@
       "league": "AMERYKA POŁUDNIOWA: Copa Libertadores - Play Offy",
       "venue": null,
       "start_time": "2026-10-16T02:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
