@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-17T05:11:01.477111+00:00",
-  "total": 499,
+  "updated_at": "2026-10-17T09:31:46.556432+00:00",
+  "total": 501,
   "data": [
     {
       "id": 76347,
@@ -699,7 +699,7 @@
       "league": "Japanese J1 League",
       "venue": "IAI Stadium Nihondaira",
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -713,7 +713,7 @@
       "league": "Australian A-League",
       "venue": "Mount Smart Stadium",
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -727,7 +727,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -741,7 +741,7 @@
       "league": "Japanese J1 League",
       "venue": "Fukuda Denshi Arena",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -755,7 +755,7 @@
       "league": "Japanese J1 League",
       "venue": "Edion Peace Wing Hiroshima",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -769,7 +769,7 @@
       "league": "Japanese J1 League",
       "venue": "Ajinomoto Stadium",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -783,7 +783,7 @@
       "league": "Japanese J1 League",
       "venue": "Yanmar Hanasaka Stadium",
       "start_time": "2026-10-17T08:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -797,7 +797,7 @@
       "league": "Japanese J1 League",
       "venue": "Kashima Soccer Stadium",
       "start_time": "2026-10-17T08:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -811,7 +811,7 @@
       "league": "Australian A-League",
       "venue": "Campbelltown Stadium",
       "start_time": "2026-10-17T08:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -825,7 +825,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-17T08:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -839,7 +839,7 @@
       "league": "Japanese J1 League",
       "venue": "K’s Denki Stadium",
       "start_time": "2026-10-17T09:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -853,7 +853,7 @@
       "league": "South Korean K League 1",
       "venue": "Ulsan Munsu Football Stadium",
       "start_time": "2026-10-17T09:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -867,7 +867,7 @@
       "league": "Australian A-League",
       "venue": "Central Coast Stadium",
       "start_time": "2026-10-17T10:40:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -881,7 +881,7 @@
       "league": "Eslovaquia: Orange Liga Women",
       "venue": null,
       "start_time": "2026-10-17T11:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -895,7 +895,7 @@
       "league": "Rumanía: Liga 2",
       "venue": null,
       "start_time": "2026-10-17T11:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -4959,6 +4959,20 @@
       "has_stream": true
     },
     {
+      "id": 99472,
+      "title": "Juventus W - Como 1907 W",
+      "home_team": "Juventus W",
+      "away_team": "Como 1907 W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Italia: Serie A Femenino",
+      "venue": null,
+      "start_time": "2026-10-18T12:30:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 59008,
       "title": "Beijing Guoan vs Qingdao West Coast",
       "home_team": "Beijing Guoan",
@@ -6213,6 +6227,20 @@
       "away_team_badge": null,
       "sport_category": "Soccer",
       "league": "Chipre: Cyprus League",
+      "venue": null,
+      "start_time": "2026-10-18T18:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 99475,
+      "title": "Sporting W - Torreense W",
+      "home_team": "Sporting W",
+      "away_team": "Torreense W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga BPI Women",
       "venue": null,
       "start_time": "2026-10-18T18:00:00+02:00",
       "status": "scheduled",
