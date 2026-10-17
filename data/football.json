@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-17T13:21:06.082682+00:00",
+  "updated_at": "2026-10-17T16:32:18.604112+00:00",
   "total": 502,
   "data": [
     {
@@ -1091,7 +1091,7 @@
       "league": "English Premier League",
       "venue": "Hill Dickinson Stadium",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1105,7 +1105,7 @@
       "league": "English League Championship",
       "venue": "Vicarage Road",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1119,7 +1119,7 @@
       "league": "English League Championship",
       "venue": "The Den",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1133,7 +1133,7 @@
       "league": "English League Championship",
       "venue": "Riverside Stadium",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "English League 1",
       "venue": "Stadium MK",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "English League 1",
       "venue": "Weston Homes Stadium",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1175,7 +1175,7 @@
       "league": "English League 2",
       "venue": "Highbury Stadium",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1189,7 +1189,7 @@
       "league": "English League 2",
       "venue": "The Croud Meadow",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1203,7 +1203,7 @@
       "league": "Indian Super League",
       "venue": "Arjuna Bhogeswar Baruah Sports Complex",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1217,7 +1217,7 @@
       "league": "FA Cup",
       "venue": "Gigg Lane",
       "start_time": "2026-10-17T13:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1231,7 +1231,7 @@
       "league": "Chinese Super League",
       "venue": "Qingdao Youth Football Stadium",
       "start_time": "2026-10-17T13:35:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1245,7 +1245,7 @@
       "league": "Chinese Super League",
       "venue": "Yuxi Plateau Sports Center Stadium",
       "start_time": "2026-10-17T13:35:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1259,7 +1259,7 @@
       "league": "English Womens Super League",
       "venue": "Emirates Stadium",
       "start_time": "2026-10-17T13:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1273,7 +1273,7 @@
       "league": "Spanish La Liga",
       "venue": "RCDE Stadium",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "Spanish La Liga 2",
       "venue": "Campo José Luis Orbegozo",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1301,7 +1301,7 @@
       "league": "Norwegian Eliteserien",
       "venue": "Briskeby Stadion",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1315,7 +1315,7 @@
       "league": "Chinese Super League",
       "venue": "Jinan Olympic Sports Center",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1329,7 +1329,7 @@
       "league": "French Ligue 2",
       "venue": "Stade de la Beaujoire - Louis Fonteneau",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1343,7 +1343,7 @@
       "league": "French Ligue 2",
       "venue": "Stade Saint-Symphorien",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1357,7 +1357,7 @@
       "league": "CAF Champions League",
       "venue": "",
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1371,7 +1371,7 @@
       "league": "España: LaLiga",
       "venue": null,
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1385,7 +1385,7 @@
       "league": "Alemania: Bundesliga - Femenino",
       "venue": null,
       "start_time": "2026-10-17T14:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1399,7 +1399,7 @@
       "league": "Polonia: Betclic 2. Liga",
       "venue": null,
       "start_time": "2026-10-17T14:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1413,7 +1413,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Stadion Yuvileynyy Bucha",
       "start_time": "2026-10-17T14:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1427,7 +1427,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Motor Lublin Arena",
       "start_time": "2026-10-17T14:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1441,7 +1441,7 @@
       "league": "Italian Serie A",
       "venue": "Stadio Pierluigi Penzo",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1455,7 +1455,7 @@
       "league": "Turkish Super Lig",
       "venue": "Eryaman Stadyumu",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1469,7 +1469,7 @@
       "league": "Turkish Super Lig",
       "venue": "Diyarbakır Stadyumu",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1483,7 +1483,7 @@
       "league": "Croatian First Football League",
       "venue": "Stadion Maksimir",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1497,7 +1497,7 @@
       "league": "Serbian Super Liga",
       "venue": "Stadion FK Čukarički",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1511,7 +1511,7 @@
       "league": "Czech First League",
       "venue": "Fortuna Arena",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1525,7 +1525,7 @@
       "league": "Czech First League",
       "venue": "Lokotrans Aréna",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1539,7 +1539,7 @@
       "league": "Czech First League",
       "venue": "CFIG Arena",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1567,7 +1567,7 @@
       "league": "Italian Serie B",
       "venue": "Stadio Ciro Vigorito",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1581,7 +1581,7 @@
       "league": "Italian Serie B",
       "venue": "Stadio Cino e Lillo Del Duca",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1595,7 +1595,7 @@
       "league": "Italian Serie B",
       "venue": "Stadio Euganeo",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1609,7 +1609,7 @@
       "league": "Italian Serie B",
       "venue": "Stadio dei Marmi",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1623,7 +1623,7 @@
       "league": "CAF Champions League",
       "venue": "",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1637,7 +1637,7 @@
       "league": "CAF Champions League",
       "venue": "Stade du TP Mazembe",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1651,7 +1651,7 @@
       "league": "Uruguayan Primera Division",
       "venue": "",
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1665,7 +1665,7 @@
       "league": "Chequia: Primera División Femenina",
       "venue": null,
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1679,7 +1679,7 @@
       "league": "Portugal: Taça de Portugal",
       "venue": null,
       "start_time": "2026-10-17T15:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1693,7 +1693,7 @@
       "league": "German Bundesliga",
       "venue": "Weserstadion",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1707,7 +1707,7 @@
       "league": "German Bundesliga",
       "venue": "VELTINS-Arena",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1721,7 +1721,7 @@
       "league": "German Bundesliga",
       "venue": "Volksparkstadion",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1735,7 +1735,7 @@
       "league": "German Bundesliga",
       "venue": "Stadion An der Alten Försterei",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1749,7 +1749,7 @@
       "league": "German Bundesliga",
       "venue": "Waldstadion Kaiserlinde",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1763,7 +1763,7 @@
       "league": "South African Premier Soccer League",
       "venue": "Sugar Ray Xulu Stadium",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1777,7 +1777,7 @@
       "league": "South African Premier Soccer League",
       "venue": "Nelson Mandela Bay Stadium",
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1791,7 +1791,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1805,7 +1805,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1819,7 +1819,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-17T15:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1833,7 +1833,7 @@
       "league": "English Premier League",
       "venue": "Craven Cottage",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1847,7 +1847,7 @@
       "league": "English Premier League",
       "venue": "Etihad Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1861,7 +1861,7 @@
       "league": "English Premier League",
       "venue": "Brentford Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1875,7 +1875,7 @@
       "league": "English League Championship",
       "venue": "St. Mary's Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1889,7 +1889,7 @@
       "league": "English League Championship",
       "venue": "St Andrew's @ Knighthead Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1903,7 +1903,7 @@
       "league": "English League Championship",
       "venue": "Ashton Gate Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1917,7 +1917,7 @@
       "league": "English League Championship",
       "venue": "The Hawthorns",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1931,7 +1931,7 @@
       "league": "English League Championship",
       "venue": "Pride Park Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1945,7 +1945,7 @@
       "league": "English League Championship",
       "venue": "Carrow Road",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1959,7 +1959,7 @@
       "league": "English League Championship",
       "venue": "Swansea.com Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1973,7 +1973,7 @@
       "league": "English League Championship",
       "venue": "SToK Cae Ras",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1987,7 +1987,7 @@
       "league": "Scottish Premier League",
       "venue": "Easter Road",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2001,7 +2001,7 @@
       "league": "Scottish Premier League",
       "venue": "Rugby Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2015,7 +2015,7 @@
       "league": "Scottish Premier League",
       "venue": "Pittodrie Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2029,7 +2029,7 @@
       "league": "Scottish Premier League",
       "venue": "McDiarmid Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2043,7 +2043,7 @@
       "league": "Norwegian Eliteserien",
       "venue": "Kristiansund Stadion",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2057,7 +2057,7 @@
       "league": "Scottish Championship",
       "venue": "Caledonian Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2071,7 +2071,7 @@
       "league": "Scottish Championship",
       "venue": "Cappielow Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2099,7 +2099,7 @@
       "league": "Scottish Championship",
       "venue": "East End Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2113,7 +2113,7 @@
       "league": "Scottish Championship",
       "venue": "Ochilview Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2127,7 +2127,7 @@
       "league": "English League 1",
       "venue": "King Power Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2141,7 +2141,7 @@
       "league": "English League 1",
       "venue": "The Brick Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2155,7 +2155,7 @@
       "league": "English League 1",
       "venue": "Hillsborough",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2169,7 +2169,7 @@
       "league": "English League 1",
       "venue": "Oakwell",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2183,7 +2183,7 @@
       "league": "English League 1",
       "venue": "University of Bradford Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2197,7 +2197,7 @@
       "league": "English League 1",
       "venue": "Home Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2211,7 +2211,7 @@
       "league": "English League 1",
       "venue": "Adams Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2225,7 +2225,7 @@
       "league": "English League 1",
       "venue": "BetWright Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2239,7 +2239,7 @@
       "league": "English League 1",
       "venue": "Edgeley Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2253,7 +2253,7 @@
       "league": "English League 2",
       "venue": "Boundary Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2267,7 +2267,7 @@
       "league": "English League 2",
       "venue": "Vale Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2281,7 +2281,7 @@
       "league": "English League 2",
       "venue": "The Nigel Eady County Ground",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2295,7 +2295,7 @@
       "league": "English League 2",
       "venue": "Wham Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2309,7 +2309,7 @@
       "league": "English League 2",
       "venue": "JobServe Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2323,7 +2323,7 @@
       "league": "English League 2",
       "venue": "Mornflake Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2337,7 +2337,7 @@
       "league": "English League 2",
       "venue": "Blundell Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2351,7 +2351,7 @@
       "league": "English League 2",
       "venue": "Rodney Parade",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2365,7 +2365,7 @@
       "league": "English League 2",
       "venue": "Prenton Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2379,7 +2379,7 @@
       "league": "English League 2",
       "venue": "Peninsula Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2393,7 +2393,7 @@
       "league": "Greek Super League 1",
       "venue": "Levadia Municipal Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2407,7 +2407,7 @@
       "league": "Indian Super League",
       "venue": "Sree Kanteerava Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2421,7 +2421,7 @@
       "league": "FA Cup",
       "venue": "Roots Hall",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2435,7 +2435,7 @@
       "league": "FA Cup",
       "venue": "The Prestige Group Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2449,7 +2449,7 @@
       "league": "FA Cup",
       "venue": "Brunton Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2463,7 +2463,7 @@
       "league": "FA Cup",
       "venue": "The EBB Stadium at The Recreation Ground",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2477,7 +2477,7 @@
       "league": "FA Cup",
       "venue": "SO Legal Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2491,7 +2491,7 @@
       "league": "FA Cup",
       "venue": "Silverlake Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2505,7 +2505,7 @@
       "league": "FA Cup",
       "venue": "Plainmoor",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2519,7 +2519,7 @@
       "league": "FA Cup",
       "venue": "Crabble Athletic Ground",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2533,7 +2533,7 @@
       "league": "FA Cup",
       "venue": "Meadow Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2547,7 +2547,7 @@
       "league": "FA Cup",
       "venue": "VBS Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2561,7 +2561,7 @@
       "league": "FA Cup",
       "venue": "The Shay",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2575,7 +2575,7 @@
       "league": "FA Cup",
       "venue": "Victory Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2589,7 +2589,7 @@
       "league": "FA Cup",
       "venue": "Aggborough Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2603,7 +2603,7 @@
       "league": "FA Cup",
       "venue": "Fetcham Grove",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2617,7 +2617,7 @@
       "league": "FA Cup",
       "venue": "J Davidson Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2631,7 +2631,7 @@
       "league": "FA Cup",
       "venue": "The Meadow",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2645,7 +2645,7 @@
       "league": "FA Cup",
       "venue": "Honeycroft",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2659,7 +2659,7 @@
       "league": "FA Cup",
       "venue": "The Mackoy Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2673,7 +2673,7 @@
       "league": "FA Cup",
       "venue": "Victory Road",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2687,7 +2687,7 @@
       "league": "FA Cup",
       "venue": "The Raymond McEnhill Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2701,7 +2701,7 @@
       "league": "FA Cup",
       "venue": "New Cuthbury",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2715,7 +2715,7 @@
       "league": "FA Cup",
       "venue": "Jakemans Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2729,7 +2729,7 @@
       "league": "FA Cup",
       "venue": "Grosvenor Vale",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2743,7 +2743,7 @@
       "league": "FA Cup",
       "venue": "Bowden Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2757,7 +2757,7 @@
       "league": "FA Cup",
       "venue": "Bolitho Park",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2771,7 +2771,7 @@
       "league": "FA Cup",
       "venue": "The Leasing.com Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2785,7 +2785,7 @@
       "league": "FA Cup",
       "venue": "Gateshead International Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2799,7 +2799,7 @@
       "league": "FA Cup",
       "venue": "Mill Farm Sports Village",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2813,7 +2813,7 @@
       "league": "FA Cup",
       "venue": "The New Eyrie",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -2827,7 +2827,7 @@
       "league": "FA Cup",
       "venue": "Sir Halley Stewart Field",
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2841,7 +2841,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -2855,7 +2855,7 @@
       "league": "Portugal: Liga BPI Women",
       "venue": null,
       "start_time": "2026-10-17T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -2869,7 +2869,7 @@
       "league": "Spanish La Liga",
       "venue": "Estadio de la Cerámica",
       "start_time": "2026-10-17T16:15:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2883,7 +2883,7 @@
       "league": "Spanish La Liga 2",
       "venue": "Estadio Municipal de Ipurúa",
       "start_time": "2026-10-17T16:15:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2897,7 +2897,7 @@
       "league": "Rumanía: Superliga",
       "venue": null,
       "start_time": "2026-10-17T16:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -2911,7 +2911,7 @@
       "league": "Dutch Eredivisie",
       "venue": "Cars Jeans Stadion",
       "start_time": "2026-10-17T16:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2925,7 +2925,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio Anxo Carro",
       "start_time": "2026-10-17T16:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2939,7 +2939,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio de Lasesarre",
       "start_time": "2026-10-17T16:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -2953,7 +2953,7 @@
       "league": "Spanish Liga F",
       "venue": "Instalaciones de Lezama Campo 2",
       "start_time": "2026-10-17T16:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2967,7 +2967,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Arena Lviv",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2981,7 +2981,7 @@
       "league": "Russian Football Premier League",
       "venue": "Lukoil Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2995,7 +2995,7 @@
       "league": "Russian Football Premier League",
       "venue": "Gazprom Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3009,7 +3009,7 @@
       "league": "Russian Football Premier League",
       "venue": "RZD Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3037,7 +3037,7 @@
       "league": "Russian Football Premier League",
       "venue": "VTB Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3051,7 +3051,7 @@
       "league": "Russian Football Premier League",
       "venue": "Rostec Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3065,7 +3065,7 @@
       "league": "Russian Football Premier League",
       "venue": "Anzhi Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -3079,7 +3079,7 @@
       "league": "Russian Football Premier League",
       "venue": "Sapsan Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3093,7 +3093,7 @@
       "league": "Austrian Bundesliga",
       "venue": "Sun Minimeal Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3107,7 +3107,7 @@
       "league": "Serbian Super Liga",
       "venue": "Stadion Karađorđe",
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3121,7 +3121,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-17T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3135,7 +3135,7 @@
       "league": "French Ligue 1",
       "venue": "Stade de la Meinau",
       "start_time": "2026-10-17T17:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3149,7 +3149,7 @@
       "league": "Italian Serie B",
       "venue": "Stadio Danilo Martelli",
       "start_time": "2026-10-17T17:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3163,7 +3163,7 @@
       "league": "Swedish Allsvenskan",
       "venue": "Strawberry Arena",
       "start_time": "2026-10-17T17:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3177,7 +3177,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Stadion Miejski w Katowicach",
       "start_time": "2026-10-17T17:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3191,7 +3191,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Khalid Sport City Stadium",
       "start_time": "2026-10-17T17:40:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3205,7 +3205,7 @@
       "league": "Italian Serie A",
       "venue": "Stadio Renato Dall'Ara",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3219,7 +3219,7 @@
       "league": "Norwegian Eliteserien",
       "venue": "Viking Stadion",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3233,7 +3233,7 @@
       "league": "Turkish Super Lig",
       "venue": "Chobani Stadyumu",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3247,7 +3247,7 @@
       "league": "Croatian First Football League",
       "venue": "Opus Arena",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3261,7 +3261,7 @@
       "league": "Czech First League",
       "venue": "Andrův stadion",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3275,7 +3275,7 @@
       "league": "South African Premier Soccer League",
       "venue": "Peter Mokaba Stadium",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3289,7 +3289,7 @@
       "league": "Peruvian Primera Division",
       "venue": "Estadio Alberto Gallardo",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3303,7 +3303,7 @@
       "league": "CAF Champions League",
       "venue": "Stade Auguste Denise",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3317,7 +3317,7 @@
       "league": "CAF Champions League",
       "venue": "",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3331,7 +3331,7 @@
       "league": "Uruguayan Primera Division",
       "venue": "Parque Osvaldo Roberto",
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3345,7 +3345,7 @@
       "league": "Portugal: Taça de Portugal",
       "venue": null,
       "start_time": "2026-10-17T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3359,7 +3359,7 @@
       "league": "English Premier League",
       "venue": "St James Park",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3373,7 +3373,7 @@
       "league": "Spanish La Liga",
       "venue": "Estadio de La Cartuja",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3387,7 +3387,7 @@
       "league": "Spanish La Liga 2",
       "venue": "Estadio El Molinón",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3401,7 +3401,7 @@
       "league": "German Bundesliga",
       "venue": "Allianz Arena",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3415,7 +3415,7 @@
       "league": "Greek Super League 1",
       "venue": "Peristeri Stadium",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3429,7 +3429,7 @@
       "league": "Ecuadorian Serie A",
       "venue": "Estadio Federativo Reina del Cisne",
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -3443,7 +3443,7 @@
       "league": "EE. UU.: NWSL Femenino",
       "venue": null,
       "start_time": "2026-10-17T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3457,7 +3457,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio Ruta de la Plata",
       "start_time": "2026-10-17T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3471,7 +3471,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio Francisco de la Hera",
       "start_time": "2026-10-17T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -3485,7 +3485,7 @@
       "league": "Spanish Primera Federación Group 2",
       "venue": "Estadio El Rubial",
       "start_time": "2026-10-17T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
