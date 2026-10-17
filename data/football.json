@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-16T22:54:58.113103+00:00",
+  "updated_at": "2026-10-17T00:54:14.478073+00:00",
   "total": 498,
   "data": [
     {
@@ -55,7 +55,7 @@
       "league": "CAF Champions League",
       "venue": "",
       "start_time": "2026-10-16T18:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -531,7 +531,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Norberto Tito Tomaghello",
       "start_time": "2026-10-17T00:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -545,7 +545,7 @@
       "league": "Uruguayan Primera Division",
       "venue": "",
       "start_time": "2026-10-17T00:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -573,7 +573,7 @@
       "league": "Brazilian Serie B",
       "venue": "Estádio Moisés Lucarelli",
       "start_time": "2026-10-17T00:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -615,7 +615,7 @@
       "league": "Brazilian Serie B",
       "venue": "Ilha do Retiro",
       "start_time": "2026-10-17T01:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -629,7 +629,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Alberto José Armando",
       "start_time": "2026-10-17T02:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -643,7 +643,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Victoria",
       "start_time": "2026-10-17T03:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
