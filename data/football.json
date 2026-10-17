@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-17T00:54:14.478073+00:00",
-  "total": 498,
+  "updated_at": "2026-10-17T05:11:01.477111+00:00",
+  "total": 499,
   "data": [
     {
       "id": 76347,
@@ -195,7 +195,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Abdullah Sports City",
       "start_time": "2026-10-16T20:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -587,7 +587,7 @@
       "league": "Brazilian Serie A",
       "venue": "Estádio José Maria de Campos Maia",
       "start_time": "2026-10-17T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -601,7 +601,7 @@
       "league": "Canadá: Canadian Premier League",
       "venue": null,
       "start_time": "2026-10-17T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -615,7 +615,7 @@
       "league": "Brazilian Serie B",
       "venue": "Ilha do Retiro",
       "start_time": "2026-10-17T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -629,7 +629,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Alberto José Armando",
       "start_time": "2026-10-17T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -643,7 +643,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Victoria",
       "start_time": "2026-10-17T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -657,7 +657,7 @@
       "league": "Canadá: Canadian Premier League",
       "venue": null,
       "start_time": "2026-10-17T04:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -671,7 +671,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Caliente",
       "start_time": "2026-10-17T05:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -685,7 +685,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Azteca",
       "start_time": "2026-10-17T05:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -699,7 +699,7 @@
       "league": "Japanese J1 League",
       "venue": "IAI Stadium Nihondaira",
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -713,7 +713,7 @@
       "league": "Australian A-League",
       "venue": "Mount Smart Stadium",
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -727,7 +727,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-17T06:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -741,7 +741,7 @@
       "league": "Japanese J1 League",
       "venue": "Fukuda Denshi Arena",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -755,7 +755,7 @@
       "league": "Japanese J1 League",
       "venue": "Edion Peace Wing Hiroshima",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -769,7 +769,7 @@
       "league": "Japanese J1 League",
       "venue": "Ajinomoto Stadium",
       "start_time": "2026-10-17T07:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -910,7 +910,7 @@
       "venue": "Stadion Dynamo im Valeriy Lobanovskyi",
       "start_time": "2026-10-17T12:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 78980,
@@ -983,6 +983,20 @@
       "has_stream": true
     },
     {
+      "id": 99455,
+      "title": "Racing Power W - Braga W",
+      "home_team": "Racing Power W",
+      "away_team": "Braga W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga BPI Women",
+      "venue": null,
+      "start_time": "2026-10-17T12:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 61560,
       "title": "Erzurumspor vs Eyüpspor",
       "home_team": "Erzurumspor",
@@ -1008,7 +1022,7 @@
       "venue": "Dalian Suoyuwan Football Stadium",
       "start_time": "2026-10-17T13:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 61143,
@@ -1218,7 +1232,7 @@
       "venue": "Qingdao Youth Football Stadium",
       "start_time": "2026-10-17T13:35:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59005,
@@ -1232,7 +1246,7 @@
       "venue": "Yuxi Plateau Sports Center Stadium",
       "start_time": "2026-10-17T13:35:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 86064,
@@ -1288,7 +1302,7 @@
       "venue": "Briskeby Stadion",
       "start_time": "2026-10-17T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59006,
@@ -1302,7 +1316,7 @@
       "venue": "Jinan Olympic Sports Center",
       "start_time": "2026-10-17T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 80137,
@@ -1400,7 +1414,7 @@
       "venue": "Stadion Yuvileynyy Bucha",
       "start_time": "2026-10-17T14:30:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 76346,
@@ -1862,7 +1876,7 @@
       "venue": "St. Mary's Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56263,
@@ -1876,7 +1890,7 @@
       "venue": "St Andrew's @ Knighthead Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56264,
@@ -1890,7 +1904,7 @@
       "venue": "Ashton Gate Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56266,
@@ -1904,7 +1918,7 @@
       "venue": "The Hawthorns",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56267,
@@ -1918,7 +1932,7 @@
       "venue": "Pride Park Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56269,
@@ -1960,7 +1974,7 @@
       "venue": "SToK Cae Ras",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56741,
@@ -1974,7 +1988,7 @@
       "venue": "Easter Road",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56742,
@@ -1988,7 +2002,7 @@
       "venue": "Rugby Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56743,
@@ -2002,7 +2016,7 @@
       "venue": "Pittodrie Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 56745,
@@ -2016,7 +2030,7 @@
       "venue": "McDiarmid Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58723,
@@ -2030,7 +2044,7 @@
       "venue": "Kristiansund Stadion",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59466,
@@ -2044,7 +2058,7 @@
       "venue": "Caledonian Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59467,
@@ -2058,7 +2072,7 @@
       "venue": "Cappielow Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59468,
@@ -2086,7 +2100,7 @@
       "venue": "East End Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59470,
@@ -2100,7 +2114,7 @@
       "venue": "Ochilview Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59716,
@@ -2114,7 +2128,7 @@
       "venue": "King Power Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59717,
@@ -2128,7 +2142,7 @@
       "venue": "The Brick Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59718,
@@ -2142,7 +2156,7 @@
       "venue": "Hillsborough",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59719,
@@ -2156,7 +2170,7 @@
       "venue": "Oakwell",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59720,
@@ -2170,7 +2184,7 @@
       "venue": "University of Bradford Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59723,
@@ -2184,7 +2198,7 @@
       "venue": "Home Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59724,
@@ -2198,7 +2212,7 @@
       "venue": "Adams Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59725,
@@ -2212,7 +2226,7 @@
       "venue": "BetWright Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59727,
@@ -2226,7 +2240,7 @@
       "venue": "Edgeley Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60269,
@@ -2240,7 +2254,7 @@
       "venue": "Boundary Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60270,
@@ -2254,7 +2268,7 @@
       "venue": "Vale Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60272,
@@ -2268,7 +2282,7 @@
       "venue": "The Nigel Eady County Ground",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60273,
@@ -2282,7 +2296,7 @@
       "venue": "Wham Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60274,
@@ -2296,7 +2310,7 @@
       "venue": "JobServe Community Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60275,
@@ -2310,7 +2324,7 @@
       "venue": "Mornflake Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60276,
@@ -2324,7 +2338,7 @@
       "venue": "Blundell Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60277,
@@ -2338,7 +2352,7 @@
       "venue": "Rodney Parade",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60278,
@@ -2352,7 +2366,7 @@
       "venue": "Prenton Park",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 60279,
@@ -2366,7 +2380,7 @@
       "venue": "Peninsula Stadium",
       "start_time": "2026-10-17T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 75850,
@@ -2954,7 +2968,7 @@
       "venue": "Arena Lviv",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58223,
@@ -2968,7 +2982,7 @@
       "venue": "Lukoil Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58224,
@@ -2982,7 +2996,7 @@
       "venue": "Gazprom Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58225,
@@ -2996,7 +3010,7 @@
       "venue": "RZD Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58226,
@@ -3010,7 +3024,7 @@
       "venue": "Solidarnost Samara Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58227,
@@ -3024,7 +3038,7 @@
       "venue": "VTB Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58228,
@@ -3038,7 +3052,7 @@
       "venue": "Rostec Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58229,
@@ -3052,7 +3066,7 @@
       "venue": "Anzhi Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58230,
@@ -3066,7 +3080,7 @@
       "venue": "Sapsan Arena",
       "start_time": "2026-10-17T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 76169,
@@ -3206,7 +3220,7 @@
       "venue": "Viking Stadion",
       "start_time": "2026-10-17T18:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 61556,
@@ -3654,7 +3668,7 @@
       "venue": "Estadio de la Cerámica",
       "start_time": "2026-10-17T20:30:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 85839,
@@ -4312,7 +4326,7 @@
       "venue": "Yankee Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 99282,
@@ -4704,7 +4718,7 @@
       "venue": "Stadion Hirnyk",
       "start_time": "2026-10-18T12:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 57973,
@@ -4718,7 +4732,7 @@
       "venue": "Tsentralʹnyy Misʹkyy Stadion Polissya",
       "start_time": "2026-10-18T12:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 59007,
@@ -4732,7 +4746,7 @@
       "venue": "Wuhan Sports Center",
       "start_time": "2026-10-18T12:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 68601,
@@ -4760,7 +4774,7 @@
       "venue": "Estadio La Isla",
       "start_time": "2026-10-18T12:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 68981,
@@ -4956,7 +4970,7 @@
       "venue": "Beijing Workers' Stadium",
       "start_time": "2026-10-18T13:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 77005,
@@ -5096,7 +5110,7 @@
       "venue": "Sydbank Park",
       "start_time": "2026-10-18T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 57586,
@@ -5110,7 +5124,7 @@
       "venue": "Lyngby Stadion",
       "start_time": "2026-10-18T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 57843,
@@ -5152,7 +5166,7 @@
       "venue": "SAIC Motor Pudong Arena",
       "start_time": "2026-10-18T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 76818,
@@ -5208,7 +5222,7 @@
       "venue": "Sarpsborg Stadion",
       "start_time": "2026-10-18T14:30:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 76170,
@@ -5600,7 +5614,7 @@
       "venue": "Nature Energy Park",
       "start_time": "2026-10-18T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 68598,
@@ -5838,7 +5852,7 @@
       "venue": "Stadion Ukraina",
       "start_time": "2026-10-18T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58724,
@@ -5852,7 +5866,7 @@
       "venue": "Aker Stadion",
       "start_time": "2026-10-18T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58725,
@@ -5866,7 +5880,7 @@
       "venue": "Sandefjord Arena",
       "start_time": "2026-10-18T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 58728,
@@ -5880,7 +5894,7 @@
       "venue": "Intility Arena",
       "start_time": "2026-10-18T17:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 76171,
@@ -6118,7 +6132,7 @@
       "venue": "Parken",
       "start_time": "2026-10-18T18:00:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 61555,
@@ -6230,7 +6244,7 @@
       "venue": "Nuevo Estadio de La Victoria",
       "start_time": "2026-10-18T18:15:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 68979,
@@ -6370,7 +6384,7 @@
       "venue": "Alfheim Stadion",
       "start_time": "2026-10-18T19:15:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 79773,
