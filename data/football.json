@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-18T06:10:18.312973+00:00",
+  "updated_at": "2026-10-18T11:28:02.558269+00:00",
   "total": 316,
   "data": [
     {
@@ -1427,7 +1427,7 @@
       "league": "Japanese J1 League",
       "venue": "JFE Harenokuni Stadium",
       "start_time": "2026-10-18T06:55:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1441,7 +1441,7 @@
       "league": "South Korean K League 1",
       "venue": "Daejeon World Cup Stadium",
       "start_time": "2026-10-18T07:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1455,7 +1455,7 @@
       "league": "South Korean K League 1",
       "venue": "Jeonju World Cup Stadium",
       "start_time": "2026-10-18T07:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1469,7 +1469,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-18T07:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1483,7 +1483,7 @@
       "league": "Japanese J1 League",
       "venue": "Machida Athletic Stadium",
       "start_time": "2026-10-18T09:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1497,7 +1497,7 @@
       "league": "South Korean K League 1",
       "venue": "Seoul World Cup Stadium",
       "start_time": "2026-10-18T09:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1511,7 +1511,7 @@
       "league": "South Korean K League 1",
       "venue": "Gangneung Stadium",
       "start_time": "2026-10-18T09:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1525,7 +1525,7 @@
       "league": "South Korean K League 1",
       "venue": "Pohang Steel Yard",
       "start_time": "2026-10-18T09:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1539,7 +1539,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Stadion Hirnyk",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1553,7 +1553,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Tsentralʹnyy Misʹkyy Stadion Polissya",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1567,7 +1567,7 @@
       "league": "Chinese Super League",
       "venue": "Wuhan Sports Center",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1581,7 +1581,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio Nuevo Municipal de Gobela",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1595,7 +1595,7 @@
       "league": "Spanish Primera Federación Group 1",
       "venue": "Estadio La Isla",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1609,7 +1609,7 @@
       "league": "Spanish Primera Federación Group 2",
       "venue": "Estadio Alfredo Di Stéfano",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1623,7 +1623,7 @@
       "league": "Spanish Liga F",
       "venue": "Campo José Luis Orbegozo",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1637,7 +1637,7 @@
       "league": "Spanish Liga F",
       "venue": "Ciudad Deportiva José Luis Compañón",
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1651,7 +1651,7 @@
       "league": "Segunda Federación · Grupo 2",
       "venue": null,
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1665,7 +1665,7 @@
       "league": "Portugal: Liga BPI Women",
       "venue": null,
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1679,7 +1679,7 @@
       "league": "España: Liga F Femenino",
       "venue": null,
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1693,7 +1693,7 @@
       "league": "España: Liga F Femenino",
       "venue": null,
       "start_time": "2026-10-18T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1707,7 +1707,7 @@
       "league": "Dutch Eredivisie",
       "venue": "MAC³PARK Stadion",
       "start_time": "2026-10-18T12:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1721,7 +1721,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Stadion im Ernesta Pohla",
       "start_time": "2026-10-18T12:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1735,7 +1735,7 @@
       "league": "Polonia: Ekstraliga Femenino",
       "venue": null,
       "start_time": "2026-10-18T12:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1749,7 +1749,7 @@
       "league": "Italian Serie A",
       "venue": "Bluenergy Stadium",
       "start_time": "2026-10-18T12:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1763,7 +1763,7 @@
       "league": "Turkish Super Lig",
       "venue": "Recep Tayyip Erdoğan Stadyumu",
       "start_time": "2026-10-18T12:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1777,7 +1777,7 @@
       "league": "Rumanía: Liga 2",
       "venue": null,
       "start_time": "2026-10-18T12:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1791,7 +1791,7 @@
       "league": "Italia: Serie A Femenino",
       "venue": null,
       "start_time": "2026-10-18T12:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1805,7 +1805,7 @@
       "league": "Chinese Super League",
       "venue": "Beijing Workers' Stadium",
       "start_time": "2026-10-18T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1819,7 +1819,7 @@
       "league": "Czech First League",
       "venue": "Městský fotbalový stadion Miroslava Valenty",
       "start_time": "2026-10-18T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1833,7 +1833,7 @@
       "league": "English Womens Super League",
       "venue": "Kingsmeadow",
       "start_time": "2026-10-18T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1847,7 +1847,7 @@
       "league": "English Womens Super League",
       "venue": "VBS Community Stadium",
       "start_time": "2026-10-18T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1861,7 +1861,7 @@
       "league": "German 2. Bundesliga",
       "venue": "Rudolf-Harbig-Stadion",
       "start_time": "2026-10-18T13:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1875,7 +1875,7 @@
       "league": "German 2. Bundesliga",
       "venue": "SchücoArena",
       "start_time": "2026-10-18T13:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1889,7 +1889,7 @@
       "league": "German 2. Bundesliga",
       "venue": "BBBank Wildpark",
       "start_time": "2026-10-18T13:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1903,7 +1903,7 @@
       "league": "Indian Super League",
       "venue": "Fatorda Stadium",
       "start_time": "2026-10-18T13:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
