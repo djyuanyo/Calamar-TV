@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-18T01:17:15.987822+00:00",
+  "updated_at": "2026-10-18T06:10:18.312973+00:00",
   "total": 316,
   "data": [
     {
@@ -1049,7 +1049,7 @@
       "league": "Argentina: Liga Profesional - Clausura",
       "venue": null,
       "start_time": "2026-10-18T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1063,7 +1063,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Akron",
       "start_time": "2026-10-18T01:07:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1077,7 +1077,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-18T01:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1091,7 +1091,7 @@
       "league": "American Major League Soccer",
       "venue": "Mercedes-Benz Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1105,7 +1105,7 @@
       "league": "American Major League Soccer",
       "venue": "Sports Illustrated Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1119,7 +1119,7 @@
       "league": "American Major League Soccer",
       "venue": "Inter&Co Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1133,7 +1133,7 @@
       "league": "American Major League Soccer",
       "venue": "Gillette Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "American Major League Soccer",
       "venue": "Yankee Stadium",
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "MLS",
       "venue": null,
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1175,7 +1175,7 @@
       "league": "MLS",
       "venue": null,
       "start_time": "2026-10-18T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1189,7 +1189,7 @@
       "league": "Brazilian Serie A",
       "venue": "Estádio do Morumbi",
       "start_time": "2026-10-18T02:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1203,7 +1203,7 @@
       "league": "American Major League Soccer",
       "venue": "Q2 Stadium",
       "start_time": "2026-10-18T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1217,7 +1217,7 @@
       "league": "American Major League Soccer",
       "venue": "Shell Energy Stadium",
       "start_time": "2026-10-18T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1231,7 +1231,7 @@
       "league": "American Major League Soccer",
       "venue": "Children's Mercy Park",
       "start_time": "2026-10-18T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1245,7 +1245,7 @@
       "league": "EE. UU.: NWSL Femenino",
       "venue": null,
       "start_time": "2026-10-18T02:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1259,7 +1259,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Nemesio Díez",
       "start_time": "2026-10-18T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1273,7 +1273,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio León",
       "start_time": "2026-10-18T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "México: Liga MX - Apertura",
       "venue": null,
       "start_time": "2026-10-18T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1301,7 +1301,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Atanasio Girardot",
       "start_time": "2026-10-18T03:10:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1315,7 +1315,7 @@
       "league": "Colombia: Primera A - Clausura",
       "venue": null,
       "start_time": "2026-10-18T03:10:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1329,7 +1329,7 @@
       "league": "Peruvian Primera Division",
       "venue": "Estadio Alejandro Villanueva",
       "start_time": "2026-10-18T03:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1343,7 +1343,7 @@
       "league": "Australian A-League",
       "venue": "Hnry Stadium",
       "start_time": "2026-10-18T04:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1357,7 +1357,7 @@
       "league": "American Major League Soccer",
       "venue": "Dignity Health Sports Park",
       "start_time": "2026-10-18T04:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1371,7 +1371,7 @@
       "league": "American Major League Soccer",
       "venue": "Lumen Field",
       "start_time": "2026-10-18T04:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1385,7 +1385,7 @@
       "league": "American Major League Soccer",
       "venue": "PayPal Park",
       "start_time": "2026-10-18T04:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1399,7 +1399,7 @@
       "league": "American Major League Soccer",
       "venue": "Providence Park",
       "start_time": "2026-10-18T04:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1413,7 +1413,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Banorte",
       "start_time": "2026-10-18T05:10:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1427,7 +1427,7 @@
       "league": "Japanese J1 League",
       "venue": "JFE Harenokuni Stadium",
       "start_time": "2026-10-18T06:55:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1441,7 +1441,7 @@
       "league": "South Korean K League 1",
       "venue": "Daejeon World Cup Stadium",
       "start_time": "2026-10-18T07:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1455,7 +1455,7 @@
       "league": "South Korean K League 1",
       "venue": "Jeonju World Cup Stadium",
       "start_time": "2026-10-18T07:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1469,7 +1469,7 @@
       "league": "Australia: A-League Femenino",
       "venue": null,
       "start_time": "2026-10-18T07:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
