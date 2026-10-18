@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1792076779156,
+ "updated_at": 1792356447179,
  "channels": [
   {
    "id": "la-1",
@@ -363,9 +363,7 @@
    "region": "",
    "logo": "https://graph.facebook.com/ondacero/picture?width=200&height=200",
    "web": "https://www.ondacero.es",
-   "streams": [
-    "https://atres-live.ondacero.es/h264/live/obs/master.m3u8"
-   ],
+   "streams": [],
    "geo": false
   },
   {
@@ -413,12 +411,12 @@
    "geo": true
   },
   {
-   "id": "gol",
-   "name": "GOL",
+   "id": "replay",
+   "name": "Replay",
    "group": "Deportes",
    "region": "",
-   "logo": "https://graph.facebook.com/goltv.es/picture?width=200&height=200",
-   "web": "https://www.goltelevision.com/en-directo/gol_live",
+   "logo": "https://pbs.twimg.com/profile_images/2104982255642800128/IRiUy9-D_200x200.jpg",
+   "web": "https://replaytv.es/en-directo",
    "streams": [],
    "geo": true
   },
@@ -588,8 +586,8 @@
    "geo": false
   },
   {
-   "id": "villareal-cf-tv",
-   "name": "Villareal CF TV",
+   "id": "villarreal-cf-tv",
+   "name": "Villarreal CF TV",
    "group": "Deportes",
    "region": "",
    "logo": "https://graph.facebook.com/villarrealcf/picture?width=200&height=200",
@@ -1075,7 +1073,7 @@
    "group": "Autonómicos",
    "region": "Andalucía",
    "logo": "https://graph.facebook.com/7TelevisionAndalucia/picture?width=200&height=200",
-   "web": "https://www.7tvandalucia.es/video/granada/granada-7tv-directo/20250723140142001188.html",
+   "web": "https://www.7tvandalucia.es/video/granada/malaga-7tv-directo/20250723140142001188.html",
    "streams": [
     "https://streaming004.gestec-video.com/hls/7TVMALAGA.m3u8"
    ],
@@ -1324,7 +1322,7 @@
    "group": "Autonómicos",
    "region": "Andalucía",
    "logo": "https://yt3.googleusercontent.com/ytc/APkrFKb6DZpbxOMbN_VANCdenLck4ceg7gxMk5tnkjmM=s200",
-   "web": "https://vivaespaña.tv/user/live-tv/ch201-andalucia-cocina/11",
+   "web": "https://xn--vivaespaa-s6a.tv/user/live-tv/ch201-andalucia-cocina/11",
    "streams": [
     "https://cloud.fastchannel.es/mic/manifiest/hls/acocina/acocina.m3u8"
    ],
@@ -1676,7 +1674,7 @@
    "logo": "https://graph.facebook.com/telemotriltv/picture?width=200&height=200",
    "web": "https://telemotril.com/telemotril-en-vivo/",
    "streams": [
-    "https://5940924978228.streamlock.net/8431/8431/playlist.m3u8"
+    "https://video.telemotril.com/telemotril-channel-1/index.m3u8"
    ],
    "geo": false
   },
@@ -2747,8 +2745,8 @@
    "geo": false
   },
   {
-   "id": "junta-castilla-y-leon",
-   "name": "Junta Castilla y León",
+   "id": "junta-de-castilla-y-leon",
+   "name": "Junta de Castilla y León",
    "group": "Autonómicos",
    "region": "Castilla y León",
    "logo": "https://graph.facebook.com/juntadecastillayleon/picture?width=200&height=200",
@@ -3545,7 +3543,7 @@
    "logo": "https://yt3.googleusercontent.com/nMLOOCMI7LojDKtlKoYXJEmVin-_lbR4Y-TgAdQ7RvJvuinOI109sFGIl_HwbqlWn3g7qMDH=s200",
    "web": "https://www.canal33.info",
    "streams": [
-    "https://media2.streambrothers.com:1936/8140/8140/.m3u8"
+    "https://media2.streambrothers.com:1936/8140/8140/playlist.m3u8"
    ],
    "geo": false
   },
@@ -3555,7 +3553,7 @@
    "group": "Autonómicos",
    "region": "C. de Madrid",
    "logo": "https://graph.facebook.com/iprotvspain/picture?width=200&height=200",
-   "web": "https://iprotv.es",
+   "web": "https://iprotv.eu",
    "streams": [
     "https://59ec5453559f0.streamlock.net/iprotv/iprotv/playlist.m3u8"
    ],
@@ -3794,12 +3792,12 @@
    "geo": false
   },
   {
-   "id": "tv-castello",
-   "name": "TV Castelló",
+   "id": "televisio-de-castello",
+   "name": "Televisió de Castelló",
    "group": "Autonómicos",
    "region": "C. Valenciana",
    "logo": "https://graph.facebook.com/TelevisiondeCastellon/picture?width=200&height=200",
-   "web": "https://tvcs.tv/en-directe/",
+   "web": "https://www.tvcs.tv/en-directe/",
    "streams": [],
    "geo": false
   },
@@ -4031,6 +4029,18 @@
    "web": "https://www.canalextremadura.app/videos/182630-canal-video-24h",
    "streams": [
     "https://d2ymuyhevki1a1.cloudfront.net/wct-ddd2992e-86fc-4611-a491-7f392259e9ba/continuous/9be76611-d2cd-474d-bf19-ef702ba31b02/index.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "exn24-extremadura-noticias",
+   "name": "EXN24 (Extremadura Noticias)",
+   "group": "Autonómicos",
+   "region": "Extremadura",
+   "logo": "https://graph.facebook.com/noticiasCEX/picture?width=200&height=200",
+   "web": "https://www.canalextremadura.app/videos/289428-exn24",
+   "streams": [
+    "https://dsdhx5k1zli7y.cloudfront.net/wct-73d928aa-5bc9-408c-97c6-61d898009440/continuous/41fa7b5f-29f3-4b34-8dee-a68fa27a7080/index.m3u8"
    ],
    "geo": false
   },
@@ -4376,6 +4386,16 @@
    "geo": false
   },
   {
+   "id": "cocina-familiar",
+   "name": "Cocina Familiar",
+   "group": "Autonómicos",
+   "region": "La Rioja",
+   "logo": "https://graph.facebook.com/cocinafamiliarjr/picture?width=200&height=200",
+   "web": "https://cocina-familiar.com",
+   "streams": [],
+   "geo": false
+  },
+  {
    "id": "parlamento-de-la-rioja",
    "name": "Parlamento de La Rioja",
    "group": "Autonómicos",
@@ -4386,16 +4406,6 @@
     "https://media.parlamento-larioja.org/live/parlarioja/playlist.m3u8",
     "https://media.parlamento-larioja.org/live/parlarioja_subtitulado/playlist.m3u8"
    ],
-   "geo": false
-  },
-  {
-   "id": "cocina-familiar",
-   "name": "Cocina Familiar",
-   "group": "Autonómicos",
-   "region": "La Rioja",
-   "logo": "https://graph.facebook.com/cocinafamiliarjr/picture?width=200&height=200",
-   "web": "https://cocina-familiar.com",
-   "streams": [],
    "geo": false
   },
   {
@@ -5197,7 +5207,8 @@
    "logo": "https://graph.facebook.com/4FUN.TV/picture?width=200&height=200",
    "web": "https://4fun.tv",
    "streams": [
-    "https://stream.4fun.tv:8888/hls/4f_high/index.m3u8"
+    "https://stream.4fun.tv:8888/hls/4f.m3u8",
+    "https://stream.4fun.tv:8888/sd/4fun.m3u8"
    ],
    "geo": false
   },
