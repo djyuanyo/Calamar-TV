@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-18T22:02:39.748178+00:00",
-  "total": 181,
+  "updated_at": "2026-10-19T00:17:52.601082+00:00",
+  "total": 199,
   "data": [
     {
       "id": 39035,
@@ -141,6 +141,20 @@
       "start_time": "2026-10-18T18:00:00+02:00",
       "status": "finished",
       "has_stream": true
+    },
+    {
+      "id": 100851,
+      "title": "Inter Milano Women vs Parma Women",
+      "home_team": "Inter Milano Women",
+      "away_team": "Parma Women",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/59ms3c1641958694.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/4zxfqo1659401347.png",
+      "sport_category": "Soccer",
+      "league": "Italy Serie A Women",
+      "venue": "Stadio Ernesto Breda",
+      "start_time": "2026-10-18T18:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
     },
     {
       "id": 68602,
@@ -755,7 +769,7 @@
       "league": "Peruvian Primera Division",
       "venue": "Estadio Campeones del 36",
       "start_time": "2026-10-18T22:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -769,7 +783,7 @@
       "league": "American Major League Soccer",
       "venue": "TQL Stadium",
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -783,7 +797,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Jorge Luis Hirschi",
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -797,7 +811,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Antonio Candini",
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -811,7 +825,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Américo Montanini",
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -825,7 +839,7 @@
       "league": "Brazilian Serie B",
       "venue": "Estádio Onésio Brasileiro Alvarenga",
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -839,7 +853,7 @@
       "league": "Argentina: Liga Profesional - Clausura",
       "venue": null,
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -853,7 +867,7 @@
       "league": "EE. UU.: NWSL Femenino",
       "venue": null,
       "start_time": "2026-10-18T23:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -867,7 +881,7 @@
       "league": "Brazilian Serie A",
       "venue": "Arena Fonte Nova",
       "start_time": "2026-10-18T23:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -881,7 +895,7 @@
       "league": "Ecuadorian Serie A",
       "venue": "Estadio Monumental Isidro Romero Carbo",
       "start_time": "2026-10-18T23:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -895,7 +909,7 @@
       "league": "Uruguayan Primera Division",
       "venue": "Estadio Belvedere",
       "start_time": "2026-10-18T23:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -923,7 +937,7 @@
       "league": "Brazilian Serie A",
       "venue": "Estádio Evandro Almeida",
       "start_time": "2026-10-19T00:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -937,7 +951,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Bello Horizonte",
       "start_time": "2026-10-19T01:05:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -951,7 +965,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Julio César Villagra",
       "start_time": "2026-10-19T01:15:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -965,7 +979,7 @@
       "league": "Peruvian Primera Division",
       "venue": "Estadio Inca Garcilaso de la Vega",
       "start_time": "2026-10-19T01:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -979,7 +993,7 @@
       "league": "México: Liga MX Femenino - Apertura",
       "venue": null,
       "start_time": "2026-10-19T02:06:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1655,6 +1669,20 @@
       "has_stream": true
     },
     {
+      "id": 101688,
+      "title": "Dep. Riestra - Union de Santa Fe",
+      "home_team": "Dep. Riestra",
+      "away_team": "Union de Santa Fe",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Argentina: Liga Profesional - Clausura",
+      "venue": null,
+      "start_time": "2026-10-20T02:15:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 77942,
       "title": "Deportivo Pasto vs Alianza de Valledupar",
       "home_team": "Deportivo Pasto",
@@ -1669,6 +1697,34 @@
       "has_stream": false
     },
     {
+      "id": 101689,
+      "title": "Dep. Pasto - Alianza",
+      "home_team": "Dep. Pasto",
+      "away_team": "Alianza",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Colombia: Primera A - Clausura",
+      "venue": null,
+      "start_time": "2026-10-20T03:05:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101690,
+      "title": "Club Leon W - Atlante W",
+      "home_team": "Club Leon W",
+      "away_team": "Atlante W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "México: Liga MX Femenino - Apertura",
+      "venue": null,
+      "start_time": "2026-10-20T03:06:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 81684,
       "title": "FC Porto Juniors vs PSV Eindhoven Youth",
       "home_team": "FC Porto Juniors",
@@ -1680,7 +1736,7 @@
       "venue": "CTFD Porto-Gaia",
       "start_time": "2026-10-20T13:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 81687,
@@ -1694,7 +1750,7 @@
       "venue": "",
       "start_time": "2026-10-20T13:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 81688,
@@ -1708,7 +1764,7 @@
       "venue": "",
       "start_time": "2026-10-20T13:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 81682,
@@ -1722,7 +1778,7 @@
       "venue": "Stadio Giuseppe Piccolo",
       "start_time": "2026-10-20T14:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 81683,
@@ -1753,6 +1809,20 @@
       "has_stream": false
     },
     {
+      "id": 101693,
+      "title": "PSG U19 - Barcelona U19",
+      "home_team": "PSG U19",
+      "away_team": "Barcelona U19",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
+      "venue": null,
+      "start_time": "2026-10-20T14:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 81686,
       "title": "Stuttgart Youth vs Atlético Madrid Juvenil",
       "home_team": "Stuttgart Youth",
@@ -1764,6 +1834,20 @@
       "venue": "WIRmachenDRUCK Arena",
       "start_time": "2026-10-20T15:00:00+02:00",
       "status": "scheduled",
+      "has_stream": false
+    },
+    {
+      "id": 97814,
+      "title": "15 de Agosto vs Simba",
+      "home_team": "15 de Agosto",
+      "away_team": "Simba",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/byxz651759160988.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/52p6sd1790008641.png",
+      "sport_category": "Soccer",
+      "league": "CAF Champions League",
+      "venue": "",
+      "start_time": "2026-10-20T15:00:00+02:00",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1806,7 +1890,7 @@
       "venue": "Liverpool FC Academy",
       "start_time": "2026-10-20T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 81681,
@@ -1820,7 +1904,91 @@
       "venue": "Joie Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
+    },
+    {
+      "id": 101694,
+      "title": "Manchester City U19 - AEK U19",
+      "home_team": "Manchester City U19",
+      "away_team": "AEK U19",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101695,
+      "title": "Academico Viseu U23 - Penafiel U23",
+      "home_team": "Academico Viseu U23",
+      "away_team": "Penafiel U23",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga Next Gen U23",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101696,
+      "title": "Estrela U23 - SC Farense U23",
+      "home_team": "Estrela U23",
+      "away_team": "SC Farense U23",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga Next Gen U23",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101697,
+      "title": "Leiria U23 - Torreense U23",
+      "home_team": "Leiria U23",
+      "away_team": "Torreense U23",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga Next Gen U23",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101698,
+      "title": "Maritimo U23 - Famalicao U23",
+      "home_team": "Maritimo U23",
+      "away_team": "Famalicao U23",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga Next Gen U23",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101699,
+      "title": "Rio Ave U23 - Portimonense U23",
+      "home_team": "Rio Ave U23",
+      "away_team": "Portimonense U23",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Portugal: Liga Next Gen U23",
+      "venue": null,
+      "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
     },
     {
       "id": 67147,
@@ -1851,6 +2019,34 @@
       "has_stream": false
     },
     {
+      "id": 101700,
+      "title": "L. Mikulas - Skalica",
+      "home_team": "L. Mikulas",
+      "away_team": "Skalica",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Eslovaquia: Copa",
+      "venue": null,
+      "start_time": "2026-10-20T17:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101701,
+      "title": "Argentina U17 W - New Zealand U17 W",
+      "home_team": "Argentina U17 W",
+      "away_team": "New Zealand U17 W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Mundial U17 Femenino",
+      "venue": null,
+      "start_time": "2026-10-20T17:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 67142,
       "title": "Al-Taawoun vs Al-Qadsiah",
       "home_team": "Al-Taawoun",
@@ -1860,6 +2056,20 @@
       "sport_category": "Soccer",
       "league": "Saudi-Arabian Pro League",
       "venue": "King Abdullah Sports City Stadium",
+      "start_time": "2026-10-20T17:10:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101702,
+      "title": "Al Taawon - Al Qadsiah",
+      "home_team": "Al Taawon",
+      "away_team": "Al Qadsiah",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Arabia Saudí: Primera División",
+      "venue": null,
       "start_time": "2026-10-20T17:10:00+02:00",
       "status": "scheduled",
       "has_stream": true
@@ -1907,6 +2117,20 @@
       "has_stream": false
     },
     {
+      "id": 101703,
+      "title": "Norrkoping - Orebro",
+      "home_team": "Norrkoping",
+      "away_team": "Orebro",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Suecia: Superettan",
+      "venue": null,
+      "start_time": "2026-10-20T19:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 67141,
       "title": "Al-Ettifaq vs Al-Ittihad",
       "home_team": "Al-Ettifaq",
@@ -1930,6 +2154,20 @@
       "sport_category": "Soccer",
       "league": "Saudi-Arabian Pro League",
       "venue": "King Saud University Stadium",
+      "start_time": "2026-10-20T20:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101704,
+      "title": "Morocco U17 W - Germany U17 W",
+      "home_team": "Morocco U17 W",
+      "away_team": "Germany U17 W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Mundial U17 Femenino",
+      "venue": null,
       "start_time": "2026-10-20T20:00:00+02:00",
       "status": "scheduled",
       "has_stream": true
@@ -2523,6 +2761,20 @@
       "has_stream": true
     },
     {
+      "id": 101705,
+      "title": "Stuttgart - Atl. Madrid",
+      "home_team": "Stuttgart",
+      "away_team": "Atl. Madrid",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Champions League - Faza ligowa",
+      "venue": null,
+      "start_time": "2026-10-20T21:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 77941,
       "title": "Deportivo Pereira vs Boyacá Chicó",
       "home_team": "Deportivo Pereira",
@@ -2534,7 +2786,7 @@
       "venue": "Estadio Hernán Ramírez Villegas",
       "start_time": "2026-10-20T23:30:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     }
   ]
 }
