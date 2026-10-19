@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1792356447179,
+ "updated_at": 1792448619330,
  "channels": [
   {
    "id": "la-1",
@@ -256,7 +256,7 @@
    "group": "Informativos",
    "region": "",
    "logo": "https://pbs.twimg.com/profile_images/1405097207339028480/H7nP_7Ti_200x200.jpg",
-   "web": "https://www.rtve.es/play/videos/programa/rne-e102/6982917/",
+   "web": "https://www.rtve.es/play/radio/radio-5/",
    "streams": [
     "https://ztnr.rtve.es/ztnr/6982917.m3u8"
    ],
@@ -464,6 +464,26 @@
    "region": "",
    "logo": "https://graph.facebook.com/aragondeporte/picture?width=200&height=200",
    "web": "https://www.aragonplay.es/watch/live/69f821f4154724838018ad62",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "aragon-deporte-3",
+   "name": "Aragón Deporte 3",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/aragondeporte/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69f821e915eed9200028511b",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "aragon-deporte-4",
+   "name": "Aragón Deporte 4",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/aragondeporte/picture?width=200&height=200",
+   "web": "https://www.aragonplay.es/watch/live/69f821dc3550029e46ebb127",
    "streams": [],
    "geo": false
   },
@@ -1329,18 +1349,6 @@
    "geo": false
   },
   {
-   "id": "andalucia-turismo",
-   "name": "Andalucía Turismo",
-   "group": "Autonómicos",
-   "region": "Andalucía",
-   "logo": "https://yt3.googleusercontent.com/ytc/APkrFKYsl5e6jEIMtXIoTUHvkJqXxDfASrvQP_QFRRww=s200",
-   "web": "https://xn--vivaespaa-s6a.tv/user/live-tv/ch200-andalucia-turismo/12",
-   "streams": [
-    "https://stream-us-east-1.getpublica.com/playlist.m3u8?&network_id=12685&live=1"
-   ],
-   "geo": false
-  },
-  {
    "id": "cordoba-tv",
    "name": "Córdoba TV",
    "group": "Autonómicos",
@@ -2006,16 +2014,6 @@
    "region": "Aragón",
    "logo": "https://graph.facebook.com/AragonPlayTV/picture?width=200&height=200",
    "web": "https://www.aragonplay.es/watch/live/699341cfc03fcc0e33b898c3",
-   "streams": [],
-   "geo": false
-  },
-  {
-   "id": "el-campo-es-nuestro-aragonplay",
-   "name": "El Campo es Nuestro (AragonPlay)",
-   "group": "Autonómicos",
-   "region": "Aragón",
-   "logo": "https://graph.facebook.com/AragonPlayTV/picture?width=200&height=200",
-   "web": "https://www.aragonplay.es/watch/live/6a35c996fe712a63795dc1a3",
    "streams": [],
    "geo": false
   },
@@ -4465,8 +4463,8 @@
    "geo": false
   },
   {
-   "id": "etb1-on",
-   "name": "ETB1 ON",
+   "id": "etb-1-on",
+   "name": "ETB 1 On",
    "group": "Autonómicos",
    "region": "País Vasco",
    "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
@@ -4477,8 +4475,8 @@
    "geo": false
   },
   {
-   "id": "etb2-on",
-   "name": "ETB2 ON",
+   "id": "etb-2-on",
+   "name": "ETB 2 On",
    "group": "Autonómicos",
    "region": "País Vasco",
    "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
@@ -4824,7 +4822,7 @@
    "group": "Música",
    "region": "",
    "logo": "https://graph.facebook.com/radio3/picture?width=200&height=200",
-   "web": "https://www.rtve.es/play/radio/",
+   "web": "https://www.rtve.es/play/videos/directo/radio-3-webcam/53522/",
    "streams": [
     "https://ztnr.rtve.es/ztnr/6982918.m3u8"
    ],
@@ -5213,8 +5211,8 @@
    "geo": false
   },
   {
-   "id": "number1-fm-turquia",
-   "name": "Number1 FM Turquía",
+   "id": "number1-tv-turquia",
+   "name": "Number1 TV Turquía",
    "group": "Música",
    "region": "",
    "logo": "https://graph.facebook.com/Number1FM/picture?width=200&height=200",
@@ -5269,8 +5267,8 @@
    "geo": false
   },
   {
-   "id": "sky-folk-macedonia",
-   "name": "Sky Folk Macedonia",
+   "id": "sky-folk-macedonia-del-norte",
+   "name": "Sky Folk Macedonia del Norte",
    "group": "Música",
    "region": "",
    "logo": "https://graph.facebook.com/skyfolk.mk/picture?width=200&height=200",
