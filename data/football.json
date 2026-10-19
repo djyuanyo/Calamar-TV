@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-19T17:15:16.769420+00:00",
+  "updated_at": "2026-10-19T21:37:32.745492+00:00",
   "total": 201,
   "data": [
     {
@@ -616,7 +616,7 @@
       "venue": "Groupama Stadium",
       "start_time": "2026-10-18T20:45:00+02:00",
       "status": "finished",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 99424,
@@ -1133,7 +1133,7 @@
       "league": "Chipre: Cyprus League",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "Rumanía: Superliga",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "Eslovaquia: 2. liga",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1175,7 +1175,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1189,7 +1189,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1231,7 +1231,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-19T18:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1245,7 +1245,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T18:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1259,7 +1259,7 @@
       "league": "Italian Serie A",
       "venue": "U-Power Stadium",
       "start_time": "2026-10-19T18:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1273,7 +1273,7 @@
       "league": "Danish Superliga",
       "venue": "Energi Viborg Arena",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "Swedish Allsvenskan",
       "venue": "Stora Valla",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1301,7 +1301,7 @@
       "league": "Turkish Super Lig",
       "venue": "Papara Park",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1315,7 +1315,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Orlen Stadion",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1329,7 +1329,7 @@
       "league": "Egyptian Premier League",
       "venue": "Suez Stadium",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1343,7 +1343,7 @@
       "league": "Egyptian Premier League",
       "venue": "Petrosport Stadium",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1357,7 +1357,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Kingdom Arena",
       "start_time": "2026-10-19T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1371,7 +1371,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Al-Shabab Club Stadium",
       "start_time": "2026-10-19T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1385,7 +1385,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1399,7 +1399,7 @@
       "league": "Rumanía: Superliga",
       "venue": null,
       "start_time": "2026-10-19T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1413,7 +1413,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-19T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1427,7 +1427,7 @@
       "league": "Spanish La Liga 2",
       "venue": "Municipal de Barreiro",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1441,7 +1441,7 @@
       "league": "Italian Serie C Girone A",
       "venue": "Stadio Pier Cesare Tombolato",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1455,7 +1455,7 @@
       "league": "Italian Serie C Girone A",
       "venue": "Stadio Città di Gorgonzola",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1469,7 +1469,7 @@
       "league": "Italian Serie C Girone A",
       "venue": "Stadio Giuseppe Moccagatta",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1483,7 +1483,7 @@
       "league": "Italian Serie C Girone A",
       "venue": "Stadio Comunale Omero Tognon",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1497,7 +1497,7 @@
       "league": "Italian Serie C Girone C",
       "venue": "Stadio Comunale Alberto De Cristofaro",
       "start_time": "2026-10-19T20:30:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1511,7 +1511,7 @@
       "league": "Italian Serie A",
       "venue": "Stadio Ennio Tardini",
       "start_time": "2026-10-19T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1525,7 +1525,7 @@
       "league": "French Ligue 2",
       "venue": "Stade Paul Lignon",
       "start_time": "2026-10-19T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1539,7 +1539,7 @@
       "league": "English Premier League",
       "venue": "Tottenham Hotspur Stadium",
       "start_time": "2026-10-19T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1553,7 +1553,7 @@
       "league": "Spanish La Liga",
       "venue": "Estadio Coliseum",
       "start_time": "2026-10-19T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1581,7 +1581,7 @@
       "league": "Ecuadorian Serie A",
       "venue": "Estadio COAC Mushuc Runa",
       "start_time": "2026-10-19T22:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -2100,7 +2100,7 @@
       "venue": "Chobani Stadyumu",
       "start_time": "2026-10-20T18:45:00+02:00",
       "status": "scheduled",
-      "has_stream": true
+      "has_stream": false
     },
     {
       "id": 72376,
