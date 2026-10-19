@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-19T10:33:18.281487+00:00",
-  "total": 200,
+  "updated_at": "2026-10-19T17:15:16.769420+00:00",
+  "total": 201,
   "data": [
     {
       "id": 39035,
@@ -1063,7 +1063,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Arena Livyi Bereh",
       "start_time": "2026-10-19T12:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1077,7 +1077,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T12:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1091,7 +1091,7 @@
       "league": "Egyptian Premier League",
       "venue": "Khaled Bichara Stadium",
       "start_time": "2026-10-19T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1105,7 +1105,7 @@
       "league": "Indian Super League",
       "venue": "Jawaharlal Nehru Stadium",
       "start_time": "2026-10-19T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1119,7 +1119,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1133,7 +1133,7 @@
       "league": "Chipre: Cyprus League",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "Rumanía: Superliga",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "Eslovaquia: 2. liga",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1175,7 +1175,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1189,7 +1189,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-19T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1203,7 +1203,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Al-Majma'ah Sports City Stadium",
       "start_time": "2026-10-19T17:05:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1217,7 +1217,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Prince Sultan bin Abdulaziz Sports City Stadium",
       "start_time": "2026-10-19T17:20:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1231,7 +1231,7 @@
       "league": "Polonia: Betclic 1. Liga",
       "venue": null,
       "start_time": "2026-10-19T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1245,7 +1245,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T18:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1259,7 +1259,7 @@
       "league": "Italian Serie A",
       "venue": "U-Power Stadium",
       "start_time": "2026-10-19T18:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1273,7 +1273,7 @@
       "league": "Danish Superliga",
       "venue": "Energi Viborg Arena",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "Swedish Allsvenskan",
       "venue": "Stora Valla",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1301,7 +1301,7 @@
       "league": "Turkish Super Lig",
       "venue": "Papara Park",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1315,7 +1315,7 @@
       "league": "Polish Ekstraklasa",
       "venue": "Orlen Stadion",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1329,7 +1329,7 @@
       "league": "Egyptian Premier League",
       "venue": "Suez Stadium",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1343,7 +1343,7 @@
       "league": "Egyptian Premier League",
       "venue": "Petrosport Stadium",
       "start_time": "2026-10-19T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1809,6 +1809,20 @@
       "has_stream": false
     },
     {
+      "id": 101693,
+      "title": "PSG U19 - Barcelona U19",
+      "home_team": "PSG U19",
+      "away_team": "Barcelona U19",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
+      "venue": null,
+      "start_time": "2026-10-20T14:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 81686,
       "title": "Stuttgart Youth vs Atlético Madrid Juvenil",
       "home_team": "Stuttgart Youth",
@@ -1973,6 +1987,20 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101744,
+      "title": "FC ASA Tg. Mures - Chindia Targoviste",
+      "home_team": "FC ASA Tg. Mures",
+      "away_team": "Chindia Targoviste",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Rumanía: Liga 2",
+      "venue": null,
+      "start_time": "2026-10-20T16:30:00+02:00",
       "status": "scheduled",
       "has_stream": true
     },
@@ -2756,20 +2784,6 @@
       "sport_category": "Soccer",
       "league": "UEFA Champions League",
       "venue": "Stadio Olimpico",
-      "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
-      "has_stream": true
-    },
-    {
-      "id": 101693,
-      "title": "PSG - Barcelona",
-      "home_team": "PSG",
-      "away_team": "Barcelona",
-      "home_team_badge": null,
-      "away_team_badge": null,
-      "sport_category": "Soccer",
-      "league": "Europa: Champions League - Faza ligowa",
-      "venue": null,
       "start_time": "2026-10-20T21:00:00+02:00",
       "status": "scheduled",
       "has_stream": true
