@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-19T00:17:52.601082+00:00",
-  "total": 199,
+  "updated_at": "2026-10-19T04:59:14.742019+00:00",
+  "total": 200,
   "data": [
     {
       "id": 39035,
@@ -937,7 +937,7 @@
       "league": "Brazilian Serie A",
       "venue": "Estádio Evandro Almeida",
       "start_time": "2026-10-19T00:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -951,7 +951,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Bello Horizonte",
       "start_time": "2026-10-19T01:05:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -965,7 +965,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Julio César Villagra",
       "start_time": "2026-10-19T01:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -979,7 +979,7 @@
       "league": "Peruvian Primera Division",
       "venue": "Estadio Inca Garcilaso de la Vega",
       "start_time": "2026-10-19T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -993,7 +993,7 @@
       "league": "México: Liga MX Femenino - Apertura",
       "venue": null,
       "start_time": "2026-10-19T02:06:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1007,7 +1007,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio BBVA",
       "start_time": "2026-10-19T03:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1021,7 +1021,7 @@
       "league": "México: Liga MX Femenino - Apertura",
       "venue": null,
       "start_time": "2026-10-19T03:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1035,7 +1035,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Deportivo Cali",
       "start_time": "2026-10-19T03:10:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1049,7 +1049,7 @@
       "league": "Colombia: Primera A - Clausura",
       "venue": null,
       "start_time": "2026-10-19T03:10:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2098,6 +2098,20 @@
       "sport_category": "Soccer",
       "league": "UEFA Champions League",
       "venue": "Bank Respublika Arena",
+      "start_time": "2026-10-20T18:45:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101713,
+      "title": "Sabah FK vs. Borussia Dortmund",
+      "home_team": "Sabah FK",
+      "away_team": "Borussia Dortmund",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Champions League",
+      "venue": null,
       "start_time": "2026-10-20T18:45:00+02:00",
       "status": "scheduled",
       "has_stream": true
