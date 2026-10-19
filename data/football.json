@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-19T04:59:14.742019+00:00",
+  "updated_at": "2026-10-19T10:33:18.281487+00:00",
   "total": 200,
   "data": [
     {
@@ -1063,7 +1063,7 @@
       "league": "Ukrainian Premier League",
       "venue": "Arena Livyi Bereh",
       "start_time": "2026-10-19T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1077,7 +1077,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-19T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1274,7 +1274,7 @@
       "venue": "Energi Viborg Arena",
       "start_time": "2026-10-19T19:00:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 57840,
@@ -1807,20 +1807,6 @@
       "start_time": "2026-10-20T14:00:00+02:00",
       "status": "scheduled",
       "has_stream": false
-    },
-    {
-      "id": 101693,
-      "title": "PSG U19 - Barcelona U19",
-      "home_team": "PSG U19",
-      "away_team": "Barcelona U19",
-      "home_team_badge": null,
-      "away_team_badge": null,
-      "sport_category": "Soccer",
-      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
-      "venue": null,
-      "start_time": "2026-10-20T14:00:00+02:00",
-      "status": "scheduled",
-      "has_stream": true
     },
     {
       "id": 81686,
@@ -2770,6 +2756,20 @@
       "sport_category": "Soccer",
       "league": "UEFA Champions League",
       "venue": "Stadio Olimpico",
+      "start_time": "2026-10-20T21:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101693,
+      "title": "PSG - Barcelona",
+      "home_team": "PSG",
+      "away_team": "Barcelona",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Champions League - Faza ligowa",
+      "venue": null,
       "start_time": "2026-10-20T21:00:00+02:00",
       "status": "scheduled",
       "has_stream": true
