@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-20T05:32:27.592170+00:00",
-  "total": 171,
+  "updated_at": "2026-10-20T10:37:50.595387+00:00",
+  "total": 173,
   "data": [
     {
       "id": 99554,
@@ -563,6 +563,20 @@
       "has_stream": true
     },
     {
+      "id": 101860,
+      "title": "FC Porto U19 - PSV U19",
+      "home_team": "FC Porto U19",
+      "away_team": "PSV U19",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
+      "venue": null,
+      "start_time": "2026-10-20T13:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 81682,
       "title": "Napoli Primavera vs Bodø/Glimt Youth",
       "home_team": "Napoli Primavera",
@@ -833,6 +847,20 @@
       "title": "Argentina U17 W - New Zealand U17 W",
       "home_team": "Argentina U17 W",
       "away_team": "New Zealand U17 W",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Mundial U17 Femenino",
+      "venue": null,
+      "start_time": "2026-10-20T17:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101859,
+      "title": "North Korea U17 W - Poland U17 W",
+      "home_team": "North Korea U17 W",
+      "away_team": "Poland U17 W",
       "home_team_badge": null,
       "away_team_badge": null,
       "sport_category": "Soccer",
