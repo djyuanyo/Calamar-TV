@@ -136,6 +136,8 @@ public final class NativePlayerActivity extends Activity {
             playDirect();
           });
       if (directUrls.size() > 1) button(controls, "Fuentes", this::chooseSource);
+      button(controls, "Modo nativo", this::playDirect);
+      button(controls, "Modo web", this::openDirectWeb);
     } else {
       button(
           controls,
@@ -148,6 +150,7 @@ public final class NativePlayerActivity extends Activity {
       button(controls, "Modo web", this::openWeb);
       button(controls, "Chrome / navegador", this::openBrowser);
     }
+    button(controls, "Pantalla completa", () -> setFullscreen(!fullscreen));
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
     scroll.addView(controls);
@@ -290,12 +293,15 @@ public final class NativePlayerActivity extends Activity {
   protected void onStart() {
     super.onStart();
     active = true;
-    if (directUrl != null) playDirect();
+    if (directUrl != null && webMode) openDirectWeb();
+    else if (directUrl != null) playDirect();
     else if (pageUrl != null) resolveFresh();
   }
 
   private void playDirect() {
     if (!active) return;
+    webMode = false;
+    clearWeb();
     handler.removeCallbacks(renewalRequest);
     sources.clear();
     String name = title == null ? "Mi canal" : title;
@@ -426,9 +432,27 @@ public final class NativePlayerActivity extends Activity {
           @Override
           public void onPlayerError(PlaybackException error) {
             if (instance != player || !active) return;
-            lastReport +=
-                "\nVídeo: " + error.getErrorCodeName() + " · " + ConnectionReport.describe(error);
-            problem("No se pudo reproducir (" + error.getErrorCodeName() + ").");
+            String detail = ConnectionReport.describe(error);
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+              if (cause
+                  instanceof
+                  androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+                detail =
+                    "HTTP "
+                        + ((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)
+                                cause)
+                            .responseCode;
+                break;
+              }
+            }
+            lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
+            if (directUrl != null && BrowserPlayback.supports(source.url)) {
+              openDirectWeb();
+              status.setText(
+                  "La reproducción nativa falló (" + detail + "). Probando el reproductor web…");
+              return;
+            }
+            problem("No se pudo reproducir (" + error.getErrorCodeName() + " · " + detail + ").");
             refreshAutomatically("Reconectando con una fuente vigente…");
           }
         });
@@ -489,7 +513,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
-    return "Calamar TV 2.2.0\nAndroid API "
+    return "Calamar TV 2.2.1\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
@@ -579,7 +603,8 @@ public final class NativePlayerActivity extends Activity {
             (dialog, index) -> {
               selection = index;
               automaticAttempts = 0;
-              playSource(sources.get(index));
+              if (directUrl != null && webMode) openDirectWeb();
+              else playSource(sources.get(index));
               dialog.dismiss();
             })
         .setNegativeButton("Cerrar", null)
@@ -644,6 +669,63 @@ public final class NativePlayerActivity extends Activity {
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText("Modo web · Pulsa ▶ para detectar el vídeo.");
     browser.loadUrl(pageUrl);
+    browser.requestFocus();
+  }
+
+  /** Keep HLS inside Chromium. Do not detect it and send it back to the failed native engine. */
+  private void openDirectWeb() {
+    if (!active || directUrls.isEmpty()) return;
+    String address = directUrls.get(selection);
+    if (!BrowserPlayback.supports(address)) {
+      problem(
+          "El modo web admite enlaces HLS (.m3u8) por HTTPS. Usa Modo nativo para esta fuente.");
+      return;
+    }
+    generation++;
+    resolving = false;
+    diagnosing = false;
+    handler.removeCallbacks(renewal);
+    handler.removeCallbacks(renewalRequest);
+    releasePlayer();
+    clearWeb();
+    webMode = true;
+    playerView.setVisibility(View.GONE);
+    browser = new WebView(this);
+    browser.getSettings().setJavaScriptEnabled(true);
+    browser.getSettings().setDomStorageEnabled(true);
+    browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
+    browser.getSettings().setAllowFileAccess(false);
+    browser.getSettings().setAllowContentAccess(false);
+    final int request = generation;
+    browser.setWebViewClient(
+        new WebViewClient() {
+          @Override
+          public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            // This player has no navigation; media requests use the browser's normal network stack.
+            return true;
+          }
+
+          @Override
+          public void onPageFinished(WebView view, String url) {
+            if (active && webMode && generation == request && browser == view)
+              status.setText(
+                  "Reproductor web · Si no empieza, pulsa Reproducir. Atrás sale de pantalla"
+                      + " completa.");
+          }
+
+          @Override
+          public void onReceivedError(
+              WebView view,
+              android.webkit.WebResourceRequest resource,
+              android.webkit.WebResourceError error) {
+            if (resource.isForMainFrame() && active && generation == request && browser == view)
+              problem(
+                  "No se pudo cargar el reproductor web. Comprueba la conexión y pulsa Modo web.");
+          }
+        });
+    stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
+    status.setText("Abriendo el reproductor web integrado…");
+    browser.loadUrl(BrowserPlayback.page(address));
     browser.requestFocus();
   }
 
