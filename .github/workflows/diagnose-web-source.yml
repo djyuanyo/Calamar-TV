@@ -3,7 +3,6 @@ on:
   push:
     branches: ['diagnose/gate4-web-20261020']
     paths: ['.github/workflows/diagnose-web-source.yml']
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -11,70 +10,61 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Comparar respuestas HLS del catalogo publico
+      - name: Preparar prueba de navegador
+        run: npm install --prefix "$RUNNER_TEMP/hls-probe" --ignore-scripts --no-audit --no-fund playwright@1.56.1
+      - name: Observar la reproduccion de la web publica en Chrome
         shell: bash
         run: |
-          python - <<'PY'
-          import json, urllib.request, urllib.parse, urllib.error, datetime
-          catalog_url = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
-          origin = 'https://djyuanyo.github.io'
-          def read(url, origin_value=None, limit=524288, referer_value=None):
-              headers = {'User-Agent': 'CalamarTV-Diagnostics/1.0'}
-              if origin_value:
-                  headers['Origin'] = origin_value
-              if referer_value:
-                  headers['Referer'] = referer_value
-              try:
-                  with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10) as response:
-                      body = response.read(limit)
-                      meta = {'http': response.status,
-                              'host': urllib.parse.urlparse(response.url).hostname,
-                              'acao': response.headers.get('Access-Control-Allow-Origin'),
-                              'content_type': response.headers.get('Content-Type'),
-                              'bytes_read': len(body)}
-                      return meta, body, response.url
-              except urllib.error.HTTPError as error:
-                  return {'http': error.code, 'acao': error.headers.get('Access-Control-Allow-Origin')}, b'', url
-              except Exception as error:
-                  return {'error': type(error).__name__}, b'', url
-          metadata, body, _ = read(catalog_url)
-          if metadata.get('http') != 200:
-              print('CATALOG', json.dumps(metadata))
-              raise SystemExit(0)
-          doc = json.loads(body)
-          catalog = json.loads(doc['fields']['json']['stringValue'])
-          links = []
-          for channel in catalog.get('channels', []):
-              for address in channel.get('streams', []):
-                  parsed = urllib.parse.urlparse(address)
-                  if parsed.scheme == 'https' and parsed.hostname == 'gate4.st' and parsed.path == '/live3/TR4/index.m3u8' and not parsed.username:
-                      links.append(address)
-          if not links:
-              print('RESULT no_matching_public_source')
-              raise SystemExit(0)
-          address = links[-1]
-          expiry = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get('e', [None])[0]
-          print('SOURCE', json.dumps({'host': 'gate4.st', 'expiry_epoch': expiry, 'matches_supplied_expiry': expiry == '1792534703'}))
-          for label, request_origin, request_referer in [('without_origin', None, None), ('web_origin', origin, None), ('web_referer', origin, origin + '/')]:
-              meta, body, final_url = read(address, request_origin, referer_value=request_referer)
-              print(label, 'manifest', json.dumps(meta))
-              if meta.get('http') != 200:
-                  continue
-              text = body.decode('utf-8', 'replace')
-              if not text.startswith('#EXTM3U'):
-                  print(label, 'not_hls')
-                  continue
-              urls = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith('#')]
-              if '#EXT-X-STREAM-INF' in text and urls:
-                  meta, body, final_url = read(urllib.parse.urljoin(final_url, urls[0]), request_origin, referer_value=request_referer)
-                  print(label, 'variant', json.dumps(meta))
-                  if meta.get('http') != 200:
-                      continue
-                  text = body.decode('utf-8', 'replace')
-                  urls = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith('#')]
-              print(label, 'playlist', json.dumps({'has_media_segments': '#EXTINF' in text, 'has_encryption_tag': '#EXT-X-KEY' in text}))
-              if '#EXTINF' in text and urls:
-                  segment = urllib.parse.urljoin(final_url, urls[-1])
-                  meta, _, _ = read(segment, request_origin, 4096, referer_value=request_referer)
-                  print(label, 'segment', json.dumps(meta))
-          PY
+          node <<'JS'
+          const { chromium } = require(process.env.RUNNER_TEMP + '/hls-probe/node_modules/playwright');
+          (async () => {
+            const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+            const page = await browser.newPage();
+            const requests = [];
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname === 'gate4.st') requests.push({
+                stage: url.pathname.endsWith('.m3u8') ? 'playlist' : 'media',
+                status: response.status(),
+                referer: response.request().headers()['referer'] || null
+              });
+            });
+            await page.addInitScript(() => {
+              window.__hlsProbe = { errors: [], codecs: [] };
+              let installed;
+              Object.defineProperty(window, 'Hls', {
+                configurable: true, get: () => installed,
+                set: Hls => {
+                  installed = new Proxy(Hls, { construct(target, args, newTarget) {
+                    const instance = Reflect.construct(target, args, newTarget);
+                    instance.on(Hls.Events.ERROR, (_event, data) => {
+                      window.__hlsProbe.errors.push({ fatal: !!data.fatal, type: data.type, details: data.details, http: data.response?.code || 0, errorType: data.error?.name });
+                    });
+                    instance.on(Hls.Events.BUFFER_CODECS, (_event, tracks) => {
+                      const codecs = {};
+                      for (const [name, track] of Object.entries(tracks)) codecs[name] = { codec: track.codec, levelCodec: track.levelCodec, container: track.container };
+                      window.__hlsProbe.codecs.push(codecs);
+                    });
+                    return instance;
+                  } });
+                }
+              });
+            });
+            await page.goto('https://djyuanyo.github.io/Calamar-TV/?verify=d9ebd7d08cf5#/canal/liga-campeones', { waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(20000);
+            const report = await page.evaluate(() => {
+              const v = document.querySelector('#video');
+              return {
+                referrerPolicy: document.referrerPolicy,
+                hlsVersion: window.Hls?.version,
+                status: document.querySelector('#player-status')?.textContent,
+                video: v ? { readyState: v.readyState, paused: v.paused, time: v.currentTime, error: v.error?.code || 0, width: v.videoWidth, height: v.videoHeight } : null,
+                probe: window.__hlsProbe
+              };
+            });
+            report.requests = requests;
+            console.log('BROWSER_REPORT', JSON.stringify(report));
+            if (!(report.video?.time > 0 && report.video.width > 0)) process.exitCode = 1;
+            await browser.close();
+          })().catch(error => { console.log('BROWSER_PROBE_ERROR', error.name); process.exitCode = 1; });
+          JS
