@@ -9,23 +9,21 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 3
     steps:
-      - name: Preparar analisis de formatos
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: Preparar prueba de navegador
-        run: npm install --prefix "$RUNNER_TEMP/hls-probe" --ignore-scripts --no-audit --no-fund playwright@1.56.1
       - name: Comparar respuestas HLS del catalogo publico
         shell: bash
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.parse, urllib.error, datetime, shutil, subprocess, tempfile, os
+          import json, urllib.request, urllib.parse, urllib.error, datetime
           catalog_url = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
           origin = 'https://djyuanyo.github.io'
-          def read(url, origin_value=None, limit=524288):
+          def read(url, origin_value=None, limit=524288, referer_value=None):
               headers = {'User-Agent': 'CalamarTV-Diagnostics/1.0'}
               if origin_value:
                   headers['Origin'] = origin_value
+              if referer_value:
+                  headers['Referer'] = referer_value
               try:
                   with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10) as response:
                       body = response.read(limit)
@@ -57,8 +55,8 @@ jobs:
           address = links[-1]
           expiry = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get('e', [None])[0]
           print('SOURCE', json.dumps({'host': 'gate4.st', 'expiry_epoch': expiry, 'matches_supplied_expiry': expiry == '1792534703'}))
-          for label, request_origin in [('without_origin', None), ('web_origin', origin)]:
-              meta, body, final_url = read(address, request_origin)
+          for label, request_origin, request_referer in [('without_origin', None, None), ('web_origin', origin, None), ('web_referer', origin, origin + '/')]:
+              meta, body, final_url = read(address, request_origin, referer_value=request_referer)
               print(label, 'manifest', json.dumps(meta))
               if meta.get('http') != 200:
                   continue
@@ -68,7 +66,7 @@ jobs:
                   continue
               urls = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith('#')]
               if '#EXT-X-STREAM-INF' in text and urls:
-                  meta, body, final_url = read(urllib.parse.urljoin(final_url, urls[0]), request_origin)
+                  meta, body, final_url = read(urllib.parse.urljoin(final_url, urls[0]), request_origin, referer_value=request_referer)
                   print(label, 'variant', json.dumps(meta))
                   if meta.get('http') != 200:
                       continue
@@ -77,63 +75,6 @@ jobs:
               print(label, 'playlist', json.dumps({'has_media_segments': '#EXTINF' in text, 'has_encryption_tag': '#EXT-X-KEY' in text}))
               if '#EXTINF' in text and urls:
                   segment = urllib.parse.urljoin(final_url, urls[-1])
-                  meta, sample, _ = read(segment, request_origin, 2097152 if label == 'web_origin' else 4096)
+                  meta, _, _ = read(segment, request_origin, 4096, referer_value=request_referer)
                   print(label, 'segment', json.dumps(meta))
-                  if label == 'web_origin' and meta.get('http') == 200:
-                      if shutil.which('ffprobe'):
-                          fd, sample_path = tempfile.mkstemp(suffix='.ts')
-                          with os.fdopen(fd, 'wb') as out:
-                              out.write(sample)
-                          result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_name,codec_type,profile,pix_fmt,width,height,level', '-of', 'json', sample_path], capture_output=True, text=True, timeout=15)
-                          try:
-                              print('CODECS', json.dumps(json.loads(result.stdout)))
-                          except Exception:
-                              print('CODECS', result.returncode)
-                          os.remove(sample_path)
-                      else:
-                          print('CODECS ffprobe_unavailable')
           PY
-      - name: Observar la reproduccion de la web publica en Chrome
-        shell: bash
-        run: |
-          node <<'JS'
-          const { chromium } = require(process.env.RUNNER_TEMP + '/hls-probe/node_modules/playwright');
-          (async () => {
-            const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
-            const page = await browser.newPage();
-            await page.addInitScript(() => {
-              window.__hlsProbe = { errors: [], codecs: [] };
-              let installed;
-              Object.defineProperty(window, 'Hls', {
-                configurable: true, get: () => installed,
-                set: Hls => {
-                  installed = new Proxy(Hls, { construct(target, args, newTarget) {
-                    const instance = Reflect.construct(target, args, newTarget);
-                    instance.on(Hls.Events.ERROR, (_event, data) => {
-                      window.__hlsProbe.errors.push({ fatal: !!data.fatal, type: data.type, details: data.details, http: data.response?.code || 0, errorType: data.error?.name });
-                    });
-                    instance.on(Hls.Events.BUFFER_CODECS, (_event, tracks) => {
-                      const codecs = {};
-                      for (const [name, track] of Object.entries(tracks)) codecs[name] = { codec: track.codec, levelCodec: track.levelCodec, container: track.container };
-                      window.__hlsProbe.codecs.push(codecs);
-                    });
-                    return instance;
-                  } });
-                }
-              });
-            });
-            await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canal/liga-campeones', { waitUntil: 'domcontentloaded' });
-            await page.waitForTimeout(20000);
-            const report = await page.evaluate(() => {
-              const v = document.querySelector('#video');
-              return {
-                hlsVersion: window.Hls?.version,
-                status: document.querySelector('#player-status')?.textContent,
-                video: v ? { readyState: v.readyState, paused: v.paused, time: v.currentTime, error: v.error?.code || 0, width: v.videoWidth, height: v.videoHeight } : null,
-                probe: window.__hlsProbe
-              };
-            });
-            console.log('BROWSER_REPORT', JSON.stringify(report));
-            await browser.close();
-          })().catch(error => { console.log('BROWSER_PROBE_ERROR', error.name); process.exitCode = 1; });
-          JS
