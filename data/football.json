@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-20T15:28:09.910804+00:00",
-  "total": 186,
+  "updated_at": "2026-10-20T19:29:02.582714+00:00",
+  "total": 187,
   "data": [
     {
       "id": 99554,
@@ -783,7 +783,7 @@
       "league": "Egyptian Premier League",
       "venue": "Asyut Petroleum Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -797,7 +797,7 @@
       "league": "Egyptian Premier League",
       "venue": "Cairo International Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -811,7 +811,7 @@
       "league": "UEFA Youth League",
       "venue": "Liverpool FC Academy",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -825,7 +825,7 @@
       "league": "UEFA Youth League",
       "venue": "Joie Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -839,7 +839,7 @@
       "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -853,7 +853,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -867,7 +867,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -881,7 +881,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -895,7 +895,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -909,7 +909,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -923,7 +923,7 @@
       "league": "Rumanía: Liga 2",
       "venue": null,
       "start_time": "2026-10-20T16:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -937,7 +937,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Prince Turki bin Abdul Aziz Stadium",
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -951,7 +951,7 @@
       "league": "Egyptian Premier League",
       "venue": "Petrosport Stadium",
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -965,7 +965,7 @@
       "league": "Eslovaquia: Copa",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -979,7 +979,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -993,7 +993,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1007,7 +1007,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Abdullah Sports City Stadium",
       "start_time": "2026-10-20T17:10:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1021,7 +1021,7 @@
       "league": "Arabia Saudí: Primera División",
       "venue": null,
       "start_time": "2026-10-20T17:10:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1035,7 +1035,7 @@
       "league": "UEFA Champions League",
       "venue": "Chobani Stadyumu",
       "start_time": "2026-10-20T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1049,7 +1049,7 @@
       "league": "UEFA Champions League",
       "venue": "Bank Respublika Arena",
       "start_time": "2026-10-20T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1063,7 +1063,7 @@
       "league": "Champions League",
       "venue": null,
       "start_time": "2026-10-20T18:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1077,7 +1077,7 @@
       "league": "Egyptian Premier League",
       "venue": "Gehaz El Reyada Stadium",
       "start_time": "2026-10-20T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1091,7 +1091,7 @@
       "league": "Suecia: Superettan",
       "venue": null,
       "start_time": "2026-10-20T19:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1105,7 +1105,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Al-Ettifaq Club Stadium",
       "start_time": "2026-10-20T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1119,7 +1119,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Saud University Stadium",
       "start_time": "2026-10-20T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1133,7 +1133,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-20T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "Champions League",
       "venue": null,
       "start_time": "2026-10-20T20:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "English League Championship",
       "venue": "Molineux Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1175,7 +1175,7 @@
       "league": "English League 1",
       "venue": "Accu Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1189,7 +1189,7 @@
       "league": "English League 1",
       "venue": "Pirelli Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1203,7 +1203,7 @@
       "league": "English League 1",
       "venue": "The Cherry Red Records Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1217,7 +1217,7 @@
       "league": "English League 1",
       "venue": "The Kassam Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1231,7 +1231,7 @@
       "league": "English League 1",
       "venue": "Club Doncaster Sports Village",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1245,7 +1245,7 @@
       "league": "English League 1",
       "venue": "Bloomfield Road",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1259,7 +1259,7 @@
       "league": "English League 1",
       "venue": "Kenilworth Road",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1273,7 +1273,7 @@
       "league": "English League 1",
       "venue": "Lamex Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "English League 1",
       "venue": "Cledara Abbey Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1301,7 +1301,7 @@
       "league": "English League 1",
       "venue": "Meadow Lane",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1315,7 +1315,7 @@
       "league": "English League 1",
       "venue": "Copperjax Community Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1329,7 +1329,7 @@
       "league": "English League 2",
       "venue": "AESSEAL New York Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1343,7 +1343,7 @@
       "league": "English League 2",
       "venue": "Memorial Stadium Bristol",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1357,7 +1357,7 @@
       "league": "English League 2",
       "venue": "Sixfields Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1371,7 +1371,7 @@
       "league": "English League 2",
       "venue": "Crown Oil Arena",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1385,7 +1385,7 @@
       "league": "English League 2",
       "venue": "Pallet-Track Bescot Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1399,7 +1399,7 @@
       "league": "English League 2",
       "venue": "SMH Group Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1413,7 +1413,7 @@
       "league": "English League 2",
       "venue": "Broadfield Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1427,7 +1427,7 @@
       "league": "English League 2",
       "venue": "St James Park Exeter",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1441,7 +1441,7 @@
       "league": "English League 2",
       "venue": "The Hive Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1455,7 +1455,7 @@
       "league": "English League 2",
       "venue": "EV Charger Points Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1469,7 +1469,7 @@
       "league": "English League 2",
       "venue": "LNER Community Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1483,7 +1483,7 @@
       "league": "FA Cup",
       "venue": "Huish Park",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1497,7 +1497,7 @@
       "league": "FA Cup",
       "venue": "The Bolt New Lawn",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1511,7 +1511,7 @@
       "league": "FA Cup",
       "venue": "Exercise Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1525,7 +1525,7 @@
       "league": "FA Cup",
       "venue": "Lye Meadow",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1539,7 +1539,7 @@
       "league": "FA Cup",
       "venue": "Flamingo Park Chislehurst",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1553,7 +1553,7 @@
       "league": "FA Cup",
       "venue": "Marston Road",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1567,7 +1567,7 @@
       "league": "FA Cup",
       "venue": "Broadhurst Park",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1581,7 +1581,7 @@
       "league": "FA Cup",
       "venue": "New Meadow Park",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1595,7 +1595,7 @@
       "league": "FA Cup",
       "venue": "Cropston Road",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1609,7 +1609,7 @@
       "league": "FA Cup",
       "venue": "",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1623,7 +1623,7 @@
       "league": "FA Cup",
       "venue": "County Sports Ground",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1637,7 +1637,7 @@
       "league": "English League 2",
       "venue": "Priestfield Stadium",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1651,7 +1651,7 @@
       "league": "UEFA Champions League",
       "venue": "Anfield",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1665,7 +1665,7 @@
       "league": "UEFA Champions League",
       "venue": "Etihad Stadium",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1679,7 +1679,7 @@
       "league": "UEFA Champions League",
       "venue": "Parc des Princes",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1693,7 +1693,7 @@
       "league": "UEFA Champions League",
       "venue": "MHP Arena",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1707,7 +1707,7 @@
       "league": "UEFA Champions League",
       "venue": "Estádio do Dragão",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1721,7 +1721,7 @@
       "league": "UEFA Champions League",
       "venue": "Stadio Diego Armando Maradona",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1735,7 +1735,7 @@
       "league": "UEFA Champions League",
       "venue": "Stadio Olimpico",
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1763,7 +1763,7 @@
       "league": "Europa: Champions League - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1946,6 +1946,20 @@
       "venue": "Estadio El Campín",
       "start_time": "2026-10-21T03:30:00+02:00",
       "status": "finished",
+      "has_stream": true
+    },
+    {
+      "id": 107310,
+      "title": "Marathon (Hon) - Alianza FC (Sal)",
+      "home_team": "Marathon (Hon)",
+      "away_team": "Alianza FC (Sal)",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "AMERYKA PÓŁNOCNA I CENTRALNA: CONCACAF Central American Cup - Play-in",
+      "venue": null,
+      "start_time": "2026-10-21T04:00:00+02:00",
+      "status": "scheduled",
       "has_stream": true
     },
     {
