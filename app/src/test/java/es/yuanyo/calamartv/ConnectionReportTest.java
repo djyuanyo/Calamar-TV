@@ -6,6 +6,27 @@ import org.junit.Test;
 
 public class ConnectionReportTest {
   @Test
+  public void networkWrapperIncludesUnderlyingFailureWithoutLeakingMessages() {
+    Throwable error =
+        new RuntimeException(
+            "secret-token",
+            new java.io.IOException(
+                "https://video.example/?token=private",
+                new IllegalStateException("private-cookie")));
+    assertEquals(
+        "RuntimeException → IOException → IllegalStateException", ConnectionReport.describe(error));
+    assertFalse(ConnectionReport.describe(error).contains("private"));
+    assertFalse(ConnectionReport.describe(error).contains("secret"));
+  }
+
+  @Test
+  public void protocolFailuresAreIdentifiedWithoutRawMessages() {
+    assertEquals(
+        "Protocolo HTTP: RuntimeException → ProtocolException",
+        ConnectionReport.describe(new RuntimeException(new java.net.ProtocolException("secret"))));
+  }
+
+  @Test
   public void findsUnderlyingDnsFailure() {
     assertEquals(
         "DNS: no se resuelve el servidor",

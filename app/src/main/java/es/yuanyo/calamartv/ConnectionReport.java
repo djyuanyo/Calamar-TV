@@ -1,5 +1,6 @@
 package es.yuanyo.calamartv;
 
+import java.net.ProtocolException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -12,7 +13,11 @@ public final class ConnectionReport {
   private ConnectionReport() {}
 
   public static String describe(Throwable failure) {
-    for (Throwable e = failure; e != null; e = e.getCause()) {
+    StringBuilder chain = new StringBuilder();
+    int depth = 0;
+    for (Throwable e = failure; e != null && depth++ < 8; e = e.getCause()) {
+      if (chain.length() > 0) chain.append(" → ");
+      chain.append(e.getClass().getSimpleName());
       if (e instanceof PlayerDocument.HttpFailure)
         return "HTTP " + ((PlayerDocument.HttpFailure) e).status;
       if (e instanceof UnknownHostException) return "DNS: no se resuelve el servidor";
@@ -24,7 +29,8 @@ public final class ConnectionReport {
       if (e instanceof SocketException
           && message.toLowerCase(java.util.Locale.ROOT).contains("reset"))
         return "Conexión reiniciada (RESET)";
+      if (e instanceof ProtocolException) return "Protocolo HTTP: " + chain;
     }
-    return failure.getClass().getSimpleName();
+    return chain.toString();
   }
 }

@@ -58,6 +58,8 @@ public final class NativePlayerActivity extends Activity {
   private NetworkTransport transport;
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
+  private boolean mediaHttp1;
+  private String mediaProgress = "Sin descargas de vídeo registradas.";
   private String pageUrl, documentUrl, currentUrl = "", title;
 
   /** A user-added media link, played as is without page lookup or renewal. */
@@ -133,10 +135,17 @@ public final class NativePlayerActivity extends Activity {
           "Reintentar",
           () -> {
             automaticAttempts = 0;
+            mediaHttp1 = false;
             playDirect();
           });
       if (directUrls.size() > 1) button(controls, "Fuentes", this::chooseSource);
-      button(controls, "Modo nativo", this::playDirect);
+      button(
+          controls,
+          "Modo nativo",
+          () -> {
+            mediaHttp1 = false;
+            playDirect();
+          });
       button(controls, "Modo web", this::openDirectWeb);
     } else {
       button(
@@ -276,6 +285,7 @@ public final class NativePlayerActivity extends Activity {
             (dialog, index) -> {
               NetworkTransport.select(this, providers[index]);
               transport = NetworkTransport.get(this);
+              mediaHttp1 = false;
               generation++;
               resolving = false;
               automaticAttempts = 0;
@@ -302,6 +312,7 @@ public final class NativePlayerActivity extends Activity {
     if (!active) return;
     webMode = false;
     clearWeb();
+    lastReport = reportHeader();
     handler.removeCallbacks(renewalRequest);
     sources.clear();
     String name = title == null ? "Mi canal" : title;
@@ -404,7 +415,11 @@ public final class NativePlayerActivity extends Activity {
       return;
     }
     releasePlayer();
-    DataSource.Factory http = transport.mediaFactory(directUrl != null ? null : mediaReferer());
+    DataSource.Factory http =
+        transport.mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1);
+    mediaProgress =
+        "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
+    lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
     player =
         new ExoPlayer.Builder(this)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
@@ -418,6 +433,38 @@ public final class NativePlayerActivity extends Activity {
     player.setHandleAudioBecomingNoisy(true);
     playerView.setPlayer(player);
     final ExoPlayer instance = player;
+    player.addAnalyticsListener(
+        new androidx.media3.exoplayer.analytics.AnalyticsListener() {
+          @Override
+          public void onLoadCompleted(
+              EventTime eventTime,
+              androidx.media3.exoplayer.source.LoadEventInfo info,
+              androidx.media3.exoplayer.source.MediaLoadData data) {
+            if (instance != player || !active) return;
+            String phase =
+                data.dataType == androidx.media3.common.C.DATA_TYPE_MANIFEST
+                    ? "Lista HLS"
+                    : "Fragmento/datos";
+            mediaProgress =
+                phase + " descargado · " + info.uri.getHost() + " · " + info.bytesLoaded + " bytes";
+          }
+
+          @Override
+          public void onLoadError(
+              EventTime eventTime,
+              androidx.media3.exoplayer.source.LoadEventInfo info,
+              androidx.media3.exoplayer.source.MediaLoadData data,
+              java.io.IOException error,
+              boolean wasCanceled) {
+            if (instance != player || !active || wasCanceled) return;
+            String phase =
+                data.dataType == androidx.media3.common.C.DATA_TYPE_MANIFEST
+                    ? "Lista HLS"
+                    : "Fragmento/datos";
+            mediaProgress =
+                phase + " falló · " + info.uri.getHost() + " · " + ConnectionReport.describe(error);
+          }
+        });
     player.addListener(
         new Player.Listener() {
           @Override
@@ -446,6 +493,16 @@ public final class NativePlayerActivity extends Activity {
               }
             }
             lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
+            lastReport += "\n" + mediaProgress;
+            if (directUrl != null
+                && BrowserPlayback.supports(source.url)
+                && !mediaHttp1
+                && error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) {
+              mediaHttp1 = true;
+              status.setText("Reintentando la conexión de vídeo con HTTP/1.1…");
+              playSource(source);
+              return;
+            }
             if (directUrl != null && BrowserPlayback.supports(source.url)) {
               openDirectWeb();
               status.setText(
@@ -513,7 +570,7 @@ public final class NativePlayerActivity extends Activity {
 
   private String reportHeader() {
     Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
-    return "Calamar TV 2.2.1\nAndroid API "
+    return "Calamar TV 2.2.2\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
@@ -526,7 +583,19 @@ public final class NativePlayerActivity extends Activity {
     if (diagnosing) return;
     diagnosing = true;
     final int request = generation;
-    final String previous = lastReport;
+    final String previous =
+        lastReport
+            + "\n"
+            + mediaProgress
+            + "\nModo: "
+            + (webMode ? "web" : "nativo")
+            + (player == null
+                ? ""
+                : " · estado "
+                    + player.getPlaybackState()
+                    + " · búfer "
+                    + player.getTotalBufferedDuration()
+                    + " ms");
     status.setText("Comparando la conexión de los motores. Espera unos segundos…");
     worker.execute(
         () -> {

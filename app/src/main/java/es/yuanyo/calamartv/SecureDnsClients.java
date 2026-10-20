@@ -4,11 +4,22 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.Dns;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 import okhttp3.dnsoverhttps.DnsOverHttps;
 
 /** TLS-verified DNS bootstrap independent of the device's resolver. */
 public final class SecureDnsClients {
   private SecureDnsClients() {}
+
+  /** A compatibility retry changes HTTP negotiation only; the selected DNS and TLS stay intact. */
+  public static OkHttpClient forMedia(OkHttpClient client, boolean http1) {
+    return http1
+        ? client
+            .newBuilder()
+            .protocols(java.util.Collections.singletonList(Protocol.HTTP_1_1))
+            .build()
+        : client;
+  }
 
   public static OkHttpClient create(DnsProvider provider) {
     OkHttpClient base =

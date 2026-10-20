@@ -10,6 +10,21 @@ import org.junit.Test;
 
 public class SecureDnsClientsTest {
   @Test
+  public void http1CompatibilityRetryKeepsDnsTlsAndTimeouts() {
+    OkHttpClient original = SecureDnsClients.create(DnsProvider.GOOGLE);
+    OkHttpClient retry = SecureDnsClients.forMedia(original, true);
+    assertEquals(java.util.Collections.singletonList(okhttp3.Protocol.HTTP_1_1), retry.protocols());
+    assertSame(original.dns(), retry.dns());
+    assertSame(original.sslSocketFactory(), retry.sslSocketFactory());
+    assertSame(original.hostnameVerifier(), retry.hostnameVerifier());
+    assertEquals(original.connectTimeoutMillis(), retry.connectTimeoutMillis());
+    assertEquals(original.readTimeoutMillis(), retry.readTimeoutMillis());
+    assertEquals(0, retry.callTimeoutMillis());
+    assertSame(original, SecureDnsClients.forMedia(original, false));
+    assertTrue(original.protocols().contains(okhttp3.Protocol.HTTP_2));
+  }
+
+  @Test
   public void cloudflareBootstrapsWithoutDeviceDns() throws Exception {
     OkHttpClient client = SecureDnsClients.create(DnsProvider.CLOUDFLARE);
     assertTrue(client.dns() instanceof DnsOverHttps);

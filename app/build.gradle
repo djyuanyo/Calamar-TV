@@ -6,8 +6,8 @@ android {
         applicationId 'es.yuanyo.calamartv'
         minSdk 24
         targetSdk 35
-        versionCode 13
-        versionName '2.2.1'
+        versionCode 14
+        versionName '2.2.2'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {

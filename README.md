@@ -98,6 +98,8 @@ El reproductor integrado usa la red y DNS de Android System WebView, conservando
 
 Pruebas: `BrowserPlaybackTest`, `node --test tools/direct_player.test.mjs`. La reproducción de ZicoTV debe comprobarse en el dispositivo con un enlace vigente.
 
+En **2.2.2**, un error de conexión durante la reproducción HLS activa un único reintento con HTTP/1.1 antes de abrir el modo web. Conserva el DNS elegido y la validación TLS. No se aplica este reintento a rechazos HTTP ni errores de decodificación. El diagnóstico incluye la fase de descarga (lista o fragmentos), bytes recibidos, estado del reproductor y la cadena de clases de la excepción, sin mensajes que puedan contener tokens. Que la prueba inicial dé HTTP 200 solo comprueba el acceso a la lista; no confirma la reproducción. La alternativa HTTP/1.1 es una medida de compatibilidad y no demuestra por sí sola la causa del fallo en un dispositivo.
+
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
 
 ## Puesta en marcha

@@ -60,8 +60,13 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
   }
 
   public DataSource.Factory mediaFactory(String referer) {
+    return mediaFactory(referer, false);
+  }
+
+  public DataSource.Factory mediaFactory(String referer, boolean http1) {
     OkHttpDataSource.Factory factory =
-        new OkHttpDataSource.Factory(client).setUserAgent(PlayerDocument.USER_AGENT);
+        new OkHttpDataSource.Factory(SecureDnsClients.forMedia(client, http1))
+            .setUserAgent(PlayerDocument.USER_AGENT);
     if (referer != null && !referer.isEmpty())
       factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
     return factory;
