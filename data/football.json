@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-20T00:48:34.901977+00:00",
+  "updated_at": "2026-10-20T05:32:27.592170+00:00",
   "total": 171,
   "data": [
     {
@@ -433,7 +433,7 @@
       "league": "Brazilian Serie A",
       "venue": "Neo Química Arena",
       "start_time": "2026-10-20T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -447,7 +447,7 @@
       "league": "Uruguayan Primera Division",
       "venue": "Estadio Gran Parque Central",
       "start_time": "2026-10-20T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -461,7 +461,7 @@
       "league": "Argentinian Primera Division",
       "venue": "Estadio Guillermo Laza",
       "start_time": "2026-10-20T02:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -475,7 +475,7 @@
       "league": "Argentina: Liga Profesional - Clausura",
       "venue": null,
       "start_time": "2026-10-20T02:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -489,7 +489,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Departamental Libertad",
       "start_time": "2026-10-20T03:05:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -503,7 +503,7 @@
       "league": "Colombia: Primera A - Clausura",
       "venue": null,
       "start_time": "2026-10-20T03:05:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -517,7 +517,7 @@
       "league": "México: Liga MX Femenino - Apertura",
       "venue": null,
       "start_time": "2026-10-20T03:06:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -603,20 +603,6 @@
       "start_time": "2026-10-20T14:00:00+02:00",
       "status": "scheduled",
       "has_stream": false
-    },
-    {
-      "id": 101693,
-      "title": "PSG U19 - Barcelona U19",
-      "home_team": "PSG U19",
-      "away_team": "Barcelona U19",
-      "home_team_badge": null,
-      "away_team_badge": null,
-      "sport_category": "Soccer",
-      "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
-      "venue": null,
-      "start_time": "2026-10-20T14:00:00+02:00",
-      "status": "scheduled",
-      "has_stream": true
     },
     {
       "id": 81686,
@@ -1580,6 +1566,20 @@
       "sport_category": "Soccer",
       "league": "UEFA Champions League",
       "venue": "Stadio Olimpico",
+      "start_time": "2026-10-20T21:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 101693,
+      "title": "PSG - Barcelona",
+      "home_team": "PSG",
+      "away_team": "Barcelona",
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Europa: Champions League - Faza ligowa",
+      "venue": null,
       "start_time": "2026-10-20T21:00:00+02:00",
       "status": "scheduled",
       "has_stream": true
