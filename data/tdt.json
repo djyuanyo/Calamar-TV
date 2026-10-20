@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1792516343318,
+ "updated_at": 1792532389535,
  "channels": [
   {
    "id": "la-1",
@@ -183,8 +183,8 @@
    "geo": false
   },
   {
-   "id": "rne-para-todos",
-   "name": "RNE para todos",
+   "id": "rne-accesible",
+   "name": "RNE Accesible",
    "group": "Generalistas",
    "region": "",
    "logo": "https://graph.facebook.com/radionacionalrne/picture?width=200&height=200",
@@ -2062,7 +2062,7 @@
    "name": "Cortes de Aragón",
    "group": "Autonómicos",
    "region": "Aragón",
-   "logo": "https://graph.facebook.com/@cortesdearagon/picture?width=200&height=200",
+   "logo": "https://graph.facebook.com/cortesdearagon/picture?width=200&height=200",
    "web": "https://www.cortesaragon.es",
    "streams": [],
    "geo": false
@@ -2100,7 +2100,7 @@
    "streams": [
     "https://rtvelivestream.rtve.es/rtvesec/can/la1_can_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "la-2-canarias",
@@ -2112,7 +2112,7 @@
    "streams": [
     "https://rtvelivestream.rtve.es/rtvesec/can/la2_can_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "24h-canarias",
@@ -2125,7 +2125,7 @@
     "https://ztnr.rtve.es/ztnr/5473142.m3u8",
     "https://rtvelivestream.rtve.es/rtvesec/can/24h_can_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "canal-4-tenerife",
@@ -2326,7 +2326,7 @@
    "name": "Cantabria TV",
    "group": "Autonómicos",
    "region": "Cantabria",
-   "logo": "https://graph.facebook.com/vegavisiontvcantabria/picture?width=200&height=200",
+   "logo": "https://pbs.twimg.com/profile_images/1494734877052264451/fAII0mh7_200x200.jpg",
    "web": "https://www.cantabriatv.es",
    "streams": [],
    "geo": false
@@ -2931,7 +2931,7 @@
    "streams": [
     "https://rtvelivestream.rtve.es/rtvesec/cat/la1_cat_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "la-2-cat",
@@ -2943,7 +2943,7 @@
    "streams": [
     "https://rtvelivestream.rtve.es/rtvesec/cat/la2_cat_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "24h-catalunya",
@@ -2956,7 +2956,7 @@
     "https://ztnr.rtve.es/ztnr/4952053.m3u8",
     "https://rtvelivestream.rtve.es/rtvesec/cat/24h_cat_main_dvr.m3u8"
    ],
-   "geo": false
+   "geo": true
   },
   {
    "id": "radio-4",
@@ -3652,7 +3652,7 @@
    "name": "8 La Marina TV",
    "group": "Autonómicos",
    "region": "C. Valenciana",
-   "logo": "https://graph.facebook.com/8lamarinatelevision/picture?width=200&height=200",
+   "logo": "https://pbs.twimg.com/profile_images/1448634676550242313/9s7UjXdC_200x200.jpg",
    "web": "https://8lamarinatv.com",
    "streams": [
     "https://streaming005.gestec-video.com/hls/canal24.m3u8"
@@ -4290,7 +4290,7 @@
    "name": "Xunta de Galicia",
    "group": "Autonómicos",
    "region": "Galicia",
-   "logo": "https://graph.facebook.com/@xuntadegalicia/picture?width=200&height=200",
+   "logo": "https://graph.facebook.com/xuntadegalicia/picture?width=200&height=200",
    "web": "https://www.xunta.gal/video-en-directo",
    "streams": [
     "https://xuntalive.akamaized.net/hls/live/2032287/streamxunta/master.m3u8"
@@ -4541,12 +4541,12 @@
    "geo": false
   },
   {
-   "id": "vascos-por-el-mundo-etb-on",
-   "name": "Vascos por el mundo (ETB On)",
+   "id": "euskal-herriko-bertsolari-txapelketa-etb-on",
+   "name": "Euskal Herriko Bertsolari Txapelketa (ETB On)",
    "group": "Autonómicos",
    "region": "País Vasco",
    "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
-   "web": "https://etbon.eus/ch/vascos-por-el-mundo",
+   "web": "https://etbon.eus/ch/finalak",
    "streams": [],
    "geo": false
   },
