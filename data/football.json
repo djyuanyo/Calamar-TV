@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-20T10:37:50.595387+00:00",
-  "total": 173,
+  "updated_at": "2026-10-20T15:28:09.910804+00:00",
+  "total": 186,
   "data": [
     {
       "id": 99554,
@@ -31,6 +31,34 @@
       "has_stream": true
     },
     {
+      "id": 103014,
+      "title": "Omonia Nicosia vs Olympiakos Nicosia",
+      "home_team": "Omonia Nicosia",
+      "away_team": "Olympiakos Nicosia",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/nmd7vt1779579017.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/mmo0kb1678201580.png",
+      "sport_category": "Soccer",
+      "league": "Cypriot First Division",
+      "venue": "GSP Stadium",
+      "start_time": "2026-10-19T18:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
+      "id": 104982,
+      "title": "Bruk-Bet Termalica Nieciecza vs Puszcza Niepołomice",
+      "home_team": "Bruk-Bet Termalica Nieciecza",
+      "away_team": "Puszcza Niepołomice",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/m1tod31628431456.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/o4kdol1709196352.png",
+      "sport_category": "Soccer",
+      "league": "Polish I liga",
+      "venue": "Stadion Sportowy Bruk-Bet Termalica",
+      "start_time": "2026-10-19T18:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
       "id": 39044,
       "title": "Monza vs Cagliari",
       "home_team": "Monza",
@@ -43,6 +71,20 @@
       "start_time": "2026-10-19T18:30:00+02:00",
       "status": "finished",
       "has_stream": true
+    },
+    {
+      "id": 58230,
+      "title": "Rodina Moscow vs Orenburg",
+      "home_team": "Rodina Moscow",
+      "away_team": "Orenburg",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/ul3ag81784825081.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/9wa10h1754674044.png",
+      "sport_category": "Soccer",
+      "league": "Russian Football Premier League",
+      "venue": "Sapsan Arena",
+      "start_time": "2026-10-19T18:30:00+02:00",
+      "status": "finished",
+      "has_stream": false
     },
     {
       "id": 57587,
@@ -129,6 +171,20 @@
       "has_stream": false
     },
     {
+      "id": 103204,
+      "title": "Beitar Jerusalem vs Maccabi Tel Aviv",
+      "home_team": "Beitar Jerusalem",
+      "away_team": "Maccabi Tel Aviv",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/lsg64h1781239463.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/oeer261781239315.png",
+      "sport_category": "Soccer",
+      "league": "Israeli Premier League",
+      "venue": "Teddy Stadium",
+      "start_time": "2026-10-19T19:30:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
       "id": 67140,
       "title": "Al-Hilal vs Al-Hazem",
       "home_team": "Al-Hilal",
@@ -197,6 +253,20 @@
       "start_time": "2026-10-19T20:00:00+02:00",
       "status": "finished",
       "has_stream": true
+    },
+    {
+      "id": 101956,
+      "title": "Voluntari vs FCSB",
+      "home_team": "Voluntari",
+      "away_team": "FCSB",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/ar8p2o1770089409.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/123g021759420850.png",
+      "sport_category": "Soccer",
+      "league": "Romanian Liga I",
+      "venue": "Stadionul Anghel Iordănescu",
+      "start_time": "2026-10-19T20:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
     },
     {
       "id": 52435,
@@ -311,6 +381,20 @@
       "has_stream": true
     },
     {
+      "id": 103926,
+      "title": "Waterford vs Galway United",
+      "home_team": "Waterford",
+      "away_team": "Galway United",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/a1z2bm1765902989.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/nil4001582565343.png",
+      "sport_category": "Soccer",
+      "league": "Irish Premier Division",
+      "venue": "Waterford Regional Sports Centre",
+      "start_time": "2026-10-19T20:45:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
       "id": 47031,
       "title": "Tottenham Hotspur vs Coventry City",
       "home_team": "Tottenham Hotspur",
@@ -337,6 +421,20 @@
       "start_time": "2026-10-19T21:00:00+02:00",
       "status": "finished",
       "has_stream": true
+    },
+    {
+      "id": 103925,
+      "title": "Derry City vs St Patrick's Athletic",
+      "home_team": "Derry City",
+      "away_team": "St Patrick's Athletic",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/i5u42j1602256316.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/wh1tqt1788970554.png",
+      "sport_category": "Soccer",
+      "league": "Irish Premier Division",
+      "venue": "Brandywell Stadium",
+      "start_time": "2026-10-19T21:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
     },
     {
       "id": 54989,
@@ -451,6 +549,20 @@
       "has_stream": false
     },
     {
+      "id": 104740,
+      "title": "Sporting San José vs San Carlos",
+      "home_team": "Sporting San José",
+      "away_team": "San Carlos",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/7wzxlo1606770023.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/v7hikt1606772054.png",
+      "sport_category": "Soccer",
+      "league": "Costa-Rica Liga FPD",
+      "venue": "Estadio Ernesto Rohrmoser Lahmann",
+      "start_time": "2026-10-20T02:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
       "id": 12581,
       "title": "Deportivo Riestra vs Unión",
       "home_team": "Deportivo Riestra",
@@ -521,6 +633,20 @@
       "has_stream": true
     },
     {
+      "id": 104741,
+      "title": "Escorpiones de Belén vs Puntarenas",
+      "home_team": "Escorpiones de Belén",
+      "away_team": "Puntarenas",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/aeng4x1785697969.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/ljzov51657724106.png",
+      "sport_category": "Soccer",
+      "league": "Costa-Rica Liga FPD",
+      "venue": "Estadio Polideportivo de Belén",
+      "start_time": "2026-10-20T04:00:00+02:00",
+      "status": "finished",
+      "has_stream": false
+    },
+    {
       "id": 81684,
       "title": "FC Porto Juniors vs PSV Eindhoven Youth",
       "home_team": "FC Porto Juniors",
@@ -531,7 +657,7 @@
       "league": "UEFA Youth League",
       "venue": "CTFD Porto-Gaia",
       "start_time": "2026-10-20T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -545,7 +671,7 @@
       "league": "UEFA Youth League",
       "venue": "",
       "start_time": "2026-10-20T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -559,7 +685,7 @@
       "league": "UEFA Youth League",
       "venue": "",
       "start_time": "2026-10-20T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -573,7 +699,7 @@
       "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-20T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -587,7 +713,7 @@
       "league": "UEFA Youth League",
       "venue": "Stadio Giuseppe Piccolo",
       "start_time": "2026-10-20T14:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -601,7 +727,7 @@
       "league": "UEFA Youth League",
       "venue": "Campus PSG",
       "start_time": "2026-10-20T14:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -615,7 +741,7 @@
       "league": "UEFA Youth League",
       "venue": "",
       "start_time": "2026-10-20T14:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -629,7 +755,7 @@
       "league": "UEFA Youth League",
       "venue": "WIRmachenDRUCK Arena",
       "start_time": "2026-10-20T15:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -657,7 +783,7 @@
       "league": "Egyptian Premier League",
       "venue": "Asyut Petroleum Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -671,7 +797,7 @@
       "league": "Egyptian Premier League",
       "venue": "Cairo International Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -685,7 +811,7 @@
       "league": "UEFA Youth League",
       "venue": "Liverpool FC Academy",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -699,7 +825,7 @@
       "league": "UEFA Youth League",
       "venue": "Joie Stadium",
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -713,7 +839,7 @@
       "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -727,7 +853,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -741,7 +867,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -755,7 +881,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -769,7 +895,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -783,7 +909,7 @@
       "league": "Portugal: Liga Next Gen U23",
       "venue": null,
       "start_time": "2026-10-20T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -797,7 +923,7 @@
       "league": "Rumanía: Liga 2",
       "venue": null,
       "start_time": "2026-10-20T16:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -811,7 +937,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "Prince Turki bin Abdul Aziz Stadium",
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -825,7 +951,7 @@
       "league": "Egyptian Premier League",
       "venue": "Petrosport Stadium",
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -839,7 +965,7 @@
       "league": "Eslovaquia: Copa",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -853,7 +979,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -867,7 +993,7 @@
       "league": "Mundial U17 Femenino",
       "venue": null,
       "start_time": "2026-10-20T17:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -881,7 +1007,7 @@
       "league": "Saudi-Arabian Pro League",
       "venue": "King Abdullah Sports City Stadium",
       "start_time": "2026-10-20T17:10:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -895,7 +1021,7 @@
       "league": "Arabia Saudí: Primera División",
       "venue": null,
       "start_time": "2026-10-20T17:10:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1011,6 +1137,20 @@
       "has_stream": true
     },
     {
+      "id": 107307,
+      "title": "The Golazo Show",
+      "home_team": null,
+      "away_team": null,
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Champions League",
+      "venue": null,
+      "start_time": "2026-10-20T20:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
       "id": 56201,
       "title": "Wolverhampton Wanderers vs Portsmouth",
       "home_team": "Wolverhampton Wanderers",
@@ -1022,7 +1162,7 @@
       "venue": "Molineux Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 59728,
@@ -1232,7 +1372,7 @@
       "venue": "Crown Oil Arena",
       "start_time": "2026-10-20T20:45:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 60284,
@@ -1246,7 +1386,7 @@
       "venue": "Pallet-Track Bescot Stadium",
       "start_time": "2026-10-20T20:45:00+02:00",
       "status": "scheduled",
-      "has_stream": false
+      "has_stream": true
     },
     {
       "id": 60285,
@@ -1609,7 +1749,7 @@
       "league": "Europa: Champions League - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-20T21:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -2145,6 +2285,20 @@
       "has_stream": true
     },
     {
+      "id": 103743,
+      "title": "PK-35 vs Jaro",
+      "home_team": "PK-35",
+      "away_team": "Jaro",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/5l3wqh1615842536.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/blp8tg1603355064.png",
+      "sport_category": "Soccer",
+      "league": "Finnish Veikkausliiga",
+      "venue": "Mustapekka Areena",
+      "start_time": "2026-10-21T17:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": false
+    },
+    {
       "id": 101820,
       "title": "Z. Moravce-Vrable - Komarno",
       "home_team": "Z. Moravce-Vrable",
@@ -2229,6 +2383,20 @@
       "has_stream": false
     },
     {
+      "id": 105782,
+      "title": "Vanløse vs Nykøbing",
+      "home_team": "Vanløse",
+      "away_team": "Nykøbing",
+      "home_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/t8b3ge1627665601.png",
+      "away_team_badge": "https://r2.thesportsdb.com/images/media/team/badge/vzlg4g1580134909.png",
+      "sport_category": "Soccer",
+      "league": "Denmark DBU Pokalen",
+      "venue": "Vanløse Idrætspark",
+      "start_time": "2026-10-21T19:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": false
+    },
+    {
       "id": 52001,
       "title": "Levante vs Athletic Bilbao",
       "home_team": "Levante",
@@ -2293,6 +2461,20 @@
       "away_team_badge": null,
       "sport_category": "Soccer",
       "league": "Mundial U17 Femenino",
+      "venue": null,
+      "start_time": "2026-10-21T20:00:00+02:00",
+      "status": "scheduled",
+      "has_stream": true
+    },
+    {
+      "id": 107308,
+      "title": "The Golazo Show",
+      "home_team": null,
+      "away_team": null,
+      "home_team_badge": null,
+      "away_team_badge": null,
+      "sport_category": "Soccer",
+      "league": "Champions League",
       "venue": null,
       "start_time": "2026-10-21T20:00:00+02:00",
       "status": "scheduled",
