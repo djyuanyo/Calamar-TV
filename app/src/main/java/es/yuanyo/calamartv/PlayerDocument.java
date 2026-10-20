@@ -9,7 +9,7 @@ import java.net.URL;
 
 /** Fresh HTTPS document fetch, using the system network stack rather than WebView. */
 public final class PlayerDocument {
-  public static final String USER_AGENT = "CalamarTV/2.2.0 (Android; Media3)";
+  public static final String USER_AGENT = "CalamarTV/2.2.1 (Android; Media3)";
 
   public interface ConnectionFactory {
     HttpURLConnection open(URL url) throws IOException;

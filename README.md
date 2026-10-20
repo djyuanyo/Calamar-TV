@@ -90,6 +90,14 @@ Pruebas nuevas: `PaletteTest`. La interfaz de la app se comprobó con el compila
 
 ## Mis canales (solo app)
 
+### Compatibilidad HLS en Android (2.2.1)
+
+Los enlaces directos HTTPS `.m3u8` pueden usar **Modo web** dentro de la app. Si Media3 devuelve un error, se abre automáticamente el reproductor web con hls.js, el mismo motor y origen HTTPS que la web pública. El vídeo permanece dentro de la app y no vuelve a enviarse al motor nativo que acaba de fallar. **Modo nativo** permite volver a Media3; **Fuentes** permite elegir otra alternativa. La pantalla completa también está disponible en este modo y Atrás permite salir.
+
+El reproductor integrado usa la red y DNS de Android System WebView, conservando la selección de DNS del motor nativo. No modifica el enlace, los tokens ni las cabeceras del proveedor. La URL firmada viaja en el fragmento de la dirección del reproductor, que no se envía al servidor de GitHub Pages. Los rechazos HTTP y enlaces caducados siguen mostrándose como errores; esta alternativa no garantiza que una emisión disponible en otro dispositivo o red funcione en Android.
+
+Pruebas: `BrowserPlaybackTest`, `node --test tools/direct_player.test.mjs`. La reproducción de ZicoTV debe comprobarse en el dispositivo con un enlace vigente.
+
 La pestaña **Mis canales** guarda enlaces solo en el dispositivo (`user-channels.json`). Para mostrarlos también en la web: **Administrar → Continuar con Google → Publicar desde Mis canales**. Se conserva la copia local; no se publica nada automáticamente.
 
 ## Puesta en marcha
