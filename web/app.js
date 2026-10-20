@@ -1,5 +1,6 @@
-import { merge, featured, groups, webPlayback, findChannel, streamExpiry, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
+import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
@@ -211,6 +212,7 @@ const playerLogo = document.getElementById('player-logo');
 let hls = null;
 let returnFocus = null;
 let playbackGeneration = 0;
+let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden });
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
@@ -229,14 +231,13 @@ function stop() {
 function playSource(c, index) {
   stop();
   const generation = playbackGeneration;
-  const candidates = c.streams.map((url) => ({ url, how: webPlayback(url), expiry: streamExpiry(url) })).filter((s) => s.how.ok);
+  const allSources = sourceOptions(c.streams);
+  const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
-  playerSources.replaceChildren(
-    ...(playable.length > 1
-      ? playable.map((s, i) => el('button', { class: 'ghost', type: 'button', 'aria-pressed': String(i === index), onclick: () => playSource(c, i) }, `Fuente ${i + 1}`))
-      : []),
-  );
+  const source = selectedSource(allSources, index);
+  currentSourceUrl = source?.url || '';
+  renderSourcePicker(playerSources, allSources, source?.index ?? index, (chosen) => playSource(c, chosen));
   if (candidates.length && !playable.length) {
     const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
@@ -247,14 +248,14 @@ function playSource(c, index) {
     playerStatus.replaceChildren(`${reason}. Disponible en la app Calamar TV.`, c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Ver en su web oficial')) : '');
     return;
   }
-  const source = playable[index];
+  const position = playable.findIndex((item) => item.index === source.index);
   let failureHandled = false;
   const next = (data) => {
     if (generation !== playbackGeneration || failureHandled) return;
     failureHandled = true;
-    if (index + 1 < playable.length) {
+    if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
-      playSource(c, index + 1);
+      playSource(c, playable[position + 1].index);
     } else {
       // A fatal network error is no longer a buffering state. Keep the failure
       // visible and stop outstanding requests until the user retries.
@@ -470,6 +471,12 @@ async function route() {
     );
     // A catalog refresh rebuilds the channel objects; compare ids so playback is not restarted.
     if (c && c.playable && (player.hidden || !current || current.id !== c.id)) open(c, true);
+    else if (c && !player.hidden) {
+      // New links can arrive from the admin while the current video keeps playing.
+      current = c;
+      renderSourcePicker(playerSources, sourceOptions(c.streams), c.streams.indexOf(currentSourceUrl),
+        (chosen) => playSource(c, chosen));
+    }
     return;
   }
   const query = search.value.trim();

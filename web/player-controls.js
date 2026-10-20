@@ -273,6 +273,7 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
     // (A touch screen leaves :hover stuck on the last thing tapped, and the focus given to the Back
     // button when the player opens is not a reason to keep them on screen.)
     const active = document.activeElement;
+    if (active?.id === 'player-source-select') return;
     const keyboardInside = keyboardUser && !!active && [...els.chrome].some((n) => n.contains(active));
     const hovering = !touch.matches && [...els.chrome].some((n) => n.matches(':hover'));
     if (keyboardInside || hovering) return;

@@ -49,6 +49,8 @@ El reproductor tiene el botón **Copiar enlace**. Si el navegador no permite cop
 
 ## Diseño y reproductor de la web
 
+El desplegable **Fuentes** aparece siempre en los controles del reproductor. Mantiene la numeración del catálogo y muestra también las alternativas caducadas o incompatibles, deshabilitadas con su motivo. Si solo hay un enlace, muestra «Fuente 1». Los enlaces nuevos del administrador aparecen en el selector del reproductor abierto sin interrumpir la emisión actual. Pruebas: `node --test tools/player_sources.test.mjs`.
+
 La web sigue el estilo de las plataformas deportivas de streaming: cabecera fija con sección activa subrayada, canal destacado a pantalla completa con selector, filas con flechas, tarjetas 16:9 y filtros fijos en la página de canales. Los colores de cada tarjeta salen del nombre del canal; no se usan marcas ni imágenes de terceros.
 
 El reproductor ocupa toda la ventana y tiene controles propios: reproducir/pausar, volumen, **pantalla completa**, imagen en imagen, selector de calidad (cuando la emisión ofrece varias), etiqueta «DIRECTO» con salto al directo, y barra de progreso solo en vídeos que no son en directo. Los controles se ocultan solos tras unos segundos y reaparecen al mover el ratón, tocar la pantalla o usar el teclado.

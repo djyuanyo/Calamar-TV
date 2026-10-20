@@ -269,6 +269,11 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .player-heading { display: grid; gap: 4px; flex: 1; min-width: 0; justify-items: start; }
 .player-heading h2 { margin: 0; font-size: clamp(17px, 2.2vw, 24px); font-weight: 800; letter-spacing: -0.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-sources { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.source-picker { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.source-picker select { max-width: min(280px, 65vw); padding: 9px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.4); color: #fff; background: #17191f; font: inherit; cursor: pointer; }
+.source-picker select:focus-visible { outline: 2px solid var(--accent, #d4ff41); outline-offset: 3px; }
+.source-picker option { color: #fff; background: #17191f; }
+.source-picker option:disabled { color: #a4a7ae; }
 .player-sources .ghost { padding: 7px 14px; font-size: 14px; border-color: rgba(255, 255, 255, 0.28); background: rgba(0, 0, 0, 0.35); }
 .pill-btn {
   flex: none; padding: 9px 16px; border-radius: 999px; cursor: pointer; font-weight: 700; font-size: 14px;
