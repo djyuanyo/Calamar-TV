@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1792448619330,
+ "updated_at": 1792516343318,
  "channels": [
   {
    "id": "la-1",
@@ -244,7 +244,7 @@
    "group": "Informativos",
    "region": "",
    "logo": "https://graph.facebook.com/radionacionalrne/picture?width=200&height=200",
-   "web": "https://www.rtve.es/play/radio/",
+   "web": "https://www.rtve.es/play/videos/directo/rne-streamings/",
    "streams": [
     "https://ztnr.rtve.es/ztnr/6982891.m3u8"
    ],
@@ -2251,7 +2251,7 @@
    "logo": "https://yt3.ggpht.com/qj92f7GsPI7R-YCYzsFj5mDoSCduHSgh8lwCWHFXbHAx6rNmLsB78RZlmfiqbjYzQdNh1Fj9sQ=s200",
    "web": "https://fuerteventuratelevision.com",
    "streams": [
-    "https://5c0956165db0b.streamlock.net/ftv/directo/.m3u8"
+    "https://live.lancelot.tv/directo/fuerteventura.television/index.m3u8"
    ],
    "geo": false
   },
@@ -2964,7 +2964,7 @@
    "group": "Autonómicos",
    "region": "Cataluña",
    "logo": "https://pbs.twimg.com/profile_images/1849411372498530304/xy9er_VU_200x200.jpg",
-   "web": "https://www.rtve.es/play/radio/",
+   "web": "https://www.rtve.es/play/videos/directo/radio-4-webcam/79888/",
    "streams": [
     "https://ztnr.rtve.es/ztnr/6982935.m3u8",
     "https://rtvelivestream.rtve.es/rtvesec/rne/rne_r4_cam_main_dvr.m3u8"
@@ -3827,7 +3827,7 @@
    "group": "Autonómicos",
    "region": "C. Valenciana",
    "logo": "https://graph.facebook.com/TV4LaVall/picture?width=200&height=200",
-   "web": "https://valldeuxo.gestec-video.com/lavall.php",
+   "web": "https://teve4lavall.com",
    "streams": [
     "https://valldeuxo.gestec-video.com/hls/lavall.m3u8"
    ],
