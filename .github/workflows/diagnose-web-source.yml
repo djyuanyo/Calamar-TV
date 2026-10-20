@@ -15,7 +15,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.parse, urllib.error, datetime
+          import json, urllib.request, urllib.parse, urllib.error, datetime, shutil, subprocess, tempfile, os
           catalog_url = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
           origin = 'https://djyuanyo.github.io'
           def read(url, origin_value=None, limit=524288):
@@ -73,6 +73,19 @@ jobs:
               print(label, 'playlist', json.dumps({'has_media_segments': '#EXTINF' in text, 'has_encryption_tag': '#EXT-X-KEY' in text}))
               if '#EXTINF' in text and urls:
                   segment = urllib.parse.urljoin(final_url, urls[-1])
-                  meta, _, _ = read(segment, request_origin, 4096)
+                  meta, sample, _ = read(segment, request_origin, 2097152 if label == 'web_origin' else 4096)
                   print(label, 'segment', json.dumps(meta))
+                  if label == 'web_origin' and meta.get('http') == 200:
+                      if shutil.which('ffprobe'):
+                          fd, sample_path = tempfile.mkstemp(suffix='.ts')
+                          with os.fdopen(fd, 'wb') as out:
+                              out.write(sample)
+                          result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_name,codec_type,profile,pix_fmt,width,height,level', '-of', 'json', sample_path], capture_output=True, text=True, timeout=15)
+                          try:
+                              print('CODECS', json.dumps(json.loads(result.stdout)))
+                          except Exception:
+                              print('CODECS', result.returncode)
+                          os.remove(sample_path)
+                      else:
+                          print('CODECS ffprobe_unavailable')
           PY
