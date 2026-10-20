@@ -9,8 +9,12 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     steps:
+      - name: Preparar analisis de formatos
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Preparar prueba de navegador
+        run: npm install --prefix "$RUNNER_TEMP/hls-probe" --ignore-scripts --no-audit --no-fund playwright@1.56.1
       - name: Comparar respuestas HLS del catalogo publico
         shell: bash
         run: |
@@ -89,3 +93,47 @@ jobs:
                       else:
                           print('CODECS ffprobe_unavailable')
           PY
+      - name: Observar la reproduccion de la web publica en Chrome
+        shell: bash
+        run: |
+          node <<'JS'
+          const { chromium } = require(process.env.RUNNER_TEMP + '/hls-probe/node_modules/playwright');
+          (async () => {
+            const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+            const page = await browser.newPage();
+            await page.addInitScript(() => {
+              window.__hlsProbe = { errors: [], codecs: [] };
+              let installed;
+              Object.defineProperty(window, 'Hls', {
+                configurable: true, get: () => installed,
+                set: Hls => {
+                  installed = new Proxy(Hls, { construct(target, args, newTarget) {
+                    const instance = Reflect.construct(target, args, newTarget);
+                    instance.on(Hls.Events.ERROR, (_event, data) => {
+                      window.__hlsProbe.errors.push({ fatal: !!data.fatal, type: data.type, details: data.details, http: data.response?.code || 0, errorType: data.error?.name });
+                    });
+                    instance.on(Hls.Events.BUFFER_CODECS, (_event, tracks) => {
+                      const codecs = {};
+                      for (const [name, track] of Object.entries(tracks)) codecs[name] = { codec: track.codec, levelCodec: track.levelCodec, container: track.container };
+                      window.__hlsProbe.codecs.push(codecs);
+                    });
+                    return instance;
+                  } });
+                }
+              });
+            });
+            await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canal/liga-campeones', { waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(20000);
+            const report = await page.evaluate(() => {
+              const v = document.querySelector('#video');
+              return {
+                hlsVersion: window.Hls?.version,
+                status: document.querySelector('#player-status')?.textContent,
+                video: v ? { readyState: v.readyState, paused: v.paused, time: v.currentTime, error: v.error?.code || 0, width: v.videoWidth, height: v.videoHeight } : null,
+                probe: window.__hlsProbe
+              };
+            });
+            console.log('BROWSER_REPORT', JSON.stringify(report));
+            await browser.close();
+          })().catch(error => { console.log('BROWSER_PROBE_ERROR', error.name); process.exitCode = 1; });
+          JS
