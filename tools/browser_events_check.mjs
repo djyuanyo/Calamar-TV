@@ -110,6 +110,7 @@ try {
   await page.getByPlaceholder('Buscar entre tus canales creados').fill('Two');
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  console.log('Editar evento', await page.locator('form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent })));
   await page.waitForFunction(() => window.__published.events[0].name === 'Final');
   assert.equal((await page.evaluate(() => window.__published)).events[0].channelId, 'sport-two');
   const eventId = published.events[0].id;
