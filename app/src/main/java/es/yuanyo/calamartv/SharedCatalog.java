@@ -82,6 +82,16 @@ final class SharedCatalog {
       }
     }
     SportsCatalog.validate(data);
+    JSONArray order = data.optJSONArray("groupOrder");
+    if (data.has("groupOrder") && (order == null || order.length() > 200))
+      throw new JSONException("Orden de categorías no válido");
+    Set<String> categories = new HashSet<>();
+    if (order != null)
+      for (int i = 0; i < order.length(); i++) {
+        Object g = order.get(i);
+        if (!(g instanceof String) || ((String) g).trim().isEmpty() || ((String) g).length() > 80 || !categories.add((String) g))
+          throw new JSONException("Orden de categorías no válido");
+      }
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;

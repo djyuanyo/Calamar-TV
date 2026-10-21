@@ -19,6 +19,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.Source;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.UUID;
 import org.json.*;
 
@@ -301,10 +303,7 @@ public class AdminActivity extends Activity {
     form.setPadding(dp(20), dp(8), dp(20), dp(8));
     EditText name = input(form, "Nombre", existing == null ? "" : existing.optString("name"));
     EditText group =
-        input(
-            form,
-            "Categoría",
-            existing == null ? "Calamar TV" : existing.optString("group", "Calamar TV"));
+        categoryInput(form, existing == null ? "Calamar TV" : existing.optString("group", "Calamar TV"));
     EditText logo =
         input(form, "Logo https (opcional)", existing == null ? "" : existing.optString("logo"));
     EditText streams =
@@ -680,6 +679,30 @@ public class AdminActivity extends Activity {
     LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(-1, -2);
     layout.setMargins(0, dp(6), 0, dp(6));
     body.addView(button, layout);
+  }
+
+  /** Write a category or pick one already used; the list opens when the field gets focus. */
+  private EditText categoryInput(LinearLayout form, String value) {
+    LinkedHashSet<String> names = new LinkedHashSet<>();
+    JSONArray order = catalog.optJSONArray("groupOrder");
+    if (order != null) for (int i = 0; i < order.length(); i++) names.add(order.optString(i));
+    names.addAll(Catalog.GROUP_ORDER);
+    JSONArray channels = catalog.optJSONArray("channels");
+    if (channels != null) for (int i = 0; i < channels.length(); i++) {
+      String g = channels.optJSONObject(i) == null ? "" : channels.optJSONObject(i).optString("group").trim();
+      if (!g.isEmpty()) names.add(g);
+    }
+    final android.widget.AutoCompleteTextView input = new android.widget.AutoCompleteTextView(this);
+    input.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, new ArrayList<>(names)));
+    input.setThreshold(0);
+    input.setHint("Categoría (escribe o elige)");
+    input.setText(value);
+    input.setSingleLine(true);
+    input.setContentDescription("Categoría");
+    input.setOnFocusChangeListener((v, focused) -> { if (focused) input.showDropDown(); });
+    input.setOnClickListener(v -> input.showDropDown());
+    form.addView(input, new LinearLayout.LayoutParams(-1, -2));
+    return input;
   }
 
   private EditText input(LinearLayout form, String hint, String value) {

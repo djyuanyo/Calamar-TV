@@ -18,6 +18,18 @@ public class SportsCatalogTest {
     assertEquals(SportsCatalog.LIVE,SportsCatalog.label("live","",before));
     assertEquals("Programado",SportsCatalog.label("scheduled","",before));
   }
+  @Test public void homeRowsGroupEventsByLeagueAndCategoriesFollowTheSavedOrder() throws Exception {
+    JSONObject data=new JSONObject("{\"channels\":[{\"id\":\"c\",\"name\":\"Channel\",\"group\":\"Zeta\",\"streams\":[\"https://example.com/a.m3u8\"]},{\"id\":\"d\",\"name\":\"Other\",\"group\":\"Deportes\",\"streams\":[\"https://example.com/b.m3u8\"]}],\"featured\":[],\"hidden\":[],\"groupOrder\":[\"Zeta\"],\"leagues\":[{\"id\":\"l\",\"name\":\"League\",\"logo\":\"https://example.com/l.png\"}],\"events\":[{\"id\":\"b\",\"name\":\"Later\",\"cover\":\"https://example.com/b.jpg\",\"channelId\":\"c\",\"leagueId\":\"l\",\"startAt\":\"2026-12-01T20:00:00Z\"},{\"id\":\"x\",\"name\":\"Free\",\"cover\":\"https://example.com/x.jpg\",\"channelId\":\"c\",\"startAt\":\"2026-10-01T20:00:00Z\"},{\"id\":\"a\",\"name\":\"Earlier\",\"cover\":\"https://example.com/a.jpg\",\"channelId\":\"c\",\"leagueId\":\"l\",\"startAt\":\"2026-11-01T20:00:00Z\"}]}");
+    SharedCatalog.validate(data);List<Catalog.Channel> all=Catalog.merge(null,data);
+    List<Catalog.EventRow> rows=Catalog.eventRows(Catalog.events(all,data),data);
+    assertEquals("League",rows.get(0).name);assertEquals("https://example.com/l.png",rows.get(0).logo);
+    assertEquals("a",rows.get(0).events.get(0).id);assertEquals("b",rows.get(0).events.get(1).id);
+    assertEquals("Otros eventos",rows.get(1).name);assertEquals("x",rows.get(1).events.get(0).id);
+    assertEquals(Arrays.asList("Zeta","Deportes"),new ArrayList<>(Catalog.groups(all,data).keySet()));
+    assertEquals(Arrays.asList("Deportes","Zeta"),new ArrayList<>(Catalog.groups(all).keySet()));
+    data.put("groupOrder",new JSONArray("[\"Zeta\",\"Zeta\"]"));
+    try{SharedCatalog.validate(data);fail("Accepted repeated categories");}catch(JSONException expected){}
+  }
   @Test public void highlightsMixEventsAndChannelsAndEventsStayChronological() throws Exception {
     JSONObject data=new JSONObject("{\"channels\":[{\"id\":\"c\",\"name\":\"Channel\",\"streams\":[\"https://example.com/a.m3u8\"]}],\"featured\":[\"c\"],\"hidden\":[],\"leagues\":[{\"id\":\"l\",\"name\":\"League\"}],\"events\":[{\"id\":\"b\",\"name\":\"Later\",\"cover\":\"https://example.com/b.jpg\",\"channelId\":\"c\",\"leagueId\":\"l\",\"startAt\":\"2026-12-01T20:00:00Z\",\"featured\":true},{\"id\":\"a\",\"name\":\"Earlier\",\"cover\":\"https://example.com/a.jpg\",\"channelId\":\"c\",\"startAt\":\"2026-11-01T20:00:00Z\"}]}");
     SharedCatalog.validate(data);List<Catalog.Channel> all=Catalog.merge(null,data);

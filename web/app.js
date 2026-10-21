@@ -1,4 +1,4 @@
-import { merge, events, homeHighlights, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, eventRows, homeHighlights, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -233,15 +233,17 @@ function home() {
   scheduleStartRefresh(matches);
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
-  if (matches.length) nodes.push(sectionHead('Eventos'), rail(matches, { wide: true, limit: matches.length }));
-  for (const [group, channels] of groups(state.channels)) {
-    nodes.push(sectionHead(group, el('a', { href: `#/canales/${encodeURIComponent(group)}` }, `Ver ${channels.length} canales`)), rail(channels));
+  // Only events on the home page: one row per league, each in date order (soonest first).
+  for (const row of eventRows(matches, state.custom)) {
+    nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
+      el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }
+  if (!matches.length) nodes.push(el('p', { class: 'status' }, 'Todavía no hay eventos. ', el('a', { href: '#/canales' }, 'Ver los canales')));
   return nodes;
 }
 
 function channelsPage(selected) {
-  const map = groups(state.channels);
+  const map = groups(state.channels, state.custom?.groupOrder);
   const chips = el(
     'div',
     { class: 'chips', role: 'group', 'aria-label': 'Categorías' },

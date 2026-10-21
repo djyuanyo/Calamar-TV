@@ -21,6 +21,9 @@ export function validateCatalog(data) {
     eventIds.add(event.id);
   }
   validateSports(data, validCover);
+  if (data.groupOrder !== undefined && (!Array.isArray(data.groupOrder) || data.groupOrder.length > 200
+      || data.groupOrder.some((g) => typeof g !== 'string' || !g.trim() || g.length > 80)
+      || new Set(data.groupOrder).size !== data.groupOrder.length)) throw new Error('El orden de categorías no es válido.');
   if (![...data.featured, ...data.hidden].every((id) => typeof id === 'string')) throw new Error('La lista de canales no es válida.');
   if (new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
   return data;

@@ -17,7 +17,7 @@ public final class Catalog {
           "Autonómicos");
 
   public static final class Channel {
-    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status;
+    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId;
     public final boolean highlighted;
     public final boolean event;
     public final List<String> streams;
@@ -28,6 +28,7 @@ public final class Catalog {
       event = o.optBoolean("event");
       cover = o.optString("cover");
       channelId = o.optString("channelId", o.optString("id"));
+      leagueId = o.optString("leagueId");
       meta = o.optString("meta"); startAt = o.optString("startAt"); status = o.optString("status", "scheduled");
       highlighted = o.optBoolean("featured");
       id = o.optString("id");
@@ -119,6 +120,29 @@ public final class Catalog {
     return out;
   }
 
+  /** A home row: a league with its logo and its events in date order. */
+  public static final class EventRow {
+    public final String name, logo;
+    public final List<Channel> events = new ArrayList<>();
+    EventRow(String name, String logo) { this.name = name; this.logo = logo; }
+  }
+
+  /** One row per league, ordered by its next event; events without league go last. */
+  public static List<EventRow> eventRows(List<Channel> events, JSONObject custom) {
+    LinkedHashMap<String, EventRow> rows = new LinkedHashMap<>();
+    EventRow other = new EventRow("Otros eventos", "");
+    for (Channel e : events) {
+      JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), e.leagueId);
+      if (league == null) { other.events.add(e); continue; }
+      EventRow row = rows.get(e.leagueId);
+      if (row == null) rows.put(e.leagueId, row = new EventRow(league.optString("name"), league.optString("logo")));
+      row.events.add(e);
+    }
+    List<EventRow> out = new ArrayList<>(rows.values());
+    if (!other.events.isEmpty()) out.add(other);
+    return out;
+  }
+
   public static List<Channel> highlights(List<Channel> channels, JSONObject custom) {
     List<Channel> out=new ArrayList<>();
     for(Channel event: events(channels,custom))if(event.highlighted)out.add(event);
@@ -129,9 +153,16 @@ public final class Catalog {
 
   /** Groups in display order; unknown groups go after the known ones, alphabetically. */
   public static LinkedHashMap<String, List<Channel>> groups(List<Channel> channels) {
+    return groups(channels, null);
+  }
+
+  /** The order saved by the administrator (`groupOrder`) comes first, then the default order. */
+  public static LinkedHashMap<String, List<Channel>> groups(List<Channel> channels, JSONObject custom) {
     TreeMap<String, List<Channel>> extra = new TreeMap<>();
     LinkedHashMap<String, List<Channel>> out = new LinkedHashMap<>();
-    for (String g : GROUP_ORDER) out.put(g, new ArrayList<Channel>());
+    JSONArray order = custom == null ? null : custom.optJSONArray("groupOrder");
+    if (order != null) for (int i = 0; i < order.length(); i++) out.put(order.optString(i), new ArrayList<Channel>());
+    for (String g : GROUP_ORDER) if (!out.containsKey(g)) out.put(g, new ArrayList<Channel>());
     for (Channel c : channels) {
       List<Channel> bucket = out.get(c.group);
       if (bucket == null) {

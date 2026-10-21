@@ -1,6 +1,6 @@
 import { eventOrder, eventMeta, eventPath, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
-import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
+import { OWN_GROUP, merge, groups } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
@@ -72,11 +72,23 @@ function validStreams(text) {
   return out;
 }
 
-function channelForm(existing, rerender) {
+/** Every category with channels, in the order the channels menu shows them. */
+const categoryNames = (state) => [...new Set([...groups(state.channels, file.data.groupOrder).keys(), OWN_GROUP])];
+
+const NEW_GROUP = '\u0000nueva';
+function channelForm(existing, rerender, state) {
   const data = file.data;
   const name = el('input', { required: true, value: existing ? existing.name : '' });
-  const groupList = el('datalist', { id: 'groups' }, GROUP_ORDER.map((g) => el('option', { value: g })));
-  const group = el('input', { list: 'groups', value: existing ? existing.group || OWN_GROUP : OWN_GROUP });
+  // Pick an existing category or write a new one.
+  const categories = categoryNames(state);
+  const current = existing ? existing.group || OWN_GROUP : OWN_GROUP;
+  const groupSelect = el('select', {}, categories.map((g) => el('option', { value: g }, g)), el('option', { value: NEW_GROUP }, '+ Nueva categoría…'));
+  groupSelect.value = categories.includes(current) ? current : NEW_GROUP;
+  const groupNew = el('input', { placeholder: 'Nombre de la nueva categoría', maxlength: '80', value: categories.includes(current) ? '' : current });
+  const groupNewField = field('Nueva categoría', groupNew);
+  groupNewField.hidden = groupSelect.value !== NEW_GROUP;
+  groupSelect.addEventListener('change', () => { groupNewField.hidden = groupSelect.value !== NEW_GROUP; if (!groupNewField.hidden) groupNew.focus(); });
+  const group = { get value() { return groupSelect.value === NEW_GROUP ? groupNew.value : groupSelect.value; } };
   const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: existing ? existing.logo || '' : '' });
   const streams = el('textarea', { required: true, placeholder: 'https://servidor/canal/index.m3u8', spellcheck: 'false' }, existing ? (existing.streams || []).join('\n') : '');
   const star = el('input', { type: 'checkbox', checked: existing ? data.featured.includes(existing.id) : false });
@@ -92,11 +104,12 @@ function channelForm(existing, rerender) {
           const channel = {
             id: existing ? existing.id : `mio-${slug(name.value)}-${Date.now().toString(36)}`,
             name: name.value.trim(),
-            group: group.value.trim() || OWN_GROUP,
+            group: group.value.trim(),
             logo: logo.value.trim().startsWith('https://') ? logo.value.trim() : '',
             streams: validStreams(streams.value),
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
+          if (!channel.group) throw new Error('Escribe el nombre de la nueva categoría.');
           if (existing) data.channels[data.channels.findIndex((c) => c.id === existing.id)] = channel;
           else data.channels.push(channel);
           data.featured = data.featured.filter((id) => id !== channel.id);
@@ -113,8 +126,8 @@ function channelForm(existing, rerender) {
     },
     el('h2', {}, existing ? `Editar ${existing.name}` : 'Crear canal'),
     field('Nombre', name, 'Por ejemplo «Canal Menciana».'),
-    field('Categoría', group, 'Elige una o escribe una nueva. Por defecto: Calamar TV.'),
-    groupList,
+    field('Categoría', groupSelect, 'Elige una de la lista o «Nueva categoría» para escribirla.'),
+    groupNewField,
     field('Logo (opcional)', logo),
     field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8 y .ts por HTTPS, y los enlaces TS del servidor HTTP configurado. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
@@ -158,6 +171,33 @@ function ownList(rerender) {
       ),
     ),
   );
+}
+
+/** Order of the categories in the channels menu, saved in the catalog as `groupOrder`. */
+function groupOrderPanel(state, rerender) {
+  const order = categoryNames(state).filter((g) => groups(state.channels).has(g));
+  const list = el('ol', { class: 'order-list' });
+  const status = el('p', { class: 'note', role: 'status' });
+  const draw = (focus) => {
+    list.replaceChildren(...order.map((g, i) => el('li', {}, el('b', { class: 'order-n' }, i + 1), el('span', {}, g),
+      el('button', { class: 'btn small secondary', type: 'button', 'aria-label': `Subir ${g}`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+      el('button', { class: 'btn small secondary', type: 'button', 'aria-label': `Bajar ${g}`, disabled: i === order.length - 1, onclick: () => move(i, 1) }, '↓'))));
+    if (focus) list.querySelector(`[aria-label="${focus}"]:not([disabled])`)?.focus();
+  };
+  const move = (i, step) => {
+    const [g] = order.splice(i, 1);
+    order.splice(i + step, 0, g);
+    status.textContent = 'Orden sin guardar.';
+    draw(`${step < 0 ? 'Subir' : 'Bajar'} ${g}`);
+  };
+  draw();
+  return [el('div', { class: 'section-head' }, el('h2', {}, 'Orden de categorías')),
+    el('p', { class: 'note' }, 'Así aparecen las categorías en el menú Canales de la web y de la app. Las categorías nuevas se añaden al final.'),
+    list,
+    el('div', { class: 'actions' },
+      el('button', { class: 'btn', type: 'button', onclick: () => { if (saving) return; file.data.groupOrder = [...order]; guarded(() => saveFile(), rerender); } }, 'Guardar orden'),
+      file.data.groupOrder ? el('button', { class: 'ghost', type: 'button', onclick: () => { if (saving) return; delete file.data.groupOrder; guarded(() => saveFile(), rerender); } }, 'Volver al orden por defecto') : null),
+    status];
 }
 
 async function guarded(action, rerender) {
@@ -253,7 +293,7 @@ export async function render(state) {
       ...(section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
-      ] : [channelForm(existing, rerender), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...tdtTools(state, rerender)]),
+      ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...groupOrderPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
   ];
 }
