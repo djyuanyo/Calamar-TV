@@ -348,7 +348,7 @@ try {
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
-  assert.ok(requests.includes('https://calamarmenciano.com/PELIS/Avatar.mp4'));
+  await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
