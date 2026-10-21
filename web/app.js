@@ -1,5 +1,6 @@
 import { merge, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
+import { mountTs } from './ts-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 
 const view = document.getElementById('view');
@@ -210,6 +211,7 @@ const playerStatus = document.getElementById('player-status');
 const playerSources = document.getElementById('player-sources');
 const playerLogo = document.getElementById('player-logo');
 let hls = null;
+let stopTs = null;
 let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
@@ -221,6 +223,7 @@ function stop() {
   playbackGeneration++;
   video.onerror = null;
   video.onplaying = null;
+  if (stopTs) { stopTs(); stopTs = null; }
   if (hls) hls.destroy();
   hls = null;
   video.removeAttribute('src');
@@ -299,6 +302,16 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
+  if (source.how.kind === 'ts') {
+    video.onplaying = () => { if (generation === playbackGeneration) playerStatus.textContent = ''; };
+    video.onerror = () => next();
+    controls.attach(null);
+    stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
+      onFailure: (data) => queueMicrotask(() => next(data)),
+      onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
+    });
+    return;
+  }
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {

@@ -163,10 +163,13 @@ export function webPlayback(url) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const relayTs = u.protocol === 'http:' && u.hostname === '31.43.191.125' && u.port === '8080'
+    && !u.username && !u.password && /^\/[^/]+\/[^/]+\/\d+(?:\.ts)?$/.test(path);
+  if (relayTs) return { ok: true, kind: 'ts', relay: true };
   if (u.protocol !== 'https:') return { ok: false, reason: 'Este enlace usa http:// y el navegador lo bloquea en una web segura' };
   if (path.endsWith('.m3u8')) return { ok: true, kind: 'hls' };
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
-  if (path.endsWith('.ts')) return { ok: false, reason: 'Los navegadores no reproducen .ts' };
+  if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }

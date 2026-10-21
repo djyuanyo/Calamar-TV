@@ -113,7 +113,7 @@ function channelForm(existing, rerender) {
     field('Categoría', group, 'Elige una o escribe una nueva. Por defecto: Calamar TV.'),
     groupList,
     field('Logo (opcional)', logo),
-    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8 por https; la app también .ts, http y páginas de reproductor. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8 y .ts por HTTPS, y los enlaces TS del servidor HTTP configurado. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
