@@ -24,4 +24,13 @@ public final class CastSource {
   public static boolean live(String type) {
     return "application/x-mpegURL".equals(type) || "application/dash+xml".equals(type);
   }
+
+  public static boolean needsBridge(String address) {
+    try {
+      URI u = URI.create(address);
+      return "http".equals(u.getScheme()) && "31.43.191.125".equals(u.getHost())
+          && u.getPort() == 8080 && u.getUserInfo() == null && u.getRawQuery() == null
+          && u.getRawFragment() == null && u.getRawPath().matches("/[^/]+/[^/]+/[0-9]+(?:\\.ts)?");
+    } catch (Exception invalid) { return false; }
+  }
 }

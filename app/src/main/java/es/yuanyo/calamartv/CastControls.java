@@ -28,6 +28,9 @@ public final class CastControls {
   private Button send, toggle;
   private MediaRouteButton route;
   private boolean destroyed;
+  private boolean preparing;
+  private final CastAdapter adapter = new CastAdapter();
+  private final java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
 
   public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
       String title, Runnable sent) {
@@ -36,8 +39,8 @@ public final class CastControls {
       sessions = CastContext.getSharedInstance(activity).getSessionManager();
       route = new MediaRouteButton(activity) {
         @Override public boolean performClick() {
-          if (!connected() && CastSource.contentType(source.current()) == null) {
-            message("Esta fuente TS/HEVC necesita adaptación antes de enviarla a Chromecast.");
+          if (!connected() && CastSource.contentType(source.current()) == null && !CastSource.needsBridge(source.current())) {
+            message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
             return true;
           }
           return super.performClick();
@@ -83,12 +86,38 @@ public final class CastControls {
   private void message(String text) { Toast.makeText(activity, text, Toast.LENGTH_LONG).show(); }
 
   public void send() {
+    if (destroyed || preparing) return;
     String address = source.current();
     String type = CastSource.contentType(address);
     if (type == null) {
-      message("Esta fuente necesita adaptación para Chromecast. Los flujos TS/HEVC no se pueden enviar directamente.");
+      if (!CastSource.needsBridge(address)) {
+        message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
+        return;
+      }
+      preparing = true;
+      message("Preparando el canal para la TV…");
+      worker.execute(() -> {
+        try {
+          String url = adapter.prepare(address);
+          activity.runOnUiThread(() -> {
+            preparing = false;
+            if (!destroyed && address.equals(source.current())) load(url, "application/x-mpegURL", address);
+          });
+        } catch (Exception failure) {
+          activity.runOnUiThread(() -> {
+            preparing = false;
+            if (!destroyed) message(failure instanceof java.io.IOException
+                && failure.getMessage() != null && !failure.getMessage().contains("http")
+                ? failure.getMessage() : "No se pudo preparar el vídeo en el hosting.");
+          });
+        }
+      });
       return;
     }
+    load(address, type, address);
+  }
+
+  private void load(String address, String type, String original) {
     RemoteMediaClient remote = remote();
     if (remote == null) return;
     MediaMetadata metadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);
@@ -100,7 +129,7 @@ public final class CastControls {
         .setResultCallback(result -> {
           if (destroyed) return;
           if (result.getStatus().isSuccess()) {
-            if (address.equals(source.current())) sent.run();
+            if (original.equals(source.current())) sent.run();
             message("Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.");
           } else message("Chromecast no pudo cargar esta fuente. Comprueba el formato y el acceso del televisor al enlace.");
         });
@@ -120,6 +149,8 @@ public final class CastControls {
 
   public void destroy() {
     destroyed = true;
+    adapter.cancel();
+    worker.shutdownNow();
     if (sessions != null) sessions.removeSessionManagerListener(listener, CastSession.class);
   }
 }

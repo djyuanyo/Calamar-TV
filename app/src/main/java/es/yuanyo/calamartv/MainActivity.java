@@ -187,10 +187,11 @@ public class MainActivity extends Activity {
 
     LinearLayout mast = row();
     mast.setPadding(0, dp(10), 0, dp(2));
-    mast.addView(Ui.brandMark(this, 28), new LinearLayout.LayoutParams(dp(28), dp(28)));
-    TextView brand = Ui.brandText(this, wide() ? 18 : 16);
-    brand.setPadding(dp(10), 0, 0, 0);
-    mast.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
+    android.widget.ImageView brand = new android.widget.ImageView(this);
+    brand.setImageResource(R.drawable.calamar_menciano_tv);
+    brand.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
+    brand.setContentDescription("Calamar Menciano TV");
+    mast.addView(brand, new LinearLayout.LayoutParams(0, dp(wide() ? 86 : 68), 1));
     Button refreshButton =
         Ui.pill(this, "↻", Ui.Kind.SURFACE, true);
     refreshButton.setContentDescription("Actualizar el catálogo");

@@ -1,4 +1,5 @@
-/** Cast receives the original URL itself; blob URLs and relay-only headers cannot be sent. */
+import { needsCastBridge, prepareCastSource } from './cast-adapter.js';
+/** Cast loads direct media or a server-produced H.264/AAC playlist. */
 export function castSource(address) {
   try {
     const u = new URL(address);
@@ -11,7 +12,8 @@ export function castSource(address) {
   } catch { return null; }
 }
 
-export function initCast({ button, toggle, disconnect, getSource, onSent, onStatus, onDisconnect, win = window }) {
+export function initCast({ button, toggle, disconnect, getSource, onSent, onStatus, onDisconnect,
+  prepareSource = prepareCastSource, win = window }) {
   let context = null, controller = null, remote = null, sending = false;
   const status = (text) => onStatus?.(text);
   const update = () => {
@@ -23,15 +25,16 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
   };
   const send = async () => {
     const selected = getSource();
-    const source = castSource(selected?.url);
-    if (!source) {
-      status('Esta fuente necesita adaptación para Chromecast. Los flujos TS/HEVC del puente se reproducen aquí, pero no se pueden enviar directamente.');
+    let source = castSource(selected?.url);
+    if (!source && !needsCastBridge(selected?.url)) {
+      status('Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.');
       return;
     }
     if (!context || sending) return;
     sending = true;
     try {
       if (!context.getCurrentSession()) await context.requestSession();
+      if (!source) source = await prepareSource(selected.url, { onStatus: status });
       // Do not send a channel that was closed or replaced while the device picker was open.
       if (getSource()?.url !== selected.url) return;
       const api = win.chrome.cast.media;
@@ -47,7 +50,7 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
       status('Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.');
     } catch (error) {
       const code = typeof error === 'string' ? error : error?.code;
-      if (code !== 'cancel') status('No se pudo enviar el vídeo a Chromecast. Comprueba que el televisor pueda acceder al enlace y admita su formato.');
+      if (code !== 'cancel') status(error instanceof Error ? error.message : 'No se pudo enviar el vídeo a Chromecast. Comprueba el acceso del televisor al enlace.');
     } finally { sending = false; update(); }
   };
   button.addEventListener('click', send);

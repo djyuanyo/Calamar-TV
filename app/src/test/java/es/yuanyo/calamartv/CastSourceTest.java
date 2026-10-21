@@ -21,4 +21,11 @@ public class CastSourceTest {
     assertNull(CastSource.contentType("https://user:pass@example.com/a.m3u8"));
     assertNull(CastSource.contentType(null));
   }
+  @Test public void onlyVerifiedProviderUsesHostingTranscoder() {
+    assertTrue(CastSource.needsBridge("http://31.43.191.125:8080/Test/Pass/123"));
+    assertTrue(CastSource.needsBridge("http://31.43.191.125:8080/Test/Pass/123.ts"));
+    assertFalse(CastSource.needsBridge("http://127.0.0.1:8080/Test/Pass/123"));
+    assertFalse(CastSource.needsBridge("http://31.43.191.125:8080/Test/Pass/123?x=1"));
+    assertFalse(CastSource.needsBridge(null));
+  }
 }

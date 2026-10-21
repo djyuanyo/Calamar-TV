@@ -445,3 +445,7 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 /* Keep TV controls on their own row on narrow phone screens. */
 .cast-remote-controls { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .player:has(#ctl-cast-toggle:not([hidden])) .player-status { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 128px); }
+
+/* Original supplied crest, contained without cropping or stretching. */
+.header-brand-logo { display:block; height:80px; width:74px; object-fit:contain; }
+@media (max-width:640px) { .header-brand-logo { height:64px; width:59px; } }

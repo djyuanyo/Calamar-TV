@@ -17,7 +17,7 @@ test('raw TS, page URLs, unsafe schemes and header-only relay URLs are not sent'
     'https://user:pass@example.com/a.m3u8', null]) assert.equal(castSource(url), null);
 });
 
-function fixture() {
+function fixture(options = {}) {
   const node = () => ({ hidden: true, textContent: '', handlers: {},
     addEventListener(name, callback) { this.handlers[name] = callback; }, setAttribute() {} });
   const button = node(), toggle = node(), disconnect = node(), logs = [], loads = [];
@@ -36,7 +36,7 @@ function fixture() {
       CastContextEventType: { SESSION_STATE_CHANGED: 'session' },
       RemotePlayerEventType: { IS_PAUSED_CHANGED: 'pause' }, RemotePlayer: class { isPaused = false; },
       RemotePlayerController: class { addEventListener() {} playOrPause() { paused++; } } } } };
-  initCast({ button, toggle, disconnect, win, getSource: () => selected,
+  initCast({ ...options, button, toggle, disconnect, win, getSource: () => selected,
     onSent: () => sent++, onDisconnect: () => closed++, onStatus: text => logs.push(text) });
   return { button, toggle, disconnect, loads, logs, select: s => selected = s,
     state: () => ({ sent, closed, paused, ended }) };
@@ -59,7 +59,7 @@ test('unsupported TS keeps local playback running and does not start a receiver 
   await f.button.handlers.click();
   assert.equal(f.loads.length, 0);
   assert.equal(f.state().sent, 0);
-  assert.match(f.logs[0], /adaptación/);
+  assert.match(f.logs[0], /enlace de vídeo compatible/);
 });
 
 test('changing source while selecting a device cannot send the previous signed URL', async () => {
@@ -69,4 +69,26 @@ test('changing source while selecting a device cannot send the previous signed U
   await click;
   assert.equal(f.loads.length, 0);
   assert.equal(f.state().sent, 0);
+});
+
+
+test('HTTP provider is adapted before sending; original path credentials stay off the TV URL', async () => {
+  const original = 'http://31.43.191.125:8080/TestUser/TestPassword/123';
+  let prepared = null;
+  const url = 'https://calamarmenciano.com/calamar-cast.php?action=media&session=' + 'a'.repeat(64) + '&file=live.m3u8';
+  const f = fixture({ prepareSource: async address => { prepared = address; return { url, type: 'application/x-mpegURL', live: true }; } });
+  f.select({ url: original });
+  await f.button.handlers.click();
+  assert.equal(prepared, original);
+  assert.equal(f.loads[0].media.contentId, url);
+  assert.equal(f.state().sent, 1);
+});
+
+test('failed conversion preserves local playback and shows the installation error', async () => {
+  const f = fixture({ prepareSource: async () => { throw new Error('Falta instalar el adaptador.'); } });
+  f.select({ url: 'http://31.43.191.125:8080/Test/Pass/123.ts' });
+  await f.button.handlers.click();
+  assert.equal(f.loads.length, 0);
+  assert.equal(f.state().sent, 0);
+  assert.match(f.logs.at(-1), /Falta instalar/);
 });
