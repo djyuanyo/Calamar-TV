@@ -390,47 +390,8 @@ function closePlayer() {
   }
 }
 
-const copyButton = document.getElementById('player-copy');
-
-/** Copies text; resolves true only when the browser really accepted it. */
-async function copyText(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      /* Fall back to the older method below. */
-    }
-  }
-  const box = el('textarea', { 'aria-hidden': 'true', style: 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px' });
-  box.value = text;
-  player.append(box);
-  box.focus();
-  box.select();
-  box.setSelectionRange(0, text.length);
-  let ok = false;
-  try {
-    ok = document.execCommand('copy');
-  } catch {
-    ok = false;
-  }
-  box.remove();
-  return ok;
-}
-
-copyButton.addEventListener('click', async () => {
-  if (!current) return;
-  const link = channelLink(current);
-  if (await copyText(link)) {
-    copyButton.textContent = 'Enlace copiado';
-    setTimeout(() => (copyButton.textContent = 'Copiar enlace'), 2000);
-    return;
-  }
-  // The browser refused: show the link selected so it can be copied by hand.
-  const field = el('input', { class: 'link-field', readonly: true, value: link, 'aria-label': 'Enlace del canal' });
-  playerStatus.replaceChildren('No se pudo copiar automáticamente. Copia este enlace: ', field);
-  field.focus();
-  field.select();
+document.getElementById('player-refresh').addEventListener('click', () => {
+  if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl)));
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
 

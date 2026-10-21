@@ -449,3 +449,16 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 /* Original supplied crest, contained without cropping or stretching. */
 .header-brand-logo { display:block; height:80px; width:74px; object-fit:contain; }
 @media (max-width:640px) { .header-brand-logo { height:64px; width:59px; } }
+
+/* Same action order as Android; standard playback controls remain below the video. */
+.player-toolbar { display:flex; align-items:center; gap:6px; flex:none; }
+.player-toolbar .player-sources { order:0; flex-basis:auto; }
+.player-sources[hidden], .pill-btn[hidden] { display:none; }
+.player-toolbar .source-picker { position:relative; padding:9px 12px; border:1px solid rgba(255,255,255,.3); border-radius:999px; background:rgba(0,0,0,.35); font-size:13px; font-weight:700; }
+.player-toolbar .source-picker select { position:absolute; inset:0; width:100%; height:100%; max-width:none; opacity:0; }
+.player-toolbar .source-picker:has(select:focus-visible) { outline:3px solid var(--accent); outline-offset:2px; }
+.player-toolbar .pill-btn { padding:8px 10px; font-size:13px; }
+.share-screen { display:flex; align-items:center; gap:5px; }
+.share-screen svg { flex:none; width:20px; height:20px; }
+.share-screen span { max-width:82px; line-height:1.15; }
+@media (max-width:720px) { .player-toolbar { flex-basis:100%; overflow-x:auto; padding-block:4px; } }

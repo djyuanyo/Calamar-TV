@@ -54,8 +54,13 @@
           <span class="live-pill" id="player-pill" hidden>EN DIRECTO</span>
           <h2 id="player-title"></h2>
         </div>
-        <div class="player-sources" id="player-sources" role="group" aria-label="Fuentes"></div>
-        <button class="pill-btn" id="player-copy" type="button">Copiar enlace</button>
+        <div class="player-toolbar" aria-label="Controles del reproductor">
+          <button class="icon-btn" id="ctl-full" type="button" aria-label="Pantalla completa" aria-pressed="false"></button>
+          <div class="player-sources" id="player-sources" role="group" aria-label="Fuentes" hidden></div>
+          <button class="pill-btn" id="player-refresh" type="button">Refrescar</button>
+          <button class="pill-btn share-screen" id="ctl-cast" type="button" aria-label="Compartir pantalla" title="Compartir pantalla" aria-pressed="false" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 8V4h16v14h-7M3 12a9 9 0 0 1 9 9M3 16a5 5 0 0 1 5 5"/><circle cx="3.5" cy="20.5" r=".7" fill="currentColor"/></svg><span>Compartir pantalla</span></button>
+        </div>
+
       </div>
 
       <p class="player-status" id="player-status" role="status" aria-live="polite"></p>
@@ -80,8 +85,6 @@
             <div class="menu" id="ctl-menu" role="menu" aria-label="Calidad de vídeo" hidden></div>
           </div>
           <button class="icon-btn" id="ctl-pip" type="button" aria-label="Imagen en imagen" hidden></button>
-          <button class="icon-btn" id="ctl-cast" type="button" aria-label="Enviar a Chromecast" title="Enviar a Chromecast" aria-pressed="false" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 8V4h16v14h-7M3 12a9 9 0 0 1 9 9M3 16a5 5 0 0 1 5 5"/><circle cx="3.5" cy="20.5" r=".7" fill="currentColor"/></svg></button>
-          <button class="icon-btn" id="ctl-full" type="button" aria-label="Pantalla completa" aria-pressed="false"></button>
         </div>
       </div>
     </div>

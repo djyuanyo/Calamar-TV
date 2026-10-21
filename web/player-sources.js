@@ -22,6 +22,9 @@ export function selectedSource(sources, index) {
 }
 
 export function renderSourcePicker(container, sources, selectedIndex, onChange) {
+  container.hidden = sources.length < 2;
+  container.replaceChildren();
+  if (container.hidden) return;
   const doc = container.ownerDocument;
   const label = doc.createElement('label');
   label.className = 'source-picker';
