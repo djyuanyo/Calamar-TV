@@ -24,8 +24,12 @@ jobs:
             const base='https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0';
             const manifest=await page.request.get(base);
             const segment=new URL((await manifest.text()).split('\n').filter(x=>x&&!x.startsWith('#')).pop(),base).href;
-            for(const [name,headers] of Object.entries({plain:{},origin:{Origin:'https://djyuanyo.github.io'},referer:{Referer:'https://djyuanyo.github.io/'}})) {
+            for(const [name,headers] of Object.entries({plain:{},range:{Range:'bytes=0-'},chrome:{'User-Agent':'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'},vlc:{'User-Agent':'VLC/3.0.21 LibVLC/3.0.21'},accept:{Accept:'*/*'}})) {
               const response=await page.request.get(segment,{headers});
+              console.log('SEGMENT_PROBE',JSON.stringify({name,status:response.status(),size:(await response.body()).length}));
+            }
+            for(const [name,address] of Object.entries({withoutQuery:segment.split('?')[0],zeroOnly:segment.split('?')[0]+'?exp=0'})) {
+              const response=await page.request.get(address);
               console.log('SEGMENT_PROBE',JSON.stringify({name,status:response.status(),size:(await response.body()).length}));
             }
             const http = await page.request.get('https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0');
