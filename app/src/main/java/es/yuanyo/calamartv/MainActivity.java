@@ -644,9 +644,11 @@ public class MainActivity extends Activity {
       art.setForeground(Ui.focusOutline(this, 12));
       art.setClipToOutline(true);
     }
-    int logoSize = Math.round(artHeight * 0.86f);
-    Ui.LogoView logo = new Ui.LogoView(this, c.name, 10);
-    art.addView(logo, new FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER));
+    // The logo fills the card as much as it can, with a small margin from the rounded corners.
+    Ui.LogoView logo = new Ui.LogoView(this, c.name, 8);
+    FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
+    logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
+    art.addView(logo, logoSize);
     image(logo, c.logo);
     if (c.event) logo.setVisibility(View.GONE);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);

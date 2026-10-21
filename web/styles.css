@@ -476,7 +476,8 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .channel-options { max-height: 280px; overflow: auto; display: grid; gap: 8px; }
 .channel-options button { text-align: left; }
 
-.card:not(.event-card) .art > img { width: 86%; height: 86%; aspect-ratio: auto; object-fit: contain; box-shadow: none; }
+/* Channel logos fill the card as much as they can, with a small margin from the rounded corners. */
+.card:not(.event-card) .art > img { width: calc(100% - 12px); height: calc(100% - 12px); aspect-ratio: auto; object-fit: contain; box-shadow: none; border-radius: 8px; }
 .hero:not(.event-hero) .hero-art { width: clamp(180px,32vw,480px); height: clamp(180px,32vw,480px); }
 .hero-picks { max-width: 45%; overflow-x: auto; }
 .pick { flex-shrink: 0; }

@@ -5,6 +5,8 @@ on:
     paths: ['web/**', 'data/**', 'tools/**', '.github/workflows/web.yml']
   schedule:
     - cron: '17 */6 * * *'
+    # Event preview pages (evento/<slug>/) follow the catalog edited in the admin within ~15 minutes.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -26,7 +28,6 @@ jobs:
         run: |
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
-          php -l hosting/calamar-evento.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
       - name: Probar el lector de TDTChannels
@@ -34,7 +35,7 @@ jobs:
       - name: Probar los enlaces de los canales
         run: node --test tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs
       - name: Actualizar canales TDT
-        if: github.event_name != 'push'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
         run: |
           python tools/sync_tdt.py || echo "::warning::No se pudo actualizar TDTChannels; se publica el catálogo anterior"
           if ! git diff --quiet -- data/tdt.json; then
@@ -51,6 +52,8 @@ jobs:
           cp -r data _site/data
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
+          # One page per event with its cover and name, so shared links show them in WhatsApp.
+          python tools/event_pages.py _site https://djyuanyo.github.io/Calamar-TV/
           python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

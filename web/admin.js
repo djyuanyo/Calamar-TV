@@ -1,6 +1,6 @@
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
-import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor } from './catalog.js';
+import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
@@ -454,14 +454,15 @@ function eventList(rerender) {
   const query = el('input', { type: 'search', placeholder: 'Buscar evento o equipo' });
   const league = selectField(data.leagues, '', 'Todas las ligas');
   const output = el('div', { class: 'list' });
+  const slugs = eventSlugs(data);
   const draw = () => {
     const found = [...data.events].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
     output.replaceChildren(...found.map(event => el('div', { class: 'item' },
       el('img', { src: event.cover, alt: '', style: 'object-fit:cover' }),
       el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || 'Canal no disponible')),
-      el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath(event) }, 'Abrir evento'),
+      el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath({ ...event, slug: slugs.get(event.id) }) }, 'Abrir evento'),
         el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
-          try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink(event)); button.textContent = 'Copiado'; }
+          try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink({ ...event, slug: slugs.get(event.id) })); button.textContent = 'Copiado'; }
           catch { notice = 'No se pudo copiar. Usa Abrir evento y copia la dirección.'; rerender(); }
         } }, 'Copiar enlace'),
         el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),

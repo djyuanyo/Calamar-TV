@@ -1,8 +1,12 @@
 export const EVENT_STATES = { scheduled: 'Programado', live: 'En juego', finished: 'Finalizado' };
-export const eventPath = (event) => `#/evento/${encodeURIComponent(event.eventId || event.id)}`;
-/** Link to share: hosting/calamar-evento.php shows the cover and name in WhatsApp and opens the event. */
-export const EVENT_SHARE_PAGE = 'https://calamarmenciano.com/calamar-evento.php';
-export const eventShareLink = (event) => `${EVENT_SHARE_PAGE}?id=${encodeURIComponent(event.eventId || event.id)}`;
+/** The event's link uses the slug of its name, like channels: #/evento/local-vs-visitante. */
+export const eventPath = (event) => `#/evento/${encodeURIComponent(event.slug || event.eventId || event.id)}`;
+export const WEB_BASE = 'https://djyuanyo.github.io/Calamar-TV/';
+/**
+ * Link to share: tools/event_pages.py publishes evento/<slug>/ on the public web with the cover and
+ * the name for WhatsApp, and it opens the event. Until that page exists 404.html still opens it.
+ */
+export const eventShareLink = (event) => `${WEB_BASE}evento/${encodeURIComponent(event.slug || event.eventId || event.id)}/`;
 export const eventOrder = (a, b) => (Date.parse(a.startAt) || Infinity) - (Date.parse(b.startAt) || Infinity) || String(a.id).localeCompare(String(b.id));
 export function eventMeta(event, data) {
   const league = (data?.leagues || []).find((l) => l.id === event.leagueId)?.name || '';

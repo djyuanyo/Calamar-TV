@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { madridInstant, localDateTime, eventPath } from '../web/sports.js';
-import { events, eventRows, groups, homeHighlights, merge, categoryList, resolveCategory, defaultColor } from '../web/catalog.js';
+import { madridInstant, localDateTime, eventPath, eventShareLink } from '../web/sports.js';
+import { events, eventRows, eventSlugs, groups, homeHighlights, merge, categoryList, resolveCategory, defaultColor } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
 const channel = { id:'sports', name:'Sports', streams:['https://example.com/live.m3u8'] };
 const make = () => ({ channels:[channel], featured:['sports'], hidden:[], leagues:[{id:'liga',name:'Mi Liga'}], teams:[{id:'home',name:'Local',leagueId:'liga'},{id:'away',name:'Visitante'}], events:[{id:'match',name:'Partido',cover:'https://example.com/photo.jpg',channelId:'sports',leagueId:'liga',homeTeamId:'home',awayTeamId:'away',startAt:'2026-12-01T20:00:00.000Z',featured:true}] });
@@ -12,12 +12,20 @@ test('Madrid time converts winter and summer and round trips',()=>{
   assert.throws(()=>madridInstant('2026-03-29T02:30'));
   assert.throws(()=>madridInstant('2026-02-30T21:00'));
 });
-test('permalink is independent of event name and chosen channel',()=>{
+test('event links use the slug of the event name, like channels, and ignore the chosen channel',()=>{
   const data=make(); const before=events(merge(null,data),data)[0];
-  data.events[0].name='Otro partido';data.channels[0]={...channel,name:'Otro canal'};
+  assert.equal(eventPath(before),'#/evento/partido');
+  assert.equal(eventShareLink(before),'https://djyuanyo.github.io/Calamar-TV/evento/partido/');
+  data.channels[0]={...channel,name:'Otro canal'};
+  assert.equal(eventPath(events(merge(null,data),data)[0]),'#/evento/partido');
+  data.events[0].name='Final de Copa: Menciana–Ñora';
   const after=events(merge(null,data),data)[0];
-  assert.equal(eventPath(before),eventPath(after)); assert.equal(eventPath(after),'#/evento/match');
+  assert.equal(eventPath(after),'#/evento/final-de-copa-menciana-nora');
   assert.match(after.meta,/Mi Liga/); assert.match(after.meta,/01\/12\/2026/);
+});
+test('repeated event names get -2, -3 in date order, whatever their channel',()=>{
+  const data=make(); data.events.push({...data.events[0],id:'later',startAt:'2026-12-08T20:00:00Z'},{...data.events[0],id:'earlier',startAt:'2026-11-01T20:00:00Z'});
+  assert.deepEqual([...eventSlugs(data)],[['earlier','partido'],['match','partido-2'],['later','partido-3']]);
 });
 test('chronological events, unscheduled last; highlighted channels and events coexist',()=>{
   const data=make(); data.events.push({...data.events[0],id:'earlier',startAt:'2026-11-01T20:00:00Z',featured:false},{...data.events[0],id:'legacy',startAt:'',featured:false});

@@ -213,11 +213,28 @@ export function webPlayback(url) {
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
 
+/**
+ * Link name of every event, from its name like channels ("local-vs-visitante"); repeated names get
+ * -2, -3… in date order. tools/event_pages.py and SportsCatalog.slugs() apply the same rule.
+ */
+export function eventSlugs(custom) {
+  const out = new Map(), used = new Set();
+  for (const event of [...(custom?.events || [])].sort(eventOrder)) {
+    const base = slugify(event.name);
+    let slug = base;
+    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    out.set(event.id, slug);
+  }
+  return out;
+}
+
 /** Each event has a stable identity and resolves the current channel sources. */
 export function events(channels, custom) {
+  const slugs = eventSlugs(custom);
   return [...(custom?.events || [])].sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
-    return target ? [{ ...target, ...event, id: event.id, eventId: event.id, slug: event.id,
+    return target ? [{ ...target, ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id),
       event: true, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
       streams: target.streams, playable: target.playable }] : [];
   });

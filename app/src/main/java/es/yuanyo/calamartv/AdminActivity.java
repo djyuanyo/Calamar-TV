@@ -491,7 +491,7 @@ public class AdminActivity extends Activity {
 
   private void copyLink(String id) {
     android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Evento",SportsCatalog.link(id)));
+    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Evento",SportsCatalog.link(SportsCatalog.slugs(catalog).get(id))));
     Toast.makeText(this,"Enlace del evento copiado",Toast.LENGTH_SHORT).show();
   }
   private android.text.TextWatcher watcher(Runnable run) {
