@@ -1339,7 +1339,7 @@ public class MainActivity extends Activity {
     name.setSingleLine(false);
     name.setMaxLines(Integer.MAX_VALUE);
     name.setEllipsize(null);
-    name.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_BALANCED);
+    if (Build.VERSION.SDK_INT >= 29) name.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_BALANCED);
     name.setLineSpacing(0, 1.05f);
   }
 
