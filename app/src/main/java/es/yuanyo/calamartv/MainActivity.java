@@ -814,6 +814,8 @@ public class MainActivity extends Activity {
     if (UserChannels.isPage(first)) intent.putExtra("page_url", first);
     else intent.putStringArrayListExtra("media_urls", new ArrayList<>(c.streams));
     intent.putExtra("title", c.name);
+    // Events can be shared from the player with their preview link (cover and name in WhatsApp).
+    if (c.event) intent.putExtra("share_url", SportsCatalog.link(SportsCatalog.slugs(custom).get(c.id)));
     startActivity(intent);
   }
 
