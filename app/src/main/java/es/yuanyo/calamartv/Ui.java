@@ -96,6 +96,21 @@ final class Ui {
     return s;
   }
 
+  /**
+   * Lime focus border drawn above a card's content: an event's cover fills the whole card and would
+   * hide the border of its background (channels show it because their logo is smaller).
+   */
+  static StateListDrawable focusOutline(Context c, float radiusDp) {
+    StateListDrawable s = new StateListDrawable();
+    GradientDrawable on = new GradientDrawable();
+    on.setCornerRadius(dp(c, radiusDp));
+    on.setStroke(dp(c, 2), ACC);
+    s.addState(new int[] {android.R.attr.state_focused}, on);
+    s.addState(new int[] {android.R.attr.state_pressed}, on);
+    s.addState(new int[] {}, new GradientDrawable());
+    return s;
+  }
+
   /** Card background in the colour of its category (same as the web), lime outline when focused. */
   static StateListDrawable categoryBackground(Context c, int color, float radiusDp) {
     StateListDrawable s = new StateListDrawable();

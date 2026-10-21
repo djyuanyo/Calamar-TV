@@ -553,16 +553,6 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, dp(48));
     wp.setMargins(0, 0, dp(10), 0);
     actions.addView(watch, wp);
-    Button all = Ui.pill(this, "Todos los canales", Ui.Kind.SURFACE, false);
-    all.setOnClickListener(
-        new View.OnClickListener() {
-          public void onClick(View v) {
-            mode = "Canales";
-            group = "Todos";
-            home();
-          }
-        });
-    actions.addView(all, new LinearLayout.LayoutParams(-2, dp(48)));
     content.addView(actions);
     frame.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
@@ -650,6 +640,9 @@ public class MainActivity extends Activity {
       cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
       image(cover, c.cover);
+      // The cover covers the background's border, so the focus border goes on top, as on channels.
+      art.setForeground(Ui.focusOutline(this, 12));
+      art.setClipToOutline(true);
     }
     int logoSize = Math.round(artHeight * 0.86f);
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 10);

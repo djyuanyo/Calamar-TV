@@ -179,6 +179,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
     root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
     setContentView(root);
+    // Channels and events open in full screen; the controller's button shows the panel again, and
+    // Back closes the player straight away instead of first leaving full screen.
+    setFullscreen(true);
   }
 
   private Button button(LinearLayout row, String text, Runnable action) {
@@ -268,13 +271,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onWindowFocusChanged(hasFocus);
     // The system shows its bars again when another app was in front; hide them once more.
     if (hasFocus && fullscreen) applySystemBars(true);
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
-  public void onBackPressed() {
-    if (fullscreen) setFullscreen(false);
-    else super.onBackPressed();
   }
 
   private void chooseDns() {
