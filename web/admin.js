@@ -277,13 +277,14 @@ async function coverFromFile(file) {
 function eventForm(existing, rerender) {
   const data = file.data;
   const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
-  const cover = el('input', { type: 'text', value: existing?.cover || '', placeholder: 'https://…/partido.jpg' });
+  let selectedCover = existing?.cover || '';
+  const cover = el('input', { type: 'url', value: selectedCover.startsWith('https://') ? selectedCover : '', placeholder: 'https://…/partido.jpg' });
   const preview = el('img', { class: 'event-preview', alt: 'Vista previa de la portada', hidden: !existing?.cover, src: existing?.cover });
-  const updatePreview = () => { preview.hidden = !validCover(cover.value.trim()); if (!preview.hidden) preview.src = cover.value.trim(); };
-  cover.addEventListener('input', updatePreview);
+  const updatePreview = () => { preview.hidden = !validCover(selectedCover); if (!preview.hidden) preview.src = selectedCover; };
+  cover.addEventListener('input', () => { selectedCover = cover.value.trim(); updatePreview(); });
   const status = el('p', { class: 'note', role: 'status' });
   const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
-    try { status.textContent = 'Preparando portada…'; cover.value = await coverFromFile(upload.files[0]); updatePreview(); status.textContent = 'Portada preparada.'; }
+    try { status.textContent = 'Preparando portada…'; selectedCover = await coverFromFile(upload.files[0]); cover.value = ''; updatePreview(); status.textContent = 'Portada preparada.'; }
     catch (error) { status.textContent = error.message; }
   } });
   let selected = existing?.channelId || '';
@@ -303,9 +304,9 @@ function eventForm(existing, rerender) {
     event.preventDefault(); if (saving) return;
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
-      if (!validCover(cover.value.trim())) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
+      if (!validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
       if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
-      const entry = { id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: cover.value.trim(), channelId: selected };
+      const entry = { id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected };
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
       validateCatalog({ ...data, events: updated });
       data.events = updated;

@@ -380,7 +380,10 @@ public class AdminActivity extends Activity {
     form.setOrientation(LinearLayout.VERTICAL);
     form.setPadding(dp(20), dp(8), dp(20), dp(8));
     EditText name = input(form, "Nombre del evento", existing == null ? "" : existing.optString("name"));
-    EditText cover = input(form, "Enlace HTTPS de la foto de portada", existing == null ? "" : existing.optString("cover"));
+    String savedCover = existing == null ? "" : existing.optString("cover");
+    EditText cover = input(form, "Enlace HTTPS de la foto de portada", savedCover.startsWith("https://") ? savedCover : "");
+    cover.setTag(savedCover);
+    if (savedCover.startsWith("data:image/")) cover.setHint("Portada guardada. Pega un enlace para cambiarla.");
     Button upload = new Button(this);
     upload.setText("Elegir foto de portada"); upload.setAllCaps(false);
     upload.setOnClickListener(v -> {
@@ -413,6 +416,7 @@ public class AdminActivity extends Activity {
     dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
       try {
         String title = name.getText().toString().trim(), photo = cover.getText().toString().trim();
+        if (photo.isEmpty() && cover.getTag() instanceof String) photo = (String) cover.getTag();
         String channelId = ids.get(search.getText().toString());
         if (title.isEmpty()) throw new JSONException("Escribe el nombre del evento");
         if (!SharedCatalog.validCover(photo)) throw new JSONException("Elige una foto o pega un enlace HTTPS de portada");
@@ -464,7 +468,7 @@ public class AdminActivity extends Activity {
       protected void onPostExecute(String cover) {
         if (isFinishing()) return;
         if (cover == null) target.setError("No se pudo preparar la foto. Prueba una imagen más pequeña.");
-        else { target.setText(cover); Toast.makeText(AdminActivity.this, "Portada preparada", Toast.LENGTH_SHORT).show(); }
+        else { target.setText(""); target.setTag(cover); target.setHint("Foto seleccionada. Pega un enlace para cambiarla."); Toast.makeText(AdminActivity.this, "Portada preparada", Toast.LENGTH_SHORT).show(); }
       }
     }.execute();
   }
