@@ -69,6 +69,6 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
             .setUserAgent(PlayerDocument.USER_AGENT);
     if (referer != null && !referer.isEmpty())
       factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
-    return factory;
+    return new HttpIptvDataSource.Factory(factory);
   }
 }

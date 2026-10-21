@@ -619,7 +619,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     String path = Uri.parse(source.url).getPath();
     if (path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-    if ("ts".equals(UserChannels.kind(source.url))) item.setMimeType(MimeTypes.VIDEO_MP2T);
+    if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
     player.setMediaItem(item.build());
     player.prepare();
