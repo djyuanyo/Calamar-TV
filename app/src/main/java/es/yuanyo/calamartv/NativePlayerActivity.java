@@ -47,6 +47,7 @@ import java.util.concurrent.Executors;
 public final class NativePlayerActivity extends androidx.appcompat.app.AppCompatActivity {
   private CastControls castControls;
   private boolean castPlayback;
+  private Button sourceButton;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final List<VideoResolver.Source> sources = new ArrayList<>();
@@ -138,7 +139,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     LinearLayout.LayoutParams fullscreenSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
     fullscreenSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
     controls.addView(fullscreenButton, fullscreenSize);
-    button(controls, "Fuentes", this::chooseSource);
+    sourceButton = button(controls, "Fuentes", this::chooseSource);
+    sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
     button(controls, "Refrescar", () -> {
       automaticAttempts = 0;
       mediaHttp1 = false;
@@ -179,7 +181,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     setContentView(root);
   }
 
-  private void button(LinearLayout row, String text, Runnable action) {
+  private Button button(LinearLayout row, String text, Runnable action) {
     Button b = Ui.pill(this, text, Ui.Kind.SURFACE, true);
     b.setTextSize(12);
     b.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);
@@ -188,6 +190,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(this, 40));
     p.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
     row.addView(b, p);
+    return b;
+  }
+
+  private void updateSourceButton() {
+    if (sourceButton != null) sourceButton.setVisibility(sources.size() > 1 ? View.VISIBLE : View.GONE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -322,6 +329,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       sources.add(
           new VideoResolver.Source(
               directUrls.size() > 1 ? name + " · fuente " + (i + 1) : name, directUrls.get(i)));
+    updateSourceButton();
     selection = Math.min(selection, sources.size() - 1);
     VideoResolver.Source source = sources.get(selection);
     status.setText("Conectando con " + Uri.parse(source.url).getHost() + "…");
@@ -349,6 +357,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       resolving = false;
       sources.clear();
       sources.add(new VideoResolver.Source("Vídeo directo", pageUrl));
+      updateSourceButton();
       playSource(sources.get(0));
       return;
     }
@@ -366,6 +375,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
+                  updateSourceButton();
                   if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -792,7 +802,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               android.webkit.WebResourceError error) {
             if (resource.isForMainFrame() && active && generation == request && browser == view)
               problem(
-                  "No se pudo cargar el reproductor web. Comprueba la conexión y pulsa Modo web.");
+                  "No se pudo cargar el reproductor web. Comprueba la conexión y pulsa Refrescar.");
           }
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
@@ -806,6 +816,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);
+    updateSourceButton();
     selection = 0;
     playSource(source);
   }
