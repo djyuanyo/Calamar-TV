@@ -1,0 +1,113 @@
+package es.yuanyo.calamartv;
+
+import android.graphics.Color;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+import androidx.fragment.app.FragmentActivity;
+import androidx.mediarouter.app.MediaRouteButton;
+import com.google.android.gms.cast.MediaInfo;
+import com.google.android.gms.cast.MediaLoadRequestData;
+import com.google.android.gms.cast.MediaMetadata;
+import com.google.android.gms.cast.framework.CastButtonFactory;
+import com.google.android.gms.cast.framework.CastContext;
+import com.google.android.gms.cast.framework.CastSession;
+import com.google.android.gms.cast.framework.SessionManager;
+import com.google.android.gms.cast.framework.SessionManagerListener;
+import com.google.android.gms.cast.framework.media.RemoteMediaClient;
+
+/** Native discovery and TV controls; ordinary local playback survives absent Play services. */
+public final class CastControls {
+  public interface SourceProvider { String current(); }
+  private final FragmentActivity activity;
+  private final SourceProvider source;
+  private final String title;
+  private final Runnable sent;
+  private SessionManager sessions;
+  private Button send, toggle;
+  private boolean destroyed;
+
+  public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
+      String title, Runnable sent) {
+    this.activity = activity; this.source = source; this.title = title; this.sent = sent;
+    try {
+      sessions = CastContext.getSharedInstance(activity).getSessionManager();
+      MediaRouteButton route = new MediaRouteButton(activity);
+      route.setContentDescription("Enviar a Chromecast");
+      route.setBackgroundColor(Color.TRANSPARENT);
+      row.addView(route, new LinearLayout.LayoutParams(Ui.dp(activity, 48), Ui.dp(activity, 48)));
+      CastButtonFactory.setUpMediaRouteButton(activity, route);
+      send = new Button(activity); send.setText("Enviar a TV");
+      send.setOnClickListener(v -> send()); row.addView(send);
+      toggle = new Button(activity); toggle.setText("⏯ TV");
+      toggle.setContentDescription("Reproducir o pausar en Chromecast");
+      toggle.setOnClickListener(v -> {
+        RemoteMediaClient remote = remote();
+        if (remote != null) { if (remote.isPaused()) remote.play(); else remote.pause(); }
+      });
+      row.addView(toggle);
+      sessions.addSessionManagerListener(listener, CastSession.class);
+      update();
+    } catch (RuntimeException unavailable) {
+      sessions = null; // Some Android TV devices do not include Google Play services.
+    }
+  }
+
+  private void update() {
+    if (send != null) send.setVisibility(connected() ? View.VISIBLE : View.GONE);
+    if (toggle != null) toggle.setVisibility(connected() ? View.VISIBLE : View.GONE);
+  }
+
+  public boolean connected() {
+    CastSession session = sessions == null ? null : sessions.getCurrentCastSession();
+    return session != null && session.isConnected();
+  }
+
+  private RemoteMediaClient remote() {
+    return connected() ? sessions.getCurrentCastSession().getRemoteMediaClient() : null;
+  }
+
+  private void message(String text) { Toast.makeText(activity, text, Toast.LENGTH_LONG).show(); }
+
+  public void send() {
+    String address = source.current();
+    String type = CastSource.contentType(address);
+    if (type == null) {
+      message("Esta fuente necesita adaptación para Chromecast. Los flujos TS/HEVC no se pueden enviar directamente.");
+      return;
+    }
+    RemoteMediaClient remote = remote();
+    if (remote == null) return;
+    MediaMetadata metadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);
+    metadata.putString(MediaMetadata.KEY_TITLE, title == null ? "Calamar TV" : title);
+    MediaInfo media = new MediaInfo.Builder(address).setContentType(type)
+        .setStreamType(CastSource.live(type) ? MediaInfo.STREAM_TYPE_LIVE : MediaInfo.STREAM_TYPE_BUFFERED)
+        .setMetadata(metadata).build();
+    remote.load(new MediaLoadRequestData.Builder().setMediaInfo(media).setAutoplay(true).build())
+        .setResultCallback(result -> {
+          if (destroyed) return;
+          if (result.getStatus().isSuccess()) {
+            if (address.equals(source.current())) sent.run();
+            message("Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.");
+          } else message("Chromecast no pudo cargar esta fuente. Comprueba el formato y el acceso del televisor al enlace.");
+        });
+  }
+
+  private final SessionManagerListener<CastSession> listener = new SessionManagerListener<CastSession>() {
+    @Override public void onSessionStarting(CastSession session) {}
+    @Override public void onSessionStarted(CastSession session, String id) { update(); send(); }
+    @Override public void onSessionStartFailed(CastSession session, int error) { update(); message("No se pudo conectar con Chromecast."); }
+    @Override public void onSessionEnding(CastSession session) {}
+    @Override public void onSessionEnded(CastSession session, int error) { update(); message("Chromecast desconectado. Pulsa Reintentar para seguir en el dispositivo."); }
+    @Override public void onSessionResuming(CastSession session, String id) {}
+    @Override public void onSessionResumed(CastSession session, boolean suspended) { update(); }
+    @Override public void onSessionResumeFailed(CastSession session, int error) { update(); }
+    @Override public void onSessionSuspended(CastSession session, int reason) { update(); }
+  };
+
+  public void destroy() {
+    destroyed = true;
+    if (sessions != null) sessions.removeSessionManagerListener(listener, CastSession.class);
+  }
+}

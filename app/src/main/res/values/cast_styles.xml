@@ -1,0 +1,6 @@
+<resources>
+    <style name="CalamarCastTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="colorAccent">#d6ff00</item>
+    </style>
+</resources>

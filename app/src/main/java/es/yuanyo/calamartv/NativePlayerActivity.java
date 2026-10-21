@@ -44,7 +44,8 @@ import java.util.concurrent.Executors;
 
 /** Page -> current media source -> Media3. Signed media URLs are kept in memory only. */
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
-public final class NativePlayerActivity extends Activity {
+public final class NativePlayerActivity extends androidx.fragment.app.FragmentActivity {
+  private CastControls castControls;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final List<VideoResolver.Source> sources = new ArrayList<>();
@@ -129,6 +130,16 @@ public final class NativePlayerActivity extends Activity {
     controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
     button(controls, "DNS", this::chooseDns);
     button(controls, "Diagnóstico", this::diagnose);
+    castControls = new CastControls(this, controls,
+        () -> !currentUrl.isEmpty() ? currentUrl
+            : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
+        title, () -> {
+          if (player != null) player.pause();
+          if (browser != null) browser.onPause();
+          handler.removeCallbacks(renewal);
+          handler.removeCallbacks(renewalRequest);
+          status.setText("Reproduciendo en Chromecast. Usa los controles TV.");
+        });
     if (directUrl != null) {
       button(
           controls,
@@ -856,6 +867,7 @@ public final class NativePlayerActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    if (castControls != null) castControls.destroy();
     worker.shutdownNow();
     super.onDestroy();
   }

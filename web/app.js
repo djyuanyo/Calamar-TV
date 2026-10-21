@@ -1,6 +1,7 @@
 import { merge, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs } from './ts-player.js';
+import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 
 const view = document.getElementById('view');
@@ -216,6 +217,15 @@ let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden });
+initCast({
+  button: document.getElementById('ctl-cast'),
+  toggle: document.getElementById('ctl-cast-toggle'),
+  disconnect: document.getElementById('ctl-cast-disconnect'),
+  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  onSent: stop,
+  onStatus: (message) => { playerStatus.textContent = message; },
+  onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
+});
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
