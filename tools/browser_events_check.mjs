@@ -130,7 +130,7 @@ try {
   assert.equal(await page.locator('#player').isHidden(), true);
   await page.locator('.slider-dots button').nth(1).click();
   assert.equal(await heroTitle(), 'Sports Two');
-  await page.locator('.event-card').click();
+  await Promise.all([page.waitForRequest('https://example.com/one.mp4'), page.locator('.event-card').click()]);
   await page.locator('#player:not([hidden])').waitFor();
   // Event links use the slug of the event name, like channels.
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));

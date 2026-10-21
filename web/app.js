@@ -99,7 +99,8 @@ const matchScores = new Map();
 function eventBadge(c, cls) {
   const label = eventLabel(c, Date.now(), EVENT_STATES);
   const score = matchScores.get(c.matchId);
-  const badge = el('span', { class: `${cls}${(score || label).live ? ' live' : ''}${!score && label.upcoming ? ' upcoming' : ''}`, 'data-match-id': c.matchUrl && c.matchId ? c.matchId : null, title: c.matchUrl ? 'Resultados: ESPN' : null }, score?.text || (c.matchUrl ? 'Consultando marcador…' : label.text));
+  const upcoming = label.upcoming && (!score || score.state === 'scheduled');
+  const badge = el('span', { class: `${cls}${(score || label).live ? ' live' : ''}${upcoming ? ' upcoming' : ''}`, 'data-match-id': c.matchUrl && c.matchId ? c.matchId : null, 'data-match-start': c.matchUrl ? c.startAt : null, title: c.matchUrl ? 'Resultados: ESPN' : null }, upcoming ? label.text : score?.text || (c.matchUrl ? 'Consultando marcador…' : label.text));
   return badge;
 }
 
@@ -113,7 +114,9 @@ async function refreshScores() {
     try { result = await fetchMatch(id); matchScores.set(id, result); }
     catch { result = { text: 'Marcador no disponible', live: false }; matchScores.delete(id); }
     for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
-      node.textContent = result.text; node.classList.toggle('live', result.live); node.classList.remove('upcoming');
+      const scheduled = result.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
+      node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : result.text;
+      node.classList.toggle('live', result.live); node.classList.toggle('upcoming', scheduled);
     }
   })); } finally { scoreBusy = false; }
 }
@@ -619,7 +622,7 @@ function open(c, fromRoute = false) {
   current = c;
   shareButton.hidden = !c.event;
   playerTitle.textContent = c.name;
-  if (c.event && c.matchUrl) playerTitle.append(' · ', eventBadge(c, 'player-score'));
+  if (c.event && c.matchUrl) playerTitle.append(eventBadge(c, 'player-score'));
   refreshScores();
   playerLogo.hidden = !c.logo;
   if (c.logo) playerLogo.src = c.logo;

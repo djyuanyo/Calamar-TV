@@ -649,12 +649,13 @@ public class MainActivity extends Activity {
   }
   void updateScores(View view){
     if(view==null)return;
-    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();MatchScores.Result score=matchResults.get(c.matchId);((TextView)view).setText(score==null?"Marcador no disponible":score.text);view.setContentDescription(((TextView)view).getText()+". Resultados: ESPN");}
+    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();MatchScores.Result score=matchResults.get(c.matchId);((TextView)view).setText(score==null?"Marcador no disponible":scoreLabel(c,score));view.setContentDescription(((TextView)view).getText()+". Resultados: ESPN");}
     if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)updateScores(group.getChildAt(i));}
   }
+  String scoreLabel(Catalog.Channel c,MatchScores.Result score){return "scheduled".equals(score.state) && SportsCatalog.instant(c.startAt)>System.currentTimeMillis()?SportsCatalog.label("scheduled",c.startAt,System.currentTimeMillis()):score.text;}
   TextView eventBadge(Catalog.Channel c, float sp) {
     MatchScores.Result score=matchResults.get(c.matchId);
-    String label=c.matchUrl.isEmpty()?SportsCatalog.label(c.status,c.startAt,System.currentTimeMillis()):score==null?"Consultando marcador…":score.text;
+    String label=c.matchUrl.isEmpty()?SportsCatalog.label(c.status,c.startAt,System.currentTimeMillis()):score==null?"Consultando marcador…":scoreLabel(c,score);
     TextView badge=SportsCatalog.LIVE.equals(label)?Ui.livePill(this,label.toUpperCase(Locale.ROOT),sp):Ui.tag(this,label,sp);
     if(!c.matchUrl.isEmpty()&&!c.matchId.isEmpty()){badge.setTag(c);badge.setContentDescription(label+". Resultados: ESPN");handler.removeCallbacks(scoreRefresh);handler.postDelayed(scoreRefresh,300);}
     return badge;
