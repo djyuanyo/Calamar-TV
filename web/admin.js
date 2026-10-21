@@ -1,3 +1,4 @@
+import { resolveMatch, googleMatchUrl } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
@@ -401,6 +402,20 @@ function eventForm(existing, rerender) {
     if (local && visitor && (!name.value.trim() || name.value === lastAuto)) name.value = lastAuto = `${local.name} vs ${visitor.name}`;
   };
   home.addEventListener('change', fillName); away.addEventListener('change', fillName);
+  const matchLink = el('input', { type: 'url', value: existing?.matchUrl || '', placeholder: 'https://share.google/… o https://www.google.com/search?…' });
+  const matchPreview = el('p', { class: 'note', role: 'status' });
+  let checkedMatch = null, checking = false;
+  const checkMatch = async () => {
+    if (checking) throw Error('Espera a que termine la comprobación del partido.');
+    checking = true; matchPreview.textContent = 'Identificando partido…';
+    try {
+      const resolved = await resolveMatch(matchLink.value.trim(), madridInstant(start.value));
+      checkedMatch = { ...resolved, start: start.value };
+      matchPreview.textContent = `${resolved.result.home} – ${resolved.result.away} · ${resolved.result.text} · Resultados: ESPN`;
+      return resolved;
+    } finally { checking = false; }
+  };
+  const matchCheck = el('button', { type: 'button', class: 'btn secondary', onclick: async () => { try { await checkMatch(); } catch (e) { matchPreview.textContent = e.message; } } }, 'Comprobar partido');
   const start = el('input', { type: 'datetime-local', required: true, value: localDateTime(existing?.startAt), step: '60' });
   const star = el('input', { type: 'checkbox', checked: !!existing?.featured });
   const state = selectField(Object.entries(EVENT_STATES).map(([id,name]) => ({id,name})), existing?.status || 'scheduled');
@@ -438,12 +453,19 @@ function eventForm(existing, rerender) {
       if (!validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
       if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
       const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
+      const link = matchLink.value.trim();
+      if (link) {
+        googleMatchUrl(link);
+        const resolved = checkedMatch?.matchUrl === link && checkedMatch.start === start.value ? checkedMatch
+          : existing?.matchUrl === link && existing.startAt === entry.startAt && existing.matchId ? existing : await checkMatch();
+        Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
+      } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
       validateCatalog({ ...data, events: updated });
       data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google. La fecha debe coincidir con el partido. Marcador y minuto: ESPN; solo partidos disponibles en su cobertura.'), matchCheck, matchPreview, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 

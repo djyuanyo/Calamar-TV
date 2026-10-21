@@ -49,7 +49,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 let browser;
 try {
-  browser = await chromium.launch({ headless: true, ...(process.env.CALAMAR_CHROME_CHANNEL ? { channel: process.env.CALAMAR_CHROME_CHANNEL } : {}) });
+  browser = await chromium.launch({ headless: true, ...(process.env.CALAMAR_CHROME_EXECUTABLE ? { executablePath: process.env.CALAMAR_CHROME_EXECUTABLE, args: JSON.parse(process.env.CALAMAR_CHROME_ARGS || '[]') } : {}), ...(process.env.CALAMAR_CHROME_CHANNEL ? { channel: process.env.CALAMAR_CHROME_CHANNEL } : {}) });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.clock.install({ time: new Date('2026-11-30T12:00:00Z') });
   const errors = [], requests = [];
@@ -252,6 +252,32 @@ try {
   assert.deepEqual(await page.locator('.chips .chip').allTextContents(), ['Todos', 'Cine', 'Fútbol']);
   // Every card of a category shares its colour.
   assert.equal(await page.locator('.card', { hasText: 'Sports One' }).evaluate(card => card.style.getPropertyValue('--c')), '#aa0000');
+  // Add a Google share link to a fresh event; provider data is isolated from the live internet.
+  let scoreFinished = false, scoreOffline = false;
+  const matchFixture = () => ({ id: '401882870', date: '2026-11-30T12:00Z', competitions: [{ id: '401882870', status: { displayClock: "74'", type: { state: scoreFinished ? 'post' : 'in', name: scoreFinished ? 'STATUS_FULL_TIME' : 'STATUS_SECOND_HALF', completed: scoreFinished } }, competitors: [{ homeAway: 'home', score: '2', team: { displayName: 'Levante' } }, { homeAway: 'away', score: '1', team: { displayName: 'Athletic Club' } }] }] });
+  await page.route('https://calamarmenciano.com/calamar-match.php?**', route => route.fulfill({ json: { url: 'https://www.google.com/search?q=levante+ud+contra+athletic+club' } }));
+  await page.route('https://site.api.espn.com/**', route => scoreOffline ? route.abort() : route.fulfill({ json: route.request().url().includes('scoreboard') ? { events: [matchFixture()] } : { header: matchFixture() } }));
+  await page.goto(base + '/#/admin/evento');
+  await page.getByRole('heading', { name: 'Crear evento', exact: true }).waitFor();
+  await page.getByLabel('Nombre del evento', { exact: true }).fill('Levante vs Athletic');
+  await page.getByLabel('Fecha y hora', { exact: false }).fill('2026-11-30T13:00');
+  await page.getByLabel('O pega el enlace HTTPS de la portada', { exact: true }).fill('https://example.com/match.jpg');
+  await page.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await page.getByLabel('Enlace del partido en Google', { exact: false }).fill('https://share.google/RSJmsOE0s8wgQUT3n');
+  await page.getByRole('button', { name: 'Comprobar partido', exact: true }).click();
+  await page.getByText('Levante – Athletic Club · 2 – 1 · En juego · 74′ · Resultados: ESPN', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
+  await page.locator('a[href^="#/evento/"]').filter({ hasText: 'Abrir evento' }).click();
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  await page.locator('#player-title .player-score').getByText('2 – 1 · En juego · 74′', { exact: true }).waitFor();
+  scoreFinished = true;
+  await page.clock.fastForward(31000);
+  await page.locator('#player-title .player-score').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
+  scoreOffline = true;
+  await page.clock.fastForward(31000);
+  await page.locator('#player-title .player-score').getByText('Marcador no disponible', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

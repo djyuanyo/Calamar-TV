@@ -627,9 +627,37 @@ public class MainActivity extends Activity {
   }
 
   /** Until an event starts it shows its date and time; then the live pill. */
+  final Map<String,MatchScores.Result> matchResults=new HashMap<>();
+  boolean scoresBusy;
+  View multiPicker;
+  final Runnable scoreRefresh=new Runnable(){public void run(){
+    if(!resumed)return;
+    if(!scoresBusy){
+      Set<String> ids=new HashSet<>(); collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      if(!ids.isEmpty()) { scoresBusy=true; new Thread(() -> {
+        Map<String,MatchScores.Result> results=new HashMap<>();
+        for(String id:ids)try{results.put(id,MatchScores.fetch(id));}catch(Exception ignored){results.put(id,null);}
+        runOnUiThread(() -> {scoresBusy=false;matchResults.putAll(results);if(resumed){updateScores(root);updateScores(multiPicker);} });
+      }).start(); }
+    }
+    handler.removeCallbacks(this);handler.postDelayed(this,30000);
+  }};
+  void collectScoreIds(View view,Set<String> ids){
+    if(view==null)return;
+    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();if(!c.matchId.isEmpty())ids.add(c.matchId);}
+    if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)collectScoreIds(group.getChildAt(i),ids);}
+  }
+  void updateScores(View view){
+    if(view==null)return;
+    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();MatchScores.Result score=matchResults.get(c.matchId);((TextView)view).setText(score==null?"Marcador no disponible":score.text);}
+    if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)updateScores(group.getChildAt(i));}
+  }
   TextView eventBadge(Catalog.Channel c, float sp) {
-    String label = SportsCatalog.label(c.status, c.startAt, System.currentTimeMillis());
-    return SportsCatalog.LIVE.equals(label) ? Ui.livePill(this, label.toUpperCase(Locale.ROOT), sp) : Ui.tag(this, label, sp);
+    MatchScores.Result score=matchResults.get(c.matchId);
+    String label=c.matchUrl.isEmpty()?SportsCatalog.label(c.status,c.startAt,System.currentTimeMillis()):score==null?"Consultando marcador…":score.text;
+    TextView badge=SportsCatalog.LIVE.equals(label)?Ui.livePill(this,label.toUpperCase(Locale.ROOT),sp):Ui.tag(this,label,sp);
+    if(!c.matchUrl.isEmpty()&&!c.matchId.isEmpty()){badge.setTag(c);badge.setContentDescription(label+". Resultados: ESPN");handler.removeCallbacks(scoreRefresh);handler.postDelayed(scoreRefresh,300);}
+    return badge;
   }
 
   /** A 16:9 card: colour from the name, logo, live badge, then the name and its category. */
@@ -761,38 +789,40 @@ public class MainActivity extends Activity {
       Toast.makeText(this, "No hay suficientes canales para la multipantalla", Toast.LENGTH_LONG).show();
       return;
     }
-    String[] names = new String[options.size()];
-    for (int i = 0; i < names.length; i++) names[i] = (options.get(i).event ? "Evento · " : "") + options.get(i).name;
-    final boolean[] checked = new boolean[names.length];
-    final List<Integer> order = new ArrayList<>();
-    new AlertDialog.Builder(this)
-        .setTitle("Multipantalla: elige de 2 a " + MultiScreen.MAX)
-        .setMultiChoiceItems(names, checked, (dialog, which, on) -> {
-          if (on && order.size() >= MultiScreen.MAX) {
-            checked[which] = false;
-            ((AlertDialog) dialog).getListView().setItemChecked(which, false);
-            Toast.makeText(this, "Máximo " + MultiScreen.MAX + " a la vez", Toast.LENGTH_SHORT).show();
-            return;
-          }
-          if (on) order.add(which);
-          else order.remove(Integer.valueOf(which));
-        })
-        .setPositiveButton("Ver a la vez", (dialog, which) -> {
-          if (order.size() < 2) {
-            Toast.makeText(this, "Elige al menos 2", Toast.LENGTH_SHORT).show();
-            return;
-          }
-          ArrayList<String> titles = new ArrayList<>(), streams = new ArrayList<>();
-          for (int index : order) {
-            titles.add(options.get(index).name);
-            streams.add(android.text.TextUtils.join("\n", options.get(index).streams));
-          }
-          startActivity(new Intent(this, MultiPlayerActivity.class)
-              .putStringArrayListExtra(MultiPlayerActivity.TITLES, titles)
-              .putStringArrayListExtra(MultiPlayerActivity.STREAMS, streams));
-        })
-        .setNegativeButton("Cancelar", null)
-        .show();
+    final List<Catalog.Channel> selected=new ArrayList<>();
+    LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(16),dp(8),dp(16),dp(8));
+    EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Buscar eventos o canales");search.setTextColor(Ui.FG);panel.addView(search,new LinearLayout.LayoutParams(-1,-2));
+    TextView count=text("Elige de 2 a "+MultiScreen.MAX,14);panel.addView(count);
+    ScrollView scroll=new ScrollView(this);LinearLayout grid=new LinearLayout(this);grid.setOrientation(LinearLayout.VERTICAL);scroll.addView(grid);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+    Button watch=new Button(this);watch.setText("Ver a la vez");watch.setAllCaps(false);watch.setEnabled(false);panel.addView(watch);
+    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Multipantalla").setView(panel).setNegativeButton("Cancelar",null).create();
+    final Map<Catalog.Channel,TextView> marks=new HashMap<>();
+    Runnable sync=() -> {count.setText(selected.size()+" / "+MultiScreen.MAX+" seleccionados");watch.setText("Ver "+selected.size()+" a la vez");watch.setEnabled(selected.size()>=2);
+      for(Map.Entry<Catalog.Channel,TextView> mark:marks.entrySet()){int index=selected.indexOf(mark.getKey());mark.getValue().setText(index<0?"+":String.valueOf(index+1));View tile=(View)mark.getValue().getParent();tile.setSelected(index>=0);tile.setContentDescription(mark.getKey().name+(index<0?", añadir":", seleccionado "+(index+1)));}
+    };
+    Runnable draw=() -> {
+      grid.removeAllViews();marks.clear();String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);
+      int available=(int)(getResources().getDisplayMetrics().widthPixels/getResources().getDisplayMetrics().density)-64;
+      int columns=available>=800?4:available>=540?3:2,width=Math.max(100,available/columns-8),column=0;LinearLayout row=null;
+      for(Catalog.Channel c:options){if(!(c.name+" "+c.meta+" "+c.group).toLowerCase(Locale.ROOT).contains(q))continue;
+        if(column++%columns==0){row=new LinearLayout(this);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));}
+        FrameLayout tile=new FrameLayout(this);View content=card(c,width);content.setFocusable(false);content.setClickable(false);content.setLongClickable(false);content.setOnLongClickListener(null);tile.addView(content,new FrameLayout.LayoutParams(-1,-2));
+        TextView mark=Ui.tag(this,"+",16);FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);mp.setMargins(0,dp(8),dp(8),0);tile.addView(mark,mp);marks.put(c,mark);
+        tile.setBackground(Ui.artBackground(this,Palette.hue(c.name),12));tile.setFocusable(true);tile.setClickable(true);Ui.scaleOnFocus(tile,1.03f);
+        tile.setOnClickListener(v -> {if(selected.contains(c))selected.remove(c);else if(selected.size()<MultiScreen.MAX)selected.add(c);else Toast.makeText(this,"Máximo "+MultiScreen.MAX+" a la vez",Toast.LENGTH_SHORT).show();sync.run();});
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(width),-2);lp.setMargins(dp(4),dp(4),dp(4),dp(8));row.addView(tile,lp);
+      }
+      if(marks.isEmpty())grid.addView(text("Sin resultados",16));sync.run();
+    };
+    search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});
+    watch.setOnClickListener(v -> {
+      if(selected.size()<2)return;
+      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",c.streams));}
+      dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams));
+    });
+    multiPicker=panel;dialog.setOnDismissListener(d -> multiPicker=null);dialog.show();
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,(int)(getResources().getDisplayMetrics().heightPixels*.9f));
+    dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
 
   /** Channels whose links are videos the player opens directly (not pages resolved in the full player). */
@@ -814,6 +844,7 @@ public class MainActivity extends Activity {
     if (UserChannels.isPage(first)) intent.putExtra("page_url", first);
     else intent.putStringArrayListExtra("media_urls", new ArrayList<>(c.streams));
     intent.putExtra("title", c.name);
+    if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events can be shared from the player with their preview link (cover and name in WhatsApp).
     if (c.event) intent.putExtra("share_url", SportsCatalog.link(SportsCatalog.slugs(custom).get(c.id)));
     startActivity(intent);
@@ -821,7 +852,7 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
-    resumed = false; handler.removeCallbacks(heroAdvance);
+    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh);
     handler.removeCallbacks(refresh);
     if (sharedListener != null) {
       sharedListener.remove();
@@ -831,7 +862,7 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
-    resumed = true;
+    resumed = true; handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);

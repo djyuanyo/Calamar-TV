@@ -226,7 +226,10 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
   els.full.hidden = !canFullscreen;
   async function enterFullscreen() {
     try {
-      if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: 'hide' });
+      if (root.requestFullscreen) {
+        try { await root.requestFullscreen({ navigationUI: 'hide' }); }
+        catch { await root.requestFullscreen(); }
+      }
       else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
       else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iPhone: only the video can go full screen
       try {

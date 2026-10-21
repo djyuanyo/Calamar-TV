@@ -1,3 +1,4 @@
+import { fetchMatch } from './match-scores.js';
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -94,10 +95,31 @@ function card(c, pick = null) {
 }
 
 /** Until an event starts its badge shows the date and time; then «En directo». */
+const matchScores = new Map();
 function eventBadge(c, cls) {
   const label = eventLabel(c, Date.now(), EVENT_STATES);
-  return el('span', { class: `${cls}${label.live ? ' live' : ''}${label.upcoming ? ' upcoming' : ''}` }, label.text);
+  const score = matchScores.get(c.matchId);
+  const badge = el('span', { class: `${cls}${(score || label).live ? ' live' : ''}${!score && label.upcoming ? ' upcoming' : ''}`, 'data-match-id': c.matchUrl && c.matchId ? c.matchId : null, title: c.matchUrl ? 'Resultados: ESPN' : null }, score?.text || (c.matchUrl ? 'Consultando marcador…' : label.text));
+  return badge;
 }
+
+let scoreBusy = false;
+async function refreshScores() {
+  if (scoreBusy || document.hidden) return;
+  const ids = [...new Set([...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId))];
+  scoreBusy = true;
+  try { await Promise.allSettled(ids.map(async id => {
+    let result;
+    try { result = await fetchMatch(id); matchScores.set(id, result); }
+    catch { result = { text: 'Marcador no disponible', live: false }; matchScores.delete(id); }
+    for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
+      node.textContent = result.text; node.classList.toggle('live', result.live); node.classList.remove('upcoming');
+    }
+  })); } finally { scoreBusy = false; }
+}
+setInterval(refreshScores, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshScores(); });
+new MutationObserver(records => { if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches('[data-match-id]') || n.querySelector('[data-match-id]'))))) refreshScores(); }).observe(view, { childList: true, subtree: true });
 
 function sectionHead(title, aside) {
   return el('div', { class: 'section-head' }, el('h2', {}, title), aside);
@@ -105,7 +127,7 @@ function sectionHead(title, aside) {
 
 /** A horizontal row of cards with previous/next arrows on devices that have a pointer. */
 function rail(items, { wide = false, limit = 40 } = {}) {
-  const track = el('div', { class: wide ? 'rail wide' : 'rail' }, items.slice(0, limit).map(card));
+  const track = el('div', { class: wide ? 'rail wide' : 'rail' }, items.slice(0, limit).map(c => card(c)));
   const button = (dir, label) => el('button', { class: `rail-btn ${dir}`, type: 'button', 'aria-label': label, hidden: true }, icon(dir === 'prev' ? 'left' : 'right'));
   const prev = button('prev', 'Anteriores');
   const next = button('next', 'Siguientes');
@@ -339,7 +361,7 @@ function results(query) {
   const q = query.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const found = [...events(state.channels, state.custom), ...state.channels].filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
-  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(card)) : el('p', { class: 'status' }, 'No hay canales con ese nombre.')];
+  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : el('p', { class: 'status' }, 'No hay canales con ese nombre.')];
 }
 
 // ---- Player ----------------------------------------------------------------------------------
@@ -597,6 +619,8 @@ function open(c, fromRoute = false) {
   current = c;
   shareButton.hidden = !c.event;
   playerTitle.textContent = c.name;
+  if (c.event && c.matchUrl) playerTitle.append(' · ', eventBadge(c, 'player-score'));
+  refreshScores();
   playerLogo.hidden = !c.logo;
   if (c.logo) playerLogo.src = c.logo;
   player.hidden = false;
@@ -722,6 +746,13 @@ let typing;
 search.addEventListener('input', () => {
   clearTimeout(typing);
   typing = setTimeout(route, 180);
+});
+document.addEventListener('click', event => {
+  const link = event.target.closest('a[href^="#/evento/"]');
+  if (!link || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  const key = decodeURIComponent(link.hash.split('/')[2] || '');
+  const item = events(state.channels, state.custom).find(c => c.slug === key || c.id === key);
+  if (item) { event.preventDefault(); open(item); }
 });
 window.addEventListener('hashchange', () => {
   // A new section starts at the top, but closing the player must leave the page where it was.

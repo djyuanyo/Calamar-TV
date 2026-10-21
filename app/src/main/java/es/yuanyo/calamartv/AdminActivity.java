@@ -417,6 +417,8 @@ public class AdminActivity extends Activity {
     JSONArray states = new JSONArray();
     try { for(int i=0;i<SportsCatalog.STATES.length;i++) states.put(new JSONObject().put("id",SportsCatalog.STATES[i]).put("name",SportsCatalog.STATE_NAMES[i])); } catch(JSONException ignored) {}
     Spinner state = choice(form,"Estado",states,existing==null?"scheduled":existing.optString("status","scheduled"),null);
+    EditText matchLink = input(form,"Enlace del partido en Google o share.google (opcional)",existing==null?"":existing.optString("matchUrl"));
+    form.addView(label("La fecha debe coincidir. Marcador y minuto: ESPN, según cobertura.",14));
     EditText season = input(form,"Temporada",existing==null?"":existing.optString("season"));
     EditText round = input(form,"Jornada o fase",existing==null?"":existing.optString("round"));
     EditText venue = input(form,"Lugar",existing==null?"":existing.optString("venue"));
@@ -476,8 +478,19 @@ public class AdminActivity extends Activity {
         boolean replaced = false;
         for (int i = 0; i < events.length(); i++) if (id.equals(events.getJSONObject(i).getString("id"))) { events.put(i, event); replaced = true; break; }
         if (!replaced) events.put(event);
-        next.put("events", events); SharedCatalog.validate(next);
-        dialog.dismiss(); publish(next);
+        next.put("events", events);
+        String matchUrl=matchLink.getText().toString().trim();
+        if(matchUrl.isEmpty()){event.remove("matchUrl");event.remove("matchId");event.remove("matchDate");}
+        if(!matchUrl.isEmpty()) MatchScores.google(matchUrl);
+        if(!matchUrl.isEmpty() && (existing==null || !matchUrl.equals(existing.optString("matchUrl")) || !event.getString("startAt").equals(existing.optString("startAt")) || existing.optString("matchId").isEmpty())){
+          dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); error.setText("Identificando partido…");
+          new Thread(() -> { try {
+            JSONObject resolved=MatchScores.resolve(matchUrl,event.optString("startAt"));
+            for(String key:new String[]{"matchUrl","matchId","matchDate"})event.put(key,resolved.get(key));
+            SharedCatalog.validate(next);
+            runOnUiThread(() -> { if(!isFinishing() && dialog.isShowing()){ dialog.dismiss(); publish(next); } });
+          } catch(Exception failure){runOnUiThread(() -> { if(dialog.isShowing()){error.setText(failure.getMessage());dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);} });} }).start();
+        } else { SharedCatalog.validate(next); dialog.dismiss(); publish(next); }
       } catch (Exception invalid) { error.setText(invalid.getMessage()); }
     }));
     dialog.show();

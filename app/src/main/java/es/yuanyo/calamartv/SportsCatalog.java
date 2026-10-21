@@ -106,6 +106,10 @@ final class SportsCatalog {
     for(int i=0;i<events.length();i++) {
       JSONObject e=events.getJSONObject(i);String time=e.optString("startAt");
       if(!time.isEmpty() && (!time.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z") || instant(time)==Long.MAX_VALUE))throw new JSONException("Fecha no válida");
+      if(!e.optString("matchUrl").isEmpty()) {
+        try { MatchScores.google(e.getString("matchUrl")); } catch(Exception invalid) { throw new JSONException("Enlace de Google no válido"); }
+        if(!e.optString("matchId").matches("\\d{1,20}") || instant(e.optString("matchDate"))==Long.MAX_VALUE)throw new JSONException("Comprueba el partido antes de guardar");
+      }
       if(e.has("featured") && !(e.get("featured") instanceof Boolean))throw new JSONException("Destacado no válido");
       String league=e.optString("leagueId"), home=e.optString("homeTeamId"), away=e.optString("awayTeamId");
       if((!league.isEmpty()&&!sets.get("leagues").contains(league)) || (!home.isEmpty()&&!sets.get("teams").contains(home)) || (!away.isEmpty()&&!sets.get("teams").contains(away)))throw new JSONException("Liga o equipo no existente");

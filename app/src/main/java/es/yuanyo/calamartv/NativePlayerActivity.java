@@ -56,7 +56,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private WebView browser;
   private LinearLayout root, panel;
   private FrameLayout stage;
-  private TextView status, livePill;
+  private TextView status, livePill, matchBadge;
+  private boolean matchActive, matchBusy;
+  private final Runnable matchRefresh=new Runnable(){public void run(){
+    if(!matchActive || matchBadge==null)return;
+    String id=getIntent().getStringExtra("match_id");
+    if(id==null||id.isEmpty())return;
+    if(!matchBusy){matchBusy=true;new Thread(() -> {
+      String text;
+      try{text=MatchScores.fetch(id).text+" · ESPN";}catch(Exception unavailable){text="Marcador no disponible · ESPN";}
+      final String label=text;handler.post(() -> {matchBusy=false;if(matchActive&&matchBadge!=null)matchBadge.setText(label);});
+    }).start();}
+    handler.postDelayed(this,30000);
+  }};
+  @Override protected void onResume(){super.onResume();matchActive=true;handler.removeCallbacks(matchRefresh);handler.post(matchRefresh);}
+  @Override protected void onPause(){matchActive=false;handler.removeCallbacks(matchRefresh);super.onPause();}
   private boolean fullscreen;
   private NetworkTransport transport;
   private String lastReport = "Aún no se ha consultado la fuente.";
@@ -128,6 +142,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     livePill.setVisibility(View.GONE);
     top.addView(livePill);
     panel.addView(top);
+    if(getIntent().hasExtra("match_id")){
+      matchBadge=new TextView(this);matchBadge.setText("Consultando marcador…");matchBadge.setTextColor(Ui.FG);matchBadge.setTextSize(14);
+      matchBadge.setPadding(Ui.dp(this,16),Ui.dp(this,4),Ui.dp(this,16),Ui.dp(this,4));panel.addView(matchBadge);
+    }
 
     LinearLayout controls = new LinearLayout(this);
     controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));

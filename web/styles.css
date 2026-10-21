@@ -608,3 +608,8 @@ label[hidden] { display: none; }
 .multi-status[hidden] { display: none; }
 .multi-name { transition: top .2s; }
 .multi:not(.idle) .multi-tile.top-row .multi-name { top: 62px; }
+
+/* Real match results stay legible on narrow cards and inside the player header. */
+[data-match-id] { font-variant-numeric: tabular-nums; }
+.card .badge[data-match-id] { max-width: calc(100% - 16px); white-space: normal; }
+.player-score { display: block; font-size: .72em; font-weight: 500; color: var(--muted, #bbc0c9); }
