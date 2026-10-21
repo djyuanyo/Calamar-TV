@@ -25,18 +25,3 @@ Los límites y la admisión de tráfico continuo dependen del plan del alojamien
 Después de verificar la integración, eliminar los PHP y JavaScript de diagnóstico
 `calamar-prueba-7f3c9b.php`, `calamar-video-test-9a62.php`, `calamar-video-test-9a62.js`
 y los ZIP subidos al servidor. Conservar el puente, calamar-http-source.php y los archivos de Chromecast que se estén usando.
-# Vista previa de eventos al compartir (WhatsApp, Telegram…)
-
-Subir `calamar-evento.php` al `public_html` de `calamarmenciano.com`. Los enlaces que se comparten de un evento
-(botón **Compartir** del reproductor, **Copiar enlace** del administrador web y de la app) tienen la forma
-`https://calamarmenciano.com/calamar-evento.php?id=ID_DEL_EVENTO`.
-
-WhatsApp y las demás apps no ejecutan JavaScript ni reciben la parte `#/evento/…` de la web, por eso cada evento
-necesita esta página: muestra la **foto de portada** y el **nombre del evento** (con liga, fecha y jornada debajo)
-y lleva a las personas directamente al evento en la web. Las portadas subidas como foto se sirven desde la misma
-página (`&imagen=1`). Lee el documento público del catálogo de Firestore y guarda una copia de 60 segundos en la
-carpeta temporal del servidor; no necesita claves ni base de datos. Requiere PHP 8 con cURL o `allow_url_fopen`.
-
-Comprobar después de subirlo: abrir `https://calamarmenciano.com/calamar-evento.php?id=` seguido del id de un evento
-(en Admin → Eventos → Copiar enlace) debe llevar al evento. WhatsApp guarda la vista previa de cada enlace durante
-un tiempo: si un enlace se compartió antes de subir el archivo, puede seguir mostrando la vista anterior.

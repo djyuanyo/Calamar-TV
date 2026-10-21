@@ -61,11 +61,35 @@ final class SportsCatalog {
     return androidFreeJoin(parts);
   }
   private static String androidFreeJoin(List<String> parts) { StringBuilder s=new StringBuilder(); for(String p:parts) {if(s.length()>0)s.append(" · ");s.append(p);} return s.toString(); }
-  /** Shared link: hosting/calamar-evento.php shows the cover and name in WhatsApp and opens the event. */
-  static String link(String id) {
-    try { return "https://calamarmenciano.com/calamar-evento.php?id=" + java.net.URLEncoder.encode(id, "UTF-8"); }
-    catch (java.io.UnsupportedEncodingException impossible) { throw new IllegalStateException(impossible); }
+  /** Same as slugify() in web/catalog.js: "Final de Copa: Ñora" -> "final-de-copa-nora". */
+  static String slugify(String text) {
+    String plain = Normalizer.normalize(text == null ? "" : text, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+    String slug = plain.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+    return slug.isEmpty() ? "canal" : slug;
   }
+
+  /** Link name of each event, as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3… */
+  static Map<String, String> slugs(JSONObject data) {
+    List<JSONObject> list = new ArrayList<>();
+    JSONArray events = data == null ? null : data.optJSONArray("events");
+    if (events != null) for (int i = 0; i < events.length(); i++) if (events.optJSONObject(i) != null) list.add(events.optJSONObject(i));
+    Collections.sort(list, (a, b) -> {
+      int cmp = Long.compare(instant(a.optString("startAt")), instant(b.optString("startAt")));
+      return cmp != 0 ? cmp : a.optString("id").compareTo(b.optString("id"));
+    });
+    Map<String, String> out = new LinkedHashMap<>();
+    Set<String> used = new HashSet<>();
+    for (JSONObject event : list) {
+      String base = slugify(event.optString("name")), slug = base;
+      for (int n = 2; used.contains(slug); n++) slug = base + "-" + n;
+      used.add(slug);
+      out.put(event.optString("id"), slug);
+    }
+    return out;
+  }
+
+  /** Shared link: the public web publishes evento/<slug>/ with the cover and name for WhatsApp. */
+  static String link(String slug) { return "https://djyuanyo.github.io/Calamar-TV/evento/" + slug + "/"; }
   static void validate(JSONObject data) throws JSONException {
     Map<String, Set<String>> sets = new HashMap<>();
     for (String kind : new String[]{"leagues","teams"}) {

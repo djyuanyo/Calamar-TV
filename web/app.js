@@ -594,7 +594,7 @@ async function route() {
   if (version !== routeVersion) return;
   if (!['canal', 'evento'].includes(page) && !player.hidden) hidePlayer();
   if (page === 'canal' || page === 'evento') {
-    const c = page === 'evento' ? events(state.channels, state.custom).find(e => e.eventId === arg) : findChannel(state.channels, arg);
+    const c = page === 'evento' ? (events(state.channels, state.custom).find(e => e.slug === arg) || events(state.channels, state.custom).find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.
     if ((!c || !c.playable) && !player.hidden) hidePlayer();
     view.replaceChildren(

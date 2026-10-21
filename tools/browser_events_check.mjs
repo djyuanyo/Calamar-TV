@@ -40,7 +40,10 @@ const server = createServer(async (req, res) => {
     const file = resolve(root, '.' + (path === '/' ? '/index.html' : path));
     if (!file.startsWith(root + '/')) throw Error();
     res.setHeader('Content-Type', mime[extname(file)] || 'application/octet-stream'); res.end(await readFile(file));
-  } catch { res.writeHead(404); res.end(); }
+  } catch {
+    // Like GitHub Pages: unknown addresses get 404.html.
+    res.writeHead(404, { 'Content-Type': 'text/html' }); res.end(await readFile(resolve(root, '404.html')));
+  }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -129,14 +132,14 @@ try {
   assert.equal(await heroTitle(), 'Sports Two');
   await page.locator('.event-card').click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.match(page.url(), /#\/evento\/evento-/);
-  assert.ok(page.url().endsWith(published.events[0].id));
+  // Event links use the slug of the event name, like channels.
+  assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
   assert.ok(requests.includes('https://example.com/one.mp4'));
   // Sharing an event uses its preview page (cover and name in WhatsApp).
   await page.evaluate(() => { navigator.share = async data => { window.__shared = data; }; });
   await page.getByRole('button', { name: 'Compartir', exact: true }).click();
-  assert.deepEqual(await page.evaluate(() => window.__shared), { title: 'Local vs visitante', url: `https://calamarmenciano.com/calamar-evento.php?id=${published.events[0].id}` });
+  assert.deepEqual(await page.evaluate(() => window.__shared), { title: 'Local vs visitante', url: 'https://djyuanyo.github.io/Calamar-TV/evento/local-vs-visitante/' });
   await page.locator('#player-viewers:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-viewers b').textContent(), '3');
   assert.equal(await page.locator('#player-viewers .sr').textContent(), '3 personas viendo');
@@ -165,6 +168,11 @@ try {
   const eventId = published.events[0].id;
   assert.equal((await page.evaluate(() => window.__published)).events[0].id, eventId);
   await page.goto(base + '/#/evento/' + eventId);
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-title').textContent(), 'Final');
+  // Old links with the id keep working; a preview page not yet published falls back to the event.
+  await page.goto(base + '/evento/final/');
+  await page.waitForURL(/#\/evento\/final$/);
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();

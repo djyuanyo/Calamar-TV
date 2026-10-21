@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Calamar TV</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0d10;color:#f5f5f5;font:16px system-ui,sans-serif}a{color:#d6ff00}</style>
+<script>
+  // GitHub Pages answers here for any address it does not have. An event shared before its preview
+  // page was published (evento/<slug>/) still opens the event in the web.
+  (function () {
+    var path = location.pathname, at = path.indexOf('/evento/');
+    var base = at >= 0 ? path.slice(0, at + 1) : '/' + (path.split('/')[1] || '') + '/';
+    var slug = at >= 0 ? path.slice(at + 8).split('/')[0] : '';
+    location.replace(base + (slug ? '#/evento/' + slug : ''));
+  })();
+</script>
+</head>
+<body><p><a href="./">Abrir Calamar TV</a></p></body>
+</html>
