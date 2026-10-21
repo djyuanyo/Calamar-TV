@@ -454,8 +454,7 @@ public class MainActivity extends Activity {
     content.setOrientation(LinearLayout.VERTICAL);
     content.setGravity(Gravity.BOTTOM);
     content.setPadding(dp(20), dp(20), dp(20), dp(20));
-    TextView pill = Ui.livePill(this, "EN DIRECTO", 11);
-    if (c.event) { pill.setText(SportsCatalog.stateName(c.status)); content.addView(pill, new LinearLayout.LayoutParams(-2, -2)); }
+    if (c.event) content.addView(eventBadge(c, 11), new LinearLayout.LayoutParams(-2, -2));
     TextView title = new TextView(this);
     title.setText(c.name);
     title.setTextColor(Ui.FG);
@@ -545,6 +544,12 @@ public class MainActivity extends Activity {
     return frame;
   }
 
+  /** Until an event starts it shows its date and time; then the live pill. */
+  TextView eventBadge(Catalog.Channel c, float sp) {
+    String label = SportsCatalog.label(c.status, c.startAt, System.currentTimeMillis());
+    return SportsCatalog.LIVE.equals(label) ? Ui.livePill(this, label.toUpperCase(Locale.ROOT), sp) : Ui.tag(this, label, sp);
+  }
+
   /** A 16:9 card: colour from the name, logo, live badge, then the name and its category. */
   View card(final Catalog.Channel c, int width) {
     LinearLayout card = new LinearLayout(this);
@@ -570,10 +575,9 @@ public class MainActivity extends Activity {
     art.addView(logo, new FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER));
     image(logo, c.logo);
     if (c.event) logo.setVisibility(View.GONE);
-    TextView badge = c.playable() ? Ui.livePill(this, "EN DIRECTO", 9) : Ui.tag(this, "SU WEB", 9);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
-    if (c.event) { badge.setText(SportsCatalog.stateName(c.status)); art.addView(badge, bp); }
+    if (c.event) art.addView(eventBadge(c, 9), bp);
     card.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
 
     TextView name = text((favorites.contains(c.channelId) ? "★ " : "") + c.name, 15);

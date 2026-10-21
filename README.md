@@ -131,7 +131,7 @@ Un reinicio de conexión (RESET) no demuestra por sí solo un fallo DNS. Este ca
 
 ## Verificación de Firebase
 
-Las reglas publicadas están en `firebase/firestore.rules`; solo conceden lectura del documento público del catálogo y escritura a la cuenta indicada. El resto de rutas continúa cerrado. La base de datos Standard está en `europe-southwest1` (Madrid), con el plan Spark. GitHub Pages continúa siendo el alojamiento web.
+Las reglas publicadas están en `firebase/firestore.rules`; solo conceden lectura del documento público del catálogo y escritura a la cuenta indicada, más las colecciones de audiencia descritas abajo. El resto de rutas continúa cerrado. La base de datos Standard está en `europe-southwest1` (Madrid), con el plan Spark. GitHub Pages continúa siendo el alojamiento web.
 
 Pruebas aisladas con Node 24 y JDK 21: `cd firebase && npm install && npm test`. El emulador comprueba lectura pública limitada, rechazo de otras identidades, escrituras del administrador, revisiones, tamaño y marcas de tiempo. No modifica producción. La compilación Android sigue usando JDK 17.
 
@@ -139,6 +139,20 @@ Pruebas aisladas con Node 24 y JDK 21: `cd firebase && npm install && npm test`.
 
 El administrador tiene secciones para Canales, Eventos, Ligas y Equipos. Permite crear, editar, buscar y eliminar ligas y equipos con su logo o escudo; no se elimina una entidad mientras esté asociada a equipos o eventos. Los eventos admiten nombre, portada completa, canal existente, liga, local, visitante, fecha y hora de Madrid, temporada, jornada/fase, lugar, descripción, estado y destacado. La portada se puede subir como foto comprimida o añadir mediante URL HTTPS. Los registros anteriores sin agenda siguen siendo válidos y aparecen después de los que tienen fecha.
 
-Cada evento tiene una dirección estable `#/evento/ID`, independiente del nombre y canal. El administrador permite abrirla o copiarla (en Android: Copiar enlace del evento). El evento resuelve las fuentes actuales del canal al abrirlo. Los eventos se ordenan de forma cronológica y muestran liga y horario. Los destacados de eventos y canales comparten un único slider que avanza cada 5 segundos. La web incluye pausa y selección manual; Android detiene el temporizador al salir de la pantalla. Si no hay destacados se usa el primer canal disponible. Las tarjetas y la portada de canales no llevan la etiqueta En directo y muestran el logo ampliado; el reproductor conserva sus indicadores de directo.
+Cada evento tiene una dirección estable `#/evento/ID`, independiente del nombre y canal. El administrador permite abrirla o copiarla (en Android: Copiar enlace del evento). El evento resuelve las fuentes actuales del canal al abrirlo. Los eventos se ordenan de forma cronológica y muestran liga y horario. Los destacados de eventos y canales comparten un único slider que avanza cada 5 segundos. La web permite deslizar el slider y elegir cada destacado; Android detiene el temporizador al salir de la pantalla. Si no hay destacados se usa el primer canal disponible. Las tarjetas y la portada de canales no llevan la etiqueta En directo y muestran el logo ampliado; el reproductor conserva sus indicadores de directo.
 
 Pruebas: `tools/sports.test.mjs`, `SportsCatalogTest`, `CatalogEventsTest` y flujo en Chrome mediante `tools/browser_events_check.mjs` (catálogo aislado, sin escrituras reales en Firebase).
+
+## Espectadores y estadísticas (2.6.0)
+
+Mientras el reproductor web está abierto, la pestaña guarda en `calamarAudience/{sesión aleatoria}` qué canal o evento ve (`c:ID` o `e:ID`) y el minuto actual, y lo renueva cada minuto; al cerrarlo se borra. Junto a Pantalla completa, Refrescar y Compartir aparece el número de personas viendo ese mismo canal o evento (se cuentan las presencias de los últimos ~3 minutos y se actualiza cada 30 segundos). No se guarda ningún dato personal.
+
+Cada apertura de un canal o evento suma una visita en `calamarVisits/AAAA-MM-DD` (día de Madrid), con un contador por canal (`c_ID`) y por evento (`e_ID`). Las reglas solo permiten sumar 1 a un contador del día actual y solo el administrador puede leer las visitas.
+
+En **Admin → Estadísticas** (`#/admin/estadisticas`): espectadores en vivo por canal y por evento (se refresca cada 20 segundos) y visitas por día (con los 30 días anteriores), por mes (día a día), por año (mes a mes) y por años, con tablas separadas de canales y eventos. Pulsar un canal o evento muestra su evolución en la gráfica.
+
+Las portadas y tarjetas de eventos con fecha muestran el día y la hora de inicio hasta que empiezan; después, «En directo» (o «Finalizado»). La web cambia la etiqueta en el momento del inicio; Android, al refrescar el catálogo.
+
+**Publicar las reglas** es necesario para que funcione: Firebase Console → Firestore → Reglas → pegar `firebase/firestore.rules` → Publicar (o `firebase deploy --only firestore:rules --project menciamedia`). Con el plan Spark cada espectador hace una escritura por minuto y una lectura cada 30 segundos; la cuota gratuita (20 000 escrituras y 50 000 lecturas al día) cubre unas 300 horas de visionado diarias. Por ahora solo cuenta la web: la app Android todavía no informa de espectadores ni visitas.
+
+Pruebas: `tools/audience.test.mjs`, reglas en `firebase/catalog.test.mjs` y el flujo de Chrome.

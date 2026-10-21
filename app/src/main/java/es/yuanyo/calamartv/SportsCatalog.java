@@ -12,6 +12,19 @@ final class SportsCatalog {
     for (int i=0;i<STATES.length;i++) if (STATES[i].equals(state)) return STATE_NAMES[i];
     return STATE_NAMES[0];
   }
+  static final String LIVE = "En directo";
+  /** Card badge: the start date and time until the event begins, then «En directo» or «Finalizado». */
+  static String label(String status, String startAt, long now) {
+    if ("finished".equals(status)) return stateName(status);
+    long start = instant(startAt);
+    if (start != Long.MAX_VALUE && now < start) {
+      SimpleDateFormat f = new SimpleDateFormat("EEE d MMM · HH:mm", Locale.forLanguageTag("es-ES"));
+      f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+      return f.format(new Date(start)).replace(".", "").replace(",", "");
+    }
+    if (start != Long.MAX_VALUE || "live".equals(status)) return LIVE;
+    return stateName(status);
+  }
   static SimpleDateFormat dateFormat(String pattern) {
     SimpleDateFormat f = new SimpleDateFormat(pattern, Locale.ROOT);
     f.setLenient(false); f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid")); return f;
