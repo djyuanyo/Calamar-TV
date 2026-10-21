@@ -792,11 +792,15 @@ public class MainActivity extends Activity {
     }
     final List<Catalog.Channel> selected=new ArrayList<>();
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(16),dp(8),dp(16),dp(8));
+    panel.addView(text("Multipantalla",22));
     EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Buscar eventos o canales");search.setTextColor(Ui.FG);search.setHintTextColor(Ui.MUTED);panel.addView(search,new LinearLayout.LayoutParams(-1,-2));
     TextView count=text("Elige de 2 a "+MultiScreen.MAX,14);panel.addView(count);
     ScrollView scroll=new ScrollView(this);LinearLayout grid=new LinearLayout(this);grid.setOrientation(LinearLayout.VERTICAL);scroll.addView(grid);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-    Button watch=new Button(this);watch.setText("Ver a la vez");watch.setAllCaps(false);watch.setEnabled(false);panel.addView(watch);
-    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Multipantalla").setView(panel).setNegativeButton("Cancelar",null).create();
+    Button watch=new Button(this);watch.setText("Ver a la vez");watch.setAllCaps(false);watch.setEnabled(false);
+    Button cancel=new Button(this);cancel.setText("Cancelar");cancel.setAllCaps(false);
+    LinearLayout actions=new LinearLayout(this);actions.addView(cancel,new LinearLayout.LayoutParams(0,-2,1));actions.addView(watch,new LinearLayout.LayoutParams(0,-2,1));panel.addView(actions);
+    Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);dialog.setContentView(panel,new ViewGroup.LayoutParams(-1,-1));
+    cancel.setOnClickListener(v -> dialog.dismiss());
     final Map<Catalog.Channel,TextView> marks=new HashMap<>();
     Runnable sync=() -> {count.setText(selected.size()+" / "+MultiScreen.MAX+" seleccionados");watch.setText("Ver "+selected.size()+" a la vez");watch.setEnabled(selected.size()>=2);
       for(Map.Entry<Catalog.Channel,TextView> mark:marks.entrySet()){int index=selected.indexOf(mark.getKey());mark.getValue().setText(index<0?"+":String.valueOf(index+1));View tile=(View)mark.getValue().getParent();tile.setSelected(index>=0);tile.setContentDescription(mark.getKey().name+(index<0?", añadir":", seleccionado "+(index+1)));}
@@ -822,7 +826,7 @@ public class MainActivity extends Activity {
       dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams));
     });
     multiPicker=panel;dialog.setOnDismissListener(d -> multiPicker=null);dialog.show();
-    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,(int)(getResources().getDisplayMetrics().heightPixels*.9f));
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,-1);
     dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
 
