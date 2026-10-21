@@ -260,6 +260,7 @@ public class MainActivity extends Activity {
               mode.equals(m),
               new View.OnClickListener() {
                 public void onClick(View v) {
+                  if ((Library.section(m) != null) != (Library.section(mode) != null)) query = "";
                   mode = m;
                   home();
                 }
@@ -1118,27 +1119,30 @@ public class MainActivity extends Activity {
       if (matches(item.title) && (genre.isEmpty() || item.genres.contains(genre))) items.add(item);
     heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
     if (!genres.isEmpty()) {
-      LinearLayout chips = row();
-      List<String> options = new ArrayList<>();
+      // A drop-down: the button shows the category chosen and opens the list of them.
+      final List<String> options = new ArrayList<>();
       options.add("");
       options.addAll(genres);
-      for (final String g : options) {
-        Button chip = Ui.pill(this, g.isEmpty() ? "Todas" : g, g.equals(genre) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
-        chip.setId(400000 + Math.abs(g.hashCode() % 90000));
-        chip.setOnClickListener(v -> {
-          genre = g;
+      final Button picker = Ui.pill(this, (genre.isEmpty() ? "Todas las categorías" : genre) + "  ▾", Ui.Kind.SURFACE, true);
+      picker.setId(400001);
+      picker.setContentDescription("Categoría: " + (genre.isEmpty() ? "todas" : genre));
+      picker.setOnClickListener(v -> {
+        PopupMenu menu = new PopupMenu(this, picker);
+        for (int i = 0; i < options.size(); i++) menu.getMenu().add(0, i, i, options.get(i).isEmpty() ? "Todas las categorías" : options.get(i));
+        menu.setOnMenuItemClickListener(choice -> {
+          genre = options.get(choice.getItemId());
           render();
-          View again = root.findViewById(v.getId());
+          View again = root.findViewById(400001);
           if (again != null) again.requestFocus();
+          return true;
         });
-        addButton(chips, chip);
-      }
-      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
-      chipScroll.setHorizontalScrollBarEnabled(false);
-      chipScroll.addView(chips);
+        menu.show();
+      });
+      LinearLayout pickerRow = row();
+      addButton(pickerRow, picker);
       LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
       cp.setMargins(0, dp(6), 0, dp(16));
-      list.addView(chipScroll, cp);
+      list.addView(pickerRow, cp);
     }
     if (items.isEmpty())
       list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));

@@ -341,10 +341,12 @@ try {
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
   await page.locator('.nav a', { hasText: 'Películas' }).click();
-  // Category chips (TMDB genres of the section) between the search box and the posters.
-  await page.getByRole('button', { name: 'Ciencia ficción', exact: true }).click();
+  // Category drop-down (TMDB genres of the section) next to the section search; no channels search here.
+  await page.locator('.poster-card').first().waitFor();
+  assert.equal(await page.locator('#search').isHidden(), true, 'the channels and events search is hidden in the library');
+  await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
-  await page.getByRole('button', { name: 'Todas', exact: true }).click();
+  await page.getByLabel('Categoría', { exact: true }).selectOption('');
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
@@ -383,6 +385,7 @@ try {
     name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
   await page.goto(base + '/#/inicio');
   await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
+  assert.equal(await page.locator('#search').isVisible(), true, 'the channels and events search is back outside the library');
   assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
   await page.locator('.continue-card a').click();

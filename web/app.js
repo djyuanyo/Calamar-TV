@@ -807,6 +807,8 @@ async function route() {
   stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
+  // Films, series and documentaries have their own search box: the channels and events one hides there.
+  search.closest('.search').hidden = !!sectionByPage(page);
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');

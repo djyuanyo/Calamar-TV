@@ -121,14 +121,11 @@ export function libraryPage(el, section, library) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const grid = el('div', { class: 'poster-grid' });
-  // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
+  // Categories: a drop-down with the TMDB genres of the titles in this section; one narrows the grid.
   const genres = [...new Set(items.flatMap((item) => item.tmdb?.genres || []))].sort((a, b) => a.localeCompare(b, 'es'));
-  let genre = '';
-  const chips = el('div', { class: 'chips library-genres-filter', role: 'group', 'aria-label': 'Categorías' });
-  const drawChips = () => chips.replaceChildren(...['', ...genres].map((g) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(g === genre),
-    onclick: () => { genre = g; drawChips(); draw(); } }, g || 'Todas')));
+  const picker = el('select', { 'aria-label': 'Categoría' }, ['', ...genres].map((g) => el('option', { value: g }, g || 'Todas las categorías')));
   const draw = () => {
-    const q = norm(query.value.trim());
+    const q = norm(query.value.trim()), genre = picker.value;
     const found = items.filter((item) => (!genre || (item.tmdb?.genres || []).includes(genre))
       && norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')}`).includes(q));
     grid.replaceChildren(...found.map((item) => el('a', { class: 'poster-card', href: `#/${section.page}/${encodeURIComponent(item.id)}`, title: itemTitle(item) },
@@ -138,10 +135,11 @@ export function libraryPage(el, section, library) {
     if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : genre && !q ? `No hay títulos de ${genre}.` : 'No hay títulos con ese nombre.'));
   };
   query.addEventListener('input', draw);
-  drawChips();
+  picker.addEventListener('change', draw);
   draw();
   return [el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, `${items.length} ${items.length === 1 ? section.one : section.label.toLowerCase()}`)),
-    el('label', { class: 'search library-search' }, query), ...(genres.length ? [chips] : []), grid, attribution(el, library)];
+    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query), genres.length ? el('label', { class: 'library-genre' }, picker) : null),
+    grid, attribution(el, library)];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
