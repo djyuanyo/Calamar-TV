@@ -326,7 +326,8 @@ try {
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
-      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } }],
+      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://calamarmenciano.com/PELIS/Torrente.mp4', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://calamarmenciano.com/SERIES/cap1001.mp4' }, { id: 'e1002', season: 10, episode: 2, url: 'https://calamarmenciano.com/SERIES/cap1002.mp4' }] }],
     documentaries: [] } };
@@ -340,6 +341,10 @@ try {
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
   await page.locator('.nav a', { hasText: 'Películas' }).click();
+  // Category chips (TMDB genres of the section) between the search box and the posters.
+  await page.getByRole('button', { name: 'Ciencia ficción', exact: true }).click();
+  assert.equal(await page.locator('.poster-card').count(), 1);
+  await page.getByRole('button', { name: 'Todas', exact: true }).click();
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);

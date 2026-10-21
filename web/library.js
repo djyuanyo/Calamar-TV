@@ -121,19 +121,27 @@ export function libraryPage(el, section, library) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const grid = el('div', { class: 'poster-grid' });
+  // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
+  const genres = [...new Set(items.flatMap((item) => item.tmdb?.genres || []))].sort((a, b) => a.localeCompare(b, 'es'));
+  let genre = '';
+  const chips = el('div', { class: 'chips library-genres-filter', role: 'group', 'aria-label': 'Categorías' });
+  const drawChips = () => chips.replaceChildren(...['', ...genres].map((g) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(g === genre),
+    onclick: () => { genre = g; drawChips(); draw(); } }, g || 'Todas')));
   const draw = () => {
     const q = norm(query.value.trim());
-    const found = items.filter((item) => norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')}`).includes(q));
+    const found = items.filter((item) => (!genre || (item.tmdb?.genres || []).includes(genre))
+      && norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')}`).includes(q));
     grid.replaceChildren(...found.map((item) => el('a', { class: 'poster-card', href: `#/${section.page}/${encodeURIComponent(item.id)}`, title: itemTitle(item) },
       el('span', { class: 'poster-frame' }, poster(el, item), item.tmdb?.rating ? el('span', { class: 'poster-rating' }, `★ ${item.tmdb.rating.toLocaleString('es-ES')}`) : null),
       el('span', { class: 'name' }, itemTitle(item)),
       el('span', { class: 'sub' }, [itemYear(item), item.kind === 'tv' ? `${item.episodes.length} capítulos` : ''].filter(Boolean).join(' · ')))));
-    if (!found.length) grid.append(el('p', { class: 'status' }, items.length ? 'No hay títulos con ese nombre.' : `Todavía no hay ${section.label.toLowerCase()}.`));
+    if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : genre && !q ? `No hay títulos de ${genre}.` : 'No hay títulos con ese nombre.'));
   };
   query.addEventListener('input', draw);
+  drawChips();
   draw();
   return [el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, `${items.length} ${items.length === 1 ? section.one : section.label.toLowerCase()}`)),
-    el('label', { class: 'search library-search' }, query), grid, attribution(el, library)];
+    el('label', { class: 'search library-search' }, query), ...(genres.length ? [chips] : []), grid, attribution(el, library)];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');

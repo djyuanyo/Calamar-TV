@@ -1071,6 +1071,7 @@ public class MainActivity extends Activity {
   // ---- Films, series and documentaries (calamar-library.php on the hosting) -------------------
 
   Library.Data library;
+  String genre = "", genreSection = "";
   boolean libraryBusy;
   long libraryAt;
   String libraryError = "";
@@ -1107,11 +1108,40 @@ public class MainActivity extends Activity {
       list.addView(label(libraryBusy ? "Cargando…" : libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED));
       return;
     }
+    // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
+    if (!section.equals(genreSection)) { genreSection = section; genre = ""; }
+    TreeSet<String> genres = new TreeSet<>(java.text.Collator.getInstance(new Locale("es", "ES")));
+    for (Library.Item item : library.items(section)) genres.addAll(item.genres);
+    if (!genres.contains(genre)) genre = "";
     List<Library.Item> items = new ArrayList<>();
-    for (Library.Item item : library.items(section)) if (matches(item.title)) items.add(item);
+    for (Library.Item item : library.items(section))
+      if (matches(item.title) && (genre.isEmpty() || item.genres.contains(genre))) items.add(item);
     heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
+    if (!genres.isEmpty()) {
+      LinearLayout chips = row();
+      List<String> options = new ArrayList<>();
+      options.add("");
+      options.addAll(genres);
+      for (final String g : options) {
+        Button chip = Ui.pill(this, g.isEmpty() ? "Todas" : g, g.equals(genre) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+        chip.setId(400000 + Math.abs(g.hashCode() % 90000));
+        chip.setOnClickListener(v -> {
+          genre = g;
+          render();
+          View again = root.findViewById(v.getId());
+          if (again != null) again.requestFocus();
+        });
+        addButton(chips, chip);
+      }
+      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
+      chipScroll.setHorizontalScrollBarEnabled(false);
+      chipScroll.addView(chips);
+      LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+      cp.setMargins(0, dp(6), 0, dp(16));
+      list.addView(chipScroll, cp);
+    }
     if (items.isEmpty())
-      list.addView(label(query.trim().isEmpty() ? "Todavía no hay vídeos en esta sección." : "Sin resultados", 15, MUTED));
+      list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
     int columns = wide() ? 6 : 3;
     int width = gridWidth(columns);
     LinearLayout r = null;
