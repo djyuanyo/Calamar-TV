@@ -63,7 +63,7 @@ public final class MatchScores {
     if("share.google".equals(u.getHost()))throw new IOException("Google no ha devuelto el partido");
     long date=SportsCatalog.instant(startAt);if(date==Long.MAX_VALUE)throw new IOException("Indica primero fecha y hora");
     SimpleDateFormat day=new SimpleDateFormat("yyyyMMdd",Locale.ROOT);day.setTimeZone(TimeZone.getTimeZone("UTC"));
-    JSONObject e=identify(json(API+"scoreboard?dates="+day.format(new Date(date-86400000))+"-"+day.format(new Date(date+86400000))+"&limit=1000"),query(u),startAt);
+    JSONObject e=identify(json(API+"scoreboard?dates="+day.format(new Date(date))+"&limit=1000"),query(u),startAt);
     return new JSONObject().put("matchUrl",value.trim()).put("matchId",e.getString("id")).put("matchDate",iso(e.getString("date")));
   }
   public static Result fetch(String id)throws Exception{

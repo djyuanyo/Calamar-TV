@@ -27,7 +27,7 @@ test('short link resolver and ESPN fixture lookup produce persisted metadata',as
    calls.push(url);return {ok:true,json:async()=>url.includes('calamar-match.php')?{url:'https://www.google.com/search?q=levante+ud+contra+athletic+club'}:{events:[e]}};
  });
  assert.equal(result.matchId,e.id);assert.equal(result.matchUrl,'https://share.google/RSJmsOE0s8wgQUT3n');assert.equal(calls.length,2);
- assert.match(calls[1],/dates=20261020-20261022/);
+ assert.match(calls[1],/dates=20261021&limit=1000/);
  await assert.rejects(resolveMatch('https://share.google/test',e.date,async()=>{throw Error('offline')}),/hosting/);
 });
 test('summary requests share cache and a failure can recover',async()=>{

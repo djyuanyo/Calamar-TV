@@ -1,4 +1,4 @@
-MARCADOR DE PARTIDOS · CALAMAR TV 2.10.1
+MARCADOR DE PARTIDOS · CALAMAR TV 2.10.2
 
 1. Descomprime este ZIP en public_html de calamarmenciano.com.
    Deben quedar calamar-match.php y calamar-http-source.php juntos.
