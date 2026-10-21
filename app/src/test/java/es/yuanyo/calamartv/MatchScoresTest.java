@@ -44,4 +44,11 @@ public class MatchScoresTest {
     MatchScores.remember("90000002",MatchScores.parse(fixture("STATUS_SECOND_HALF","in",false)),end+300001);
     assertFalse(MatchScores.expired("90000002",end+300002));
   }
+  @Test public void spanishClubBrujasLinkMatchesClubBruggeAndLens()throws Exception{
+    JSONObject e=fixture("STATUS_SECOND_HALF","in",false).put("id","401915388");
+    JSONArray teams=e.getJSONArray("competitions").getJSONObject(0).getJSONArray("competitors");
+    teams.getJSONObject(0).put("team",new JSONObject().put("displayName","Club Brugge"));
+    teams.getJSONObject(1).put("team",new JSONObject().put("displayName","Lens"));
+    assertEquals("401915388",MatchScores.identify(new JSONObject().put("events",new JSONArray().put(e)),"club brujas contra racing club de lens","2026-10-21T18:00:00Z").getString("id"));
+  }
 }

@@ -12,7 +12,7 @@ const normal = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 function mentioned(team, query) {
   return ['displayName', 'shortDisplayName', 'name'].some(key => {
     const alias = normal(team?.[key]);
-    return alias.length >= 4 && (` ${query} `).includes(` ${alias} `);
+    return alias.length >= 4 && (` ${query.replace(/\bclub brujas\b/g, 'club brugge')} `).includes(` ${alias} `);
   });
 }
 export function identifyMatch(data, query, startAt) {

@@ -70,3 +70,11 @@ test('cancelled or abandoned fixtures are not treated as finished even when mark
  assert.equal(matchResult(fixture('post','STATUS_CANCELED',true)).state,'cancelled');
  assert.equal(matchResult(fixture('post','STATUS_ABANDONED',true)).state,'suspended');
 });
+
+test('Google Club Brujas and Racing Club de Lens identify the ESPN Club Brugge–Lens fixture',()=>{
+ const e=fixture();e.id='401915388';e.date='2026-10-21T19:00Z';
+ e.competitions[0].competitors[0].team={displayName:'Club Brugge',name:'Club Brugge',shortDisplayName:'Club Brugge'};
+ e.competitions[0].competitors[1].team={displayName:'Lens',name:'Lens',shortDisplayName:'Lens'};
+ assert.equal(identifyMatch({events:[e]},'club brujas contra racing club de lens',e.date).id,'401915388');
+ assert.throws(()=>identifyMatch({events:[e]},'club brujas contra real madrid',e.date));
+});

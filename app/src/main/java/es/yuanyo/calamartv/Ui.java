@@ -177,6 +177,9 @@ final class Ui {
     return v;
   }
 
+  static TextView audienceBadge(Context c,float sp){
+    TextView badge=tag(c,"—",sp);badge.setCompoundDrawablesWithIntrinsicBounds(icon(Icon.EYE,FG,dp(c,16)),null,null,null);badge.setCompoundDrawablePadding(dp(c,4));return badge;
+  }
   static void scaleOnFocus(View v, final float scale) {
     v.setOnFocusChangeListener(
         new View.OnFocusChangeListener() {
@@ -212,6 +215,7 @@ final class Ui {
 
   enum Icon {
     PLAY,
+    EYE,
     BACK,
     ADMIN
   }
@@ -237,6 +241,9 @@ final class Ui {
         path.lineTo(19f, 12f);
         path.close();
         paint.setStyle(Paint.Style.FILL);
+      } else if (icon == Icon.EYE) {
+        path.moveTo(2f,12f);path.cubicTo(6f,3f,18f,3f,22f,12f);path.cubicTo(18f,21f,6f,21f,2f,12f);path.close();
+        path.addCircle(12f,12f,3f,Path.Direction.CW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);
       } else if (icon == Icon.ADMIN) {
         // Account silhouette: head and shoulders, as the web's admin button.
         path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);

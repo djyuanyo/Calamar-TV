@@ -252,6 +252,8 @@ try {
   assert.deepEqual(await page.locator('.chips .chip').allTextContents(), ['Todos', 'Cine', 'Fútbol']);
   // Every card of a category shares its colour.
   assert.equal(await page.locator('.card', { hasText: 'Sports One' }).evaluate(card => card.style.getPropertyValue('--c')), '#aa0000');
+  assert.equal(await page.locator('.card .card-viewers').count(),await page.locator('.card').count());
+  assert.equal(await page.locator('.card-viewers svg circle').count(),await page.locator('.card').count());
   // Add a Google share link to a fresh event; provider data is isolated from the live internet.
   let scoreFinished = false, scoreOffline = false;
   const matchFixture = () => ({ id: '401882870', date: '2026-11-30T12:00Z', competitions: [{ id: '401882870', status: { displayClock: "74'", type: { state: scoreFinished ? 'post' : 'in', name: scoreFinished ? 'STATUS_FULL_TIME' : 'STATUS_SECOND_HALF', completed: scoreFinished } }, competitors: [{ homeAway: 'home', score: '2', team: { displayName: 'Levante' } }, { homeAway: 'away', score: '1', team: { displayName: 'Athletic Club' } }] }] });
@@ -268,16 +270,32 @@ try {
   await page.getByText('Levante – Athletic Club · 2 – 1 · En juego · 74′ · Resultados: ESPN', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
-  await page.locator('a[href^="#/evento/"]').filter({ hasText: 'Abrir evento' }).click();
+  await page.locator('.nav a').filter({hasText:'Inicio'}).click();
+  await page.locator('.event-card [data-match-id]').getByText('2 – 1 · En juego · 74′',{exact:true}).waitFor();
+  await page.locator('.event-card .card-viewers b').getByText('0',{exact:true}).waitFor();
+  const cardPosition=await page.locator('.event-card').evaluate(c => {const a=c.querySelector('.art').getBoundingClientRect(),b=c.querySelector('.card-viewers').getBoundingClientRect();return {right:a.right-b.right,top:b.top-a.top};});
+  assert.ok(Math.abs(cardPosition.right-8)<1.5);assert.ok(Math.abs(cardPosition.top-8)<1.5);
+  await page.locator('.event-card').click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
-  await page.locator('#player-title .player-score').getByText('2 – 1 · En juego · 74′', { exact: true }).waitFor();
+  assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
+  assert.equal(await page.locator('#player [data-match-id]').count(),0);
+  await page.evaluate(() => {document.querySelector('#player-pill').hidden=false;});
+  for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){
+    await page.setViewportSize(viewport);
+    const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),pill=root.querySelector('#player-pill');return {bar:bar.getBoundingClientRect().toJSON(),pill:pill.getBoundingClientRect().toJSON(),right:root.getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
+    assert.equal(pos.first,'player-viewers');assert.ok(pos.bar.top>=pos.pill.bottom);assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
+  }
+  await page.setViewportSize({width:390,height:844});
   scoreFinished = true;
   await page.clock.fastForward(31000);
-  await page.locator('#player-title .player-score').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
+  await page.locator('.event-card [data-match-id]').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
+  assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
+  await page.locator('.event-card .card-viewers b').getByText('1',{exact:true}).waitFor();
   scoreOffline = true;
   await page.clock.fastForward(31000);
-  await page.locator('#player-title .player-score').getByText('Marcador no disponible', { exact: true }).waitFor();
+  await page.locator('.event-card [data-match-id]').getByText('Marcador no disponible', { exact: true }).waitFor();
+  assert.equal(await page.locator('#player [data-match-id]').count(),0);
   // Grace is kept across a page reload and an API outage. Expiring a card keeps admin data.
   const finishRegistry=await page.evaluate(() => JSON.parse(localStorage.getItem('calamar-match-finished-v1')));
   const graceEnd=finishRegistry['401882870']+300000;

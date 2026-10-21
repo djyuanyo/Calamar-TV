@@ -8,7 +8,7 @@ import { prepareHostedVideo } from './video-bridge.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
-import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS } from './audience.js';
+import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
@@ -87,6 +87,7 @@ function card(c, pick = null) {
       { class: 'art' },
       c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
       c.event ? eventBadge(c, 'badge') : null,
+      cardAudience(c),
       pick ? el('span', { class: 'pick-mark', 'aria-hidden': 'true' }, pick.selected ? String(pick.selected) : '+') : c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
     ),
     el('span', { class: 'name' }, c.name),
@@ -133,6 +134,38 @@ function syncEventExpiry() {
 setInterval(refreshScores, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncEventExpiry(); refreshScores(); } });
 new MutationObserver(records => { if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches('[data-match-id]') || n.querySelector('[data-match-id]'))))) refreshScores(); }).observe(view, { childList: true, subtree: true });
+
+const cardCounts = new Map();
+let cardsReady = false, cardsBusy = false, cardsCheckedAt = 0;
+function eyeIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '16'); svg.setAttribute('height', '16'); svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>';
+  return svg;
+}
+function cardAudience(c) {
+  const target = audienceTarget(c), count = cardsReady ? cardCounts.get(target) || 0 : '—';
+  return el('span', { class: 'card-viewers', 'data-audience-target': target, 'aria-label': `${count} personas viendo` }, eyeIcon(), el('b', {}, String(count)));
+}
+function paintCardAudience() {
+  for (const node of document.querySelectorAll('[data-audience-target]')) {
+    const count = cardsReady ? cardCounts.get(node.dataset.audienceTarget) || 0 : '—';
+    node.querySelector('b').textContent = String(count); node.setAttribute('aria-label', count === '—' ? 'Espectadores no disponibles' : `${count} personas viendo`);
+  }
+}
+async function refreshCardAudience() {
+  if (document.hidden || cardsBusy || !document.querySelector('[data-audience-target]')) return;
+  if (cardsCheckedAt && Date.now() - cardsCheckedAt < COUNT_MS) { paintCardAudience(); return; }
+  cardsBusy = true;
+  try {
+    const f = await shared(), counts = liveCounts(await f.audience());
+    cardCounts.clear(); for (const [target, count] of counts) cardCounts.set(target, count); cardsReady = true;
+  } catch { cardsReady = false; }
+  finally { cardsBusy = false; cardsCheckedAt = Date.now(); paintCardAudience(); }
+}
+setInterval(refreshCardAudience, COUNT_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { cardsCheckedAt = 0; refreshCardAudience(); } });
+new MutationObserver(records => { if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches('[data-audience-target]') || n.querySelector('[data-audience-target]'))))) refreshCardAudience(); }).observe(view, { childList: true, subtree: true });
 
 function sectionHead(title, aside) {
   return el('div', { class: 'section-head' }, el('h2', {}, title), aside);
@@ -578,7 +611,7 @@ function playSource(c, index) {
 const viewersBadge = document.getElementById('player-viewers');
 let watching = null;
 function showViewers(count) {
-  viewersBadge.hidden = !Number.isInteger(count) || count < 1;
+  viewersBadge.hidden = !Number.isInteger(count) || count < 0;
   viewersBadge.querySelector('b').textContent = count > 999 ? `${(count / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mil` : String(count);
   const text = count === 1 ? '1 persona viendo' : `${count} personas viendo`;
   viewersBadge.querySelector('.sr').textContent = text;
@@ -632,7 +665,6 @@ function open(c, fromRoute = false) {
   current = c;
   shareButton.hidden = !c.event;
   playerTitle.textContent = c.name;
-  if (c.event && c.matchUrl) playerTitle.append(eventBadge(c, 'player-score'));
   refreshScores();
   playerLogo.hidden = !c.logo;
   if (c.logo) playerLogo.src = c.logo;

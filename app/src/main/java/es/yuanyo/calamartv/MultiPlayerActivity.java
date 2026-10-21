@@ -52,7 +52,7 @@ public final class MultiPlayerActivity extends Activity {
     final List<String> urls;
     final FrameLayout frame;
     final PlayerView view;
-    final TextView name, status, soundButton;
+    final TextView name, status, soundButton, viewersBadge;
     ExoPlayer player;
     AudienceSession audience;
     long viewers=-1;
@@ -84,6 +84,8 @@ public final class MultiPlayerActivity extends Activity {
       FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
       np.setMargins(Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 8), 0);
       frame.addView(name, np);
+      viewersBadge=Ui.audienceBadge(MultiPlayerActivity.this,11);viewersBadge.setVisibility(View.GONE);
+      FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);vp.setMargins(0,Ui.dp(MultiPlayerActivity.this,8),Ui.dp(MultiPlayerActivity.this,8),0);frame.addView(viewersBadge,vp);
       status = new TextView(MultiPlayerActivity.this);
       status.setTextColor(Color.WHITE);
       status.setTextSize(13);
@@ -170,7 +172,7 @@ public final class MultiPlayerActivity extends Activity {
     ArrayList<String> targets=getIntent().getStringArrayListExtra("audience_targets"),channels=getIntent().getStringArrayListExtra("audience_channels");
     for(int i=0;i<tiles.size();i++)if(targets!=null&&i<targets.size()&&AudienceModel.validTarget(targets.get(i))){
       final Tile tile=tiles.get(i);String channel=channels!=null&&i<channels.size()?channels.get(i):null;
-      tile.audience=new AudienceSession(this,targets.get(i),channel,viewers -> {tile.viewers=viewers;showSound();});
+      tile.audience=new AudienceSession(this,targets.get(i),channel,viewers -> {tile.viewers=viewers;tile.viewersBadge.setVisibility(View.VISIBLE);tile.viewersBadge.setText(viewers<0?"—":String.valueOf(viewers));tile.viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers+" personas viendo");});
     }
     int[] grid = MultiScreen.grid(count);
     LinearLayout rows = new LinearLayout(this);
@@ -239,7 +241,7 @@ public final class MultiPlayerActivity extends Activity {
     for (int i = 0; i < tiles.size(); i++) {
       Tile tile = tiles.get(i);
       if (tile.player != null) tile.player.setVolume(i == sound ? 1f : 0f);
-      tile.name.setText((i == sound ? "🔊 " : "") + tile.title + (tile.audience==null?"":tile.viewers<0?" · ◉ —":" · ◉ "+tile.viewers));
+      tile.name.setText((i == sound ? "🔊 " : "") + tile.title);
       tile.name.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0x99000000, 6, 0, 0));
       tile.name.setTextColor(i == sound ? Ui.BG : Color.WHITE);
       tile.soundButton.setText(i == sound ? "🔊" : "🔇");

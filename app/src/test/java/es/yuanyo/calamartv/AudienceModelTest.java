@@ -13,4 +13,11 @@ public class AudienceModelTest {
     assertEquals("e_partido_a",AudienceModel.visitKey(true,"partido:a"));assertEquals("c_tv",AudienceModel.visitKey(false,"tv"));
     assertEquals("2026-07-02",AudienceModel.day(1782946800000L));
   }
+  @Test public void cardsOnlyCountLiveSessionsInTheSameWindowAsWeb(){
+    java.util.List<Map<String,Object>> docs=new ArrayList<>();
+    docs.add(AudienceModel.presence("c:tv",6000000));docs.add(AudienceModel.presence("c:tv",5940000));
+    docs.add(AudienceModel.presence("c:tv",5760000));docs.add(AudienceModel.presence("c:tv",6120000));
+    docs.add(AudienceModel.presence("e:game",6000000));
+    Map<String,Long> counts=AudienceModel.counts(docs,6000000);assertEquals(Long.valueOf(2),counts.get("c:tv"));assertEquals(Long.valueOf(1),counts.get("e:game"));
+  }
 }

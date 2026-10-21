@@ -23,7 +23,7 @@ public final class MatchScores {
     for(String part:(u.getRawQuery()==null?"":u.getRawQuery()).split("&")){String[] p=part.split("=",2);if("q".equals(p[0])&&p.length==2)return URLDecoder.decode(p[1],"UTF-8");}return "";
   }
   static String normal(String s){return Normalizer.normalize(s,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();}
-  static boolean mentioned(JSONObject team,String query){for(String key:new String[]{"displayName","shortDisplayName","name"}){String alias=normal(team.optString(key));if(alias.length()>=4&&(" "+query+" ").contains(" "+alias+" "))return true;}return false;}
+  static boolean mentioned(JSONObject team,String query){for(String key:new String[]{"displayName","shortDisplayName","name"}){String alias=normal(team.optString(key));if(alias.length()>=4&&(" "+query.replaceAll("\\bclub brujas\\b","club brugge")+" ").contains(" "+alias+" "))return true;}return false;}
   static String iso(String value){return value.replaceAll("T(\\d{2}:\\d{2})Z$","T$1:00Z");}
   static JSONObject identify(JSONObject data,String query,String startAt)throws Exception{
     long date=SportsCatalog.instant(startAt); if(date==Long.MAX_VALUE)throw new IOException("Indica la fecha y hora del partido");

@@ -56,7 +56,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private WebView browser;
   private LinearLayout root, panel;
   private FrameLayout stage;
-  private TextView status, livePill, matchBadge, viewersBadge;
+  private TextView status, livePill, viewersBadge;
   private AudienceSession audience;
   private final Runnable audiencePlayback=new Runnable(){public void run(){
     if(!matchActive||audience==null)return;
@@ -66,13 +66,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }};
   private boolean matchActive, matchBusy;
   private final Runnable matchRefresh=new Runnable(){public void run(){
-    if(!matchActive || matchBadge==null)return;
+    if(!matchActive)return;
     String id=getIntent().getStringExtra("match_id");
     if(id==null||id.isEmpty())return;
     if(!matchBusy){matchBusy=true;new Thread(() -> {
-      String text;
-      try{text=MatchScores.fetch(id).text+" · ESPN";}catch(Exception unavailable){text="Marcador no disponible · ESPN";}
-      final String label=text;handler.post(() -> {matchBusy=false;if(matchActive&&matchBadge!=null)matchBadge.setText(label);});
+      try{MatchScores.fetch(id);}catch(Exception ignored){}
+      handler.post(() -> matchBusy=false);
     }).start();}
     handler.postDelayed(this,30000);
   }};
@@ -150,12 +149,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     livePill.setVisibility(View.GONE);
     top.addView(livePill);
     panel.addView(top);
-    if(getIntent().hasExtra("match_id")){
-      matchBadge=new TextView(this);matchBadge.setText("Consultando marcador…");matchBadge.setTextColor(Ui.FG);matchBadge.setTextSize(14);
-      matchBadge.setPadding(Ui.dp(this,16),Ui.dp(this,4),Ui.dp(this,16),Ui.dp(this,4));panel.addView(matchBadge);
-    }
+
 
     LinearLayout controls = new LinearLayout(this);
+    controls.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
     controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
     ImageButton fullscreenButton = new ImageButton(this);
     fullscreenButton.setImageResource(R.drawable.ic_player_fullscreen);
@@ -165,16 +162,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
     LinearLayout.LayoutParams fullscreenSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
     fullscreenSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
-    controls.addView(fullscreenButton, fullscreenSize);
     String audienceTarget=getIntent().getStringExtra("audience_target");
     if(AudienceModel.validTarget(audienceTarget)){
-      viewersBadge=Ui.tag(this,"◉ —",12);viewersBadge.setContentDescription("Consultando espectadores");
+      viewersBadge=Ui.audienceBadge(this,12);viewersBadge.setContentDescription("Consultando espectadores");
       controls.addView(viewersBadge,new LinearLayout.LayoutParams(-2,-2));
       audience=new AudienceSession(this,audienceTarget,getIntent().getStringExtra("audience_channel"), viewers -> {
-        viewersBadge.setText(viewers<0?"◉ —":"◉ "+viewers);
+        viewersBadge.setText(viewers<0?"—":String.valueOf(viewers));
         viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers==1?"1 persona viendo":viewers+" personas viendo");
       });
     }
+    controls.addView(fullscreenButton, fullscreenSize);
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
     button(controls, "Refrescar", () -> {
@@ -198,6 +195,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
+    scroll.setFillViewport(true);
     scroll.addView(controls);
     panel.addView(scroll);
     status = new TextView(this);

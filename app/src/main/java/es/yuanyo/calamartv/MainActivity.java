@@ -628,6 +628,23 @@ public class MainActivity extends Activity {
   }
 
   /** Until an event starts it shows its date and time; then the live pill. */
+  static class AudienceTag {final String target;AudienceTag(String target){this.target=target;}}
+  final Map<String,Long> cardViewers=new HashMap<>();boolean cardAudienceReady,cardAudienceBusy;
+  final Runnable audienceRefresh=new Runnable(){public void run(){
+    if(!resumed)return;
+    if(!cardAudienceBusy){cardAudienceBusy=true;com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(MainActivity.this)).collection("calamarAudience")
+      .whereGreaterThanOrEqualTo("minute",AudienceModel.minute(System.currentTimeMillis())-2).get(com.google.firebase.firestore.Source.SERVER).addOnCompleteListener(task -> {
+        cardAudienceBusy=false;if(!resumed)return;cardAudienceReady=task.isSuccessful();cardViewers.clear();
+        if(task.isSuccessful()){List<Map<String,Object>> docs=new ArrayList<>();for(com.google.firebase.firestore.DocumentSnapshot doc:task.getResult().getDocuments())docs.add(doc.getData());cardViewers.putAll(AudienceModel.counts(docs,System.currentTimeMillis()));}
+        paintCardViewers(root);paintCardViewers(multiPicker);
+      });}
+    handler.removeCallbacks(this);handler.postDelayed(this,30000);
+  }};
+  void paintCardViewers(View view){
+    if(view==null)return;
+    if(view instanceof TextView&&view.getTag() instanceof AudienceTag){String target=((AudienceTag)view.getTag()).target;Long value=cardViewers.get(target);String count=cardAudienceReady?String.valueOf(value==null?0:value):"—";((TextView)view).setText(count);view.setContentDescription(count.equals("—")?"Espectadores no disponibles":count+" personas viendo");}
+    if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)paintCardViewers(group.getChildAt(i));}
+  }
   final Map<String,MatchScores.Result> matchResults=new HashMap<>();
   boolean scoresBusy;
   View multiPicker;
@@ -705,7 +722,9 @@ public class MainActivity extends Activity {
     if (c.event) logo.setVisibility(View.GONE);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
-    if (c.event) art.addView(eventBadge(c, 9), bp);
+    if (c.event) {TextView badge=eventBadge(c,9);badge.setMaxWidth(dp(Math.max(60,width-88)));art.addView(badge,bp);}
+    TextView viewers=Ui.audienceBadge(this,10);viewers.setTag(new AudienceTag(AudienceModel.target(c.event,c.id)));paintCardViewers(viewers);
+    FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);vp.setMargins(0,dp(8),dp(8),0);art.addView(viewers,vp);
     card.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
 
     TextView name = text((favorites.contains(c.channelId) ? "★ " : "") + c.name, 15);
@@ -825,7 +844,7 @@ public class MainActivity extends Activity {
       for(Catalog.Channel c:options){if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis()))continue;if(!(c.name+" "+c.meta+" "+c.group).toLowerCase(Locale.ROOT).contains(q))continue;
         if(column++%columns==0){row=new LinearLayout(this);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));}
         FrameLayout tile=new FrameLayout(this);View content=card(c,width);content.setOnClickListener(null);content.setOnLongClickListener(null);content.setFocusable(false);content.setClickable(false);content.setLongClickable(false);tile.addView(content,new FrameLayout.LayoutParams(-1,-2));
-        TextView mark=Ui.tag(this,"+",16);FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);mp.setMargins(0,dp(8),dp(8),0);tile.addView(mark,mp);marks.put(c,mark);
+        TextView mark=Ui.tag(this,"+",16);FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.END);mp.setMargins(0,0,dp(8),dp(8));tile.addView(mark,mp);marks.put(c,mark);
         tile.setBackground(Ui.artBackground(this,Palette.hue(c.name),12));tile.setFocusable(true);tile.setClickable(true);Ui.scaleOnFocus(tile,1.03f);
         tile.setOnClickListener(v -> {if(selected.contains(c))selected.remove(c);else if(selected.size()<MultiScreen.MAX)selected.add(c);else Toast.makeText(this,"Máximo "+MultiScreen.MAX+" a la vez",Toast.LENGTH_SHORT).show();sync.run();});
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(width),-2);lp.setMargins(dp(4),dp(4),dp(4),dp(8));row.addView(tile,lp);
@@ -872,7 +891,7 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
-    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);
+    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
     if (sharedListener != null) {
       sharedListener.remove();
@@ -882,7 +901,7 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
-    resumed = true; pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
+    resumed = true; handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);
