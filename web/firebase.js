@@ -1,3 +1,4 @@
+import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, minuteOf } from './audience.js';
@@ -24,8 +25,21 @@ function unpack(snapshot, fallback) {
   if (!Number.isSafeInteger(value.revision) || value.revision < 1) throw new Error('Revisión del catálogo no válida.');
   return { data: validateCatalog(JSON.parse(value.json)), revision: value.revision };
 }
+let migratedImages;
+async function imageManifest() {
+  if (!migratedImages) migratedImages = fetch(new URL('./images/manifest.json', import.meta.url), { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw Error(); return r.json(); }).catch(() => ({}));
+  return migratedImages;
+}
 export async function readCatalog(fallback) {
-  return unpack(await getDocFromServer(catalog), fallback);
+  const result = unpack(await getDocFromServer(catalog), fallback);
+  result.data = await externalizeImages(result.data, { known: await imageManifest() });
+  return result;
+}
+export async function imageService() { return imageRequest(); }
+export async function connectImageService(githubToken) {
+  if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
+  return imageRequest({ action: 'configure', token: githubToken }, await auth.currentUser.getIdToken());
 }
 export function watchCatalog(fallback, changed, failed) {
   return onSnapshot(catalog, (snapshot) => {
@@ -35,13 +49,17 @@ export function watchCatalog(fallback, changed, failed) {
 }
 export async function publishCatalog(data, expectedRevision) {
   if (!administrator()) throw new Error('Entra con la cuenta de administrador de Google.');
-  const json = JSON.stringify(validateCatalog(data));
+  validateCatalog(data, { checkSize: false });
+  const prepared = await externalizeImages(data, { known: await imageManifest(),
+    upload: async image => imageRequest({ action: 'upload', image }, await auth.currentUser.getIdToken()) });
+  const json = JSON.stringify(validateCatalog(prepared));
   await runTransaction(db, async (tx) => {
     const current = await tx.get(catalog);
     const revision = current.exists() ? current.data().revision : 0;
     if (revision !== expectedRevision) throw new Error('El catálogo cambió en otro dispositivo. Se ha recargado; vuelve a aplicar el cambio.');
     tx.set(catalog, { json, revision: revision + 1, updatedAt: serverTimestamp() });
   });
+  Object.assign(data, prepared);
   return expectedRevision + 1;
 }
 

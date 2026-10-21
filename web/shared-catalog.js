@@ -2,7 +2,7 @@ import { validateSports } from './sports.js';
 export const ADMIN_EMAIL = 'juanjocarrillo7@gmail.com';
 export const CATALOG_PATH = 'calamarCatalog/custom';
 
-export function validateCatalog(data) {
+export function validateCatalog(data, { checkSize = true } = {}) {
   if (!data || !['channels', 'featured', 'hidden'].every((key) => Array.isArray(data[key]))) throw new Error('El catálogo no tiene un formato válido.');
   const ids = new Set();
   for (const c of data.channels) {
@@ -35,7 +35,7 @@ export function validateCatalog(data) {
     }
   }
   if (![...data.featured, ...data.hidden].every((id) => typeof id === 'string')) throw new Error('La lista de canales no es válida.');
-  if (new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
+  if (checkSize && new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
   return data;
 }
 

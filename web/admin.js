@@ -3,7 +3,7 @@ import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madrid
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
+import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 
 let saving = false;
@@ -318,6 +318,27 @@ function tdtTools(state, rerender) {
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Canales TDT')), el('div', { class: 'form' }, field('Buscar', query)), out];
 }
 
+function githubImagesPanel(rerender) {
+  const message = el('p', { class: 'note', role: 'status' });
+  const token = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Credencial de GitHub', 'aria-label': 'Credencial de GitHub' });
+  const connect = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    connect.disabled = true;
+    try { message.textContent = 'Conectando…'; const value = token.value.trim(); token.value = ''; await connectImageService(value); message.textContent = 'GitHub conectado. Las fotos nuevas se guardarán allí.'; }
+    catch (e) { message.textContent = e.message; } finally { connect.disabled = false; }
+  } }, 'Conectar GitHub');
+  const check = el('button', { class: 'ghost', type: 'button', onclick: async () => {
+    try { message.textContent = (await imageService()).configured ? 'GitHub conectado.' : 'Archivo instalado. Falta conectar la credencial de GitHub.'; }
+    catch(e) { message.textContent = e.message; }
+  } }, 'Comprobar conexión');
+  return el('details', { class: 'image-settings' }, el('summary', {}, 'Imágenes en GitHub'),
+    el('p', { class: 'note' }, 'Las imágenes se guardan en GitHub y el catálogo conserva solo sus enlaces. La primera vez, sube el archivo al hosting y conecta GitHub.'),
+    el('a', { class: 'btn secondary', href: 'downloads/Calamar-Imagenes-GitHub.zip', download: '' }, 'Descargar archivo para el hosting'),
+    el('p', { class: 'note' }, 'Crea una credencial de GitHub solo para Calamar-TV, con Contents: lectura y escritura. Se envía por HTTPS a tu hosting y se guarda fuera de la carpeta pública.'),
+    el('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener noreferrer' }, 'Crear credencial en GitHub'),
+    token, el('div', { class: 'actions' }, connect, check), message,
+    el('button', { class: 'ghost', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Guardar catálogo y liberar espacio de las portadas antiguas'));
+}
+
 export async function render(state) {
   const view = document.getElementById('view');
   const rerender = async () => view.replaceChildren(...(await render(state)));
@@ -362,6 +383,7 @@ export async function render(state) {
       el('div', { class: 'section-head' }, el('h1', {}, 'Administración'), el('button', { class: 'ghost', type: 'button', onclick: async () => { await logout(); file = null; rerender(); } }, 'Cerrar sesión')),
       el('p', { class: 'lead' }, 'Los cambios se guardan en Firebase y se comparten con la web y la app. Tu cuenta de Google es la única autorizada para editar.'),
       shown ? el('p', { class: shown.startsWith('Guardado') ? 'ok' : 'error', role: 'status' }, shown) : null,
+      githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
       el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : el('b', {}, file.data[key].length), label))),
       ...(section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
@@ -461,11 +483,11 @@ function eventForm(existing, rerender) {
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
-      validateCatalog({ ...data, events: updated });
+      validateCatalog({ ...data, events: updated }, { checkSize: false });
       data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google. La fecha debe coincidir con el partido. Marcador y minuto: ESPN; solo partidos disponibles en su cobertura.'), matchCheck, matchPreview, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google. La fecha debe coincidir con el partido. Marcador y minuto: ESPN; solo partidos disponibles en su cobertura.'), matchCheck, matchPreview, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
@@ -524,7 +546,7 @@ function entityPanel(kind, rerender) {
       if (selectedLogo && !validCover(selectedLogo)) throw new Error('Usa una imagen o un enlace HTTPS.');
       const entry = { ...(existing || {}), id: existing?.id || `${team ? 'equipo' : 'liga'}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name: name.value.trim(), logo: selectedLogo, ...(team ? { leagueId: league.value } : {}) };
       const updated = existing ? data[kind].map(item => item.id === existing.id ? entry : item) : [...data[kind], entry];
-      validateCatalog({ ...data, [kind]: updated }); data[kind] = updated;
+      validateCatalog({ ...data, [kind]: updated }, { checkSize: false }); data[kind] = updated;
       await saveFile(); location.hash = `#/admin/${team ? 'equipos' : 'ligas'}`; rerender();
     } catch (error) { status.textContent = explain(error); }
   } }, el('h2', {}, `${existing ? 'Editar' : 'Crear'} ${title}`), field(`Nombre de ${title}`, name), field(team ? 'Escudo (opcional)' : 'Logo (opcional)', upload), field('O enlace HTTPS de la imagen', logo), preview, team ? field('Liga principal', league, 'Un equipo puede participar en eventos de otras ligas.') : null,

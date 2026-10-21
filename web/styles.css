@@ -629,3 +629,8 @@ label[hidden] { display: none; }
   .player-toolbar { flex-basis:auto; overflow:visible; padding:0; gap:5px; }
   .player-toolbar .player-sources { order:0; flex-basis:auto; }
 }
+
+.image-settings { margin:16px 0; padding:14px; border:1px solid var(--border, #30353d); border-radius:14px; }
+.image-settings summary { cursor:pointer; font-weight:700; }
+.image-settings input { display:block; width:100%; margin:12px 0; padding:12px; background:var(--bg, #0b0d10); color:inherit; border:1px solid #454a52; border-radius:10px; font:inherit; }
+.image-settings .actions { margin:12px 0; }

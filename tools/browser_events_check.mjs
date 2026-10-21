@@ -16,6 +16,8 @@ import { validateCatalog } from './shared-catalog.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
 export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com' } };
 export const administrator = () => true;
+export const imageService = async () => ({configured: true});
+export const connectImageService = async () => ({configured: true});
 export const watchAuth = () => () => {};
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
