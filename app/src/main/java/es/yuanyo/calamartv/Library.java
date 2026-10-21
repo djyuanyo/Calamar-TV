@@ -50,8 +50,13 @@ final class Library {
       still = e.optString("still");
     }
 
+    /** «1x01» in the file name is season 1, episode 1: shown as «Capítulo 1» of «Temporada 1». */
     String label() {
-      return season + "x" + String.format(Locale.ROOT, "%02d", episode);
+      return "Capítulo " + episode;
+    }
+
+    String seasonLabel() {
+      return "Temporada " + season;
     }
   }
 
@@ -129,8 +134,36 @@ final class Library {
       return out;
     }
 
+    /** The player's title: «Los hombres de Paco · T1 · Capítulo 1». */
     String episodeTitle(Episode e) {
-      return title + " · " + e.label() + (e.name.isEmpty() ? "" : " · " + e.name);
+      return title + " · T" + e.season + " · " + e.label();
+    }
+
+    /** The episode after this one in season and episode order, or null after the last. */
+    Episode next(Episode current) {
+      List<Episode> all = new ArrayList<>();
+      for (List<Episode> season : seasons().values()) all.addAll(season);
+      for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) return all.get(i + 1);
+      return null;
+    }
+
+    Episode episode(String id) {
+      for (Episode e : episodes) if (e.id.equals(id)) return e;
+      return null;
+    }
+
+    /** What «Continuar viendo» keeps to draw its card and come back to this film or episode. */
+    JSONObject entry(String section, Episode e) {
+      JSONObject o = new JSONObject();
+      try {
+        o.put("key", e == null ? id : e.id).put("section", section).put("item", id).put("episode", e == null ? "" : e.id)
+            .put("url", e == null ? url : e.url).put("title", e == null ? title : episodeTitle(e)).put("name", title)
+            .put("sub", e == null ? (year > 0 ? String.valueOf(year) : "") : e.seasonLabel() + " · " + e.label() + (e.name.isEmpty() ? "" : " · " + e.name))
+            .put("image", e != null && !e.still.isEmpty() ? e.still : !backdrop.isEmpty() ? backdrop : poster);
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+      return o;
     }
   }
 
@@ -161,6 +194,84 @@ final class Library {
     }
   }
 
+  /**
+   * «Continuar viendo»: where each film or episode was left on this device. One entry per series (the
+   * last episode watched), the 20 most recent, and gone once it has been watched.
+   */
+  static final class Progress {
+    private Progress() {}
+
+    static final int LIMIT = 20;
+
+    static boolean finished(long positionMs, long durationMs) {
+      return durationMs >= 300000 && positionMs >= durationMs * 0.95;
+    }
+
+    static JSONObject record(JSONObject store, JSONObject entry, long positionMs, long durationMs, long now) {
+      JSONObject next = copy(store);
+      String key = entry.optString("key");
+      if (key.isEmpty() || positionMs < 10000) return next;
+      java.util.Iterator<String> keys = store.keys();
+      while (keys.hasNext()) {
+        String other = keys.next();
+        JSONObject saved = store.optJSONObject(other);
+        if (!other.equals(key) && saved != null && saved.optString("section").equals(entry.optString("section"))
+            && saved.optString("item").equals(entry.optString("item"))) next.remove(other);
+      }
+      if (finished(positionMs, durationMs)) {
+        next.remove(key);
+        return next;
+      }
+      try {
+        JSONObject saved = new JSONObject(entry.toString());
+        saved.put("position", positionMs).put("duration", Math.max(0, durationMs)).put("at", now);
+        next.put(key, saved);
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+      List<JSONObject> all = list(next);
+      for (int i = LIMIT; i < all.size(); i++) next.remove(all.get(i).optString("key"));
+      return next;
+    }
+
+    static JSONObject remove(JSONObject store, String key) {
+      JSONObject next = copy(store);
+      next.remove(key);
+      return next;
+    }
+
+    static List<JSONObject> list(JSONObject store) {
+      List<JSONObject> out = new ArrayList<>();
+      java.util.Iterator<String> keys = store.keys();
+      while (keys.hasNext()) {
+        JSONObject o = store.optJSONObject(keys.next());
+        if (o != null) out.add(o);
+      }
+      Collections.sort(out, (a, b) -> Long.compare(b.optLong("at"), a.optLong("at")));
+      return out;
+    }
+
+    private static JSONObject copy(JSONObject store) {
+      try {
+        return new JSONObject(store.toString());
+      } catch (JSONException impossible) {
+        return new JSONObject();
+      }
+    }
+
+    static JSONObject load(android.content.Context context) {
+      try {
+        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString("progress", "{}"));
+      } catch (JSONException broken) {
+        return new JSONObject();
+      }
+    }
+
+    static void save(android.content.Context context, JSONObject store) {
+      context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).edit().putString("progress", store.toString()).apply();
+    }
+  }
+
   /** Only https files of the Calamar hosting are played; the list cannot point the player elsewhere. */
   static final class Media {
     private Media() {}
@@ -176,6 +287,12 @@ final class Library {
         return false;
       }
     }
+  }
+
+  /** 1:02:05 or 12:34. */
+  static String clock(long ms) {
+    long s = Math.max(0, ms / 1000), h = s / 3600, m = s / 60 % 60;
+    return h > 0 ? String.format(Locale.ROOT, "%d:%02d:%02d", h, m, s % 60) : String.format(Locale.ROOT, "%d:%02d", m, s % 60);
   }
 
   static Data download() throws IOException, JSONException {

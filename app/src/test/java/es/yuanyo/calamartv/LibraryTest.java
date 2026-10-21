@@ -29,9 +29,39 @@ public class LibraryTest {
     Library.Item paco = new Library.Data(new JSONObject(JSON)).items("series").get(0);
     Map<Integer, List<Library.Episode>> seasons = paco.seasons();
     assertEquals(Arrays.asList(1, 10), new ArrayList<>(seasons.keySet()));
-    assertEquals("10x01", seasons.get(10).get(0).label());
-    assertEquals("Los hombres de Paco · 10x01 · Vuelta a empezar", paco.episodeTitle(seasons.get(10).get(0)));
+    Library.Episode first = seasons.get(10).get(0);
+    assertEquals("Capítulo 1", first.label());
+    assertEquals("Temporada 10", first.seasonLabel());
+    assertEquals("Los hombres de Paco · T10 · Capítulo 1", paco.episodeTitle(first));
     assertEquals("2 temporadas · 3 capítulos", paco.facts());
+    assertEquals("e1", paco.next(seasons.get(1).get(0)).id);
+    assertEquals("e2", paco.next(first).id);
+    assertNull(paco.next(paco.episode("e2")));
+    JSONObject entry = paco.entry("series", first);
+    assertEquals("Temporada 10 · Capítulo 1 · Vuelta a empezar", entry.getString("sub"));
+    assertEquals("https://calamarmenciano.com/S/1.mkv", entry.getString("url"));
+  }
+
+  @Test public void progressKeepsOneEntryPerSeriesAndDropsWhatWasWatched() throws Exception {
+    Library.Item paco = new Library.Data(new JSONObject(JSON)).items("series").get(0);
+    JSONObject one = paco.entry("series", paco.episode("e1")), two = paco.entry("series", paco.episode("e2"));
+    JSONObject store = Library.Progress.record(new JSONObject(), one, 5000, 1500000, 1);
+    assertEquals(0, store.length());
+    store = Library.Progress.record(store, one, 600000, 1500000, 2);
+    assertEquals(600000, store.getJSONObject("e1").getLong("position"));
+    store = Library.Progress.record(store, two, 60000, 1500000, 3);
+    assertFalse(store.has("e1"));
+    assertTrue(store.has("e2"));
+    assertFalse(Library.Progress.finished(50000, 60000));
+    assertEquals(0, Library.Progress.record(store, two, 1450000, 1500000, 4).length());
+    assertEquals(0, Library.Progress.remove(store, "e2").length());
+    for (int i = 0; i < Library.Progress.LIMIT + 3; i++)
+      store = Library.Progress.record(store, new JSONObject().put("key", "m" + i).put("section", "movies").put("item", "m" + i), 100000, 3000000, 10 + i);
+    List<JSONObject> list = Library.Progress.list(store);
+    assertEquals(Library.Progress.LIMIT, list.size());
+    assertEquals("m" + (Library.Progress.LIMIT + 2), list.get(0).getString("key"));
+    assertEquals("1:02:05", Library.clock(3725000));
+    assertEquals("1:15", Library.clock(75000));
   }
 
   @Test public void visibilityIsAnOptionalBoolean() throws Exception {

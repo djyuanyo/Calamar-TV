@@ -326,7 +326,8 @@ try {
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
-      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } }],
+      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://calamarmenciano.com/PELIS/Torrente.mp4', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://calamarmenciano.com/SERIES/cap1001.mp4' }, { id: 'e1002', season: 10, episode: 2, url: 'https://calamarmenciano.com/SERIES/cap1002.mp4' }] }],
     documentaries: [] } };
@@ -340,25 +341,59 @@ try {
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
   await page.locator('.nav a', { hasText: 'Películas' }).click();
+  // Category chips (TMDB genres of the section) between the search box and the posters.
+  await page.getByRole('button', { name: 'Ciencia ficción', exact: true }).click();
+  assert.equal(await page.locator('.poster-card').count(), 1);
+  await page.getByRole('button', { name: 'Todas', exact: true }).click();
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
-  await page.getByRole('button', { name: '▶ Ver', exact: true }).click();
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
+  // Films are not live: no «En directo» pill or live button, whatever the stream says.
+  await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));
+  assert.equal(await page.locator('#player-pill').isHidden(), true);
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
   await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
-  await page.locator('.episode', { hasText: '10x01 · Vuelta a empezar' }).click();
+  // An episode opens its own page (Capítulo 1, its name and synopsis) with the play button.
+  await page.locator('.episode', { hasText: 'Capítulo 1' }).click();
+  await page.getByRole('heading', { name: 'Capítulo 1', exact: true }).waitFor();
+  assert.ok(page.url().endsWith('#/series/spaco/capitulo/e1001'));
+  assert.equal(await page.locator('.episode-name').textContent(), 'Vuelta a empezar');
+  assert.equal(await page.locator('#player').isHidden(), true);
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · 10x01 · Vuelta a empezar');
+  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Capítulo 1');
+  // When it ends the next episode starts by itself.
+  await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
+  await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
+  assert.ok(page.url().endsWith('#/series/spaco/ver/e1002'));
+  await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/SERIES/cap1002.mp4');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  // «Continuar viendo» heads the home page and opens the film where it was left.
+  await page.evaluate(() => localStorage.setItem('calamar-progress-v1', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',
+    name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
+  await page.goto(base + '/#/inicio');
+  await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
+  assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
+  assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
+  await page.locator('.continue-card a').click();
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.goto(base + '/#/peliculas/mavatar');
+  await page.getByRole('button', { name: '▶ Continuar · 30:00', exact: true }).waitFor();
+  await page.goto(base + '/#/inicio');
+  await page.getByRole('button', { name: 'Quitar Avatar de Continuar viendo' }).click();
+  await page.waitForFunction(() => !document.querySelector('.continue-card'));
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

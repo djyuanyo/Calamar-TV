@@ -398,6 +398,7 @@ public class MainActivity extends Activity {
     } else {
       List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
       List<Catalog.Channel> events = Catalog.events(channels, custom);
+      if (Library.visible(custom)) continueRow();
       if (!featured.isEmpty()) hero(featured);
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
@@ -1070,6 +1071,7 @@ public class MainActivity extends Activity {
   // ---- Films, series and documentaries (calamar-library.php on the hosting) -------------------
 
   Library.Data library;
+  String genre = "", genreSection = "";
   boolean libraryBusy;
   long libraryAt;
   String libraryError = "";
@@ -1106,11 +1108,40 @@ public class MainActivity extends Activity {
       list.addView(label(libraryBusy ? "Cargando…" : libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED));
       return;
     }
+    // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
+    if (!section.equals(genreSection)) { genreSection = section; genre = ""; }
+    TreeSet<String> genres = new TreeSet<>(java.text.Collator.getInstance(new Locale("es", "ES")));
+    for (Library.Item item : library.items(section)) genres.addAll(item.genres);
+    if (!genres.contains(genre)) genre = "";
     List<Library.Item> items = new ArrayList<>();
-    for (Library.Item item : library.items(section)) if (matches(item.title)) items.add(item);
+    for (Library.Item item : library.items(section))
+      if (matches(item.title) && (genre.isEmpty() || item.genres.contains(genre))) items.add(item);
     heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
+    if (!genres.isEmpty()) {
+      LinearLayout chips = row();
+      List<String> options = new ArrayList<>();
+      options.add("");
+      options.addAll(genres);
+      for (final String g : options) {
+        Button chip = Ui.pill(this, g.isEmpty() ? "Todas" : g, g.equals(genre) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+        chip.setId(400000 + Math.abs(g.hashCode() % 90000));
+        chip.setOnClickListener(v -> {
+          genre = g;
+          render();
+          View again = root.findViewById(v.getId());
+          if (again != null) again.requestFocus();
+        });
+        addButton(chips, chip);
+      }
+      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
+      chipScroll.setHorizontalScrollBarEnabled(false);
+      chipScroll.addView(chips);
+      LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+      cp.setMargins(0, dp(6), 0, dp(16));
+      list.addView(chipScroll, cp);
+    }
     if (items.isEmpty())
-      list.addView(label(query.trim().isEmpty() ? "Todavía no hay vídeos en esta sección." : "Sin resultados", 15, MUTED));
+      list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
     int columns = wide() ? 6 : 3;
     int width = gridWidth(columns);
     LinearLayout r = null;
@@ -1156,7 +1187,7 @@ public class MainActivity extends Activity {
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
     card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : ""));
-    card.setOnClickListener(v -> libraryDetail(item));
+    card.setOnClickListener(v -> libraryDetail(Library.section(mode), item));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
@@ -1164,7 +1195,7 @@ public class MainActivity extends Activity {
   }
 
   /** The title's page: backdrop, facts, synopsis, Ver (films) or seasons and episodes, and cast. */
-  void libraryDetail(final Library.Item item) {
+  void libraryDetail(final String section, final Library.Item item) {
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(Ui.BG);
@@ -1207,16 +1238,7 @@ public class MainActivity extends Activity {
     body.setOrientation(LinearLayout.VERTICAL);
     body.setPadding(dp(gutter()), 0, dp(gutter()), 0);
     page.addView(body);
-    if (!item.series) {
-      Button watch = Ui.pill(this, "Ver", Ui.Kind.ACCENT, false);
-      watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
-      watch.setCompoundDrawablePadding(dp(8));
-      watch.setOnClickListener(v -> playLibrary(item.title, item.url));
-      LinearLayout actions = row();
-      addButton(actions, watch);
-      body.addView(actions);
-      watch.requestFocus();
-    }
+    if (!item.series) playButtons(body, item.entry(section, null));
     if (!item.overview.isEmpty()) body.addView(label(item.overview, 15, 0xffd6dbe2));
 
     if (item.series) {
@@ -1234,7 +1256,7 @@ public class MainActivity extends Activity {
           addButton(chips, chip);
         }
         episodes.removeAllViews();
-        for (final Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(item, e));
+        for (final Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(section, item, e));
       };
       draw[0].run();
       HorizontalScrollView chipScroll = new HorizontalScrollView(this);
@@ -1263,7 +1285,7 @@ public class MainActivity extends Activity {
     dialog.getWindow().setLayout(-1, -1);
   }
 
-  View episodeRow(final Library.Item item, final Library.Episode e) {
+  View episodeRow(final String section, final Library.Item item, final Library.Episode e) {
     LinearLayout r = row();
     r.setFocusable(true);
     r.setClickable(true);
@@ -1284,10 +1306,19 @@ public class MainActivity extends Activity {
     r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 160 : 112), dp(wide() ? 90 : 63)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
-    TextView name = text(e.label() + (e.name.isEmpty() ? "" : " · " + e.name), 15);
+    TextView name = text(e.label(), 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(12), 0, dp(4), 0);
     texts.addView(name);
+    if (!e.name.isEmpty()) {
+      TextView subtitle = label(e.name, 13, 0xffd6dbe2);
+      subtitle.setSingleLine(true);
+      subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      subtitle.setPadding(dp(12), 0, dp(4), 0);
+      texts.addView(subtitle);
+    }
+    JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
+    if (saved != null) texts.addView(progressBar(saved), progressBarParams(dp(12)));
     if (!e.overview.isEmpty()) {
       TextView about = label(e.overview, 12, Ui.MUTED);
       about.setMaxLines(2);
@@ -1296,8 +1327,8 @@ public class MainActivity extends Activity {
       texts.addView(about);
     }
     r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-    r.setContentDescription("Ver " + item.episodeTitle(e));
-    r.setOnClickListener(v -> playLibrary(item.episodeTitle(e), e.url));
+    r.setContentDescription(e.seasonLabel() + ", " + e.label() + (e.name.isEmpty() ? "" : ", " + e.name));
+    r.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.setMargins(0, dp(4), 0, dp(4));
     r.setLayoutParams(p);
@@ -1309,13 +1340,221 @@ public class MainActivity extends Activity {
     return v;
   }
 
-  /** Films are played like a direct video link; they do not count in the channel audience. */
-  void playLibrary(String title, String url) {
+  /** «▶ Reproducir», or «▶ Continuar · 12:34» and «Desde el principio» when it was left half watched. */
+  void playButtons(LinearLayout parent, final JSONObject entry) {
+    JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
+    LinearLayout actions = row();
+    Button watch = Ui.pill(this, saved == null ? "Reproducir" : "Continuar · " + Library.clock(saved.optLong("position")), Ui.Kind.ACCENT, false);
+    watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
+    watch.setCompoundDrawablePadding(dp(8));
+    watch.setOnClickListener(v -> playEntry(entry, false));
+    addButton(actions, watch);
+    if (saved != null) {
+      Button restart = Ui.pill(this, "↺ Desde el principio", Ui.Kind.SURFACE, true);
+      restart.setOnClickListener(v -> playEntry(entry, true));
+      addButton(actions, restart);
+    }
+    HorizontalScrollView scroll = new HorizontalScrollView(this);
+    scroll.setHorizontalScrollBarEnabled(false);
+    scroll.addView(actions);
+    parent.addView(scroll);
+    if (saved != null) parent.addView(progressBar(saved), progressBarParams(dp(4)));
+    watch.requestFocus();
+  }
+
+  /** The watched part of a film or episode, as a lime bar. */
+  View progressBar(JSONObject saved) {
+    long duration = saved.optLong("duration"), position = saved.optLong("position");
+    float done = duration > 0 ? Math.min(1f, position / (float) duration) : 0f;
+    LinearLayout track = new LinearLayout(this);
+    track.setBackground(Ui.shape(this, 0x47ffffff, 2, 0, 0));
+    View fill = new View(this);
+    fill.setBackground(Ui.shape(this, Ui.ACC, 2, 0, 0));
+    track.addView(fill, new LinearLayout.LayoutParams(0, -1, done));
+    View rest = new View(this);
+    track.addView(rest, new LinearLayout.LayoutParams(0, -1, 1f - done));
+    return track;
+  }
+
+  LinearLayout.LayoutParams progressBarParams(int start) {
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(wide() ? 280 : 200), dp(4));
+    p.setMargins(start, dp(6), 0, dp(4));
+    return p;
+  }
+
+  /** An episode's own page: its image, «Capítulo N», its name and synopsis, and the play button. */
+  void episodePage(final String section, final Library.Item item, final Library.Episode e) {
+    final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
+    ScrollView scroll = new ScrollView(this);
+    scroll.setBackgroundColor(Ui.BG);
+    LinearLayout page = new LinearLayout(this);
+    page.setOrientation(LinearLayout.VERTICAL);
+    page.setPadding(0, 0, 0, dp(28));
+    scroll.addView(page);
+
+    FrameLayout hero = new FrameLayout(this);
+    hero.setBackground(Ui.heroBackground(this, Palette.hue(item.title)));
+    String picture = !e.still.isEmpty() ? e.still : item.backdrop;
+    if (!picture.isEmpty()) {
+      ImageView still = new ImageView(this);
+      still.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      hero.addView(still, new FrameLayout.LayoutParams(-1, -1));
+      image(still, picture);
+    }
+    View scrim = new View(this);
+    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff0b0d10, 0x660b0d10, 0x220b0d10}));
+    hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+    Button back = Ui.pill(this, "‹ " + item.title, Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> dialog.dismiss());
+    FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, dp(44), Gravity.TOP | Gravity.START);
+    bp.setMargins(dp(gutter()), dp(12), dp(gutter()), 0);
+    hero.addView(back, bp);
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 320 : 220)));
+
+    LinearLayout body = new LinearLayout(this);
+    body.setOrientation(LinearLayout.VERTICAL);
+    body.setPadding(dp(gutter() + 6), 0, dp(gutter() + 6), 0);
+    page.addView(body);
+    body.addView(noPad(label(item.title + " · " + e.seasonLabel(), 14, Ui.MUTED)));
+    TextView title = text(e.label(), wide() ? 34 : 28);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setPadding(0, dp(2), 0, 0);
+    body.addView(title);
+    if (!e.name.isEmpty()) {
+      TextView name = noPad(text(e.name, 19));
+      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      body.addView(name);
+    }
+    String about = !e.overview.isEmpty() ? e.overview : !item.overview.isEmpty() ? item.overview : "Sin descripción.";
+    TextView overview = label(about, 15, 0xffd6dbe2);
+    overview.setPadding(0, dp(10), 0, dp(10));
+    body.addView(overview);
+    playButtons(body, item.entry(section, e));
+    final Library.Episode next = item.next(e);
+    if (next != null) {
+      Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.label() + " ›", Ui.Kind.SURFACE, true);
+      following.setOnClickListener(v -> { dialog.dismiss(); episodePage(section, item, next); });
+      LinearLayout r = row();
+      addButton(r, following);
+      body.addView(r);
+    }
+    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
+    dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
+    dialog.show();
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
+    dialog.getWindow().setLayout(-1, -1);
+  }
+
+  static final int PLAY_LIBRARY = 7;
+
+  /**
+   * Films and episodes are played like a direct video link, where this device left them; they do not
+   * count in the channel audience. When one ends the player says so and the next episode starts.
+   */
+  void playEntry(JSONObject entry, boolean restart) {
+    String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
+    JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
     intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
-    intent.putExtra("title", title);
-    startActivity(intent);
+    intent.putExtra("title", entry.optString("title"));
+    intent.putExtra("progress_entry", entry.toString());
+    intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));
+    startActivityForResult(intent, PLAY_LIBRARY);
+  }
+
+  @Override
+  protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request != PLAY_LIBRARY) return;
+    render();
+    String key = result == RESULT_OK && data != null ? data.getStringExtra("ended") : null;
+    if (key == null || library == null) return;
+    for (String[] section : Library.SECTIONS)
+      for (Library.Item item : library.items(section[0])) {
+        Library.Episode e = item.series ? item.episode(key) : null;
+        if (e == null) continue;
+        Library.Episode next = item.next(e);
+        if (next == null) return;
+        Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.label(), Toast.LENGTH_SHORT).show();
+        playEntry(item.entry(section[0], next), false);
+        return;
+      }
+  }
+
+  /** The first row of the home page: what this device left half watched, most recent first. */
+  void continueRow() {
+    List<JSONObject> entries = Library.Progress.list(Library.Progress.load(this));
+    if (entries.isEmpty()) return;
+    loadLibrary();
+    heading("Continuar viendo", null);
+    HorizontalScrollView h = new HorizontalScrollView(this);
+    h.setHorizontalScrollBarEnabled(false);
+    h.setClipToPadding(false);
+    LinearLayout r = row();
+    r.setGravity(Gravity.TOP);
+    for (JSONObject entry : entries) r.addView(continueCard(entry, wide() ? 260 : 200));
+    h.addView(r);
+    list.addView(h);
+  }
+
+  View continueCard(final JSONObject entry, int width) {
+    LinearLayout card = new LinearLayout(this);
+    card.setId(300000 + Math.abs(entry.optString("key").hashCode() % 800000));
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setPadding(dp(3), dp(3), dp(3), dp(8));
+    card.setFocusable(true);
+    card.setClickable(true);
+    Ui.scaleOnFocus(card, 1.03f);
+    FrameLayout art = new FrameLayout(this);
+    art.setBackground(Ui.artBackground(this, Palette.hue(entry.optString("name")), 12));
+    art.setForeground(Ui.focusOutline(this, 12));
+    art.setClipToOutline(true);
+    art.setDuplicateParentStateEnabled(true);
+    TextView fallback = label(entry.optString("name"), 15, 0x66ffffff);
+    fallback.setGravity(Gravity.CENTER);
+    fallback.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
+    if (!entry.optString("image").isEmpty()) {
+      ImageView picture = new ImageView(this);
+      picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      art.addView(picture, new FrameLayout.LayoutParams(-1, -1));
+      image(picture, entry.optString("image"));
+    }
+    ImageView play = new ImageView(this);
+    play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(22)));
+    play.setScaleType(ImageView.ScaleType.CENTER);
+    play.setBackground(Ui.shape(this, 0x99000000, 999, 0, 0));
+    art.addView(play, new FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER));
+    FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(4), Gravity.BOTTOM);
+    barSize.setMargins(dp(8), 0, dp(8), dp(8));
+    art.addView(progressBar(entry), barSize);
+    card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 9f / 16f)));
+    TextView name = text(entry.optString("name"), 15);
+    name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    name.setSingleLine(true);
+    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    name.setPadding(dp(2), dp(8), dp(2), 0);
+    card.addView(name);
+    long left = entry.optLong("duration") - entry.optLong("position");
+    String sub = entry.optString("sub") + (entry.optLong("duration") > 0 ? (entry.optString("sub").isEmpty() ? "" : " · ") + "quedan " + Math.max(1, Math.round(left / 60000f)) + " min" : "");
+    TextView subtitle = label(sub, 12, Ui.MUTED);
+    subtitle.setSingleLine(true);
+    subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    subtitle.setPadding(dp(2), 0, dp(2), 0);
+    card.addView(subtitle);
+    card.setContentDescription("Continuar " + entry.optString("title") + ". Mantén pulsado para quitarlo de Continuar viendo");
+    card.setOnClickListener(v -> playEntry(entry, false));
+    card.setOnLongClickListener(v -> {
+      Library.Progress.save(this, Library.Progress.remove(Library.Progress.load(this), entry.optString("key")));
+      Toast.makeText(this, "Quitado de Continuar viendo", Toast.LENGTH_SHORT).show();
+      render();
+      return true;
+    });
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    p.setMargins(dp(4), dp(4), dp(6), dp(6));
+    card.setLayoutParams(p);
+    return card;
   }
 
   void favoriteAction(View view, Catalog.Channel channel) {

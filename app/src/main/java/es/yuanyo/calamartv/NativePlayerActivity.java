@@ -97,6 +97,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
   private boolean active, resolving, webMode, footballFallback;
+
+  /** Films and episodes: their «Continuar viendo» entry, where to start, and whether it reached the end. */
+  private org.json.JSONObject progressEntry;
+  private long resumeMs;
+  private boolean ended;
+  private final Runnable progressTick = new Runnable() { public void run() {
+    rememberPosition();
+    handler.postDelayed(this, 10000);
+  }};
   private final Runnable renewal = () -> refreshAutomatically("Renovando la fuente…");
 
   @Override
@@ -107,6 +116,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     title = getIntent().getStringExtra("title");
     shareUrl = getIntent().getStringExtra("share_url");
     footballFallback = getIntent().getBooleanExtra("football_fallback", false);
+    try {
+      String entry = getIntent().getStringExtra("progress_entry");
+      if (entry != null) progressEntry = new org.json.JSONObject(entry);
+    } catch (org.json.JSONException ignored) {
+    }
+    resumeMs = getIntent().getLongExtra("resume_ms", 0);
     ArrayList<String> urls = getIntent().getStringArrayListExtra("media_urls");
     if (urls == null) urls = new ArrayList<>();
     urls.add(0, getIntent().getStringExtra("media_url"));
@@ -388,6 +403,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     castPlayback = false;
+    if (progressEntry != null) { handler.removeCallbacks(progressTick); handler.postDelayed(progressTick, 10000); }
     if (directUrl != null && webMode) openDirectWeb();
     else if (directUrl != null) playDirect();
     else if (pageUrl != null) resolveFresh();
@@ -567,10 +583,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (state == Player.STATE_READY) {
               cancelBufferingTimeout();
               status.setText("Reproductor nativo · " + source.label + " · " + engineName());
-              livePill.setVisibility(instance.isCurrentMediaItemLive() ? View.VISIBLE : View.GONE);
+              livePill.setVisibility(instance.isCurrentMediaItemLive() && progressEntry == null ? View.VISIBLE : View.GONE);
             } else if (state == Player.STATE_BUFFERING) {
               status.setText("Cargando vídeo…");
               armBufferingTimeout(instance, source);
+            } else if (state == Player.STATE_ENDED && progressEntry != null) {
+              // Watched to the end: out of «Continuar viendo», and the series plays the next episode.
+              ended = true;
+              Library.Progress.save(NativePlayerActivity.this, Library.Progress.remove(Library.Progress.load(NativePlayerActivity.this), progressEntry.optString("key")));
+              setResult(RESULT_OK, new Intent().putExtra("ended", progressEntry.optString("key")));
+              finish();
             } else cancelBufferingTimeout();
           }
 
@@ -622,6 +644,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
     player.setMediaItem(item.build());
+    if (progressEntry != null && resumeMs > 0) player.seekTo(resumeMs);
     player.prepare();
     player.play();
     playerView.requestFocus();
@@ -964,7 +987,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
   }
 
+  /** Saves where the film or episode is, so it can continue there (also after a retry or a pause). */
+  private void rememberPosition() {
+    if (progressEntry == null || player == null || ended) return;
+    long position = player.getCurrentPosition(), duration = player.getDuration();
+    if (position <= 0) return;
+    resumeMs = position;
+    Library.Progress.save(this, Library.Progress.record(Library.Progress.load(this), progressEntry, position,
+        duration == androidx.media3.common.C.TIME_UNSET ? 0 : duration, System.currentTimeMillis()));
+  }
+
   private void releasePlayer() {
+    rememberPosition();
     cancelBufferingTimeout();
     if (livePill != null) livePill.setVisibility(View.GONE);
     if (player != null) {
