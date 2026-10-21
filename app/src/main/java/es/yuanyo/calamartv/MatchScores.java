@@ -49,6 +49,7 @@ public final class MatchScores {
   }
   static synchronized long deadline(String id){Long at=finished.get(id);return at==null?0:at+EVENT_GRACE_MS;}
   static boolean expired(String id,long now){long end=deadline(id);return end>0&&now>=end;}
+  static boolean shouldPoll(String id,long now){return !expired(id,now)||now-deadline(id)<86400000;}
   public static class Result {
     public final String text,home,away,state; public final boolean live; public long finishedAt;
     Result(String text,String home,String away,String state){this.text=text;this.home=home;this.away=away;this.state=state;live=state.equals("live")||state.equals("halftime");}
@@ -60,7 +61,7 @@ public final class MatchScores {
     JSONObject t=s.getJSONObject("type"),home=null,away=null;JSONArray teams=c.getJSONArray("competitors");
     for(int i=0;i<teams.length();i++){JSONObject a=teams.getJSONObject(i);if("home".equals(a.optString("homeAway")))home=a;if("away".equals(a.optString("homeAway")))away=a;}
     if(home==null||away==null)throw new IOException("Marcador incompleto");
-    String name=t.optString("name"),state=t.optBoolean("completed")?"finished":name.equals("STATUS_HALFTIME")?"halftime":name.contains("POSTPON")?"postponed":name.contains("CANCEL")?"cancelled":name.contains("SUSPEND")||name.contains("DELAY")?"suspended":"in".equals(t.optString("state"))?"live":"scheduled";
+    String name=t.optString("name"),state=name.contains("POSTPON")?"postponed":name.contains("CANCEL")?"cancelled":name.contains("SUSPEND")||name.contains("DELAY")||name.contains("ABANDON")?"suspended":t.optBoolean("completed")?"finished":name.equals("STATUS_HALFTIME")?"halftime":"in".equals(t.optString("state"))?"live":"scheduled";
     String label=state.equals("finished")?"Finalizado":state.equals("halftime")?"Descanso":state.equals("postponed")?"Aplazado":state.equals("cancelled")?"Cancelado":state.equals("suspended")?"Interrumpido":state.equals("scheduled")?"Programado":"En juego";
     if(state.equals("live")&&s.optString("displayClock").matches(".*[0-9].*"))label+=" · "+s.optString("displayClock").replace("'","′");
     if(Arrays.asList("live","halftime","finished","suspended").contains(state)&&score(home).matches("\\d+")&&score(away).matches("\\d+"))label=score(home)+" – "+score(away)+" · "+label;
@@ -89,7 +90,7 @@ public final class MatchScores {
   }
   public static Result fetch(String id)throws Exception{
     if(!id.matches("\\d{1,20}"))throw new IOException("Identificador de partido no válido");
-    synchronized(cache){Cached c=cache.get(id);if(c!=null&&System.currentTimeMillis()-c.at<30000)return c.value;}
+    synchronized(cache){Cached c=cache.get(id);if(c!=null&&System.currentTimeMillis()-c.at<(expired(id,System.currentTimeMillis())?600000:30000))return c.value;}
     Result result=parse(json(API+"summary?event="+id));remember(id,result,System.currentTimeMillis());synchronized(cache){cache.put(id,new Cached(result));}return result;
   }
 }

@@ -65,3 +65,8 @@ test('public events disappear at expiry while their catalog records and channels
  const data={channels:[{id:'c',name:'TV',streams:['https://example.com/live.m3u8']}],events:[{id:'e',name:'Game',channelId:'c',matchUrl:'https://share.google/a',matchId:'90000003'}]};
  assert.equal(events(merge(null,data),data).length,0);assert.equal(data.events.length,1);assert.equal(merge(null,data).length,1);
 });
+
+test('cancelled or abandoned fixtures are not treated as finished even when marked completed',()=>{
+ assert.equal(matchResult(fixture('post','STATUS_CANCELED',true)).state,'cancelled');
+ assert.equal(matchResult(fixture('post','STATUS_ABANDONED',true)).state,'suspended');
+});

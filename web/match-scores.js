@@ -31,7 +31,7 @@ export function matchResult(data) {
   if (!c || !t) throw Error('Respuesta de marcador incompleta.');
   const home = c.competitors?.find(x => x.homeAway === 'home'), away = c.competitors?.find(x => x.homeAway === 'away');
   if (!home || !away) throw Error('Faltan los equipos del marcador.');
-  const state = t.completed ? 'finished' : t.name === 'STATUS_HALFTIME' ? 'halftime' : t.name?.includes('POSTPON') ? 'postponed' : t.name?.includes('CANCEL') ? 'cancelled' : t.name?.includes('SUSPEND') || t.name?.includes('DELAY') ? 'suspended' : t.state === 'in' ? 'live' : 'scheduled';
+  const state = t.name?.includes('POSTPON') ? 'postponed' : t.name?.includes('CANCEL') ? 'cancelled' : t.name?.includes('SUSPEND') || t.name?.includes('DELAY') || t.name?.includes('ABANDON') ? 'suspended' : t.completed ? 'finished' : t.name === 'STATUS_HALFTIME' ? 'halftime' : t.state === 'in' ? 'live' : 'scheduled';
   const score = x => typeof x.score === 'object' ? x.score?.displayValue : x.score;
   const scored = ['live', 'halftime', 'finished', 'suspended'].includes(state) && /^\d+$/.test(String(score(home))) && /^\d+$/.test(String(score(away)));
   const clock = state === 'live' && /\d/.test(s.displayClock || '') ? s.displayClock.replace(/'/g, '′') : '';
@@ -82,11 +82,13 @@ export function rememberMatch(id, result, now = Date.now()) {
 }
 export const matchDeadline = id => finished.has(String(id)) ? finished.get(String(id)) + EVENT_GRACE_MS : 0;
 export const matchExpired = (id, now = Date.now()) => matchDeadline(id) > 0 && now >= matchDeadline(id);
+// Retained admin history must not download years of old matches every 30 seconds.
+export const shouldPollMatch = (id, now = Date.now()) => !matchExpired(id, now) || now - matchDeadline(id) < 86400000;
 const cache = new Map();
 export async function fetchMatch(id, fetcher = globalThis.fetch) {
   if (!/^\d{1,20}$/.test(String(id))) throw Error('Identificador de partido no válido.');
   const old = cache.get(id);
-  if (old && Date.now() - old.at < 30000) return old.promise;
+  if (old && Date.now() - old.at < (matchExpired(id) ? 600000 : 30000)) return old.promise;
   const promise = json(`${API}summary?event=${id}`, fetcher).then(matchResult).then(result => rememberMatch(String(id), result));
   cache.set(id, { at: Date.now(), promise });
   try { return await promise; } catch (e) { cache.delete(id); throw e; }

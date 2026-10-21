@@ -1,4 +1,4 @@
-import { fetchMatch, matchExpired, matchDeadline } from './match-scores.js';
+import { fetchMatch, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -107,7 +107,7 @@ function eventBadge(c, cls) {
 let scoreBusy = false;
 async function refreshScores() {
   if (scoreBusy || document.hidden) return;
-  const ids = [...new Set([...(state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])];
+  const ids = [...new Set([...(state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])].filter(id => shouldPollMatch(id));
   scoreBusy = true;
   try { await Promise.allSettled(ids.map(async id => {
     let result;

@@ -19,6 +19,8 @@ public class MatchScoresTest {
     assertEquals("2 – 1 · En juego · 74′",MatchScores.parse(fixture("STATUS_SECOND_HALF","in",false)).text);
     assertEquals("2 – 1 · Descanso",MatchScores.parse(fixture("STATUS_HALFTIME","in",false)).text);
     assertEquals("2 – 1 · Finalizado",MatchScores.parse(fixture("STATUS_FULL_TIME","post",true)).text);
+    assertEquals("cancelled",MatchScores.parse(fixture("STATUS_CANCELED","post",true)).state);
+    assertEquals("suspended",MatchScores.parse(fixture("STATUS_ABANDONED","post",true)).state);
     assertEquals("Aplazado",MatchScores.parse(fixture("STATUS_POSTPONED","pre",false)).text);
     assertEquals("Programado",MatchScores.parse(fixture("STATUS_SCHEDULED","pre",false)).text);
   }

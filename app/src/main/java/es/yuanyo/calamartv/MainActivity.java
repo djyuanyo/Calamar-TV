@@ -634,7 +634,7 @@ public class MainActivity extends Activity {
   final Runnable scoreRefresh=new Runnable(){public void run(){
     if(!resumed)return;
     if(!scoresBusy){
-      Set<String> ids=new HashSet<>(); JSONArray all=custom.optJSONArray("events"); if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e!=null&&!e.optString("matchUrl").isEmpty()&&!e.optString("matchId").isEmpty())ids.add(e.optString("matchId"));} collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      Set<String> ids=new HashSet<>(); JSONArray all=custom.optJSONArray("events"); if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e!=null&&!e.optString("matchUrl").isEmpty()&&!e.optString("matchId").isEmpty()&&MatchScores.shouldPoll(e.optString("matchId"),System.currentTimeMillis()))ids.add(e.optString("matchId"));} collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
       if(!ids.isEmpty()) { scoresBusy=true; new Thread(() -> {
         Map<String,MatchScores.Result> results=new HashMap<>();
         for(String id:ids)try{results.put(id,MatchScores.fetch(id));}catch(Exception ignored){results.put(id,null);}
