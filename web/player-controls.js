@@ -377,6 +377,7 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
       root.classList.remove('is-buffering', 'idle');
       refreshTime();
     },
+    enterFullscreen,
     leaveFullscreen,
     isFullscreen: () => !!fullscreenElement(),
     wake,
