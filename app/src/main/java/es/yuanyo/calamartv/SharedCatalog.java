@@ -92,6 +92,19 @@ final class SharedCatalog {
         if (!(g instanceof String) || ((String) g).trim().isEmpty() || ((String) g).length() > 80 || !categories.add((String) g))
           throw new JSONException("Orden de categorías no válido");
       }
+    JSONArray list = data.optJSONArray("categories");
+    if (data.has("categories") && (list == null || list.length() > 200))
+      throw new JSONException("Categorías no válidas");
+    Set<String> categoryIds = new HashSet<>(), categoryNames = new HashSet<>();
+    if (list != null)
+      for (int i = 0; i < list.length(); i++) {
+        JSONObject c = list.getJSONObject(i);
+        String id = c.optString("id"), name = c.optString("name").trim();
+        if (id.trim().isEmpty() || id.length() > 80 || name.isEmpty() || c.optString("name").length() > 80
+            || !c.optString("color").matches("#[0-9a-fA-F]{6}")
+            || !categoryIds.add(id) || !categoryNames.add(name.toLowerCase(java.util.Locale.ROOT)))
+          throw new JSONException("Categoría incompleta o repetida");
+      }
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;

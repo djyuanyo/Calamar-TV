@@ -549,8 +549,26 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 /* Home rows per league: logo and name. */
 .section-head .league-head { display:inline-flex; align-items:center; gap:10px; color:inherit; font-size:inherit; font-weight:inherit; }
 .league-head img { width:32px; height:32px; object-fit:contain; border-radius:6px; flex:none; }
-.order-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; max-width: 520px; }
+.order-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; max-width: 680px; }
 .order-list li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .order-list li span { flex: 1; }
 .order-list .order-n { width: 22px; color: var(--muted); font-variant-numeric: tabular-nums; }
 label[hidden] { display: none; }
+
+/* Each category has its own card colour (chosen in Admin → Canales → Categorías). */
+.card[style*="--c"] .art {
+  background: var(--c);
+  background: radial-gradient(90% 120% at 30% 0%, color-mix(in srgb, var(--c) 80%, white), transparent 70%), linear-gradient(145deg, var(--c), color-mix(in srgb, var(--c) 45%, black));
+}
+.order-list li { flex-wrap: wrap; }
+.order-list li input:not([type=color]) { flex: 1 1 140px; min-width: 0; }
+.order-list li input[type=color] { width: 44px; height: 36px; padding: 2px; border-radius: 8px; flex: none; }
+.order-list li small { color: var(--muted); white-space: nowrap; }
+.order-list .swatch { width: 10px; align-self: stretch; border-radius: 4px; background: var(--c); flex: none; }
+.order-list li.dragging { border-color: var(--accent); box-shadow: 0 10px 28px rgba(0, 0, 0, .5); position: relative; z-index: 2; }
+.drag-handle { touch-action: none; cursor: grab; border: 0; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px 4px; border-radius: 6px; }
+.drag-handle:active { cursor: grabbing; }
+.dragging .drag-handle { color: var(--accent); }
+.category-add { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 4px 0 12px; }
+.category-add label { display: grid; gap: 4px; }
+.category-add input[type=color] { width: 56px; height: 40px; padding: 2px; border-radius: 8px; }

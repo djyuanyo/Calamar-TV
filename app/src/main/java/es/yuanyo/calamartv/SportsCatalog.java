@@ -61,7 +61,11 @@ final class SportsCatalog {
     return androidFreeJoin(parts);
   }
   private static String androidFreeJoin(List<String> parts) { StringBuilder s=new StringBuilder(); for(String p:parts) {if(s.length()>0)s.append(" · ");s.append(p);} return s.toString(); }
-  static String link(String id) { return "https://djyuanyo.github.io/Calamar-TV/#/evento/" + id; }
+  /** Shared link: hosting/calamar-evento.php shows the cover and name in WhatsApp and opens the event. */
+  static String link(String id) {
+    try { return "https://calamarmenciano.com/calamar-evento.php?id=" + java.net.URLEncoder.encode(id, "UTF-8"); }
+    catch (java.io.UnsupportedEncodingException impossible) { throw new IllegalStateException(impossible); }
+  }
   static void validate(JSONObject data) throws JSONException {
     Map<String, Set<String>> sets = new HashMap<>();
     for (String kind : new String[]{"leagues","teams"}) {

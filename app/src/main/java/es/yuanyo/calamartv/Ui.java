@@ -96,6 +96,26 @@ final class Ui {
     return s;
   }
 
+  /** Card background in the colour of its category (same as the web), lime outline when focused. */
+  static StateListDrawable categoryBackground(Context c, int color, float radiusDp) {
+    StateListDrawable s = new StateListDrawable();
+    GradientDrawable on = categoryGradient(c, color, radiusDp);
+    on.setStroke(dp(c, 2), ACC);
+    s.addState(new int[] {android.R.attr.state_focused}, on);
+    s.addState(new int[] {android.R.attr.state_pressed}, on);
+    GradientDrawable idle = categoryGradient(c, color, radiusDp);
+    idle.setStroke(1, 0x14ffffff);
+    s.addState(new int[] {}, idle);
+    return s;
+  }
+
+  private static GradientDrawable categoryGradient(Context c, int color, float radiusDp) {
+    GradientDrawable g =
+        new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {color, Palette.darker(color, 0.45f)});
+    g.setCornerRadius(dp(c, radiusDp));
+    return g;
+  }
+
   private static GradientDrawable artGradient(Context c, int hue, float radiusDp) {
     GradientDrawable g =
         new GradientDrawable(

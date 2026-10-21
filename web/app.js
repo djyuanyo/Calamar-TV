@@ -1,5 +1,5 @@
-import { merge, events, eventRows, homeHighlights, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, EVENT_STATES } from './sports.js';
+import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -75,7 +75,7 @@ function logo(c, cls) {
 function card(c) {
   return el(
     'button',
-    { class: c.event ? 'card event-card' : 'card', type: 'button', style: `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
+    { class: c.event ? 'card event-card' : 'card', type: 'button', style: c.color && !c.event ? `--h:${hue(c.name)};--c:${c.color}` : `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
     el(
       'span',
       { class: 'art' },
@@ -243,7 +243,7 @@ function home() {
 }
 
 function channelsPage(selected) {
-  const map = groups(state.channels, state.custom?.groupOrder);
+  const map = groups(state.channels, categoryList(state.custom).map((c) => c.name));
   const chips = el(
     'div',
     { class: 'chips', role: 'group', 'aria-label': 'Categorías' },
@@ -254,7 +254,7 @@ function channelsPage(selected) {
   const nodes = [chips];
   for (const [group, channels] of map) {
     if (selected && selected !== group) continue;
-    nodes.push(sectionHead(group, el('span', {}, `${channels.length} canales`)));
+    nodes.push(sectionHead(group, el('span', {}, channels.length === 1 ? '1 canal' : `${channels.length} canales`)));
     const sorted = [...channels].sort((a, b) => a.region.localeCompare(b.region, 'es') || Number(b.playable) - Number(a.playable));
     let region = null;
     let grid = null;
@@ -505,6 +505,7 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
+  shareButton.hidden = !c.event;
   playerTitle.textContent = c.name;
   playerLogo.hidden = !c.logo;
   if (c.logo) playerLogo.src = c.logo;
@@ -544,6 +545,18 @@ document.getElementById('player-refresh').addEventListener('click', () => {
   if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl)));
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
+// Events are shared through their preview page, so WhatsApp and others show the cover and the name.
+const shareButton = document.getElementById('player-share');
+shareButton.addEventListener('click', async () => {
+  if (!current?.event) return;
+  const url = eventShareLink(current);
+  try {
+    if (navigator.share) await navigator.share({ title: current.name, url });
+    else { await navigator.clipboard.writeText(url); shareButton.textContent = 'Enlace copiado'; setTimeout(() => { shareButton.textContent = 'Compartir'; }, 2500); }
+  } catch (error) {
+    if (error?.name !== 'AbortError') playerStatus.textContent = `Copia este enlace para compartir: ${url}`;
+  }
+});
 
 // ---- Routing ---------------------------------------------------------------------------------
 

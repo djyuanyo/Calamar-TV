@@ -109,7 +109,7 @@ La pestaña **Favoritos** sustituye la antigua lista local. Los archivos locales
 1. GitHub Pages solo publica repositorios privados con un plan de pago. Para el plan gratuito, haz público el repositorio (Settings → General → Danger Zone → Change visibility). El catálogo y la web no contienen credenciales; revisa igualmente el historial antes de hacerlo.
 2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 3. Ejecuta el workflow **Calamar TV · Web y catálogo** (Actions → Run workflow). La web queda en `https://djyuanyo.github.io/Calamar-TV/`.
-4. Para firmar la app y poder actualizarla, añade en Settings → Secrets and variables → Actions los secretos `CALAMAR_KEYSTORE_BASE64`, `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave se guarda fuera del repositorio. Todas las versiones deben firmarse con la misma; la primera APK firmada obliga a desinstalar una vez la versión de pruebas.
+4. Para firmar la app y poder actualizarla, añade en Settings → Secrets and variables → Actions los secretos `CALAMAR_KEYSTORE_BASE64` (el archivo .p12 en base64), `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave se guarda fuera del repositorio. Con los secretos, la APK release y la debug se firman con la misma clave permanente (el registro de la compilación muestra sus huellas SHA-1 y SHA-256), así que cualquier APK nueva se instala encima de la anterior. La primera APK firmada obliga a desinstalar una vez las versiones anteriores. Las huellas deben estar añadidas en Firebase (Configuración del proyecto → app Android) para que funcione el acceso con Google en la app. Si falta el secreto, la compilación muestra un aviso.
 
 ## Compilación y pruebas
 
@@ -161,6 +161,17 @@ Pruebas: `tools/audience.test.mjs`, reglas en `firebase/catalog.test.mjs` y el f
 
 La página de inicio (web y app) muestra el slider de destacados y, debajo, solo los eventos creados: una fila por liga con su logo y su nombre, ordenadas por el próximo evento de cada liga, y los eventos de cada fila por fecha y hora, del más próximo al más lejano. Los eventos sin liga van al final en «Otros eventos». Los canales siguen en el menú **Canales**.
 
-En **Admin → Canales → Orden de categorías** se sube o baja cada categoría y se guarda con **Guardar orden** (campo `groupOrder` del catálogo). Ese orden se aplica al menú Canales de la web y de la app; las categorías que se creen después aparecen al final. **Volver al orden por defecto** elimina el orden guardado.
+El orden, nombre y color de las categorías se gestionan en **Admin → Canales → Categorías** (ver 2.8.0).
 
 Al crear o editar un canal, la categoría se elige en un desplegable con las categorías existentes o con **+ Nueva categoría…** para escribir una nueva. En la app Android el campo permite escribir o elegir de la lista.
+
+## Colores y gestión de categorías (2.8.0)
+
+Las tarjetas de los canales tienen el color de su categoría: todos los canales de Deportes del mismo color, todos los de Generalistas de otro, etc. Colores por defecto: Calamar TV verde oliva, Generalistas azul, Deportes verde, Informativos rojo, Infantiles naranja, Música morado y Autonómicos turquesa; las demás categorías reciben un color fijo según su nombre.
+
+En **Admin → Canales → Categorías**:
+
+- Se arrastra ⠿ (ratón o dedo) para cambiar el orden del menú Canales; con el teclado, flechas arriba/abajo sobre ⠿.
+- Se cambia el nombre y el color de cada categoría. Los canales guardan el identificador original de la categoría, así que renombrar «Deportes» como «Fútbol» mueve también los canales TDT de Deportes.
+- **Añadir categoría** crea una categoría nueva con su color (aparece en el desplegable de los canales). Las categorías sin canales se pueden eliminar.
+- **Guardar categorías** publica los cambios (campo `categories` del catálogo: `id`, `name`, `color`), que se aplican en la web y en la app. **Restablecer** vuelve a los valores por defecto.

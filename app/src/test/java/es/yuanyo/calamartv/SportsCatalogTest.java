@@ -30,6 +30,18 @@ public class SportsCatalogTest {
     data.put("groupOrder",new JSONArray("[\"Zeta\",\"Zeta\"]"));
     try{SharedCatalog.validate(data);fail("Accepted repeated categories");}catch(JSONException expected){}
   }
+  @Test public void categoriesGiveOneColourPerCategoryAndCanBeRenamed() throws Exception {
+    JSONObject tdt=new JSONObject("{\"channels\":[{\"id\":\"gol\",\"name\":\"Gol\",\"group\":\"Deportes\",\"streams\":[\"https://example.com/g.m3u8\"]},{\"id\":\"tele\",\"name\":\"Tele\",\"group\":\"Deportes\",\"streams\":[\"https://example.com/t.m3u8\"]},{\"id\":\"la-1\",\"name\":\"La 1\",\"group\":\"Generalistas\",\"streams\":[\"https://example.com/l.m3u8\"]}]}");
+    List<Catalog.Channel> all=Catalog.merge(tdt,new JSONObject());
+    assertEquals(0xff1d7a40,all.get(0).color);assertEquals(all.get(0).color,all.get(1).color);assertEquals(0xff1f4f8f,all.get(2).color);
+    assertEquals(Catalog.defaultColor("Cine"),Catalog.defaultColor("Cine"));
+    JSONObject custom=new JSONObject("{\"channels\":[],\"featured\":[],\"hidden\":[],\"categories\":[{\"id\":\"Generalistas\",\"name\":\"Generalistas\",\"color\":\"#1f4f8f\"},{\"id\":\"Deportes\",\"name\":\"Fútbol\",\"color\":\"#aa0000\"}]}");
+    SharedCatalog.validate(custom);all=Catalog.merge(tdt,custom);
+    assertEquals("Fútbol",all.get(0).group);assertEquals("Deportes",all.get(0).category);assertEquals(0xffaa0000,all.get(0).color);
+    assertEquals(Arrays.asList("Generalistas","Fútbol"),new ArrayList<>(Catalog.groups(all,custom).keySet()));
+    custom.put("categories",new JSONArray("[{\"id\":\"a\",\"name\":\"A\",\"color\":\"red\"}]"));
+    try{SharedCatalog.validate(custom);fail("Accepted a bad colour");}catch(JSONException expected){}
+  }
   @Test public void highlightsMixEventsAndChannelsAndEventsStayChronological() throws Exception {
     JSONObject data=new JSONObject("{\"channels\":[{\"id\":\"c\",\"name\":\"Channel\",\"streams\":[\"https://example.com/a.m3u8\"]}],\"featured\":[\"c\"],\"hidden\":[],\"leagues\":[{\"id\":\"l\",\"name\":\"League\"}],\"events\":[{\"id\":\"b\",\"name\":\"Later\",\"cover\":\"https://example.com/b.jpg\",\"channelId\":\"c\",\"leagueId\":\"l\",\"startAt\":\"2026-12-01T20:00:00Z\",\"featured\":true},{\"id\":\"a\",\"name\":\"Earlier\",\"cover\":\"https://example.com/a.jpg\",\"channelId\":\"c\",\"startAt\":\"2026-11-01T20:00:00Z\"}]}");
     SharedCatalog.validate(data);List<Catalog.Channel> all=Catalog.merge(null,data);
