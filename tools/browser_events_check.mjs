@@ -14,7 +14,7 @@ const fixture = { channels: [
 const firebase = `
 import { validateCatalog } from './shared-catalog.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
-export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com' } };
+export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com', getIdToken: async () => 'token' } };
 export const administrator = () => true;
 export const imageService = async () => ({configured: true});
 export const connectImageService = async () => ({configured: true});
@@ -323,6 +323,42 @@ try {
   await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id),'player');
+  // Films and series: hidden in the menu until the administrator switches them on.
+  const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
+    movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
+      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } }],
+    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
+      episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://calamarmenciano.com/SERIES/cap1001.mp4' }, { id: 'e1002', season: 10, episode: 2, url: 'https://calamarmenciano.com/SERIES/cap1002.mp4' }] }],
+    documentaries: [] } };
+  await page.route('https://calamarmenciano.com/calamar-library.php**', route => route.fulfill({ contentType: 'application/json',
+    body: JSON.stringify(route.request().method() === 'GET' ? library : { configured: true, folders: { movies: 'PELIS', series: 'SERIES', documentaries: 'DOCS' } }) }));
+  assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
+  await page.goto(base + '/#/admin/biblioteca');
+  await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
+  await page.locator('.library-item').filter({ hasText: 'Avatar.mp4' }).waitFor();
+  await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
+  await page.waitForFunction(() => window.__published.libraryVisible === true);
+  await page.goto(base + '/#/');
+  await page.locator('.nav a', { hasText: 'Películas' }).click();
+  await page.locator('.poster-card', { hasText: 'Avatar' }).click();
+  await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
+  assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
+  assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
+  await page.getByRole('button', { name: '▶ Ver', exact: true }).click();
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
+  assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
+  await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
+  await page.locator('.nav a', { hasText: 'Series' }).click();
+  await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
+  await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
+  await page.locator('.episode', { hasText: '10x01 · Vuelta a empezar' }).click();
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · 10x01 · Vuelta a empezar');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

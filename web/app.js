@@ -6,6 +6,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { prepareHostedVideo } from './video-bridge.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
+import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, playable } from './library.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
@@ -658,7 +659,7 @@ function open(c, fromRoute = false) {
     return;
   }
   if (!fromRoute) {
-    history.pushState(null, '', c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`);
+    history.pushState(null, '', c.path || (c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`));
     pushed = true;
   }
   if (player.hidden) returnFocus = document.activeElement;
@@ -676,7 +677,8 @@ function open(c, fromRoute = false) {
   // Pressing «Ver» opens the video in full screen, as in the app. Browsers only allow it right after a
   // tap, so a link opened directly (fromRoute) starts in the normal player.
   if (!fromRoute && !controls.isFullscreen()) controls.enterFullscreen();
-  startAudience(c);
+  // Viewers and visits are counted per channel and event; films and episodes are not.
+  if (!c.vod) startAudience(c);
   playSource(c, 0);
 }
 
@@ -693,7 +695,7 @@ function hidePlayer() {
 
 function closePlayer() {
   hidePlayer();
-  if (!/^#\/(canal|evento)\//.test(location.hash)) return;
+  if (!/^#\/(canal|evento)\/|^#\/(peliculas|series|documentales)\/[^/]+\/ver/.test(location.hash)) return;
   if (pushed) {
     pushed = false;
     history.back();
@@ -719,6 +721,31 @@ shareButton.addEventListener('click', async () => {
     if (error?.name !== 'AbortError') playerStatus.textContent = `Copia este enlace para compartir: ${url}`;
   }
 });
+
+// ---- Films, series and documentaries --------------------------------------------------------------
+// Shown in the menu only while the administrator has the catalog switched on (libraryVisible).
+function syncLibraryNav() {
+  for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryVisible(state.custom);
+}
+async function libraryRoute(page, [itemId, sub, episodeId], version) {
+  const section = sectionByPage(page);
+  if (!libraryVisible(state.custom)) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
+  if (!itemId) view.replaceChildren(el('p', { class: 'status', role: 'status' }, `Cargando ${section.label.toLowerCase()}…`));
+  let library;
+  try { library = await fetchLibrary(); }
+  catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
+  if (version !== routeVersion) return;
+  if (!itemId) { view.replaceChildren(...libraryPage(el, section, library)); return; }
+  const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
+  if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...libraryPage(el, section, library)); return; }
+  const play = (target, episode) => open(playable(section, target, episode));
+  view.replaceChildren(...libraryDetail(el, section, library, item, play));
+  if (sub === 'ver') {
+    const episode = episodeId ? item.episodes?.find((e) => e.id === episodeId) : null;
+    const c = playable(section, item, episode);
+    if (player.hidden || current?.id !== c.id) open(c, true);
+  }
+}
 
 // ---- Routing ---------------------------------------------------------------------------------
 
@@ -755,13 +782,16 @@ async function route() {
   }
   // A slower initial catalog request must never overwrite a newly selected tab.
   if (version !== routeVersion) return;
-  if (!['canal', 'evento'].includes(page) && !player.hidden) hidePlayer();
+  syncLibraryNav();
+  const watching = sectionByPage(page) && hash.split('/')[2] === 'ver';
+  if (!['canal', 'evento'].includes(page) && !watching && !player.hidden) hidePlayer();
   if (page !== 'multipantalla' || !arg) closeMulti();
   if (page === 'multipantalla') {
     if (arg && showMulti(arg)) { view.replaceChildren(...multiPage()); return; }
     view.replaceChildren(...multiPage());
     return;
   }
+  if (sectionByPage(page)) { await libraryRoute(page, hash.split('/').slice(1), version); return; }
   if (page === 'canal' || page === 'evento') {
     const c = page === 'evento' ? (events(state.channels, state.custom).find(e => e.slug === arg) || events(state.channels, state.custom).find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.

@@ -27,6 +27,7 @@ jobs:
       - name: Comprobar instalador de Chromecast
         run: |
           php -l hosting/calamar-images.php
+          php -l hosting/calamar-library.php
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
@@ -55,6 +56,7 @@ jobs:
           cp -r data _site/data
           mkdir -p _site/downloads
           (cd hosting && zip ../_site/downloads/Calamar-Imagenes-GitHub.zip calamar-images.php README-Imagenes-GitHub.txt)
+          (cd hosting && zip ../_site/downloads/Calamar-Peliculas-Series.zip calamar-library.php calamar-images.php README-Peliculas-Series.txt)
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event with its cover and name, so shared links show them in WhatsApp.

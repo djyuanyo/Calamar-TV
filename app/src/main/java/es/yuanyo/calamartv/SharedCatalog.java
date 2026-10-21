@@ -105,6 +105,8 @@ final class SharedCatalog {
             || !categoryIds.add(id) || !categoryNames.add(name.toLowerCase(java.util.Locale.ROOT)))
           throw new JSONException("Categoría incompleta o repetida");
       }
+    if (data.has("libraryVisible") && !(data.opt("libraryVisible") instanceof Boolean))
+      throw new JSONException("El interruptor de películas y series no es válido");
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;
