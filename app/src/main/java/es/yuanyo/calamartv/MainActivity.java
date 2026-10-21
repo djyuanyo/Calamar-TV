@@ -741,10 +741,9 @@ public class MainActivity extends Activity {
 
     TextView name = text((favorites.contains(c.channelId) ? "★ " : "") + c.name, 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(8), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView sub = label(c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
     sub.setSingleLine(!c.event);
     if (c.event) { sub.setMaxLines(2); sub.setMinLines(2); }
@@ -759,7 +758,8 @@ public class MainActivity extends Activity {
             open(c);
           }
         });
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
@@ -1185,16 +1185,16 @@ public class MainActivity extends Activity {
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 1.5f)));
     TextView name = text(item.title, 13);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(6), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView sub = label(item.year > 0 ? String.valueOf(item.year) : item.series ? "Serie" : "", 11, Ui.MUTED);
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
     card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : ""));
     card.setOnClickListener(v -> libraryDetail(Library.section(mode), item));
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
@@ -1332,6 +1332,15 @@ public class MainActivity extends Activity {
     p.setMargins(0, dp(4), 0, dp(4));
     r.setLayoutParams(p);
     return r;
+  }
+
+  /** Long names are shown whole, on as many lines as they need, with balanced line lengths. */
+  void wholeName(TextView name) {
+    name.setSingleLine(false);
+    name.setMaxLines(Integer.MAX_VALUE);
+    name.setEllipsize(null);
+    name.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_BALANCED);
+    name.setLineSpacing(0, 1.05f);
   }
 
   TextView noPad(TextView v) {
@@ -1526,10 +1535,9 @@ public class MainActivity extends Activity {
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 9f / 16f)));
     TextView name = text(entry.optString("name"), 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(8), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     long left = entry.optLong("duration") - entry.optLong("position");
     String sub = entry.optString("sub") + (entry.optLong("duration") > 0 ? (entry.optString("sub").isEmpty() ? "" : " · ") + "quedan " + Math.max(1, Math.round(left / 60000f)) + " min" : "");
     TextView subtitle = label(sub, 12, Ui.MUTED);
@@ -1545,7 +1553,8 @@ public class MainActivity extends Activity {
       render();
       return true;
     });
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;

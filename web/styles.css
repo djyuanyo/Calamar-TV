@@ -729,3 +729,17 @@ label[hidden] { display: none; }
 .top .search[hidden] { display: none; }
 .library-filters .library-search { order: 0; }
 .library-filters .library-genre { order: 1; }
+/* Long names are shown whole, on several lines with balanced line lengths. Cards keep their artwork
+   at the top, so every row of a grid or rail lines up: same image height, names starting at the same
+   point, whatever the length of each name. */
+.card { display: flex; flex-direction: column; justify-content: flex-start; align-self: stretch; }
+.card .name, .poster-card .name, .continue-card .name {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+  text-wrap: balance; line-height: 1.25;
+}
+.poster-card, .continue-card { display: flex; flex-direction: column; }
+.continue-card > a { display: flex; flex-direction: column; }
+/* The name takes the free space, so the line under it (date, year, time left) lines up across a row. */
+.card .name, .poster-card .name, .continue-card .name { flex: 1 0 auto; }
+.continue-card { height: 100%; }
+.continue-card > a { flex: 1; }
