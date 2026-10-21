@@ -175,3 +175,7 @@ En **Admin → Canales → Categorías**:
 - Se cambia el nombre y el color de cada categoría. Los canales guardan el identificador original de la categoría, así que renombrar «Deportes» como «Fútbol» mueve también los canales TDT de Deportes.
 - **Añadir categoría** crea una categoría nueva con su color (aparece en el desplegable de los canales). Las categorías sin canales se pueden eliminar.
 - **Guardar categorías** publica los cambios (campo `categories` del catálogo: `id`, `name`, `color`), que se aplican en la web y en la app. **Restablecer** vuelve a los valores por defecto.
+
+## Icono y favicon (2.8.1)
+
+El icono de la app (también el icono adaptable de Android 8+), el banner de Android TV y los favicons de la web salen del logo de la cabecera (`web/assets/calamar-menciano-tv.png`). Si el logo cambia, se regeneran con `python tools/make_icons.py` (requiere Pillow).
