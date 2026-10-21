@@ -306,11 +306,11 @@ function home() {
   const list = homeHighlights(state.channels, state.custom);
   scheduleStartRefresh(matches);
   const nodes = [];
-  // Films and episodes left half watched in this browser come first.
+  if (list.length) nodes.push(highlightSlider(list));
+  // Films and episodes left half watched in this browser come right under the featured slider.
   const unfinished = libraryVisible(state.custom) ? progressList(loadProgress()) : [];
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
-  if (list.length) nodes.push(highlightSlider(list));
   // Only events on the home page: one row per league, each in date order (soonest first).
   for (const row of eventRows(matches, state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),

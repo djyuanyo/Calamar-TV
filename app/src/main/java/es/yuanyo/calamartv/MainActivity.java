@@ -399,8 +399,9 @@ public class MainActivity extends Activity {
     } else {
       List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
       List<Catalog.Channel> events = Catalog.events(channels, custom);
-      if (Library.visible(custom)) continueRow();
       if (!featured.isEmpty()) hero(featured);
+      // Films and episodes left half watched come right under the featured slider.
+      if (Library.visible(custom)) continueRow();
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
@@ -1073,6 +1074,7 @@ public class MainActivity extends Activity {
 
   Library.Data library;
   String genre = "", genreSection = "";
+  final int genrePickerId = View.generateViewId();
   boolean libraryBusy;
   long libraryAt;
   String libraryError = "";
@@ -1124,7 +1126,7 @@ public class MainActivity extends Activity {
       options.add("");
       options.addAll(genres);
       final Button picker = Ui.pill(this, (genre.isEmpty() ? "Todas las categorías" : genre) + "  ▾", Ui.Kind.SURFACE, true);
-      picker.setId(400001);
+      picker.setId(genrePickerId);
       picker.setContentDescription("Categoría: " + (genre.isEmpty() ? "todas" : genre));
       picker.setOnClickListener(v -> {
         PopupMenu menu = new PopupMenu(this, picker);
@@ -1132,7 +1134,7 @@ public class MainActivity extends Activity {
         menu.setOnMenuItemClickListener(choice -> {
           genre = options.get(choice.getItemId());
           render();
-          View again = root.findViewById(400001);
+          View again = root.findViewById(genrePickerId);
           if (again != null) again.requestFocus();
           return true;
         });

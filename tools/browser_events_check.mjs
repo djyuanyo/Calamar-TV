@@ -387,6 +387,8 @@ try {
   await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
   assert.equal(await page.locator('#search').isVisible(), true, 'the channels and events search is back outside the library');
   assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
+  assert.ok(await page.evaluate(() => { const slider = document.querySelector('.highlight-slider'), row = document.querySelector('.continue-rail');
+    return !!slider && !!(slider.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Continuar viendo comes under the featured slider');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
   await page.locator('.continue-card a').click();
   await page.locator('#player:not([hidden])').waitFor();
