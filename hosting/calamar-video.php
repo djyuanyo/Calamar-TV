@@ -2,9 +2,9 @@
 /**
  * Video files of this hosting (MKV, AVI…) for browsers: H.264 video is copied as it is and the audio
  * (often AC3/DTS, which Chrome and Firefox cannot play) becomes AAC stereo, in HLS that grows while
- * FFmpeg converts it. Only files inside this site's public folder are accepted; a converted file is
- * shared by every viewer and removed after some hours without use. FFmpeg comes from the Chromecast
- * installer (calamar-cast-install.php).
+ * FFmpeg converts it. Only files inside this site's public folder are accepted. A converted file is
+ * kept for good in calamar-video-cache (closed to direct access) and shared by every viewer; it is only
+ * removed when its original is deleted or replaced. FFmpeg comes from the Chromecast installer.
  */
 declare(strict_types=1);
 ini_set('display_errors', '0');
@@ -16,7 +16,6 @@ require_once __DIR__ . '/calamar-cast.php';
 const VIDEO_PUBLIC_URL = 'https://calamarmenciano.com/calamar-video.php';
 const VIDEO_HOSTS = ['calamarmenciano.com', 'www.calamarmenciano.com'];
 const VIDEO_EXTENSIONS = ['mkv', 'avi', 'mov', 'wmv', 'flv', 'm4v', 'mp4', 'webm', 'mpg', 'mpeg', 'ts', 'm2ts', 'vob'];
-const VIDEO_KEEP_SECONDS = 6 * 3600;
 const VIDEO_MAX_CONVERSIONS = 2;
 
 /** The file on disk for an address of this site, or null for anything else. */
@@ -63,15 +62,17 @@ function videoWorker(string $command, string $folder): string {
         . "rm -f done failed\n$command </dev/null >/dev/null 2>&1 && touch done || touch failed\nrm -f worker.sh\n";
 }
 
-/** Removes converted files nobody asked for in VIDEO_KEEP_SECONDS (and never one being converted). */
-function videoSweep(string $root, int $now): void {
+/** Removes conversions whose original was deleted or replaced (never one being converted). */
+function videoSweep(string $root): void {
     foreach (glob($root . '/*', GLOB_ONLYDIR) ?: [] as $folder) {
         if (!preg_match('/\/[a-f0-9]{64}$/', $folder)) continue;
-        $used = @filemtime($folder . '/heartbeat') ?: @filemtime($folder) ?: 0;
-        if ($now - $used < VIDEO_KEEP_SECONDS) continue;
+        [$file, $modified] = array_pad(explode("\n", (string)@file_get_contents($folder . '/source'), 2), 2, '');
+        clearstatcache(true, $file);
+        if ($file !== '' && is_file($file) && (string)filemtime($file) === trim($modified)) continue;
+        if ($file === '' && time() - (int)@filemtime($folder) < 3600) continue; // Just created, not described yet.
         $lock = @fopen($folder . '/worker.lock', 'c');
         if ($lock && !flock($lock, LOCK_EX | LOCK_NB)) { fclose($lock); continue; }
-        foreach (glob($folder . '/*') ?: [] as $file) @unlink($file);
+        foreach (glob($folder . '/*') ?: [] as $entry) @unlink($entry);
         if ($lock) fclose($lock);
         @rmdir($folder);
     }
@@ -87,11 +88,16 @@ function videoBusy(string $root): int {
     return $busy;
 }
 
+/** Permanent folder next to this page; the web server never serves it directly (only this page does). */
 function videoRoot(): string {
-    $root = sys_get_temp_dir() . '/calamar-video-' . substr(hash('sha256', __DIR__), 0, 16);
+    $root = __DIR__ . '/calamar-video-cache';
     if (!is_dir($root) && !@mkdir($root, 0700, true) && !is_dir($root)) {
-        throw new RuntimeException('El hosting no permite crear la carpeta temporal de vídeo.');
+        throw new RuntimeException('El hosting no permite crear la carpeta de vídeos convertidos.');
     }
+    if (!is_file($root . '/.htaccess')) {
+        file_put_contents($root . '/.htaccess', "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
+    }
+    if (!is_file($root . '/index.html')) file_put_contents($root . '/index.html', '');
     return $root;
 }
 
@@ -133,7 +139,6 @@ try {
             || !is_string($file) || !preg_match('/^(?:index[.]m3u8|seg[0-9]+[.]ts)$/D', $file)) castReply(['error' => 'Vídeo no encontrado.'], 404);
         $folder = $root . '/' . $token; $path = $folder . '/' . $file;
         if (!is_file($path) || is_link($path)) castReply(['error' => 'El vídeo ya no está preparado. Vuelve a abrirlo.'], 404);
-        @touch($folder . '/heartbeat');
         if ($file === 'index.m3u8') {
             header('Content-Type: application/vnd.apple.mpegurl');
             if ($method !== 'HEAD') echo videoPlaylist((string)file_get_contents($path), $token);
@@ -159,7 +164,7 @@ try {
     $cap = castCapabilities();
     if (!$cap['ready']) castReply(['error' => 'Falta FFmpeg en el hosting: instala Calamar Chromecast (calamar-cast-install.php).'], 503);
 
-    videoSweep($root, time());
+    videoSweep($root);
     $secretLock = fopen($root . '/secret.lock', 'c'); flock($secretLock, LOCK_EX);
     if (!is_file($root . '/secret')) file_put_contents($root . '/secret', random_bytes(32));
     // A replaced file (new modification time) gets a new conversion.
@@ -167,7 +172,8 @@ try {
     flock($secretLock, LOCK_UN); fclose($secretLock);
     $folder = $root . '/' . $token;
     if (!is_dir($folder)) @mkdir($folder, 0700);
-    @touch($folder . '/heartbeat');
+    // Which original this conversion belongs to, so it can be removed if that file goes away or changes.
+    if (!is_file($folder . '/source')) file_put_contents($folder . '/source', $file . "\n" . filemtime($file));
     $lock = fopen($folder . '/start.lock', 'c'); flock($lock, LOCK_EX);
     clearstatcache();
     $workerLock = fopen($folder . '/worker.lock', 'c');

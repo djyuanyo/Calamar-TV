@@ -1,5 +1,6 @@
 """Real conversion of a hosted MKV (H.264 + AC3 5.1) into HLS with AAC stereo, and source limits."""
 import json
+import os
 import pathlib
 import shutil
 import socket
@@ -64,6 +65,17 @@ class VideoBridgeTest(unittest.TestCase):
         streams = subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_name,channels', '-of', 'json', '-'], input=segment)
         codecs = {s['codec_name']: s.get('channels') for s in json.loads(streams)['streams']}
         self.assertEqual(codecs, {'h264': None, 'aac': 2})
+        # Kept for good next to the page, closed to direct access, until the original changes.
+        cache = self.site / 'calamar-video-cache'
+        self.assertTrue((cache / session / 'seg0.ts').exists())
+        self.assertIn('Require all denied', (cache / '.htaccess').read_text())
+        original = self.site / 'MENCIA MEDIA' / 'SERIES' / 'Prueba (Temporada 1)' / 'Capitulo [AC3 5.1].mkv'
+        stamp = original.stat().st_mtime + 60
+        os.utime(original, (stamp, stamp))
+        status, body = self.start(source)
+        self.assertFalse((cache / session).exists())
+        replaced = urllib.parse.parse_qs(urllib.parse.urlparse(json.loads(body)['url'] or 'x?session=').query).get('session', [''])[0]
+        self.assertNotEqual(replaced, session)
 
     def test_only_video_files_of_this_site(self):
         for source in ('https://example.com/a.mkv', 'http://calamarmenciano.com/MENCIA%20MEDIA/x.mkv',

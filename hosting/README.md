@@ -40,6 +40,9 @@ cualquier punto. Si el vídeo no es H.264 (por ejemplo HEVC), también se convie
 cuesta mucha más CPU.
 
 Solo se aceptan archivos dentro de `public_html` de este sitio; nunca enlaces de otros servidores. Cada
-vídeo convertido se comparte entre todos los espectadores y se borra tras 6 horas sin uso (ocupa
-aproximadamente lo mismo que el original en la carpeta temporal). Como máximo se convierten 2 vídeos a la
-vez. La app Android reproduce estos archivos directamente con el decodificador del dispositivo.
+vídeo se convierte una sola vez y se guarda para siempre en `public_html/calamar-video-cache` (cerrada al
+acceso directo con `.htaccess`; solo la sirve `calamar-video.php`), compartido por todos los espectadores.
+Ocupa aproximadamente lo mismo que el original, así que el espacio del hosting se duplica para los vídeos
+que se vean. Solo se borra si el archivo original se elimina o se sustituye (entonces se vuelve a convertir
+al abrirlo). Para liberar espacio se puede borrar esa carpeta entera: los vídeos se convertirán de nuevo
+cuando alguien los abra. Como máximo se convierten 2 vídeos a la vez. La app Android reproduce estos archivos directamente con el decodificador del dispositivo.
