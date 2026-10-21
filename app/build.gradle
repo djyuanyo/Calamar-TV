@@ -2,6 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'es.yuanyo.calamartv'
     compileSdk 35
+    buildFeatures { buildConfig true }
     defaultConfig {
         applicationId 'es.yuanyo.calamartv'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
