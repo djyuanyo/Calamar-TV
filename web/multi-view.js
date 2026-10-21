@@ -79,39 +79,56 @@ export function openMulti(items, { onClose, onWatch = () => {} } = {}) {
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', 'Multipantalla');
+  // The buttons stay hidden over the videos; a tap shows them for a few seconds (another tap hides
+  // them). Sound only changes with each video's own sound button, so a tap never moves the audio.
+  root.classList.add('idle');
   const bar = document.createElement('div');
   bar.className = 'multi-bar';
   const close = Object.assign(document.createElement('button'), { type: 'button', className: 'pill-btn', textContent: '✕ Salir' });
   const full = Object.assign(document.createElement('button'), { type: 'button', className: 'pill-btn', textContent: 'Pantalla completa' });
-  const hint = Object.assign(document.createElement('span'), { className: 'multi-hint', textContent: 'Toca un vídeo para oír su sonido' });
+  const hint = Object.assign(document.createElement('span'), { className: 'multi-hint', textContent: 'Pulsa 🔊 en un vídeo para oírlo' });
   bar.append(close, hint, full);
   const grid = document.createElement('div');
   grid.className = 'multi-grid';
   grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
   grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+  let hideTimer = null, pointer = '';
+  root.addEventListener('pointerdown', (event) => { pointer = event.pointerType; });
+  const showControls = () => {
+    root.classList.remove('idle');
+    clearTimeout(hideTimer);
+    // They stay while a keyboard user is on one of them; taps and clicks let them hide.
+    hideTimer = setTimeout(() => { if (!root.querySelector('button:focus-visible')) root.classList.add('idle'); }, 4000);
+  };
+  const hideControls = () => { clearTimeout(hideTimer); root.classList.add('idle'); };
   const stops = [], tiles = [];
   const listen = (index) => tiles.forEach((tile, i) => {
     tile.video.muted = i !== index;
     tile.node.classList.toggle('active', i === index);
-    tile.node.setAttribute('aria-pressed', String(i === index));
+    tile.sound.textContent = i === index ? '🔊' : '🔇';
+    tile.sound.setAttribute('aria-pressed', String(i === index));
   });
   list.forEach((channel, index) => {
-    const node = document.createElement('button');
-    node.type = 'button';
-    node.className = 'multi-tile';
-    node.setAttribute('aria-label', `${channel.name}. Pulsa para oír este vídeo`);
+    const node = document.createElement('div');
+    node.className = index < cols ? 'multi-tile top-row' : 'multi-tile';
+    node.setAttribute('role', 'group');
+    node.setAttribute('aria-label', channel.name);
     const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, autoplay: true });
     video.setAttribute('playsinline', '');
     const name = Object.assign(document.createElement('span'), { className: 'multi-name', textContent: channel.name });
     const status = Object.assign(document.createElement('span'), { className: 'multi-status' });
-    node.append(video, name, status);
-    node.addEventListener('click', () => { listen(index); video.play().catch(() => {}); });
+    const sound = Object.assign(document.createElement('button'), { type: 'button', className: 'multi-sound' });
+    sound.setAttribute('aria-label', `Oír ${channel.name}`);
+    sound.addEventListener('click', (event) => { event.stopPropagation(); listen(index); video.play().catch(() => {}); showControls(); });
+    node.append(video, name, status, sound);
+    // A tap toggles the buttons; with a mouse (which already shows them by moving) a click only shows them.
+    node.addEventListener('click', () => (root.classList.contains('idle') || pointer === 'mouse' ? showControls() : hideControls()));
     grid.append(node);
-    tiles.push({ node, video });
+    tiles.push({ node, video, sound });
     stops.push(playTile(video, channel, (text) => { status.textContent = text; status.hidden = !text; }));
     onWatch(channel);
   });
-  root.append(bar, grid);
+  root.append(grid, bar);
   document.body.append(root);
   document.body.style.overflow = 'hidden';
   listen(0);
@@ -124,19 +141,25 @@ export function openMulti(items, { onClose, onWatch = () => {} } = {}) {
         if (list.length > 2) await screen.orientation?.lock?.('landscape').catch(() => {});
       }
     } catch { /* Full screen is optional: the grid already fills the window. */ }
+    showControls();
   };
   full.addEventListener('click', toggleFull);
   close.addEventListener('click', () => onClose ? onClose() : closeMulti());
+  // Keyboard and mouse users get the controls too: moving the pointer or the focus shows them.
+  root.addEventListener('mousemove', (event) => { if (event.movementX || event.movementY) showControls(); });
+  root.addEventListener('focusin', (event) => { if (event.target !== root) showControls(); });
   const keys = (event) => { if (event.key === 'Escape' && !document.fullscreenElement) close.click(); };
   document.addEventListener('keydown', keys);
-  view = { root, stops, keys };
-  close.focus();
+  root.tabIndex = -1;
+  view = { root, stops, keys, hideTimer: () => clearTimeout(hideTimer) };
+  root.focus({ preventScroll: true });
   return { toggleFull };
 }
 
 export function closeMulti() {
   if (!view) return;
   view.stops.forEach((stop) => stop());
+  view.hideTimer();
   document.removeEventListener('keydown', view.keys);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   screen.orientation?.unlock?.();
