@@ -21,6 +21,13 @@ jobs:
             const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
             const page = await browser.newPage();
             const requests = [];
+            const base='https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0';
+            const manifest=await page.request.get(base);
+            const segment=new URL((await manifest.text()).split('\n').filter(x=>x&&!x.startsWith('#')).pop(),base).href;
+            for(const [name,headers] of Object.entries({plain:{},origin:{Origin:'https://djyuanyo.github.io'},referer:{Referer:'https://djyuanyo.github.io/'}})) {
+              const response=await page.request.get(segment,{headers});
+              console.log('SEGMENT_PROBE',JSON.stringify({name,status:response.status(),size:(await response.body()).length}));
+            }
             const http = await page.request.get('https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0');
             console.log('HTTP_PROBE', JSON.stringify({status:http.status(),headers:http.headers(),body:(await http.text()).slice(0,3500)}));
             page.on('response', response => {
