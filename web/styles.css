@@ -441,3 +441,7 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* Keep TV controls on their own row on narrow phone screens. */
+.cast-remote-controls { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.player:has(#ctl-cast-toggle:not([hidden])) .player-status { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 128px); }
