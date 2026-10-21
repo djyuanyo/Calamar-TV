@@ -21,9 +21,11 @@ jobs:
             const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
             const page = await browser.newPage();
             const requests = [];
+            const http = await page.request.get('https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0');
+            console.log('HTTP_PROBE', JSON.stringify({status:http.status(),headers:http.headers(),body:(await http.text()).slice(0,3500)}));
             page.on('response', response => {
               const url = new URL(response.url());
-              if (url.hostname === 'gate4.st') requests.push({
+              if (url.hostname === 'p7.streamhostingcdn.top') requests.push({
                 stage: url.pathname.endsWith('.m3u8') ? 'playlist' : 'media',
                 status: response.status(),
                 referer: response.request().headers()['referer'] || null
@@ -50,14 +52,14 @@ jobs:
                 }
               });
             });
-            await page.goto('https://djyuanyo.github.io/Calamar-TV/?verify=d9ebd7d08cf5#/canal/liga-campeones', { waitUntil: 'domcontentloaded' });
+            await page.goto('https://djyuanyo.github.io/Calamar-TV/direct-player.html#https%3A%2F%2Fp7.streamhostingcdn.top%2Fstream%2F36%2Findex.m3u8%3Ftoken%3D%26exp%3D0', { waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(20000);
             const report = await page.evaluate(() => {
               const v = document.querySelector('#video');
               return {
                 referrerPolicy: document.referrerPolicy,
                 hlsVersion: window.Hls?.version,
-                status: document.querySelector('#player-status')?.textContent,
+                status: document.querySelector('#status')?.textContent,
                 video: v ? { readyState: v.readyState, paused: v.paused, time: v.currentTime, error: v.error?.code || 0, width: v.videoWidth, height: v.videoHeight } : null,
                 probe: window.__hlsProbe
               };
