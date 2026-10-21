@@ -28,9 +28,11 @@ jobs:
           sudo apt-get install -y -qq php-cli ffmpeg
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
+          php -l hosting/calamar-video.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
           python -m unittest discover -s tools -p 'test_cast_bridge.py' -v
+          python -m unittest discover -s tools -p 'test_video_bridge.py' -v
       - name: Compilar release y debug con validación
         run: |
           gradle --no-daemon :app:assembleRelease :app:assembleDebug :app:lintDebug :app:testDebugUnitTest || {
@@ -91,7 +93,7 @@ jobs:
             --target "$GITHUB_SHA" --title "Calamar TV $version" \
             --notes "APK de Calamar TV $version para Android y Android TV. Instala Calamar-TV-$version.apk (firmada) para poder actualizar encima de versiones anteriores."
           (cd dist && zip "Calamar-TV-$version-compilada.zip" *.apk)
-          (cd hosting && zip ../dist/Calamar-Chromecast-hosting.zip calamar-cast.php calamar-cast-install.php calamar-http-source.php calamar-tv-relay.php README-Chromecast.txt)
+          (cd hosting && zip ../dist/Calamar-Chromecast-hosting.zip calamar-cast.php calamar-cast-install.php calamar-http-source.php calamar-tv-relay.php calamar-video.php README-Chromecast.txt)
           gh release upload "v$version" dist/*.apk dist/*.zip --clobber
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
