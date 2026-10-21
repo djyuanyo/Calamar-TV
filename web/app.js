@@ -604,6 +604,9 @@ function open(c, fromRoute = false) {
   for (const n of behind()) n.inert = true;
   controls.wake();
   document.getElementById('player-close').focus();
+  // Pressing «Ver» opens the video in full screen, as in the app. Browsers only allow it right after a
+  // tap, so a link opened directly (fromRoute) starts in the normal player.
+  if (!fromRoute && !controls.isFullscreen()) controls.enterFullscreen();
   startAudience(c);
   playSource(c, 0);
 }

@@ -135,6 +135,8 @@ try {
   // Event links use the slug of the event name, like channels.
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
+  // Pressing «Ver» opens it in full screen, as in the app.
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
   assert.ok(requests.includes('https://example.com/one.mp4'));
   // Sharing an event uses its preview page (cover and name in WhatsApp).
   await page.evaluate(() => { navigator.share = async data => { window.__shared = data; }; });
@@ -198,6 +200,8 @@ try {
   await page.goto(base + '/#/evento/' + eventId);
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
+  // A link opened directly (no tap) cannot start in full screen: browsers do not allow it.
+  assert.equal(await page.evaluate(() => document.fullscreenElement), null);
   // Old links with the id keep working; a preview page not yet published falls back to the event.
   await page.goto(base + '/evento/final/');
   await page.waitForURL(/#\/evento\/final$/);
