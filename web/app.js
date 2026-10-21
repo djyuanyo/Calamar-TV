@@ -4,6 +4,7 @@ import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { prepareHostedVideo } from './video-bridge.js';
+import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS } from './audience.js';
@@ -73,16 +74,19 @@ function logo(c, cls) {
   return img;
 }
 
-function card(c) {
+/** A channel or event card; with `pick` it selects for multi-screen instead of opening. */
+function card(c, pick = null) {
   return el(
     'button',
-    { class: c.event ? 'card event-card' : 'card', type: 'button', style: c.color && !c.event ? `--h:${hue(c.name)};--c:${c.color}` : `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
+    { class: `${c.event ? 'card event-card' : 'card'}${pick?.selected ? ' picked' : ''}`, type: 'button', style: c.color && !c.event ? `--h:${hue(c.name)};--c:${c.color}` : `--h:${hue(c.name)}`,
+      onclick: pick ? pick.toggle : () => open(c), 'aria-pressed': pick ? String(!!pick.selected) : null, 'aria-label': pick ? c.name : null,
+      title: pick ? `${pick.selected ? 'Quitar' : 'Añadir'} ${c.name}` : c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
     el(
       'span',
       { class: 'art' },
       c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
       c.event ? eventBadge(c, 'badge') : null,
-      c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
+      pick ? el('span', { class: 'pick-mark', 'aria-hidden': 'true' }, pick.selected ? String(pick.selected) : '+') : c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
     ),
     el('span', { class: 'name' }, c.name),
     el('span', { class: 'sub' }, c.event ? c.meta || c.channelName : c.region || c.group),
@@ -269,6 +273,66 @@ function channelsPage(selected) {
     }
   }
   return nodes;
+}
+
+// ---- Multi-screen ------------------------------------------------------------------------------
+// Picked channels and events are kept as 'c:<slug>' / 'e:<slug>' keys, in the order they were chosen.
+let multiPicks = [];
+const multiKey = (c) => (c.event ? `e:${c.slug}` : `c:${c.slug}`);
+function multiItems(keys) {
+  const list = events(state.channels, state.custom);
+  return keys.map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
+}
+function multiPage() {
+  const query = el('input', { type: 'search', placeholder: 'Buscar canales y eventos', 'aria-label': 'Buscar para la multipantalla' });
+  const watch = el('button', { class: 'btn', type: 'button' });
+  const clear = el('button', { class: 'ghost', type: 'button' }, 'Quitar selección');
+  const grid = el('div', { class: 'grid' });
+  const candidates = [...events(state.channels, state.custom), ...state.channels].filter(multiPlayable);
+  const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
+  const draw = () => {
+    multiPicks = multiPicks.filter((key) => candidates.some((c) => multiKey(c) === key));
+    watch.textContent = multiPicks.length >= 2 ? `Ver ${multiPicks.length} a la vez` : 'Elige al menos 2';
+    watch.disabled = multiPicks.length < 2;
+    clear.hidden = !multiPicks.length;
+    const q = norm(query.value.trim());
+    grid.replaceChildren(...candidates.filter((c) => norm(`${c.name} ${c.group || ''}`).includes(q)).slice(0, 120).map((c) => {
+      const position = multiPicks.indexOf(multiKey(c)) + 1;
+      return card(c, { selected: position, toggle: () => {
+        if (position) multiPicks = multiPicks.filter((key) => key !== multiKey(c));
+        else if (multiPicks.length < MULTI_MAX) multiPicks = [...multiPicks, multiKey(c)];
+        else { watch.textContent = `Máximo ${MULTI_MAX} a la vez`; return; }
+        draw();
+      } });
+    }));
+    if (!grid.children.length) grid.append(el('p', { class: 'status' }, 'No hay canales con ese nombre.'));
+  };
+  query.addEventListener('input', draw);
+  clear.addEventListener('click', () => { multiPicks = []; draw(); });
+  // Opening it goes through the address so Back closes the multi-screen.
+  watch.addEventListener('click', () => {
+    // On phones and tablets three or more videos go full screen and horizontal; browsers only allow
+    // turning the screen in full screen, and only from a tap like this one.
+    if (multiPicks.length > 2 && matchMedia('(pointer: coarse)').matches && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    }
+    location.hash = `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`;
+  });
+  draw();
+  return [sectionHead('Multipantalla', el('span', {}, `Hasta ${MULTI_MAX}`)),
+    el('p', { class: 'note multi-note' }, 'Elige varios canales o eventos para verlos a la vez. Con 2 se reparten arriba y abajo; con más, en cuadrícula en horizontal.'),
+    el('div', { class: 'multi-actions' }, el('label', { class: 'search multi-search' }, query), watch, clear), grid];
+}
+function showMulti(arg) {
+  const items = multiItems(arg.split('+').map(decodeURIComponent));
+  if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
+  multiPicks = items.map(multiKey);
+  openMulti(items, {
+    onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
+    onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
+      .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
+  });
+  return true;
 }
 
 function results(query) {
@@ -620,6 +684,12 @@ async function route() {
   // A slower initial catalog request must never overwrite a newly selected tab.
   if (version !== routeVersion) return;
   if (!['canal', 'evento'].includes(page) && !player.hidden) hidePlayer();
+  if (page !== 'multipantalla' || !arg) closeMulti();
+  if (page === 'multipantalla') {
+    if (arg && showMulti(arg)) { view.replaceChildren(...multiPage()); return; }
+    view.replaceChildren(...multiPage());
+    return;
+  }
   if (page === 'canal' || page === 'evento') {
     const c = page === 'evento' ? (events(state.channels, state.custom).find(e => e.slug === arg) || events(state.channels, state.custom).find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.

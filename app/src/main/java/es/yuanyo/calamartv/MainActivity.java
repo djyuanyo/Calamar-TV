@@ -201,6 +201,10 @@ public class MainActivity extends Activity {
     brand.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
     brand.setContentDescription("Calamar Menciano TV");
     mast.addView(brand, new LinearLayout.LayoutParams(0, dp(wide() ? 86 : 68), 1));
+    Button multiButton = Ui.pill(this, "Multipantalla", Ui.Kind.SURFACE, true);
+    multiButton.setContentDescription("Multipantalla: ver varios canales a la vez");
+    multiButton.setOnClickListener(v -> pickMulti());
+    addButton(mast, multiButton);
     Button refreshButton =
         Ui.pill(this, "↻", Ui.Kind.SURFACE, true);
     refreshButton.setContentDescription("Actualizar el catálogo");
@@ -739,6 +743,54 @@ public class MainActivity extends Activity {
           }
         });
     return out;
+  }
+
+  /** Multi-screen: pick 2 to 6 channels or events (events first) and watch them together. */
+  void pickMulti() {
+    final List<Catalog.Channel> options = new ArrayList<>();
+    for (Catalog.Channel c : Catalog.events(channels, custom)) if (directMedia(c)) options.add(c);
+    for (Catalog.Channel c : channels) if (directMedia(c)) options.add(c);
+    if (options.size() < 2) {
+      Toast.makeText(this, "No hay suficientes canales para la multipantalla", Toast.LENGTH_LONG).show();
+      return;
+    }
+    String[] names = new String[options.size()];
+    for (int i = 0; i < names.length; i++) names[i] = (options.get(i).event ? "Evento · " : "") + options.get(i).name;
+    final boolean[] checked = new boolean[names.length];
+    final List<Integer> order = new ArrayList<>();
+    new AlertDialog.Builder(this)
+        .setTitle("Multipantalla: elige de 2 a " + MultiScreen.MAX)
+        .setMultiChoiceItems(names, checked, (dialog, which, on) -> {
+          if (on && order.size() >= MultiScreen.MAX) {
+            checked[which] = false;
+            ((AlertDialog) dialog).getListView().setItemChecked(which, false);
+            Toast.makeText(this, "Máximo " + MultiScreen.MAX + " a la vez", Toast.LENGTH_SHORT).show();
+            return;
+          }
+          if (on) order.add(which);
+          else order.remove(Integer.valueOf(which));
+        })
+        .setPositiveButton("Ver a la vez", (dialog, which) -> {
+          if (order.size() < 2) {
+            Toast.makeText(this, "Elige al menos 2", Toast.LENGTH_SHORT).show();
+            return;
+          }
+          ArrayList<String> titles = new ArrayList<>(), streams = new ArrayList<>();
+          for (int index : order) {
+            titles.add(options.get(index).name);
+            streams.add(android.text.TextUtils.join("\n", options.get(index).streams));
+          }
+          startActivity(new Intent(this, MultiPlayerActivity.class)
+              .putStringArrayListExtra(MultiPlayerActivity.TITLES, titles)
+              .putStringArrayListExtra(MultiPlayerActivity.STREAMS, streams));
+        })
+        .setNegativeButton("Cancelar", null)
+        .show();
+  }
+
+  /** Channels whose links are videos the player opens directly (not pages resolved in the full player). */
+  boolean directMedia(Catalog.Channel c) {
+    return c.playable() && !UserChannels.isPage(c.streams.get(0));
   }
 
   void open(Catalog.Channel c) {

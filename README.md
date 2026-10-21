@@ -193,3 +193,7 @@ Al compartir un evento (botón **Compartir** del reproductor, **Copiar enlace** 
 Los logos de los canales ocupan toda la tarjeta, con un pequeño margen (web y app).
 
 El botón de compartir pantalla (Chromecast) es solo el icono, en la web y en la app (2.8.4); su nombre se mantiene para lectores de pantalla y como texto de ayuda.
+
+## Multipantalla (2.9.0)
+
+Varios canales o eventos a la vez, en la web (menú **Multipantalla**, `#/multipantalla`) y en la app (botón **Multipantalla** de la cabecera). Se eligen de 2 a 6; con 2 se reparten arriba y abajo y con más forman una cuadrícula (3–4: 2×2, 5–6: 3×2) en horizontal (en móviles la web pasa a pantalla completa y gira la pantalla). Todos empiezan en silencio salvo el primero; al tocar un vídeo (o moverse a él con el mando en Android TV) se oye ese, marcado en verde. Cada vídeo prueba sus enlaces en orden y cuenta como visita. La dirección `#/multipantalla/c:la-1+e:final` abre directamente esa combinación. En la app se ofrecen los canales y eventos cuyo enlace es un vídeo directo (no las páginas de reproductor).
