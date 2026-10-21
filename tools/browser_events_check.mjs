@@ -284,7 +284,7 @@ try {
   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){
     await page.setViewportSize(viewport);
     const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),pill=root.querySelector('#player-pill');return {bar:bar.getBoundingClientRect().toJSON(),pill:pill.getBoundingClientRect().toJSON(),right:root.getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
-    assert.equal(pos.first,'player-viewers');assert.ok(pos.bar.top>=pos.pill.bottom);assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
+    assert.equal(pos.first,'player-viewers');assert.ok(pos.bar.top>=pos.pill.bottom);assert.ok(pos.bar.top<=40,`Controls too low: ${pos.bar.top}`);assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
   }
   await page.setViewportSize({width:390,height:844});
   scoreFinished = true;

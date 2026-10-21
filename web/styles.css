@@ -614,7 +614,7 @@ label[hidden] { display: none; }
 .card .badge[data-match-id] { max-width: calc(100% - 16px); white-space: normal; }
 
 /* Actions sit on the right directly below the live label, on phones and wide screens. */
-.player-top { display:grid; grid-template-columns:auto auto minmax(0,1fr) auto; grid-template-areas:'back logo title live' '. actions actions actions'; align-items:center; gap:8px 12px; }
+.player-top { display:grid; grid-template-columns:auto auto minmax(0,1fr) auto; grid-template-areas:'back logo title live' 'back actions actions actions'; grid-template-rows:24px auto; align-items:start; gap:4px 12px; padding-top:max(8px, env(safe-area-inset-top)); }
 #player-close { grid-area:back; }
 .player-top .player-logo { grid-area:logo; }
 .player-heading { grid-area:title; }
@@ -625,7 +625,7 @@ label[hidden] { display: none; }
 .card .badge[data-match-id] { max-width:calc(100% - 82px); }
 .card .pick-mark { top:auto; bottom:8px; }
 @media(max-width:720px) {
-  .player-top { grid-template-columns:44px minmax(0,1fr) auto; grid-template-areas:'back title live' 'actions actions actions'; }
+  .player-top { grid-template-columns:44px minmax(0,1fr) auto; grid-template-areas:'back title live' 'back actions actions'; }
   .player-toolbar { flex-basis:auto; overflow:visible; padding:0; gap:5px; }
   .player-toolbar .player-sources { order:0; flex-basis:auto; }
 }

@@ -35,6 +35,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import java.util.ArrayList;
@@ -82,6 +83,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
   private boolean mediaHttp1;
+  private boolean mediaSystemRetry;
+  private Runnable bufferingTimeout;
   private String mediaProgress = "Sin descargas de vídeo registradas.";
   private String pageUrl, documentUrl, currentUrl = "", title, shareUrl;
 
@@ -128,7 +131,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     panel.setOrientation(LinearLayout.VERTICAL);
 
     LinearLayout top = new LinearLayout(this);
-    top.setGravity(Gravity.CENTER_VERTICAL);
+    top.setGravity(Gravity.TOP);
     top.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 14), 0);
     ImageButton back = new ImageButton(this);
     back.setImageDrawable(Ui.icon(Ui.Icon.BACK, Ui.FG, Ui.dp(this, 24)));
@@ -148,7 +151,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     livePill = Ui.livePill(this, "EN DIRECTO", 11);
     livePill.setVisibility(View.GONE);
     top.addView(livePill);
-    panel.addView(top);
+    FrameLayout header = new FrameLayout(this);
+    header.addView(top, new FrameLayout.LayoutParams(-1, -2));
+    panel.addView(header);
 
 
     LinearLayout controls = new LinearLayout(this);
@@ -177,6 +182,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     button(controls, "Refrescar", () -> {
       automaticAttempts = 0;
       mediaHttp1 = false;
+      mediaSystemRetry = false;
       if (directUrl != null) playDirect(); else resolveFresh();
     });
     // Events, as on the web: their preview link (cover and name in WhatsApp) through the share sheet.
@@ -197,7 +203,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     scroll.setHorizontalScrollBarEnabled(false);
     scroll.setFillViewport(true);
     scroll.addView(controls);
-    panel.addView(scroll);
+    FrameLayout.LayoutParams actions = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP | Gravity.RIGHT);
+    actions.topMargin = Ui.dp(this, 30);
+    actions.leftMargin = Ui.dp(this, 54);
+    header.addView(scroll, actions);
     status = new TextView(this);
     status.setTextColor(Ui.ACC);
     status.setTextSize(13);
@@ -496,12 +505,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     releasePlayer();
     DataSource.Factory http =
-        transport.mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1);
+        (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
+            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1);
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
     player =
         new ExoPlayer.Builder(this)
+            .setLoadControl(new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(5000, 20000, 1000, 2000)
+                .setPrioritizeTimeOverSizeThresholds(true).build())
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
             .build();
     player.setAudioAttributes(
@@ -552,9 +565,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           public void onPlaybackStateChanged(int state) {
             if (instance != player || !active) return;
             if (state == Player.STATE_READY) {
+              cancelBufferingTimeout();
               status.setText("Reproductor nativo · " + source.label + " · " + engineName());
               livePill.setVisibility(instance.isCurrentMediaItemLive() ? View.VISIBLE : View.GONE);
-            } else if (state == Player.STATE_BUFFERING) status.setText("Cargando vídeo…");
+            } else if (state == Player.STATE_BUFFERING) {
+              status.setText("Cargando vídeo…");
+              armBufferingTimeout(instance, source);
+            } else cancelBufferingTimeout();
           }
 
           @Override
@@ -575,6 +592,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             }
             lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
             lastReport += "\n" + mediaProgress;
+            cancelBufferingTimeout();
+            if ((error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                    || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
+                && retrySystemNetwork(source)) return;
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
                 && !mediaHttp1
@@ -605,6 +626,43 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     player.play();
     playerView.requestFocus();
     scheduleRenewal(source.url);
+  }
+
+  private void cancelBufferingTimeout() {
+    if (bufferingTimeout != null) handler.removeCallbacks(bufferingTimeout);
+    bufferingTimeout = null;
+  }
+
+  private void armBufferingTimeout(ExoPlayer instance, VideoResolver.Source source) {
+    cancelBufferingTimeout();
+    bufferingTimeout = () -> {
+      if (!active || player != instance || !instance.getPlayWhenReady()
+          || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
+      lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
+      if (retrySystemNetwork(source)) return;
+      if (directUrl != null && BrowserPlayback.supports(source.url)) {
+        openDirectWeb();
+        status.setText("La conexión nativa no responde. Probando el reproductor web…");
+      } else {
+        problem("La fuente no responde. Pulsa Refrescar o prueba otra fuente.");
+        releasePlayer();
+        refreshAutomatically("Probando otra conexión…");
+      }
+    };
+    handler.postDelayed(bufferingTimeout, 25000);
+  }
+
+  /** A failed private DNS must not leave working device connections waiting indefinitely. */
+  private boolean retrySystemNetwork(VideoResolver.Source source) {
+    if (mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
+    mediaSystemRetry = true;
+    mediaHttp1 = true;
+    status.setText("Reintentando con la conexión del dispositivo…");
+    lastReport += "\nReintento: DNS del sistema · HTTP/1.1";
+    // Release first: a previously playing instance must not short-circuit the retry.
+    releasePlayer();
+    playSource(source);
+    return true;
   }
 
   private void scheduleRenewal(String address) {
@@ -651,7 +709,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private String reportHeader() {
     Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
-    return "Calamar TV 2.2.2\nAndroid API "
+    return "Calamar TV " + BuildConfig.VERSION_NAME + "\nAndroid API "
         + android.os.Build.VERSION.SDK_INT
         + "\nPágina: "
         + page.getHost()
@@ -907,6 +965,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void releasePlayer() {
+    cancelBufferingTimeout();
     if (livePill != null) livePill.setVisibility(View.GONE);
     if (player != null) {
       playerView.setPlayer(null);
