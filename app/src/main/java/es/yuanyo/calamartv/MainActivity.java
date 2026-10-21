@@ -807,7 +807,7 @@ public class MainActivity extends Activity {
       int columns=available>=800?4:available>=540?3:2,width=Math.max(100,available/columns-8),column=0;LinearLayout row=null;
       for(Catalog.Channel c:options){if(!(c.name+" "+c.meta+" "+c.group).toLowerCase(Locale.ROOT).contains(q))continue;
         if(column++%columns==0){row=new LinearLayout(this);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));}
-        FrameLayout tile=new FrameLayout(this);View content=card(c,width);content.setFocusable(false);content.setClickable(false);content.setLongClickable(false);content.setOnLongClickListener(null);tile.addView(content,new FrameLayout.LayoutParams(-1,-2));
+        FrameLayout tile=new FrameLayout(this);View content=card(c,width);content.setOnClickListener(null);content.setOnLongClickListener(null);content.setFocusable(false);content.setClickable(false);content.setLongClickable(false);tile.addView(content,new FrameLayout.LayoutParams(-1,-2));
         TextView mark=Ui.tag(this,"+",16);FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);mp.setMargins(0,dp(8),dp(8),0);tile.addView(mark,mp);marks.put(c,mark);
         tile.setBackground(Ui.artBackground(this,Palette.hue(c.name),12));tile.setFocusable(true);tile.setClickable(true);Ui.scaleOnFocus(tile,1.03f);
         tile.setOnClickListener(v -> {if(selected.contains(c))selected.remove(c);else if(selected.size()<MultiScreen.MAX)selected.add(c);else Toast.makeText(this,"Máximo "+MultiScreen.MAX+" a la vez",Toast.LENGTH_SHORT).show();sync.run();});
