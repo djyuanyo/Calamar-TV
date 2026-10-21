@@ -494,3 +494,5 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .highlight-slider .hero { animation: highlightFade .4s ease; }
 @keyframes highlightFade { from { opacity: .35; } to { opacity: 1; } }
 @media(prefers-reduced-motion:reduce) { .highlight-slider .hero { animation: none; } }
+
+.event-card .sub { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 34px; }

@@ -25,6 +25,7 @@ async function saveFile() {
 }
 
 function field(label, input, hint) {
+  input.setAttribute('aria-label', label);
   return el('label', {}, label, input, hint ? el('small', {}, hint) : null);
 }
 

@@ -36,7 +36,7 @@ export function validateSports(data, imageValid) {
   }
   for (const team of data.teams || []) if (team.leagueId && !sets.leagues.has(team.leagueId)) throw new Error('La liga del equipo no existe.');
   for (const event of data.events || []) {
-    if (event.startAt && (typeof event.startAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(event.startAt) || (!Number.isFinite(Date.parse(event.startAt)) || new Date(event.startAt).toISOString().replace('.000Z', 'Z') !== event.startAt.replace('.000Z', 'Z')))) throw new Error('La fecha del evento no es válida.');
+    if (event.startAt !== undefined && event.startAt !== '' && (typeof event.startAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(event.startAt) || (!Number.isFinite(Date.parse(event.startAt)) || new Date(event.startAt).toISOString().replace('.000Z', 'Z') !== event.startAt.replace('.000Z', 'Z')))) throw new Error('La fecha del evento no es válida.');
     if (event.featured !== undefined && typeof event.featured !== 'boolean') throw new Error('Destacado no válido.');
     if (event.status && !EVENT_STATES[event.status]) throw new Error('El estado del evento no es válido.');
     if ((event.leagueId && !sets.leagues.has(event.leagueId)) || [event.homeTeamId, event.awayTeamId].some(id => id && !sets.teams.has(id))) throw new Error('La liga o los equipos del evento no existen.');

@@ -108,8 +108,8 @@ public class AdminActivity extends Activity {
     }
     body.addView(label("Canales · " + catalog.optJSONArray("channels").length() + "   /   Eventos · " + (catalog.optJSONArray("events") == null ? 0 : catalog.optJSONArray("events").length()), 15));
     for (String section : new String[]{"channels", "events", "leagues", "teams"}) {
-      String title = section.equals("channels") ? "Canales" : section.equals("events") ? "Eventos" : section.equals("leagues") ? "Ligas" : "Equipos";
-      addButton((adminSection.equals(section) ? "• " : "") + title, () -> { adminSection = section; draw(); });
+      String sectionTitle = section.equals("channels") ? "Canales" : section.equals("events") ? "Eventos" : section.equals("leagues") ? "Ligas" : "Equipos";
+      addButton((adminSection.equals(section) ? "• " : "") + sectionTitle, () -> { adminSection = section; draw(); });
     }
     if (adminSection.equals("leagues") || adminSection.equals("teams")) { entitySection(adminSection); return; }
     addButton("Crear canal", () -> edit(null));

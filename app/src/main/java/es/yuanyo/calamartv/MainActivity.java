@@ -583,7 +583,8 @@ public class MainActivity extends Activity {
     name.setPadding(dp(2), dp(8), dp(2), 0);
     card.addView(name);
     TextView sub = label(c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
-    sub.setSingleLine(true);
+    sub.setSingleLine(!c.event);
+    if (c.event) { sub.setMaxLines(2); sub.setMinLines(2); }
     sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);

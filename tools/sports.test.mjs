@@ -27,7 +27,7 @@ test('chronological events, unscheduled last; highlighted channels and events co
 });
 test('validates relationships, repeated teams, dates and featured types',()=>{
   validateCatalog(make());
-  for (const change of [{leagueId:'missing'},{homeTeamId:'missing'},{awayTeamId:'home'},{startAt:'wrong'},{featured:'true'},{status:'wrong'}]) {
+  for (const change of [{leagueId:'missing'},{homeTeamId:'missing'},{awayTeamId:'home'},{startAt:'wrong'},{startAt:false},{startAt:'2026-02-30T20:00:00Z'},{featured:'true'},{status:'wrong'}]) {
     const data=make();Object.assign(data.events[0],change);assert.throws(()=>validateCatalog(data));
   }
   const data=make();data.teams[0].leagueId='missing';assert.throws(()=>validateCatalog(data));
