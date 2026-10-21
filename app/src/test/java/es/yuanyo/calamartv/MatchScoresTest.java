@@ -30,4 +30,16 @@ public class MatchScoresTest {
     try{MatchScores.identify(board,"levante contra athletic club","2026-10-21T18:00:00Z");fail();}catch(java.io.IOException expected){}
     assertEquals("2026-10-21T18:00:00Z",MatchScores.iso("2026-10-21T18:00Z"));
   }
+  @Test public void endTimestampAndFiveMinuteGraceAreNotEstimatedFromKickoff()throws Exception{
+    long end=SportsCatalog.instant("2026-10-21T20:10:00Z");
+    JSONObject data=new JSONObject().put("header",fixture("STATUS_FULL_TIME","post",true)).put("meta",new JSONObject().put("gameState","post").put("lastPlayWallClock","2026-10-21T20:10:00Z"));
+    MatchScores.Result r=MatchScores.parse(data);assertEquals(end,r.finishedAt);
+    MatchScores.remember("90000001",r,end+1000);
+    assertFalse(MatchScores.expired("90000001",end+299999));assertTrue(MatchScores.expired("90000001",end+300000));
+    MatchScores.Result fallback=MatchScores.parse(fixture("STATUS_FULL_TIME","post",true));
+    assertEquals(0,fallback.finishedAt);MatchScores.remember("90000002",fallback,end);MatchScores.remember("90000002",fallback,end+290000);
+    assertEquals(end+300000,MatchScores.deadline("90000002"));
+    MatchScores.remember("90000002",MatchScores.parse(fixture("STATUS_SECOND_HALF","in",false)),end+300001);
+    assertFalse(MatchScores.expired("90000002",end+300002));
+  }
 }

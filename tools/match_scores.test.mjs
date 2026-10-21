@@ -36,3 +36,32 @@ test('summary requests share cache and a failure can recover',async()=>{
  await assert.rejects(fetchMatch('12',async()=>({ok:false,status:503})),/503/);
  assert.equal((await fetchMatch('12',fetcher)).state,'live');
 });
+
+test('finished timestamp comes from the provider, never kickoff plus an estimated duration',async()=>{
+ const {rememberMatch,matchExpired,matchDeadline}=await import('../web/match-scores.js');
+ const e=fixture('post','STATUS_FULL_TIME',true),finish=Date.parse('2026-10-21T20:10:00Z');
+ const result=matchResult({header:e,meta:{gameState:'post',lastPlayWallClock:new Date(finish).toISOString()}});
+ assert.equal(result.finishedAt,finish);
+ rememberMatch('90000001',result,finish+1000);
+ assert.equal(matchDeadline('90000001'),finish+300000);
+ assert.equal(matchExpired('90000001',finish+299999),false);
+ assert.equal(matchExpired('90000001',finish+300000),true);
+ assert.equal(matchResult(e).finishedAt,0);
+});
+test('missing end timestamp uses first detection without resetting its grace; a corrected final restores it',async()=>{
+ const {rememberMatch,matchExpired,matchDeadline}=await import('../web/match-scores.js');
+ const result=matchResult(fixture('post','STATUS_FULL_TIME',true)),now=1800000000000;
+ rememberMatch('90000002',result,now);rememberMatch('90000002',result,now+290000);
+ assert.equal(matchDeadline('90000002'),now+300000);
+ assert.equal(matchExpired('90000002',now+300000),true);
+ rememberMatch('90000002',matchResult(fixture()),now+300001);
+ assert.equal(matchExpired('90000002',now+300002),false);
+});
+test('public events disappear at expiry while their catalog records and channels remain',async()=>{
+ const {rememberMatch}=await import('../web/match-scores.js');
+ const {events,merge}=await import('../web/catalog.js');
+ const now=Date.now(),result=matchResult(fixture('post','STATUS_FULL_TIME',true));
+ result.finishedAt=now-300001;rememberMatch('90000003',result,now);
+ const data={channels:[{id:'c',name:'TV',streams:['https://example.com/live.m3u8']}],events:[{id:'e',name:'Game',channelId:'c',matchUrl:'https://share.google/a',matchId:'90000003'}]};
+ assert.equal(events(merge(null,data),data).length,0);assert.equal(data.events.length,1);assert.equal(merge(null,data).length,1);
+});

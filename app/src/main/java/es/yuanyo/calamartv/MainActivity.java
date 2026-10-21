@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
+    MatchScores.initialize(this);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     restore();
@@ -633,15 +634,26 @@ public class MainActivity extends Activity {
   final Runnable scoreRefresh=new Runnable(){public void run(){
     if(!resumed)return;
     if(!scoresBusy){
-      Set<String> ids=new HashSet<>(); collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      Set<String> ids=new HashSet<>(); JSONArray all=custom.optJSONArray("events"); if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e!=null&&!e.optString("matchUrl").isEmpty()&&!e.optString("matchId").isEmpty())ids.add(e.optString("matchId"));} collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
       if(!ids.isEmpty()) { scoresBusy=true; new Thread(() -> {
         Map<String,MatchScores.Result> results=new HashMap<>();
         for(String id:ids)try{results.put(id,MatchScores.fetch(id));}catch(Exception ignored){results.put(id,null);}
-        runOnUiThread(() -> {scoresBusy=false;matchResults.putAll(results);if(resumed){updateScores(root);updateScores(multiPicker);} });
+        runOnUiThread(() -> {scoresBusy=false;matchResults.putAll(results);if(resumed){updateScores(root);updateScores(multiPicker);pruneFinishedEvents();} });
       }).start(); }
     }
     handler.removeCallbacks(this);handler.postDelayed(this,30000);
   }};
+  String expiredSignature="";
+  Runnable redrawMulti;
+  final Runnable expiryCheck=() -> pruneFinishedEvents();
+  void pruneFinishedEvents(){
+    handler.removeCallbacks(expiryCheck); long now=System.currentTimeMillis(),next=Long.MAX_VALUE;
+    List<String> expired=new ArrayList<>();JSONArray all=custom.optJSONArray("events");
+    if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e==null||e.optString("matchUrl").isEmpty())continue;String id=e.optString("matchId");long end=MatchScores.deadline(id);if(MatchScores.expired(id,now))expired.add(id);else if(end>now)next=Math.min(next,end);}
+    Collections.sort(expired);String signature=expired.toString();
+    if(!signature.equals(expiredSignature)){expiredSignature=signature;render();if(redrawMulti!=null)redrawMulti.run();}
+    if(resumed&&next!=Long.MAX_VALUE)handler.postDelayed(expiryCheck,Math.max(1,next-now+1));
+  }
   void collectScoreIds(View view,Set<String> ids){
     if(view==null)return;
     if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();if(!c.matchId.isEmpty())ids.add(c.matchId);}
@@ -806,10 +818,11 @@ public class MainActivity extends Activity {
       for(Map.Entry<Catalog.Channel,TextView> mark:marks.entrySet()){int index=selected.indexOf(mark.getKey());mark.getValue().setText(index<0?"+":String.valueOf(index+1));View tile=(View)mark.getValue().getParent();tile.setSelected(index>=0);tile.setContentDescription(mark.getKey().name+(index<0?", añadir":", seleccionado "+(index+1)));}
     };
     Runnable draw=() -> {
+      selected.removeIf(c -> c.event && MatchScores.expired(c.matchId,System.currentTimeMillis()));
       grid.removeAllViews();marks.clear();String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);
       int available=(int)(getResources().getDisplayMetrics().widthPixels/getResources().getDisplayMetrics().density)-64;
       int columns=available>=800?4:available>=540?3:2,width=Math.max(100,available/columns-8),column=0;LinearLayout row=null;
-      for(Catalog.Channel c:options){if(!(c.name+" "+c.meta+" "+c.group).toLowerCase(Locale.ROOT).contains(q))continue;
+      for(Catalog.Channel c:options){if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis()))continue;if(!(c.name+" "+c.meta+" "+c.group).toLowerCase(Locale.ROOT).contains(q))continue;
         if(column++%columns==0){row=new LinearLayout(this);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));}
         FrameLayout tile=new FrameLayout(this);View content=card(c,width);content.setOnClickListener(null);content.setOnLongClickListener(null);content.setFocusable(false);content.setClickable(false);content.setLongClickable(false);tile.addView(content,new FrameLayout.LayoutParams(-1,-2));
         TextView mark=Ui.tag(this,"+",16);FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);mp.setMargins(0,dp(8),dp(8),0);tile.addView(mark,mp);marks.put(c,mark);
@@ -822,10 +835,10 @@ public class MainActivity extends Activity {
     search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});
     watch.setOnClickListener(v -> {
       if(selected.size()<2)return;
-      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",c.streams));}
-      dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams));
+      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",c.streams));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
+      dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
     });
-    multiPicker=panel;dialog.setOnDismissListener(d -> multiPicker=null);dialog.show();
+    multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});dialog.show();
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,-1);
     dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
@@ -836,6 +849,7 @@ public class MainActivity extends Activity {
   }
 
   void open(Catalog.Channel c) {
+    if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis())){Toast.makeText(this,"El evento ha finalizado",Toast.LENGTH_SHORT).show();return;}
     if (!c.playable()) {
       try {
         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(c.web)));
@@ -849,6 +863,7 @@ public class MainActivity extends Activity {
     if (UserChannels.isPage(first)) intent.putExtra("page_url", first);
     else intent.putStringArrayListExtra("media_urls", new ArrayList<>(c.streams));
     intent.putExtra("title", c.name);
+    intent.putExtra("audience_target",AudienceModel.target(c.event,c.id));intent.putExtra("audience_channel",c.event?c.channelId:c.id);
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events can be shared from the player with their preview link (cover and name in WhatsApp).
     if (c.event) intent.putExtra("share_url", SportsCatalog.link(SportsCatalog.slugs(custom).get(c.id)));
@@ -857,7 +872,7 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
-    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh);
+    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);
     handler.removeCallbacks(refresh);
     if (sharedListener != null) {
       sharedListener.remove();
@@ -867,7 +882,7 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
-    resumed = true; handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
+    resumed = true; pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);

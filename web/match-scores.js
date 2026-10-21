@@ -36,7 +36,10 @@ export function matchResult(data) {
   const scored = ['live', 'halftime', 'finished', 'suspended'].includes(state) && /^\d+$/.test(String(score(home))) && /^\d+$/.test(String(score(away)));
   const clock = state === 'live' && /\d/.test(s.displayClock || '') ? s.displayClock.replace(/'/g, '′') : '';
   const status = { finished: 'Finalizado', halftime: 'Descanso', postponed: 'Aplazado', cancelled: 'Cancelado', suspended: 'Interrumpido', scheduled: 'Programado', live: clock ? `En juego · ${clock}` : 'En juego' }[state];
-  return { id: String(e.id || c.id), home: home.team.displayName, away: away.team.displayName, state, clock,
+  const ended = state === 'finished' && data.meta?.gameState === 'post' ? Date.parse(data.meta.lastPlayWallClock || '') : NaN;
+  const start = Date.parse(c.date || e.date || '');
+  const finishedAt = Number.isFinite(ended) && Number.isFinite(start) && ended >= start ? ended : 0;
+  return { finishedAt, id: String(e.id || c.id), home: home.team.displayName, away: away.team.displayName, state, clock,
     text: `${scored ? `${score(home)} – ${score(away)} · ` : ''}${status}`, live: state === 'live' || state === 'halftime' };
 }
 async function json(url, fetcher) {
@@ -61,12 +64,30 @@ export async function resolveMatch(value, startAt, fetcher = globalThis.fetch) {
   const event = identifyMatch(board, new URL(googleUrl).searchParams.get('q'), startAt);
   return { matchUrl, matchId: String(event.id), matchDate: new Date(event.date).toISOString(), result: matchResult(event) };
 }
+export const EVENT_GRACE_MS = 5 * 60000;
+const storageKey = 'calamar-match-finished-v1';
+const finished = new Map();
+try {
+  for (const [id, at] of Object.entries(JSON.parse(globalThis.localStorage?.getItem(storageKey) || '{}'))) {
+    if (/^\d{1,20}$/.test(id) && Number.isSafeInteger(at) && at > 0) finished.set(id, at);
+  }
+} catch { /* Storage may be unavailable; the provider's end timestamp still works. */ }
+export function rememberMatch(id, result, now = Date.now()) {
+  if (result.state === 'finished') {
+    const at = result.finishedAt > 0 && result.finishedAt <= now + 60000 ? result.finishedAt : finished.get(id) || now;
+    finished.set(id, at);
+  } else finished.delete(id); // A corrected final status must make the event visible again.
+  try { globalThis.localStorage?.setItem(storageKey, JSON.stringify(Object.fromEntries(finished))); } catch {}
+  return result;
+}
+export const matchDeadline = id => finished.has(String(id)) ? finished.get(String(id)) + EVENT_GRACE_MS : 0;
+export const matchExpired = (id, now = Date.now()) => matchDeadline(id) > 0 && now >= matchDeadline(id);
 const cache = new Map();
 export async function fetchMatch(id, fetcher = globalThis.fetch) {
   if (!/^\d{1,20}$/.test(String(id))) throw Error('Identificador de partido no válido.');
   const old = cache.get(id);
   if (old && Date.now() - old.at < 30000) return old.promise;
-  const promise = json(`${API}summary?event=${id}`, fetcher).then(matchResult);
+  const promise = json(`${API}summary?event=${id}`, fetcher).then(matchResult).then(result => rememberMatch(String(id), result));
   cache.set(id, { at: Date.now(), promise });
   try { return await promise; } catch (e) { cache.delete(id); throw e; }
 }

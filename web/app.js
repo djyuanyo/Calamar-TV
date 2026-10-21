@@ -1,4 +1,4 @@
-import { fetchMatch } from './match-scores.js';
+import { fetchMatch, matchExpired, matchDeadline } from './match-scores.js';
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -107,7 +107,7 @@ function eventBadge(c, cls) {
 let scoreBusy = false;
 async function refreshScores() {
   if (scoreBusy || document.hidden) return;
-  const ids = [...new Set([...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId))];
+  const ids = [...new Set([...(state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])];
   scoreBusy = true;
   try { await Promise.allSettled(ids.map(async id => {
     let result;
@@ -118,10 +118,20 @@ async function refreshScores() {
       node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : result.text;
       node.classList.toggle('live', result.live); node.classList.toggle('upcoming', scheduled);
     }
-  })); } finally { scoreBusy = false; }
+  })); } finally { scoreBusy = false; syncEventExpiry(); }
+}
+let expiryTimer, expiredEvents = '';
+function syncEventExpiry() {
+  clearTimeout(expiryTimer);
+  const now = Date.now(), ids = (state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => String(e.matchId));
+  const fingerprint = ids.filter(id => matchExpired(id, now)).sort().join('|');
+  const changed = fingerprint !== expiredEvents; expiredEvents = fingerprint;
+  const next = Math.min(...ids.map(matchDeadline).filter(time => time > now));
+  if (Number.isFinite(next)) expiryTimer = setTimeout(syncEventExpiry, Math.min(next - now + 1, 2147483647));
+  if (changed && !location.hash.startsWith('#/admin') && player.hidden) route();
 }
 setInterval(refreshScores, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshScores(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncEventExpiry(); refreshScores(); } });
 new MutationObserver(records => { if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches('[data-match-id]') || n.querySelector('[data-match-id]'))))) refreshScores(); }).observe(view, { childList: true, subtree: true });
 
 function sectionHead(title, aside) {

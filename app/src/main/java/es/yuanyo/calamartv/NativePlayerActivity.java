@@ -56,7 +56,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private WebView browser;
   private LinearLayout root, panel;
   private FrameLayout stage;
-  private TextView status, livePill, matchBadge;
+  private TextView status, livePill, matchBadge, viewersBadge;
+  private AudienceSession audience;
+  private final Runnable audiencePlayback=new Runnable(){public void run(){
+    if(!matchActive||audience==null)return;
+    if(webMode&&browser!=null){final WebView current=browser;current.evaluateJavascript("(function(){var v=document.querySelector('video');return !!v&&!v.paused&&!v.ended&&v.readyState>=3;})()", value -> {if(matchActive&&browser==current&&webMode)audience.watching("true".equals(value));});}
+    else audience.watching(castPlayback || player!=null&&player.isPlaying());
+    handler.postDelayed(this,10000);
+  }};
   private boolean matchActive, matchBusy;
   private final Runnable matchRefresh=new Runnable(){public void run(){
     if(!matchActive || matchBadge==null)return;
@@ -69,8 +76,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }).start();}
     handler.postDelayed(this,30000);
   }};
-  @Override protected void onResume(){super.onResume();matchActive=true;handler.removeCallbacks(matchRefresh);handler.post(matchRefresh);}
-  @Override protected void onPause(){matchActive=false;handler.removeCallbacks(matchRefresh);super.onPause();}
+  @Override protected void onResume(){super.onResume();matchActive=true;handler.removeCallbacks(matchRefresh);handler.post(matchRefresh);if(audience!=null)audience.open();handler.removeCallbacks(audiencePlayback);handler.post(audiencePlayback);}
+  @Override protected void onPause(){matchActive=false;handler.removeCallbacks(matchRefresh);handler.removeCallbacks(audiencePlayback);if(audience!=null)audience.close();super.onPause();}
   private boolean fullscreen;
   private NetworkTransport transport;
   private String lastReport = "Aún no se ha consultado la fuente.";
@@ -93,6 +100,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override
   public void onCreate(Bundle state) {
     super.onCreate(state);
+    MatchScores.initialize(this);
     pageUrl = getIntent().getStringExtra("page_url");
     title = getIntent().getStringExtra("title");
     shareUrl = getIntent().getStringExtra("share_url");
@@ -158,6 +166,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     LinearLayout.LayoutParams fullscreenSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
     fullscreenSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
     controls.addView(fullscreenButton, fullscreenSize);
+    String audienceTarget=getIntent().getStringExtra("audience_target");
+    if(AudienceModel.validTarget(audienceTarget)){
+      viewersBadge=Ui.tag(this,"◉ —",12);viewersBadge.setContentDescription("Consultando espectadores");
+      controls.addView(viewersBadge,new LinearLayout.LayoutParams(-2,-2));
+      audience=new AudienceSession(this,audienceTarget,getIntent().getStringExtra("audience_channel"), viewers -> {
+        viewersBadge.setText(viewers<0?"◉ —":"◉ "+viewers);
+        viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers==1?"1 persona viendo":viewers+" personas viendo");
+      });
+    }
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
     button(controls, "Refrescar", () -> {
@@ -172,6 +189,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
         title, () -> {
           castPlayback = true;
+          if(audience!=null)audience.watching(true);
           if (player != null) player.pause();
           if (browser != null) browser.onPause();
           handler.removeCallbacks(renewal);
@@ -531,6 +549,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     player.addListener(
         new Player.Listener() {
+          @Override public void onIsPlayingChanged(boolean playing){if(instance==player&&audience!=null&&matchActive)audience.watching(castPlayback||playing);}
           @Override
           public void onPlaybackStateChanged(int state) {
             if (instance != player || !active) return;

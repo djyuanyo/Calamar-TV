@@ -163,7 +163,7 @@ public final class Catalog {
     if (events == null) return out;
     for (int i = 0; i < events.length(); i++) {
       JSONObject event = events.optJSONObject(i);
-      if (event == null) continue;
+      if (event == null || (!event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"),System.currentTimeMillis()))) continue;
       for (Channel target : channels) if (target.id.equals(event.optString("channelId")) && target.playable()) {
         try {
           JSONObject card = new JSONObject(event.toString()).put("id", event.getString("id")).put("channelId", target.id).put("meta", SportsCatalog.meta(event, custom)).put("name", event.getString("name"))

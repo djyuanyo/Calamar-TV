@@ -1,3 +1,4 @@
+import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { httpTsSource } from './http-stream.js';
 import { hostedVideo, VIDEO_FILE } from './video-bridge.js';
@@ -235,7 +236,7 @@ export function eventSlugs(custom) {
 /** Each event has a stable identity and resolves the current channel sources. */
 export function events(channels, custom) {
   const slugs = eventSlugs(custom);
-  return [...(custom?.events || [])].sort(eventOrder).flatMap((event) => {
+  return [...(custom?.events || [])].filter(event => !event.matchUrl || !matchExpired(event.matchId)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     return target ? [{ ...target, ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id),
       event: true, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),

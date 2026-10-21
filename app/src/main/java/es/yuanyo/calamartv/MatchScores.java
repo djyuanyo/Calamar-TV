@@ -34,8 +34,23 @@ public final class MatchScores {
     }
     if(found.length()!=1)throw new IOException(found.length()==0?"No se encontró este partido en los resultados. Comprueba el enlace y la fecha":"Hay varios partidos. Comprueba el enlace y la fecha");return found.getJSONObject(0);
   }
+  static final long EVENT_GRACE_MS=5*60000L;
+  static final Map<String,Long> finished=new HashMap<>();
+  private static android.content.SharedPreferences storage;
+  public static synchronized void initialize(android.content.Context context){
+    if(storage!=null)return;
+    storage=context.getApplicationContext().getSharedPreferences("match-finished-v1",android.content.Context.MODE_PRIVATE);
+    for(Map.Entry<String,?> e:storage.getAll().entrySet())if(e.getKey().matches("\\d{1,20}") && e.getValue() instanceof Long)finished.put(e.getKey(),(Long)e.getValue());
+  }
+  static synchronized void remember(String id,Result result,long now){
+    if("finished".equals(result.state))finished.put(id,result.finishedAt>0&&result.finishedAt<=now+60000?result.finishedAt:finished.containsKey(id)?finished.get(id):now);
+    else finished.remove(id);
+    if(storage!=null){android.content.SharedPreferences.Editor out=storage.edit().clear();for(Map.Entry<String,Long> e:finished.entrySet())out.putLong(e.getKey(),e.getValue());out.apply();}
+  }
+  static synchronized long deadline(String id){Long at=finished.get(id);return at==null?0:at+EVENT_GRACE_MS;}
+  static boolean expired(String id,long now){long end=deadline(id);return end>0&&now>=end;}
   public static class Result {
-    public final String text,home,away,state; public final boolean live;
+    public final String text,home,away,state; public final boolean live; public long finishedAt;
     Result(String text,String home,String away,String state){this.text=text;this.home=home;this.away=away;this.state=state;live=state.equals("live")||state.equals("halftime");}
   }
   static String score(JSONObject team){Object s=team.opt("score");return s instanceof JSONObject?((JSONObject)s).optString("displayValue"):String.valueOf(s);}
@@ -49,7 +64,13 @@ public final class MatchScores {
     String label=state.equals("finished")?"Finalizado":state.equals("halftime")?"Descanso":state.equals("postponed")?"Aplazado":state.equals("cancelled")?"Cancelado":state.equals("suspended")?"Interrumpido":state.equals("scheduled")?"Programado":"En juego";
     if(state.equals("live")&&s.optString("displayClock").matches(".*[0-9].*"))label+=" · "+s.optString("displayClock").replace("'","′");
     if(Arrays.asList("live","halftime","finished","suspended").contains(state)&&score(home).matches("\\d+")&&score(away).matches("\\d+"))label=score(home)+" – "+score(away)+" · "+label;
-    return new Result(label,home.getJSONObject("team").optString("displayName"),away.getJSONObject("team").optString("displayName"),state);
+    Result result=new Result(label,home.getJSONObject("team").optString("displayName"),away.getJSONObject("team").optString("displayName"),state);
+    JSONObject meta=data.optJSONObject("meta");
+    if("finished".equals(state)&&meta!=null&&"post".equals(meta.optString("gameState"))){
+      long end=SportsCatalog.instant(iso(meta.optString("lastPlayWallClock"))),start=SportsCatalog.instant(iso(c.optString("date",e.optString("date"))));
+      if(end!=Long.MAX_VALUE&&start!=Long.MAX_VALUE&&end>=start)result.finishedAt=end;
+    }
+    return result;
   }
   static JSONObject json(String address)throws Exception{
     HttpURLConnection c=(HttpURLConnection)new URL(address).openConnection();c.setConnectTimeout(10000);c.setReadTimeout(15000);c.setRequestProperty("Accept","application/json");
@@ -69,6 +90,6 @@ public final class MatchScores {
   public static Result fetch(String id)throws Exception{
     if(!id.matches("\\d{1,20}"))throw new IOException("Identificador de partido no válido");
     synchronized(cache){Cached c=cache.get(id);if(c!=null&&System.currentTimeMillis()-c.at<30000)return c.value;}
-    Result result=parse(json(API+"summary?event="+id));synchronized(cache){cache.put(id,new Cached(result));}return result;
+    Result result=parse(json(API+"summary?event="+id));remember(id,result,System.currentTimeMillis());synchronized(cache){cache.put(id,new Cached(result));}return result;
   }
 }

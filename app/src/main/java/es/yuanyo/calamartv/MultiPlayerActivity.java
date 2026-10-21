@@ -54,6 +54,8 @@ public final class MultiPlayerActivity extends Activity {
     final PlayerView view;
     final TextView name, status, soundButton;
     ExoPlayer player;
+    AudienceSession audience;
+    long viewers=-1;
     int next;
 
     Tile(String title, List<String> urls) {
@@ -120,7 +122,9 @@ public final class MultiPlayerActivity extends Activity {
           .build();
       view.setPlayer(player);
       final ExoPlayer instance = player;
+      if(audience!=null)audience.open();
       player.addListener(new Player.Listener() {
+        @Override public void onIsPlayingChanged(boolean playing){if(instance==player&&audience!=null)audience.watching(playing);}
         @Override public void onPlaybackStateChanged(int state) {
           if (instance == player && state == Player.STATE_READY) status.setText("");
         }
@@ -141,6 +145,7 @@ public final class MultiPlayerActivity extends Activity {
     }
 
     void release() {
+      if(audience!=null)audience.close();
       if (player != null) {
         view.setPlayer(null);
         player.release();
@@ -162,6 +167,11 @@ public final class MultiPlayerActivity extends Activity {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if (MultiScreen.landscape(count)) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     for (int i = 0; i < count; i++) tiles.add(new Tile(titles.get(i), Arrays.asList(streams.get(i).split("\n"))));
+    ArrayList<String> targets=getIntent().getStringArrayListExtra("audience_targets"),channels=getIntent().getStringArrayListExtra("audience_channels");
+    for(int i=0;i<tiles.size();i++)if(targets!=null&&i<targets.size()&&AudienceModel.validTarget(targets.get(i))){
+      final Tile tile=tiles.get(i);String channel=channels!=null&&i<channels.size()?channels.get(i):null;
+      tile.audience=new AudienceSession(this,targets.get(i),channel,viewers -> {tile.viewers=viewers;showSound();});
+    }
     int[] grid = MultiScreen.grid(count);
     LinearLayout rows = new LinearLayout(this);
     rows.setOrientation(LinearLayout.VERTICAL);
@@ -229,7 +239,7 @@ public final class MultiPlayerActivity extends Activity {
     for (int i = 0; i < tiles.size(); i++) {
       Tile tile = tiles.get(i);
       if (tile.player != null) tile.player.setVolume(i == sound ? 1f : 0f);
-      tile.name.setText((i == sound ? "🔊 " : "") + tile.title);
+      tile.name.setText((i == sound ? "🔊 " : "") + tile.title + (tile.audience==null?"":tile.viewers<0?" · ◉ —":" · ◉ "+tile.viewers));
       tile.name.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0x99000000, 6, 0, 0));
       tile.name.setTextColor(i == sound ? Ui.BG : Color.WHITE);
       tile.soundButton.setText(i == sound ? "🔊" : "🔇");

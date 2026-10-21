@@ -278,6 +278,21 @@ try {
   scoreOffline = true;
   await page.clock.fastForward(31000);
   await page.locator('#player-title .player-score').getByText('Marcador no disponible', { exact: true }).waitFor();
+  // Grace is kept across a page reload and an API outage. Expiring a card keeps admin data.
+  const finishRegistry=await page.evaluate(() => JSON.parse(localStorage.getItem('calamar-match-finished-v1')));
+  const graceEnd=finishRegistry['401882870']+300000;
+  await page.goto(base + '/?expiry=1#/inicio');
+  await page.locator('.event-card').waitFor();
+  const remaining=graceEnd-await page.evaluate(() => Date.now());
+  assert.ok(remaining>1500);
+  await page.clock.fastForward(remaining-1500);
+  assert.equal(await page.locator('.event-card').count(),1);
+  await page.clock.fastForward(1501);
+  await page.waitForFunction(() => !document.querySelector('.event-card'));
+  assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).events.length),1);
+  scoreOffline=false;scoreFinished=false;
+  await page.clock.fastForward(31000);
+  await page.locator('.event-card').waitFor();
   // Every event card opens, including the second item of a rail (map's index is not a picker).
   await page.evaluate(() => {
     const c=JSON.parse(sessionStorage.getItem('catalog'));
