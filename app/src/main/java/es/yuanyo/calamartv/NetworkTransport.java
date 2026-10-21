@@ -64,11 +64,17 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
   }
 
   public DataSource.Factory mediaFactory(String referer, boolean http1) {
+    return mediaFactory(referer, http1, null);
+  }
+
+  public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource) {
     OkHttpDataSource.Factory factory =
         new OkHttpDataSource.Factory(SecureDnsClients.forMedia(client, http1))
             .setUserAgent(PlayerDocument.USER_AGENT);
     if (referer != null && !referer.isEmpty())
       factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
-    return new HttpIptvDataSource.Factory(factory);
+    // Only complete live IPTV streams use the renewable transport. HLS TS fragments
+    // must end normally, even if a playlist points to HTTP segment URLs.
+    return CastSource.needsBridge(rootSource) ? new HttpIptvDataSource.Factory(factory) : factory;
   }
 }

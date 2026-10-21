@@ -27,7 +27,8 @@ final class HttpIptvDataSource implements DataSource {
   private final Uri endpoint;
   private DataSpec request;
   private Uri original;
-  private boolean relay, opened;
+  private boolean relay;
+  private volatile boolean opened;
   HttpIptvDataSource(DataSource upstream, Uri endpoint) { this.upstream=upstream; this.endpoint=endpoint; }
   @Override public void addTransferListener(TransferListener listener) { upstream.addTransferListener(listener); }
   @Override public long open(DataSpec source) throws IOException {

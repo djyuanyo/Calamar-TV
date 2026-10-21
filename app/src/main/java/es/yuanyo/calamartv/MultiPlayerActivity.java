@@ -120,7 +120,7 @@ public final class MultiPlayerActivity extends Activity {
       status.setText("Conectando…");
       player = new ExoPlayer.Builder(MultiPlayerActivity.this)
           .setMediaSourceFactory(new DefaultMediaSourceFactory(MultiPlayerActivity.this)
-              .setDataSourceFactory(NetworkTransport.get(MultiPlayerActivity.this).mediaFactory(null, false)))
+              .setDataSourceFactory(NetworkTransport.get(MultiPlayerActivity.this).mediaFactory(null, false, url)))
           .build();
       view.setPlayer(player);
       final ExoPlayer instance = player;
@@ -139,7 +139,7 @@ public final class MultiPlayerActivity extends Activity {
       String path = Uri.parse(url).getPath();
       if (path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
       if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-      if ("ts".equals(UserChannels.kind(url))) item.setMimeType(MimeTypes.VIDEO_MP2T);
+      if ("ts".equals(UserChannels.kind(url)) || CastSource.needsBridge(url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
       player.setMediaItem(item.build());
       player.setVolume(tiles.indexOf(this) == sound ? 1f : 0f);
       player.prepare();

@@ -21,6 +21,12 @@ public class HttpIptvDataSourceTest {
     public Map<String,List<String>> getResponseHeaders(){return Collections.emptyMap();}
     public void close(){closes++;}
   }
+  @Test public void hlsFragmentsNeverUseAnEndlessIptvTransport() {
+    NetworkTransport transport=NetworkTransport.get(DnsProvider.SYSTEM);
+    assertFalse(transport.mediaFactory(null,false,"http://cdn.example/live.m3u8").createDataSource() instanceof HttpIptvDataSource);
+    assertFalse(transport.mediaFactory(null,false,"https://tdt.example/live.m3u8").createDataSource() instanceof HttpIptvDataSource);
+    assertTrue(transport.mediaFactory(null,false,"http://cdn.example/user/password/244").createDataSource() instanceof HttpIptvDataSource);
+  }
   @Test public void finiteHostingConnectionsRenewWithoutEndingLivePlayback() throws Exception {
     Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
     String original="http://31.43.191.125:8080/user/password/244";
