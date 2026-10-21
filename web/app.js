@@ -219,7 +219,6 @@ function heroSection(list, index = 0) {
         'div',
         { class: 'hero-actions' },
         el('button', { class: 'btn lg', type: 'button', onclick: () => open(c) }, icon('play'), 'Ver ahora'),
-        el('a', { class: 'btn secondary lg', href: '#/canales' }, 'Todos los canales'),
       ),
     ),
     picks,

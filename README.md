@@ -183,3 +183,5 @@ El icono de la app (también el icono adaptable de Android 8+), el banner de And
 ## Reproductor a pantalla completa (2.8.2)
 
 En la app, los canales y eventos se abren directamente a pantalla completa (sin barras del sistema y, en el móvil, en horizontal). El botón de pantalla completa del reproductor muestra el panel con fuentes, DNS y diagnóstico; Atrás cierra el reproductor. Si hay un error que leer, el reproductor sale de la pantalla completa para mostrarlo.
+
+En Android TV, las tarjetas de eventos marcan su borde en color al pasar por encima, igual que las de canales. La portada de destacados solo tiene el botón **Ver ahora** (web y app); los canales siguen en el menú Canales.
