@@ -1,7 +1,7 @@
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
-import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
+import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 
@@ -37,7 +37,7 @@ function loginView(rerender) {
     status.textContent = 'Abriendo Google…';
     try {
       await login();
-      if (!administrator()) throw new Error(`Solo ${ADMIN_EMAIL} puede administrar los canales.`);
+      if (!administrator()) throw new Error('Esta cuenta de Google no tiene permiso de administración.');
       await loadFile();
       notice = '';
       rerender();
@@ -47,7 +47,6 @@ function loginView(rerender) {
     } finally { button.disabled = false; }
   } }, 'Continuar con Google');
   return [el('section', { class: 'panel' }, el('h1', {}, 'Administración'),
-    el('p', { class: 'lead' }, `Entra con ${ADMIN_EMAIL} para publicar canales y eventos en todos tus dispositivos.`),
     button, auth.currentUser ? el('button', { class: 'ghost', onclick: async () => { await logout(); file = null; rerender(); } }, 'Cerrar sesión') : null, status)];
 }
 
