@@ -30,3 +30,9 @@ test('hosting errors and foreign playlists are reported, not played', async () =
   await assert.rejects(prepareHostedVideo(episode, { fetcher: async () => ({ status: 404, ok: false, headers: { get: () => 'text/html' } }) }), /calamar-video.php/);
   assert.equal(await prepareHostedVideo('https://example.com/a.mkv'), null);
 });
+
+test('multi-screen layout: two top and bottom, more in a grid', async () => {
+  const { multiGrid } = await import('../web/multi-view.js');
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((n) => multiGrid(n)), [
+    { rows: 1, cols: 1 }, { rows: 2, cols: 1 }, { rows: 2, cols: 2 }, { rows: 2, cols: 2 }, { rows: 2, cols: 3 }, { rows: 2, cols: 3 }]);
+});

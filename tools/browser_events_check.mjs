@@ -148,6 +148,25 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__visits), [['2026-11-30', `e_${published.events[0].id}`], ['2026-11-30', 'c_sport-one']]);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   assert.equal(await page.locator('#player-viewers').isHidden(), true);
+  // Multi-screen: two videos top and bottom, three in a 2x2 grid; tapping a tile gives it the sound.
+  await page.locator('.nav a').filter({ hasText: 'Multipantalla' }).click();
+  await page.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver 2 a la vez', exact: true }).click();
+  await page.locator('.multi .multi-tile').nth(1).waitFor();
+  assert.deepEqual(await page.locator('.multi-grid').evaluate(g => [getComputedStyle(g).gridTemplateRows.split(' ').length, getComputedStyle(g).gridTemplateColumns.split(' ').length]), [2, 1]);
+  assert.ok(requests.includes('https://example.com/two.mp4'));
+  assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [false, true]);
+  await page.getByRole('button', { name: '✕ Salir', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('.multi') && location.hash === '#/multipantalla');
+  await page.getByRole('button', { name: 'Local vs visitante', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver 3 a la vez', exact: true }).click();
+  await page.locator('.multi .multi-tile').nth(2).waitFor();
+  assert.deepEqual(await page.locator('.multi-grid').evaluate(g => [getComputedStyle(g).gridTemplateRows.split(' ').length, getComputedStyle(g).gridTemplateColumns.split(' ').length]), [2, 2]);
+  await page.locator('.multi-tile').nth(2).click();
+  assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [true, true, false]);
+  await page.goBack();
+  await page.waitForFunction(() => !document.querySelector('.multi'));
   await page.locator('.admin-link').click();
   await page.locator('.admin-stats a').filter({ hasText: 'Estadísticas' }).click();
   await page.getByRole('heading', { name: 'En vivo ahora', exact: true }).waitFor();
@@ -221,5 +240,5 @@ try {
   // Every card of a category shares its colour.
   assert.equal(await page.locator('.card', { hasText: 'Sports One' }).evaluate(card => card.style.getPropertyValue('--c')), '#aa0000');
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
