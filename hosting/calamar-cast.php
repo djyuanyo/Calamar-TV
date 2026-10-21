@@ -45,9 +45,10 @@ function castCapabilities(): array {
 }
 
 function castArguments(string $binary, string $source, string $folder): array {
-    return [$binary, '-hide_banner', '-loglevel', 'quiet', '-nostdin', '-y',
+    $args = [$binary, '-hide_banner', '-loglevel', 'quiet', '-nostdin', '-y',
         '-threads', '2', '-rw_timeout', '15000000', '-reconnect', '1', '-reconnect_at_eof', '1',
         '-reconnect_streamed', '1', '-reconnect_delay_max', '3', '-tls_verify', '1',
+        '-verifyhost', 'calamarmenciano.com',
         '-headers', 'X-Calamar-Source: ' . base64_encode($source) . "\r\n",
         '-i', CAST_INPUT_URL, '-map', '0:v:0', '-map', '0:a:0?',
         '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=25',
@@ -58,6 +59,13 @@ function castArguments(string $binary, string $source, string $folder): array {
         '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8', '-hls_delete_threshold', '4',
         '-hls_start_number_source', 'epoch', '-hls_flags', 'delete_segments+independent_segments+temp_file+omit_endlist',
         '-hls_segment_filename', $folder . '/seg%d.ts', $folder . '/live.m3u8'];
+    foreach (['/etc/pki/tls/cert.pem', '/etc/ssl/certs/ca-certificates.crt'] as $ca) {
+        if (is_readable($ca)) {
+            array_splice($args, array_search('-headers', $args, true), 0, ['-ca_file', $ca]);
+            break;
+        }
+    }
+    return $args;
 }
 
 function castWorker(string $command, string $folder): string {

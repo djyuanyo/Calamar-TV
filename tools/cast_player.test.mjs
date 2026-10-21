@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { castSource, initCast } from '../web/cast-player.js';
+import { prepareCastSource, needsCastBridge } from '../web/cast-adapter.js';
 
 test('Cast preserves signed source URLs and reports their real MIME type', () => {
   const url = 'https://example.com/live.M3U8?token=A%2Bb&exp=0';
@@ -91,4 +92,27 @@ test('failed conversion preserves local playback and shows the installation erro
   assert.equal(f.loads.length, 0);
   assert.equal(f.state().sent, 0);
   assert.match(f.logs.at(-1), /Falta instalar/);
+});
+
+
+test('adapter polls until HLS is ready, keeping original credentials exclusively in a header', async () => {
+  const original = 'http://31.43.191.125:8080/Test/Pass/123';
+  const url = 'https://calamarmenciano.com/calamar-cast.php?action=media&session=' + 'b'.repeat(64) + '&file=live.m3u8';
+  let calls = 0;
+  const result = await prepareCastSource(original, { sleep: async () => {}, fetcher: async (address, options) => {
+    assert.equal(address, 'https://calamarmenciano.com/calamar-cast.php?action=start');
+    assert.equal(atob(options.headers['X-Calamar-Source']), original);
+    return { ok: true, status: ++calls === 1 ? 202 : 200,
+      headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ url: calls === 1 ? null : url }) };
+  }});
+  assert.equal(calls, 2);
+  assert.deepEqual(result, { url, type: 'application/x-mpegURL', live: true });
+  assert.equal(needsCastBridge('http://127.0.0.1:8080/Test/Pass/123'), false);
+});
+
+test('adapter rejects untrusted result URLs and does not mask installation errors', async () => {
+  const address = 'http://31.43.191.125:8080/Test/Pass/123';
+  const response = data => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => data });
+  await assert.rejects(prepareCastSource(address, { fetcher: async () => response({ url: 'https://example.com/live.m3u8' }) }), /Respuesta no válida/);
+  await assert.rejects(prepareCastSource(address, { fetcher: async () => ({ ...response({ error: 'Instala FFmpeg.' }), ok: false }) }), /Instala FFmpeg/);
 });
