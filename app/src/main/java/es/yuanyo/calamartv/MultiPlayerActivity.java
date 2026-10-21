@@ -33,6 +33,8 @@ import java.util.List;
  * bottom; three or more make a grid on a horizontal screen. Only the tile with sound plays audio; a
  * tap (or the remote's focus on TV) moves the sound to another tile. Each tile tries its links in order.
  */
+// Same Media3 player settings (resize mode, buffering indicator) as NativePlayerActivity.
+@android.annotation.SuppressLint("UnsafeOptInUsageError")
 public final class MultiPlayerActivity extends Activity {
   /** Names of the videos, and for each one its links joined by line breaks. */
   static final String TITLES = "titles", STREAMS = "streams";
