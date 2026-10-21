@@ -191,3 +191,5 @@ En Android TV, las tarjetas de eventos marcan su borde en color al pasar por enc
 Al compartir un evento (botón **Compartir** del reproductor, **Copiar enlace** del administrador web y de la app) el enlace es de la web pública: `https://djyuanyo.github.io/Calamar-TV/evento/local-vs-visitante/`. `tools/event_pages.py` publica esa página para cada evento con su **foto de portada** y su **nombre** (liga, fecha y jornada debajo) para WhatsApp y las demás apps, y lleva al evento. El workflow de la web la regenera en cada publicación y cada 15 minutos, así que un evento nuevo tiene vista previa en unos 15 minutos; si se comparte antes, `404.html` lo abre igualmente (con la vista previa general). WhatsApp guarda cada vista previa un tiempo. Ya no se usa `calamar-evento.php` en el hosting.
 
 Los logos de los canales ocupan toda la tarjeta, con un pequeño margen (web y app).
+
+El botón de compartir pantalla (Chromecast) es solo el icono, en la web y en la app (2.8.4); su nombre se mantiene para lectores de pantalla y como texto de ayuda.

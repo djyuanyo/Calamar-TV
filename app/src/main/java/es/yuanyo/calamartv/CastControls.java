@@ -2,7 +2,6 @@ package es.yuanyo.calamartv;
 
 import android.graphics.Color;
 import android.view.View;
-import android.widget.TextView;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -53,24 +52,16 @@ public final class CastControls {
       route.setFocusable(false);
       route.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       route.setBackgroundColor(Color.TRANSPARENT);
+      // Icon only, the same size as the full screen button; the name stays for screen readers.
       control = new LinearLayout(activity);
-      control.setGravity(Gravity.CENTER_VERTICAL);
-      control.setPadding(Ui.dp(activity, 6), 0, Ui.dp(activity, 8), 0);
+      control.setGravity(Gravity.CENTER);
       control.setBackground(Ui.focusFill(activity, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
       control.setFocusable(true);
       control.setContentDescription("Compartir pantalla");
       control.setOnClickListener(v -> route.performClick());
+      if (android.os.Build.VERSION.SDK_INT >= 26) control.setTooltipText("Compartir pantalla");
       control.addView(route, new LinearLayout.LayoutParams(Ui.dp(activity, 24), Ui.dp(activity, 40)));
-      TextView label = new TextView(activity);
-      label.setText("Compartir pantalla");
-      label.setTextColor(Ui.FG); label.setTextSize(12);
-      label.setMaxWidth(Ui.dp(activity, 75)); label.setMaxLines(2);
-      label.setGravity(Gravity.CENTER);
-      label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-      label.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-      label.setPadding(Ui.dp(activity, 4), 0, 0, 0);
-      control.addView(label);
-      LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-2, Ui.dp(activity, 40));
+      LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(Ui.dp(activity, 44), Ui.dp(activity, 40));
       size.setMargins(Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4));
       row.addView(control, size);
       CastButtonFactory.setUpMediaRouteButton(activity, route);

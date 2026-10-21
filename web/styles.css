@@ -460,9 +460,10 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .player-toolbar .source-picker select { position:absolute; inset:0; width:100%; height:100%; max-width:none; opacity:0; }
 .player-toolbar .source-picker:has(select:focus-visible) { outline:3px solid var(--accent); outline-offset:2px; }
 .player-toolbar .pill-btn { padding:8px 10px; font-size:13px; }
-.share-screen { display:flex; align-items:center; gap:5px; }
-.share-screen svg { flex:none; width:20px; height:20px; }
-.share-screen span { max-width:82px; line-height:1.15; }
+/* Share screen (Chromecast) is an icon only; its name stays in aria-label and the hover title. */
+.player-toolbar .pill-btn.share-screen { display:grid; place-items:center; width:40px; height:36px; padding:0; }
+.share-screen[hidden] { display:none !important; }
+.share-screen svg { flex:none; width:22px; height:22px; }
 @media (max-width:720px) { .player-toolbar { flex-basis:100%; overflow-x:auto; padding-block:4px; } }
 
 /* Search sits directly below the header on phones, desktop and TV. */
