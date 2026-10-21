@@ -232,8 +232,9 @@ public class MainActivity extends Activity {
     search.setTextColor(Ui.FG);
     search.setHintTextColor(Ui.MUTED);
     search.setTextSize(16);
-    search.setHint("Buscar canales y eventos");
-    search.setContentDescription("Buscar canales y eventos");
+    String hint = Library.section(mode) != null ? "Buscar títulos" : "Buscar canales y eventos";
+    search.setHint(hint);
+    search.setContentDescription(hint);
     search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
     search.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 24, 0));
     search.setPadding(dp(18), dp(10), dp(18), dp(10));
@@ -248,7 +249,11 @@ public class MainActivity extends Activity {
     });
 
     LinearLayout nav = row();
-    for (final String m : new String[] {"Inicio", "Canales", "Favoritos"}) {
+    if (Library.section(mode) != null && !Library.visible(custom)) mode = "Inicio";
+    List<String> menu = new ArrayList<>(Arrays.asList("Inicio", "Canales"));
+    if (Library.visible(custom)) for (String[] section : Library.SECTIONS) menu.add(section[1]);
+    menu.add("Favoritos");
+    for (final String m : menu) {
       nav.addView(
           tab(
               m,
@@ -362,6 +367,10 @@ public class MainActivity extends Activity {
     handler.removeCallbacks(heroAdvance); heroHost = null;
     list.removeAllViews();
     message.setText(status());
+    if (Library.section(mode) != null) {
+      libraryPage(Library.section(mode));
+      return;
+    }
     if (mode.equals("Favoritos")) {
       heading("Favoritos", "Mantén pulsado para quitar");
       List<Catalog.Channel> saved = new ArrayList<>();
@@ -917,10 +926,15 @@ public class MainActivity extends Activity {
                   try {
                     JSONObject next = SharedCatalog.decode(snapshot);
                     if (sharedAvailable && next.toString().equals(custom.toString())) return;
+                    boolean menuChanged = Library.visible(next) != Library.visible(custom);
                     custom = next;
                     sharedAvailable = true;
                     SharedCatalog.cache(this, custom);
                     channels = Catalog.merge(tdt, custom);
+                    if (menuChanged) {
+                      home();
+                      return;
+                    }
                     renderFilters();
                     render();
                   } catch (Exception ignored) {
@@ -1051,6 +1065,257 @@ public class MainActivity extends Activity {
       if (i % cols == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
       r.addView(card(items.get(i), gridWidth(cols)));
     }
+  }
+
+  // ---- Films, series and documentaries (calamar-library.php on the hosting) -------------------
+
+  Library.Data library;
+  boolean libraryBusy;
+  long libraryAt;
+  String libraryError = "";
+
+  /** Downloads the list at most every 2 minutes; the page redraws when it arrives. */
+  void loadLibrary() {
+    if (libraryBusy || (library != null && System.currentTimeMillis() - libraryAt < 120000)) return;
+    libraryBusy = true;
+    new Thread(() -> {
+      Library.Data data = null;
+      String error = "";
+      try {
+        data = Library.download();
+      } catch (Exception e) {
+        error = e instanceof UnknownHostException ? "Sin conexión" : "No se pudo cargar el catálogo de vídeos";
+      }
+      final Library.Data result = data;
+      final String failure = error;
+      runOnUiThread(() -> {
+        libraryBusy = false;
+        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); }
+        libraryError = failure;
+        if (!isFinishing() && Library.section(mode) != null) render();
+      });
+    }).start();
+  }
+
+  void libraryPage(String section) {
+    String name = "";
+    for (String[] s : Library.SECTIONS) if (s[0].equals(section)) name = s[1];
+    loadLibrary();
+    if (library == null) {
+      heading(name, null);
+      list.addView(label(libraryBusy ? "Cargando…" : libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED));
+      return;
+    }
+    List<Library.Item> items = new ArrayList<>();
+    for (Library.Item item : library.items(section)) if (matches(item.title)) items.add(item);
+    heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
+    if (items.isEmpty())
+      list.addView(label(query.trim().isEmpty() ? "Todavía no hay vídeos en esta sección." : "Sin resultados", 15, MUTED));
+    int columns = wide() ? 6 : 3;
+    int width = gridWidth(columns);
+    LinearLayout r = null;
+    for (int i = 0; i < items.size(); i++) {
+      if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
+      r.addView(poster(items.get(i), width));
+    }
+    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
+  }
+
+  /** A 2:3 poster with the title under it; without a TMDB poster the title is written on the card. */
+  View poster(final Library.Item item, int width) {
+    LinearLayout card = new LinearLayout(this);
+    card.setId(200000 + Math.abs(item.id.hashCode() % 800000));
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setPadding(dp(3), dp(3), dp(3), dp(8));
+    card.setFocusable(true);
+    card.setClickable(true);
+    Ui.scaleOnFocus(card, 1.04f);
+    FrameLayout art = new FrameLayout(this);
+    art.setBackground(Ui.artBackground(this, Palette.hue(item.title), 10));
+    art.setForeground(Ui.focusOutline(this, 10));
+    art.setClipToOutline(true);
+    art.setDuplicateParentStateEnabled(true);
+    TextView fallback = label(item.title, 14, Ui.FG);
+    fallback.setGravity(Gravity.CENTER);
+    fallback.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
+    if (!item.poster.isEmpty()) {
+      ImageView cover = new ImageView(this);
+      cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
+      image(cover, item.poster);
+    }
+    card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 1.5f)));
+    TextView name = text(item.title, 13);
+    name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    name.setSingleLine(true);
+    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    name.setPadding(dp(2), dp(6), dp(2), 0);
+    card.addView(name);
+    TextView sub = label(item.year > 0 ? String.valueOf(item.year) : item.series ? "Serie" : "", 11, Ui.MUTED);
+    sub.setPadding(dp(2), 0, dp(2), 0);
+    card.addView(sub);
+    card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : ""));
+    card.setOnClickListener(v -> libraryDetail(item));
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    p.setMargins(dp(4), dp(4), dp(6), dp(6));
+    card.setLayoutParams(p);
+    return card;
+  }
+
+  /** The title's page: backdrop, facts, synopsis, Ver (films) or seasons and episodes, and cast. */
+  void libraryDetail(final Library.Item item) {
+    final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
+    ScrollView scroll = new ScrollView(this);
+    scroll.setBackgroundColor(Ui.BG);
+    final LinearLayout page = new LinearLayout(this);
+    page.setOrientation(LinearLayout.VERTICAL);
+    page.setPadding(0, 0, 0, dp(28));
+    scroll.addView(page);
+
+    FrameLayout hero = new FrameLayout(this);
+    hero.setBackground(Ui.heroBackground(this, Palette.hue(item.title)));
+    if (!item.backdrop.isEmpty()) {
+      ImageView backdrop = new ImageView(this);
+      backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      hero.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
+      image(backdrop, item.backdrop);
+    }
+    View scrim = new View(this);
+    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff0b0d10, 0x990b0d10, 0x220b0d10}));
+    hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+    Button back = Ui.pill(this, "‹ Volver", Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> dialog.dismiss());
+    FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, dp(44), Gravity.TOP | Gravity.START);
+    bp.setMargins(dp(gutter()), dp(12), 0, 0);
+    hero.addView(back, bp);
+    LinearLayout head = new LinearLayout(this);
+    head.setOrientation(LinearLayout.VERTICAL);
+    head.setGravity(Gravity.BOTTOM);
+    head.setPadding(dp(gutter() + 6), 0, dp(gutter() + 6), dp(14));
+    TextView title = text(item.title, wide() ? 34 : 26);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setPadding(0, 0, 0, dp(4));
+    head.addView(title);
+    String facts = item.facts();
+    if (!facts.isEmpty()) head.addView(noPad(label(facts, 14, 0xffd6dbe2)));
+    if (!item.genres.isEmpty()) head.addView(noPad(label(String.join(" · ", item.genres), 13, Ui.ACC)));
+    hero.addView(head, new FrameLayout.LayoutParams(-1, -1));
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 260)));
+
+    LinearLayout body = new LinearLayout(this);
+    body.setOrientation(LinearLayout.VERTICAL);
+    body.setPadding(dp(gutter()), 0, dp(gutter()), 0);
+    page.addView(body);
+    if (!item.series) {
+      Button watch = Ui.pill(this, "Ver", Ui.Kind.ACCENT, false);
+      watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
+      watch.setCompoundDrawablePadding(dp(8));
+      watch.setOnClickListener(v -> playLibrary(item.title, item.url));
+      LinearLayout actions = row();
+      addButton(actions, watch);
+      body.addView(actions);
+      watch.requestFocus();
+    }
+    if (!item.overview.isEmpty()) body.addView(label(item.overview, 15, 0xffd6dbe2));
+
+    if (item.series) {
+      final Map<Integer, List<Library.Episode>> seasons = item.seasons();
+      final LinearLayout chips = row();
+      final LinearLayout episodes = new LinearLayout(this);
+      episodes.setOrientation(LinearLayout.VERTICAL);
+      final int[] current = {seasons.keySet().iterator().next()};
+      final Runnable[] draw = new Runnable[1];
+      draw[0] = () -> {
+        chips.removeAllViews();
+        for (final int number : seasons.keySet()) {
+          Button chip = Ui.pill(this, "Temporada " + number, number == current[0] ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+          chip.setOnClickListener(v -> { current[0] = number; draw[0].run(); });
+          addButton(chips, chip);
+        }
+        episodes.removeAllViews();
+        for (final Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(item, e));
+      };
+      draw[0].run();
+      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
+      chipScroll.setHorizontalScrollBarEnabled(false);
+      chipScroll.addView(chips);
+      body.addView(chipScroll);
+      body.addView(episodes);
+      if (episodes.getChildCount() > 0) episodes.getChildAt(0).requestFocus();
+    }
+
+    if (!item.cast.isEmpty()) {
+      TextView castTitle = text("Reparto", 18);
+      castTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      castTitle.setPadding(dp(4), dp(18), 0, dp(4));
+      body.addView(castTitle);
+      StringBuilder cast = new StringBuilder();
+      for (String[] person : item.cast)
+        cast.append(cast.length() == 0 ? "" : "\n").append(person[0]).append(person[1].isEmpty() ? "" : " · " + person[1]);
+      body.addView(label(cast.toString(), 14, Ui.MUTED));
+    }
+    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
+
+    dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
+    dialog.show();
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
+    dialog.getWindow().setLayout(-1, -1);
+  }
+
+  View episodeRow(final Library.Item item, final Library.Episode e) {
+    LinearLayout r = row();
+    r.setFocusable(true);
+    r.setClickable(true);
+    r.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 10, 0));
+    r.setPadding(dp(8), dp(8), dp(8), dp(8));
+    FrameLayout still = new FrameLayout(this);
+    still.setBackground(Ui.artBackground(this, Palette.hue(item.title), 8));
+    still.setClipToOutline(true);
+    TextView number = label(e.label(), 14, Ui.FG);
+    number.setGravity(Gravity.CENTER);
+    still.addView(number, new FrameLayout.LayoutParams(-1, -1));
+    if (!e.still.isEmpty()) {
+      ImageView image = new ImageView(this);
+      image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      still.addView(image, new FrameLayout.LayoutParams(-1, -1));
+      image(image, e.still);
+    }
+    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 160 : 112), dp(wide() ? 90 : 63)));
+    LinearLayout texts = new LinearLayout(this);
+    texts.setOrientation(LinearLayout.VERTICAL);
+    TextView name = text(e.label() + (e.name.isEmpty() ? "" : " · " + e.name), 15);
+    name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    name.setPadding(dp(12), 0, dp(4), 0);
+    texts.addView(name);
+    if (!e.overview.isEmpty()) {
+      TextView about = label(e.overview, 12, Ui.MUTED);
+      about.setMaxLines(2);
+      about.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      about.setPadding(dp(12), dp(2), dp(4), 0);
+      texts.addView(about);
+    }
+    r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+    r.setContentDescription("Ver " + item.episodeTitle(e));
+    r.setOnClickListener(v -> playLibrary(item.episodeTitle(e), e.url));
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+    p.setMargins(0, dp(4), 0, dp(4));
+    r.setLayoutParams(p);
+    return r;
+  }
+
+  TextView noPad(TextView v) {
+    v.setPadding(0, dp(2), 0, dp(2));
+    return v;
+  }
+
+  /** Films are played like a direct video link; they do not count in the channel audience. */
+  void playLibrary(String title, String url) {
+    if (!Library.Media.allowed(url)) return;
+    Intent intent = new Intent(this, NativePlayerActivity.class);
+    intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
+    intent.putExtra("title", title);
+    startActivity(intent);
   }
 
   void favoriteAction(View view, Catalog.Channel channel) {

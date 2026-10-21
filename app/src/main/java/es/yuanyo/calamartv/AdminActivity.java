@@ -103,6 +103,11 @@ public class AdminActivity extends Activity {
       return;
     }
     body.addView(label("Canales · " + catalog.optJSONArray("channels").length() + "   /   Eventos · " + (catalog.optJSONArray("events") == null ? 0 : catalog.optJSONArray("events").length()), 15));
+    final boolean libraryOn = Library.visible(catalog);
+    addButton("Películas, Series y Documentales: " + (libraryOn ? "visibles · Ocultar" : "ocultos · Mostrar"), () -> {
+      try { JSONObject next = copy(); next.put("libraryVisible", !libraryOn); SharedCatalog.validate(next); publish(next); }
+      catch (Exception error) { fail(error); }
+    });
     for (String section : new String[]{"channels", "events", "leagues", "teams"}) {
       String sectionTitle = section.equals("channels") ? "Canales" : section.equals("events") ? "Eventos" : section.equals("leagues") ? "Ligas" : "Equipos";
       addButton((adminSection.equals(section) ? "• " : "") + sectionTitle, () -> { adminSection = section; draw(); });
