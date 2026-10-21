@@ -499,7 +499,7 @@ function statsPanel(state) {
     el('p', { class: 'stats-total' }, liveTotal, ' personas viendo en este momento'),
     liveBody,
     el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
-    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal o un evento cuenta como una visita (días según el horario de Madrid).'),
+    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal o un evento cuenta como una visita; la visita a un evento también suma a su canal (días según el horario de Madrid).'),
     el('div', { class: 'stats-controls' }, modeButtons, picker),
     history,
   ];
@@ -525,7 +525,8 @@ function visitReport(days, names, from, to) {
         : el('p', { class: 'note' }, `Sin visitas a ${title.toLowerCase()} en este periodo.`));
   };
   // Chart: day by day (30 days or one month), month by month, or year by year.
-  const { buckets } = summarize(days, mode === 'year' ? 'month' : mode === 'all' ? 'year' : 'day', only);
+  // Every opening adds to a channel (events also add to theirs), so the channel counters are the total.
+  const { buckets } = summarize(days, mode === 'year' ? 'month' : mode === 'all' ? 'year' : 'day', only || 'c_');
   let keys;
   if (mode === 'year') keys = Array.from({ length: 12 }, (_, i) => `${statsView.year}-${String(i + 1).padStart(2, '0')}`);
   else if (mode === 'all') { const years = days.map((d) => Number(d.id.slice(0, 4))); keys = years.length ? Array.from({ length: Math.max(...years) - Math.min(...years) + 1 }, (_, i) => String(Math.min(...years) + i)) : []; }
@@ -538,7 +539,7 @@ function visitReport(days, names, from, to) {
       el('span', { class: 'value' }, value ? value.toLocaleString('es-ES') : ''), el('span', { class: 'fill', style: `--h:${value / max * 100}%` }), el('span', { class: 'tick' }, label(key))); }))
     : el('p', { class: 'note' }, 'Todavía no hay visitas registradas.');
   return [
-    el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_') + sum('e_'), 'visita', 'visitas')), ` · ${period}`),
+    el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_'), 'visita', 'visitas')), ` · ${period}`),
     el('div', { class: 'stats-card stats-chart-card' },
       el('h3', {}, `${only ? `Evolución de ${names.get(only) || only.slice(2)}` : 'Evolución de todas las visitas'} · ${mode === 'day' ? 'últimos 30 días' : mode === 'month' ? 'día a día' : mode === 'year' ? 'mes a mes' : 'año a año'}`),
       only ? el('button', { type: 'button', class: 'ghost', onclick: () => { statsView.only = null; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } }, 'Ver todas') : null,

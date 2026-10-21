@@ -133,7 +133,9 @@ try {
   await page.locator('#player-viewers:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-viewers b').textContent(), '3');
   assert.equal(await page.locator('#player-viewers .sr').textContent(), '3 personas viendo');
-  assert.deepEqual(await page.evaluate(() => window.__visits), [['2026-11-30', `e_${published.events[0].id}`]]);
+  // The event visit also counts for the channel it plays on.
+  await page.waitForFunction(() => window.__visits.length === 2);
+  assert.deepEqual(await page.evaluate(() => window.__visits), [['2026-11-30', `e_${published.events[0].id}`], ['2026-11-30', 'c_sport-one']]);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   assert.equal(await page.locator('#player-viewers').isHidden(), true);
   await page.locator('.admin-link').click();

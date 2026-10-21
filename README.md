@@ -147,7 +147,7 @@ Pruebas: `tools/sports.test.mjs`, `SportsCatalogTest`, `CatalogEventsTest` y flu
 
 Mientras el reproductor web está abierto, la pestaña guarda en `calamarAudience/{sesión aleatoria}` qué canal o evento ve (`c:ID` o `e:ID`) y el minuto actual, y lo renueva cada minuto; al cerrarlo se borra. Junto a Pantalla completa, Refrescar y Compartir aparece el número de personas viendo ese mismo canal o evento (se cuentan las presencias de los últimos ~3 minutos y se actualiza cada 30 segundos). No se guarda ningún dato personal.
 
-Cada apertura de un canal o evento suma una visita en `calamarVisits/AAAA-MM-DD` (día de Madrid), con un contador por canal (`c_ID`) y por evento (`e_ID`). Las reglas solo permiten sumar 1 a un contador del día actual y solo el administrador puede leer las visitas.
+Cada apertura de un canal o evento suma una visita en `calamarVisits/AAAA-MM-DD` (día de Madrid), con un contador por canal (`c_ID`) y por evento (`e_ID`). Abrir un evento suma una visita al evento y otra al canal al que está asignado, así que el total de visitas es la suma de los canales. Las reglas solo permiten sumar 1 a un contador del día actual y solo el administrador puede leer las visitas.
 
 En **Admin → Estadísticas** (`#/admin/estadisticas`): espectadores en vivo por canal y por evento (se refresca cada 20 segundos) y visitas por día (con los 30 días anteriores), por mes (día a día), por año (mes a mes) y por años, con tablas separadas de canales y eventos. Pulsar un canal o evento muestra su evolución en la gráfica.
 

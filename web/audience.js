@@ -48,6 +48,7 @@ export function liveCounts(docs, now = Date.now()) {
 }
 
 /**
+ * `only` is one counter (c_la-1) or a whole kind (c_ or e_).
  * Adds up daily documents ({ id: '2026-10-21', data: { c_la-1: 3 } }) for a period.
  * by: 'day' groups by date, 'month' by YYYY-MM, 'year' by YYYY. Returns totals per key and per bucket.
  */
@@ -57,7 +58,7 @@ export function summarize(days, by = 'day', only = null) {
   for (const { id, data } of days) {
     const bucket = id.slice(0, size);
     for (const [key, value] of Object.entries(data || {})) {
-      if (!Number.isFinite(value) || value <= 0 || (only && key !== only)) continue;
+      if (!Number.isFinite(value) || value <= 0 || (only && key !== only && !(only.endsWith('_') && key.startsWith(only)))) continue;
       totals.set(key, (totals.get(key) || 0) + value);
       buckets.set(bucket, (buckets.get(bucket) || 0) + value);
     }

@@ -28,6 +28,7 @@ test('visits add up by day, month and year and can follow one channel', () => {
   assert.deepEqual([...summarize(days).totals], [['c_la-1', 3], ['e_m', 5]]);
   assert.deepEqual([...summarize(days, 'month').buckets], [['2026-11', 2], ['2026-12', 5], ['2027-01', 1]]);
   assert.deepEqual([...summarize(days, 'year', 'e_m').buckets], [['2026', 4], ['2027', 1]]);
+  assert.deepEqual([...summarize(days, 'month', 'c_').buckets], [['2026-11', 2], ['2026-12', 1]]);
 });
 test('events show their date and time until they start', () => {
   const event = { startAt: '2026-12-01T20:00:00.000Z', status: 'scheduled' };
