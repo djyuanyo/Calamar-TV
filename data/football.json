@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-21T01:07:31.238751+00:00",
+  "updated_at": "2026-10-21T12:06:30.216531+00:00",
   "total": 196,
   "data": [
     {
@@ -615,7 +615,7 @@
       "league": "FA Cup",
       "venue": "County Sports Ground",
       "start_time": "2026-10-20T20:45:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -839,7 +839,7 @@
       "league": "Copa Chile",
       "venue": "Estadio Municipal Nicolás Chahuán Nazar",
       "start_time": "2026-10-21T01:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -853,7 +853,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio Metropolitano de Techo",
       "start_time": "2026-10-21T01:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -867,7 +867,7 @@
       "league": "Colombia: Primera A - Clausura",
       "venue": null,
       "start_time": "2026-10-21T01:15:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -881,7 +881,7 @@
       "league": "Colombia Categoría Primera A",
       "venue": "Estadio General Santander",
       "start_time": "2026-10-21T01:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -895,7 +895,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Akron",
       "start_time": "2026-10-21T02:07:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -909,7 +909,7 @@
       "league": "Copa Sudamericana",
       "venue": "Estádio São Januário",
       "start_time": "2026-10-21T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -923,7 +923,7 @@
       "league": "Sudamérica: Copa Sudamericana - Playoffs",
       "venue": null,
       "start_time": "2026-10-21T02:30:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -937,7 +937,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Olímpico Benito Juárez",
       "start_time": "2026-10-21T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -951,7 +951,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Alfonso Lastras Ramírez",
       "start_time": "2026-10-21T03:00:00+02:00",
-      "status": "live",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -979,7 +979,7 @@
       "league": "AMERYKA PÓŁNOCNA I CENTRALNA: CONCACAF Central American Cup - Play-in",
       "venue": null,
       "start_time": "2026-10-21T04:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -993,7 +993,7 @@
       "league": "Mexican Primera League",
       "venue": "Estadio Universitario UANL",
       "start_time": "2026-10-21T05:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
@@ -1007,7 +1007,7 @@
       "league": "Japanese J1 League",
       "venue": "Best Denki Stadium",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1021,7 +1021,7 @@
       "league": "Japanese J1 League",
       "venue": "Ajinomoto Stadium",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1035,7 +1035,7 @@
       "league": "Japanese J1 League",
       "venue": "Uvance Todoroki Stadium by Fujitsu",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1049,7 +1049,7 @@
       "league": "Japanese J1 League",
       "venue": "Sanga Stadium by Kyocera",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1063,7 +1063,7 @@
       "league": "Japanese J1 League",
       "venue": "New Paloma Mizuho Stadium",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1077,7 +1077,7 @@
       "league": "Japanese J1 League",
       "venue": "JFE Harenokuni Stadium",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1091,7 +1091,7 @@
       "league": "Japanese J1 League",
       "venue": "IAI Stadium Nihondaira",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1105,7 +1105,7 @@
       "league": "Japanese J1 League",
       "venue": "Peace Stadium Connected by SoftBank",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1119,7 +1119,7 @@
       "league": "Japanese J1 League",
       "venue": "Nissan Stadium Yokohama",
       "start_time": "2026-10-21T12:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": false
     },
     {
@@ -1133,7 +1133,7 @@
       "league": "Japanese J1 League",
       "venue": "Saitama Stadium 2002",
       "start_time": "2026-10-21T12:30:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": false
     },
     {
@@ -1147,7 +1147,7 @@
       "league": "UEFA Youth League",
       "venue": "",
       "start_time": "2026-10-21T13:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1161,7 +1161,7 @@
       "league": "UEFA Youth League",
       "venue": "Complexe Sportif de Luchin",
       "start_time": "2026-10-21T14:00:00+02:00",
-      "status": "scheduled",
+      "status": "live",
       "has_stream": true
     },
     {
@@ -1287,7 +1287,7 @@
       "league": "Europa: Liga Młodzieżowa UEFA - Faza ligowa",
       "venue": null,
       "start_time": "2026-10-21T16:00:00+02:00",
-      "status": "scheduled",
+      "status": "finished",
       "has_stream": true
     },
     {
