@@ -32,13 +32,15 @@ public class LibraryTest {
     Library.Episode first = seasons.get(10).get(0);
     assertEquals("Capítulo 1", first.label());
     assertEquals("Temporada 10", first.seasonLabel());
-    assertEquals("Los hombres de Paco · T10 · Capítulo 1", paco.episodeTitle(first));
+    assertEquals("Vuelta a empezar", first.title());
+    assertEquals("Capítulo 2", paco.episode("e2").title());
+    assertEquals("Los hombres de Paco · T10 · Vuelta a empezar", paco.episodeTitle(first));
     assertEquals("2 temporadas · 3 capítulos", paco.facts());
     assertEquals("e1", paco.next(seasons.get(1).get(0)).id);
     assertEquals("e2", paco.next(first).id);
     assertNull(paco.next(paco.episode("e2")));
     JSONObject entry = paco.entry("series", first);
-    assertEquals("Temporada 10 · Capítulo 1 · Vuelta a empezar", entry.getString("sub"));
+    assertEquals("Temporada 10 · Vuelta a empezar", entry.getString("sub"));
     assertEquals("https://calamarmenciano.com/S/1.mkv", entry.getString("url"));
   }
 

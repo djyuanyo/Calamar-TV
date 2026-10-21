@@ -365,15 +365,15 @@ try {
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
   await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
-  // An episode opens its own page (Capítulo 1, its name and synopsis) with the play button.
-  await page.locator('.episode', { hasText: 'Capítulo 1' }).click();
-  await page.getByRole('heading', { name: 'Capítulo 1', exact: true }).waitFor();
+  // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
+  assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');
+  await page.locator('.episode', { hasText: 'Vuelta a empezar' }).click();
+  await page.getByRole('heading', { name: 'Vuelta a empezar', exact: true }).waitFor();
   assert.ok(page.url().endsWith('#/series/spaco/capitulo/e1001'));
-  assert.equal(await page.locator('.episode-name').textContent(), 'Vuelta a empezar');
   assert.equal(await page.locator('#player').isHidden(), true);
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Capítulo 1');
+  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Vuelta a empezar');
   // When it ends the next episode starts by itself.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
   await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');

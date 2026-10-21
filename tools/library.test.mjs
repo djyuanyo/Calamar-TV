@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { episodeLabel, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT } from '../web/library.js';
+import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT } from '../web/library.js';
 
 const section = { key: 'series', page: 'series', label: 'Series' };
 const paco = { id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', tmdb: { title: 'Los hombres de Paco', backdrop: 'https://image.tmdb.org/b.jpg' },
@@ -8,9 +8,12 @@ const paco = { id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', tmdb: { ti
 
 test('1x01 is shown as Capítulo 1 and the next episode follows', () => {
   assert.equal(episodeLabel(paco.episodes[0]), 'Capítulo 1');
+  assert.equal(episodeTitle(paco.episodes[0]), 'Piloto', 'the TMDB name replaces «Capítulo 1»');
+  assert.equal(episodeTitle(paco.episodes[1]), 'Capítulo 2');
   const first = playable(section, paco, paco.episodes[0]);
-  assert.equal(first.name, 'Los hombres de Paco · T1 · Capítulo 1');
-  assert.equal(first.progress.sub, 'Temporada 1 · Capítulo 1 · Piloto');
+  assert.equal(first.name, 'Los hombres de Paco · T1 · Piloto');
+  assert.equal(first.progress.sub, 'Temporada 1 · Piloto');
+  assert.equal(playable(section, paco, paco.episodes[1]).name, 'Los hombres de Paco · T1 · Capítulo 2');
   assert.equal(first.next().id, 'e2');
   assert.equal(nextEpisode(paco, paco.episodes[1]), null);
   assert.equal(playable(section, paco, paco.episodes[1]).next(), null);

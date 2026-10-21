@@ -1310,17 +1310,10 @@ public class MainActivity extends Activity {
     r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 160 : 112), dp(wide() ? 90 : 63)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
-    TextView name = text(e.label(), 15);
+    TextView name = text(e.title(), 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(12), 0, dp(4), 0);
     texts.addView(name);
-    if (!e.name.isEmpty()) {
-      TextView subtitle = label(e.name, 13, 0xffd6dbe2);
-      subtitle.setSingleLine(true);
-      subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      subtitle.setPadding(dp(12), 0, dp(4), 0);
-      texts.addView(subtitle);
-    }
     JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
     if (saved != null) texts.addView(progressBar(saved), progressBarParams(dp(12)));
     if (!e.overview.isEmpty()) {
@@ -1331,7 +1324,7 @@ public class MainActivity extends Activity {
       texts.addView(about);
     }
     r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-    r.setContentDescription(e.seasonLabel() + ", " + e.label() + (e.name.isEmpty() ? "" : ", " + e.name));
+    r.setContentDescription(e.seasonLabel() + ", " + e.title());
     r.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.setMargins(0, dp(4), 0, dp(4));
@@ -1420,15 +1413,10 @@ public class MainActivity extends Activity {
     body.setPadding(dp(gutter() + 6), 0, dp(gutter() + 6), 0);
     page.addView(body);
     body.addView(noPad(label(item.title + " · " + e.seasonLabel(), 14, Ui.MUTED)));
-    TextView title = text(e.label(), wide() ? 34 : 28);
+    TextView title = text(e.title(), wide() ? 34 : 28);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setPadding(0, dp(2), 0, 0);
     body.addView(title);
-    if (!e.name.isEmpty()) {
-      TextView name = noPad(text(e.name, 19));
-      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      body.addView(name);
-    }
     String about = !e.overview.isEmpty() ? e.overview : !item.overview.isEmpty() ? item.overview : "Sin descripción.";
     TextView overview = label(about, 15, 0xffd6dbe2);
     overview.setPadding(0, dp(10), 0, dp(10));
@@ -1436,7 +1424,7 @@ public class MainActivity extends Activity {
     playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
-      Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.label() + " ›", Ui.Kind.SURFACE, true);
+      Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
       following.setOnClickListener(v -> { dialog.dismiss(); episodePage(section, item, next); });
       LinearLayout r = row();
       addButton(r, following);
@@ -1480,7 +1468,7 @@ public class MainActivity extends Activity {
         if (e == null) continue;
         Library.Episode next = item.next(e);
         if (next == null) return;
-        Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.label(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.title(), Toast.LENGTH_SHORT).show();
         playEntry(item.entry(section[0], next), false);
         return;
       }
