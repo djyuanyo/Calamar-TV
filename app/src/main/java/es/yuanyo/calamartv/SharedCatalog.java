@@ -81,6 +81,7 @@ final class SharedCatalog {
           throw new JSONException("Cada evento necesita nombre, portada y un canal creado");
       }
     }
+    SportsCatalog.validate(data);
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;

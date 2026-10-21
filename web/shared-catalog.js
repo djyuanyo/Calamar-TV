@@ -1,3 +1,4 @@
+import { validateSports } from './sports.js';
 export const ADMIN_EMAIL = 'juanjocarrillo7@gmail.com';
 export const CATALOG_PATH = 'calamarCatalog/custom';
 
@@ -19,6 +20,7 @@ export function validateCatalog(data) {
         || typeof event.cover !== 'string' || !validCover(event.cover)) throw new Error('Cada evento necesita nombre, portada y un canal creado.');
     eventIds.add(event.id);
   }
+  validateSports(data, validCover);
   if (![...data.featured, ...data.hidden].every((id) => typeof id === 'string')) throw new Error('La lista de canales no es válida.');
   if (new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
   return data;

@@ -17,7 +17,8 @@ public final class Catalog {
           "Autonómicos");
 
   public static final class Channel {
-    public final String id, name, group, region, logo, web, cover;
+    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status;
+    public final boolean highlighted;
     public final boolean event;
     public final List<String> streams;
     public final boolean geo, own;
@@ -26,6 +27,9 @@ public final class Catalog {
       this.own = own;
       event = o.optBoolean("event");
       cover = o.optString("cover");
+      channelId = o.optString("channelId", o.optString("id"));
+      meta = o.optString("meta"); startAt = o.optString("startAt"); status = o.optString("status", "scheduled");
+      highlighted = o.optBoolean("featured");
       id = o.optString("id");
       name = o.optString("name", "Canal");
       String g = o.optString("group").trim();
@@ -103,7 +107,7 @@ public final class Catalog {
       if (event == null) continue;
       for (Channel target : channels) if (target.id.equals(event.optString("channelId")) && target.playable()) {
         try {
-          JSONObject card = new JSONObject().put("id", target.id).put("name", event.getString("name"))
+          JSONObject card = new JSONObject(event.toString()).put("id", event.getString("id")).put("channelId", target.id).put("meta", SportsCatalog.meta(event, custom)).put("name", event.getString("name"))
               .put("group", target.name).put("cover", event.getString("cover")).put("event", true)
               .put("streams", new JSONArray(target.streams));
           out.add(new Channel(card, true));
@@ -111,7 +115,16 @@ public final class Catalog {
         break;
       }
     }
+    Collections.sort(out, (a,b) -> { int cmp=Long.compare(SportsCatalog.instant(a.startAt), SportsCatalog.instant(b.startAt));return cmp!=0?cmp:a.id.compareTo(b.id); });
     return out;
+  }
+
+  public static List<Channel> highlights(List<Channel> channels, JSONObject custom) {
+    List<Channel> out=new ArrayList<>();
+    for(Channel event: events(channels,custom))if(event.highlighted)out.add(event);
+    Set<String> ids=strings(custom.optJSONArray("featured"));
+    for(Channel c:channels)if(c.playable()&&ids.contains(c.id))out.add(c);
+    return out.isEmpty()?featured(channels,custom,1):out;
   }
 
   /** Groups in display order; unknown groups go after the known ones, alphabetically. */

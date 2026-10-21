@@ -12,7 +12,7 @@ public class CatalogEventsTest {
     JSONObject data = catalog();
     SharedCatalog.validate(data);
     Catalog.Channel event = Catalog.events(Catalog.merge(null, data), data).get(0);
-    assertEquals("sports", event.id); assertEquals("Local vs visitante", event.name);
+    assertEquals("match", event.id); assertEquals("sports", event.channelId); assertEquals("Local vs visitante", event.name);
     assertEquals("https://example.com/cover.jpg", event.cover); assertTrue(event.event);
     data.getJSONArray("channels").getJSONObject(0).put("streams", new JSONArray().put("https://example.com/two.m3u8"));
     assertEquals("https://example.com/two.m3u8", Catalog.events(Catalog.merge(null, data), data).get(0).streams.get(0));

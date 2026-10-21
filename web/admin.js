@@ -1,3 +1,4 @@
+import { eventOrder, eventMeta, eventPath, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
@@ -231,10 +232,11 @@ export async function render(state) {
   // Keep the public view in this tab consistent with what was just saved.
   state.custom = file.data;
   state.channels = merge(state.tdt, file.data);
-  file.data.events ||= [];
+  file.data.events ||= []; file.data.leagues ||= []; file.data.teams ||= [];
   const eventRoute = decodeURIComponent(location.hash).match(/^#\/admin\/(?:evento|editar-evento(?:\/(.+))?)$/);
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
+  const section = location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -245,13 +247,11 @@ export async function render(state) {
       el('p', { class: 'lead' }, 'Los cambios se guardan en Firebase y se comparten con la web y la app. Tu cuenta de Google es la única autorizada para editar.'),
       shown ? el('p', { class: shown.startsWith('Guardado') ? 'ok' : 'error', role: 'status' }, shown) : null,
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'actions admin-tabs' }, el('a', { class: eventRoute ? 'btn secondary' : 'btn', href: '#/admin' }, 'Crear canal'), el('a', { class: eventRoute ? 'btn' : 'btn secondary', href: '#/admin/evento' }, 'Crear evento')),
-      eventRoute ? eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender) : channelForm(existing, rerender),
-      el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')),
-      eventList(rerender),
-      el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')),
-      ownList(rerender),
-      ...tdtTools(state, rerender),
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, el('b', {}, file.data[key].length), label))),
+      ...(section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+        eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
+        el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
+      ] : [channelForm(existing, rerender), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...tdtTools(state, rerender)]),
     ),
   ];
 }
@@ -277,6 +277,22 @@ async function coverFromFile(file) {
 function eventForm(existing, rerender) {
   const data = file.data;
   const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
+  const league = selectField(data.leagues, existing?.leagueId, 'Sin liga');
+  const home = selectField(data.teams, existing?.homeTeamId, 'Seleccionar local');
+  const away = selectField(data.teams, existing?.awayTeamId, 'Seleccionar visitante');
+  let lastAuto = '';
+  const fillName = () => {
+    const local = data.teams.find(t => t.id === home.value), visitor = data.teams.find(t => t.id === away.value);
+    if (local && visitor && (!name.value.trim() || name.value === lastAuto)) name.value = lastAuto = `${local.name} vs ${visitor.name}`;
+  };
+  home.addEventListener('change', fillName); away.addEventListener('change', fillName);
+  const start = el('input', { type: 'datetime-local', required: true, value: localDateTime(existing?.startAt), step: '60' });
+  const star = el('input', { type: 'checkbox', checked: !!existing?.featured });
+  const state = selectField(Object.entries(EVENT_STATES).map(([id,name]) => ({id,name})), existing?.status || 'scheduled');
+  const season = el('input', { value: existing?.season || '', placeholder: '2026/2027' });
+  const round = el('input', { value: existing?.round || '', placeholder: 'Jornada 1 / Final' });
+  const venue = el('input', { value: existing?.venue || '' });
+  const description = el('textarea', {}, existing?.description || '');
   let selectedCover = existing?.cover || '';
   const cover = el('input', { type: 'url', value: selectedCover.startsWith('https://') ? selectedCover : '', placeholder: 'https://…/partido.jpg' });
   const preview = el('img', { class: 'event-preview', alt: 'Vista previa de la portada', hidden: !existing?.cover, src: existing?.cover });
@@ -306,25 +322,86 @@ function eventForm(existing, rerender) {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
       if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
-      const entry = { id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected };
+      const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
       validateCatalog({ ...data, events: updated });
       data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
+
 function eventList(rerender) {
   const data = file.data;
-  if (!data.events.length) return el('p', { class: 'note' }, 'Aún no hay eventos.');
-  return el('div', { class: 'list' }, data.events.map((event) => el('div', { class: 'item' },
-    el('img', { src: event.cover, alt: '', style: 'object-fit:cover' }),
-    el('div', { class: 'meta' }, el('b', {}, event.name), el('span', {}, data.channels.find((c) => c.id === event.channelId)?.name || 'Canal no disponible')),
-    el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),
-      el('button', { class: 'btn small danger', type: 'button', onclick: () => {
-        if (saving || !confirm(`¿Eliminar el evento ${event.name}?`)) return;
-        data.events = data.events.filter((e) => e.id !== event.id); guarded(() => saveFile(), rerender);
-      } }, 'Eliminar')))));
+  const query = el('input', { type: 'search', placeholder: 'Buscar evento o equipo' });
+  const league = selectField(data.leagues, '', 'Todas las ligas');
+  const output = el('div', { class: 'list' });
+  const draw = () => {
+    const found = [...data.events].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
+    output.replaceChildren(...found.map(event => el('div', { class: 'item' },
+      el('img', { src: event.cover, alt: '', style: 'object-fit:cover' }),
+      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || 'Canal no disponible')),
+      el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath(event) }, 'Abrir evento'),
+        el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
+          try { const button = e.currentTarget; await navigator.clipboard.writeText(`${location.origin}${location.pathname}${eventPath(event)}`); button.textContent = 'Copiado'; }
+          catch { notice = 'No se pudo copiar. Usa Abrir evento y copia la dirección.'; rerender(); }
+        } }, 'Copiar enlace'),
+        el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),
+        el('button', { class: 'btn small danger', type: 'button', onclick: () => {
+          if (saving || !confirm(`¿Eliminar el evento ${event.name}?`)) return;
+          data.events = data.events.filter(e => e.id !== event.id); guarded(() => saveFile(), rerender);
+        } }, 'Eliminar')))));
+    if (!found.length) output.append(el('p', { class: 'note' }, 'No hay eventos para esta búsqueda.'));
+  };
+  query.addEventListener('input', draw); league.addEventListener('change', draw); draw();
+  return el('div', {}, el('div', { class: 'event-fields form' }, field('Buscar eventos', query), field('Filtrar por liga', league)), output);
+}
+
+function selectField(items, selected = '', empty = null) {
+  const select = el('select', {}, empty !== null ? el('option', { value: '' }, empty) : null, items.map(item => el('option', { value: item.id }, item.name)));
+  select.value = selected || ''; return select;
+}
+
+function entityPanel(kind, rerender) {
+  const data = file.data, team = kind === 'teams', title = team ? 'equipo' : 'liga';
+  const key = decodeURIComponent(location.hash.split('/')[3] || '');
+  const existing = data[kind].find(item => item.id === key);
+  const name = el('input', { required: true, value: existing?.name || '' });
+  let selectedLogo = existing?.logo || '';
+  const logo = el('input', { type: 'url', value: selectedLogo.startsWith('https://') ? selectedLogo : '', placeholder: 'https://…/escudo.png' });
+  logo.addEventListener('input', () => { selectedLogo = logo.value.trim(); });
+  const preview = el('img', { class: 'event-preview', alt: 'Logo', src: selectedLogo || undefined, hidden: !selectedLogo, style: 'object-fit:contain;max-height:120px' });
+  const status = el('p', { class: 'note', role: 'status' });
+  const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
+    try { selectedLogo = await coverFromFile(upload.files[0]); logo.value = ''; preview.src = selectedLogo; preview.hidden = false; status.textContent = 'Imagen preparada.'; }
+    catch (error) { status.textContent = error.message; }
+  } });
+  const league = selectField(data.leagues, existing?.leagueId, 'Sin liga principal');
+  const form = el('form', { class: 'form', onsubmit: async e => {
+    e.preventDefault(); if (saving) return;
+    try {
+      if (!name.value.trim()) throw new Error('Escribe el nombre.');
+      if (selectedLogo && !validCover(selectedLogo)) throw new Error('Usa una imagen o un enlace HTTPS.');
+      const entry = { ...(existing || {}), id: existing?.id || `${team ? 'equipo' : 'liga'}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name: name.value.trim(), logo: selectedLogo, ...(team ? { leagueId: league.value } : {}) };
+      const updated = existing ? data[kind].map(item => item.id === existing.id ? entry : item) : [...data[kind], entry];
+      validateCatalog({ ...data, [kind]: updated }); data[kind] = updated;
+      await saveFile(); location.hash = `#/admin/${team ? 'equipos' : 'ligas'}`; rerender();
+    } catch (error) { status.textContent = explain(error); }
+  } }, el('h2', {}, `${existing ? 'Editar' : 'Crear'} ${title}`), field(`Nombre de ${title}`, name), field(team ? 'Escudo (opcional)' : 'Logo (opcional)', upload), field('O enlace HTTPS de la imagen', logo), preview, team ? field('Liga principal', league, 'Un equipo puede participar en eventos de otras ligas.') : null,
+  el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: `#/admin/${team ? 'equipos' : 'ligas'}` }, 'Cancelar edición') : null), status);
+  const query = el('input', { type: 'search', placeholder: team ? 'Buscar equipo' : 'Buscar liga' }), output = el('div', { class: 'list' });
+  const draw = () => output.replaceChildren(...data[kind].filter(item => item.name.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es'))).sort((a,b) => a.name.localeCompare(b.name,'es')).map(item => el('div', { class: 'item' },
+    item.logo ? el('img', { src: item.logo, alt: '' }) : null, el('div', { class: 'meta' }, el('b', {}, item.name), team ? el('span', {}, data.leagues.find(l => l.id === item.leagueId)?.name || '') : null),
+    el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: `#/admin/${team ? 'equipos' : 'ligas'}/${encodeURIComponent(item.id)}` }, 'Editar'),
+    el('button', { class: 'btn small danger', type: 'button', onclick: () => {
+      if (saving) return;
+      const used = data.events.some(e => team ? e.homeTeamId === item.id || e.awayTeamId === item.id : e.leagueId === item.id) || (!team && data.teams.some(t => t.leagueId === item.id));
+      if (used) { notice = 'No se puede eliminar: está en uso. Cambia primero sus equipos o eventos asociados.'; rerender(); return; }
+      if (!confirm(`¿Eliminar ${item.name}?`)) return;
+      data[kind] = data[kind].filter(x => x.id !== item.id); guarded(() => saveFile(), rerender);
+    } }, 'Eliminar')))));
+  query.addEventListener('input', draw); draw();
+  return [form, el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
 }

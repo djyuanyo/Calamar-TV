@@ -1,4 +1,5 @@
-import { merge, events, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, homeHighlights, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { eventPath, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -75,11 +76,11 @@ function card(c) {
       'span',
       { class: 'art' },
       c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
-      el('span', { class: c.playable ? 'badge live' : 'badge' }, c.playable ? 'EN DIRECTO' : 'SU WEB'),
+      c.event ? el('span', { class: 'badge' }, EVENT_STATES[c.status || 'scheduled']) : null,
       c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
     ),
     el('span', { class: 'name' }, c.name),
-    el('span', { class: 'sub' }, c.region || c.group),
+    el('span', { class: 'sub' }, c.event ? c.meta || c.channelName : c.region || c.group),
   );
 }
 
@@ -106,6 +107,38 @@ function rail(items, { wide = false, limit = 40 } = {}) {
   return el('div', { class: 'rail-wrap' }, prev, track, next);
 }
 
+let highlightTimer = null, highlightHost = null, highlightItems = [], highlightIndex = 0;
+function stopHighlight() { clearTimeout(highlightTimer); highlightTimer = null; highlightHost = null; }
+function scheduleHighlight() {
+  clearTimeout(highlightTimer);
+  if (!highlightHost || highlightItems.length < 2 || document.hidden) return;
+  highlightTimer = setTimeout(() => {
+    if (!highlightHost?.isConnected || !player.hidden) return;
+    showHighlight((highlightIndex + 1) % highlightItems.length);
+  }, 5000);
+}
+function showHighlight(index, user = false) {
+  if (!highlightHost) return;
+  const focused = highlightHost.contains(document.activeElement);
+  highlightIndex = index;
+  const controls = highlightItems.length > 1 ? el('button', { class: 'slider-pause', type: 'button', onclick: (e) => {
+      const paused = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+      e.currentTarget.setAttribute('aria-pressed', String(paused));
+      highlightHost.dataset.paused = String(paused);
+      e.currentTarget.textContent = paused ? 'Reanudar portada' : 'Pausar portada';
+      if (paused) clearTimeout(highlightTimer); else scheduleHighlight();
+    }, 'aria-pressed': highlightHost.dataset.paused || 'false' }, highlightHost.dataset.paused === 'true' ? 'Reanudar portada' : 'Pausar portada') : null;
+  highlightHost.replaceChildren(heroSection(highlightItems, index), ...(controls ? [controls] : []));
+  if (focused || user) (highlightHost.querySelectorAll('.pick')[index] || highlightHost.querySelector('button')).focus({ preventScroll: true });
+  if (highlightHost.dataset.paused !== 'true') scheduleHighlight();
+}
+function highlightSlider(items) {
+  highlightItems = items; highlightIndex = 0;
+  highlightHost = el('div', { class: 'highlight-slider', 'aria-label': 'Destacados de portada' });
+  showHighlight(0); return highlightHost;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(highlightTimer); else if (highlightHost?.dataset.paused !== 'true') scheduleHighlight(); });
+
 function heroSection(list, index = 0) {
   const c = list[index];
   const picks =
@@ -113,7 +146,7 @@ function heroSection(list, index = 0) {
       ? el(
           'div',
           { class: 'hero-picks', role: 'group', 'aria-label': 'Canales destacados' },
-          list.slice(0, 6).map((p, i) =>
+          list.map((p, i) =>
             el(
               'button',
               {
@@ -123,13 +156,10 @@ function heroSection(list, index = 0) {
                 'aria-label': p.name,
                 'aria-pressed': String(i === index),
                 onclick: () => {
-                  const next = heroSection(list, i);
-                  section.replaceWith(next);
-                  section = next;
-                  next.querySelectorAll('.pick')[i].focus();
+                  showHighlight(i, true);
                 },
               },
-              logo(p),
+              p.event ? el('img', { src: p.cover, alt: '', class: 'pick-cover' }) : logo(p),
             ),
           ),
         )
@@ -142,9 +172,9 @@ function heroSection(list, index = 0) {
     el(
       'div',
       { class: 'hero-body' },
-      el('span', { class: 'live-pill' }, 'EN DIRECTO'),
+      c.event ? el('span', { class: 'event-state' }, EVENT_STATES[c.status || 'scheduled']) : null,
       el('h1', {}, c.name),
-      el('p', { class: 'hero-meta' }, [c.group, c.region, c.event ? 'Evento' : c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
+      el('p', { class: 'hero-meta' }, c.event ? c.meta || c.channelName : [c.group, c.region, c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
       el(
         'div',
         { class: 'hero-actions' },
@@ -159,12 +189,10 @@ function heroSection(list, index = 0) {
 
 function home() {
   const matches = events(state.channels, state.custom);
-  const list = featured(state.channels, state.custom, 8);
+  const list = homeHighlights(state.channels, state.custom);
   const nodes = [];
-  if (matches.length) nodes.push(heroSection(matches), sectionHead('Eventos'), rail(matches, { wide: true, limit: matches.length }));
-  else if (list[0]) nodes.push(heroSection(list));
-  if (matches.length && list.length) nodes.push(sectionHead('Destacados'), rail(list, { wide: true }));
-  else if (list.length > 1) nodes.push(sectionHead('Destacados'), rail(list.slice(1), { wide: true }));
+  if (list.length) nodes.push(highlightSlider(list));
+  if (matches.length) nodes.push(sectionHead('Eventos'), rail(matches, { wide: true, limit: matches.length }));
   for (const [group, channels] of groups(state.channels)) {
     nodes.push(sectionHead(group, el('a', { href: `#/canales/${encodeURIComponent(group)}` }, `Ver ${channels.length} canales`)), rail(channels));
   }
@@ -379,7 +407,7 @@ function playSource(c, index) {
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
 let current = null;
 let pushed = false;
-const channelLink = (c) => `${location.origin}${location.pathname}#/canal/${encodeURIComponent(c.slug)}`;
+const channelLink = (c) => `${location.origin}${location.pathname}${c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`}`;
 
 function open(c, fromRoute = false) {
   if (!c.playable) {
@@ -387,7 +415,7 @@ function open(c, fromRoute = false) {
     return;
   }
   if (!fromRoute) {
-    history.pushState(null, '', `#/canal/${encodeURIComponent(c.slug)}`);
+    history.pushState(null, '', c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`);
     pushed = true;
   }
   if (player.hidden) returnFocus = document.activeElement;
@@ -415,7 +443,7 @@ function hidePlayer() {
 
 function closePlayer() {
   hidePlayer();
-  if (!location.hash.startsWith('#/canal/')) return;
+  if (!/^#\/(canal|evento)\//.test(location.hash)) return;
   if (pushed) {
     pushed = false;
     history.back();
@@ -435,6 +463,7 @@ document.getElementById('player-close').addEventListener('click', closePlayer);
 let routeVersion = 0;
 async function route() {
   const version = ++routeVersion;
+  stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   for (const a of document.querySelectorAll('[data-route]'))
@@ -464,9 +493,9 @@ async function route() {
   }
   // A slower initial catalog request must never overwrite a newly selected tab.
   if (version !== routeVersion) return;
-  if (page !== 'canal' && !player.hidden) hidePlayer();
-  if (page === 'canal') {
-    const c = findChannel(state.channels, arg);
+  if (!['canal', 'evento'].includes(page) && !player.hidden) hidePlayer();
+  if (page === 'canal' || page === 'evento') {
+    const c = page === 'evento' ? events(state.channels, state.custom).find(e => e.eventId === arg) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.
     if ((!c || !c.playable) && !player.hidden) hidePlayer();
     view.replaceChildren(
@@ -474,7 +503,7 @@ async function route() {
         ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
         : c
           ? home()
-          : [el('p', { class: 'error' }, `No existe el canal «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
+          : [el('p', { class: 'error' }, `No existe ${page === 'evento' ? 'el evento' : 'el canal'} «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
     );
     // A catalog refresh rebuilds the channel objects; compare ids so playback is not restarted.
     if (c && c.playable && (player.hidden || !current || current.id !== c.id)) open(c, true);

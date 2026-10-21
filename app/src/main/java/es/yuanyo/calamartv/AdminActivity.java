@@ -31,6 +31,7 @@ public class AdminActivity extends Activity {
   private long revision;
   private boolean loading, saving;
   private EditText pendingCover;
+  private String adminSection = "events";
   private FirebaseAuth.AuthStateListener authListener;
 
   @Override
@@ -105,15 +106,31 @@ public class AdminActivity extends Activity {
       status.setText("Pulsa Recargar catálogo para conectar.");
       return;
     }
+    body.addView(label("Canales · " + catalog.optJSONArray("channels").length() + "   /   Eventos · " + (catalog.optJSONArray("events") == null ? 0 : catalog.optJSONArray("events").length()), 15));
+    for (String section : new String[]{"channels", "events", "leagues", "teams"}) {
+      String title = section.equals("channels") ? "Canales" : section.equals("events") ? "Eventos" : section.equals("leagues") ? "Ligas" : "Equipos";
+      addButton((adminSection.equals(section) ? "• " : "") + title, () -> { adminSection = section; draw(); });
+    }
+    if (adminSection.equals("leagues") || adminSection.equals("teams")) { entitySection(adminSection); return; }
     addButton("Crear canal", () -> edit(null));
     addButton("Crear evento", () -> editEvent(null));
     JSONArray events = catalog.optJSONArray("events");
-    if (events != null) {
+    if (events != null && adminSection.equals("events")) {
       body.addView(label("EVENTOS PUBLICADOS · " + events.length(), 18));
-      for (int i = 0; i < events.length(); i++) {
-        JSONObject event = events.optJSONObject(i);
+      java.util.List<JSONObject> ordered = new java.util.ArrayList<>();
+      for (int i = 0; i < events.length(); i++) if (events.optJSONObject(i) != null) ordered.add(events.optJSONObject(i));
+      java.util.Collections.sort(ordered, (a,b) -> Long.compare(SportsCatalog.instant(a.optString("startAt")), SportsCatalog.instant(b.optString("startAt"))));
+      EditText query = input(body, "Buscar eventos", "");
+      LinearLayout eventRows = new LinearLayout(this); eventRows.setOrientation(LinearLayout.VERTICAL); body.addView(eventRows);
+      final LinearLayout mainBody = body;
+      Runnable drawEvents = () -> {
+      eventRows.removeAllViews(); body = eventRows;
+      for (JSONObject event : ordered) {
+        if (!event.optString("name").toLowerCase(java.util.Locale.ROOT).contains(query.getText().toString().trim().toLowerCase(java.util.Locale.ROOT))) continue;
         if (event == null) continue;
+        body.addView(label((event.optBoolean("featured") ? "★ " : "") + event.optString("name") + "\n" + SportsCatalog.meta(event, catalog), 17));
         addButton("Editar evento: " + event.optString("name"), () -> editEvent(event));
+        addButton("Copiar enlace del evento", () -> copyLink(event.optString("id")));
         addButton("Eliminar evento: " + event.optString("name"), () -> new AlertDialog.Builder(this)
             .setTitle("¿Eliminar el evento?").setMessage(event.optString("name"))
             .setNegativeButton("Cancelar", null).setPositiveButton("Eliminar", (d, w) -> {
@@ -121,7 +138,11 @@ public class AdminActivity extends Activity {
               catch (Exception error) { fail(error); }
             }).show());
       }
+      body = mainBody;
+      };
+      query.addTextChangedListener(watcher(drawEvents)); drawEvents.run();
     }
+    if (!adminSection.equals("channels")) return;
     JSONArray channels = catalog.optJSONArray("channels");
     body.addView(label("CANALES PUBLICADOS · " + channels.length(), 18));
     for (int i = 0; i < channels.length(); i++) {
@@ -380,6 +401,34 @@ public class AdminActivity extends Activity {
     form.setOrientation(LinearLayout.VERTICAL);
     form.setPadding(dp(20), dp(8), dp(20), dp(8));
     EditText name = input(form, "Nombre del evento", existing == null ? "" : existing.optString("name"));
+    Spinner league = choice(form, "Liga", catalog.optJSONArray("leagues"), existing == null ? "" : existing.optString("leagueId"), "Sin liga");
+    AutoCompleteTextView home = reference(form, "Buscar equipo local", catalog.optJSONArray("teams"), existing == null ? "" : existing.optString("homeTeamId"));
+    AutoCompleteTextView away = reference(form, "Buscar equipo visitante", catalog.optJSONArray("teams"), existing == null ? "" : existing.optString("awayTeamId"));
+    Runnable fillName = () -> {
+      JSONObject h=SportsCatalog.find(catalog.optJSONArray("teams"), referenceId(home)), a=SportsCatalog.find(catalog.optJSONArray("teams"), referenceId(away));
+      if (h!=null&&a!=null&&name.getText().toString().trim().isEmpty()) name.setText(h.optString("name")+" vs "+a.optString("name"));
+    };
+    home.setOnItemClickListener((parent, view, pos, id) -> fillName.run()); away.setOnItemClickListener((parent, view, pos, id) -> fillName.run());
+    EditText date = input(form, "Fecha (AAAA-MM-DD)", existing == null ? "" : SportsCatalog.local(existing.optString("startAt"), "yyyy-MM-dd"));
+    EditText time = input(form, "Hora (HH:mm)", existing == null ? "" : SportsCatalog.local(existing.optString("startAt"), "HH:mm"));
+    date.setInputType(InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_DATE);
+    time.setInputType(InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+    Button calendar = new Button(this); calendar.setText("Elegir fecha y hora"); calendar.setAllCaps(false);
+    calendar.setOnClickListener(v -> {
+      java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Madrid"));
+      new android.app.DatePickerDialog(this, (picker,y,m,d) -> {
+        date.setText(String.format(java.util.Locale.ROOT,"%04d-%02d-%02d",y,m+1,d));
+        new android.app.TimePickerDialog(this, (clock,h,min) -> time.setText(String.format(java.util.Locale.ROOT,"%02d:%02d",h,min)), now.get(java.util.Calendar.HOUR_OF_DAY),now.get(java.util.Calendar.MINUTE),true).show();
+      },now.get(java.util.Calendar.YEAR),now.get(java.util.Calendar.MONTH),now.get(java.util.Calendar.DAY_OF_MONTH)).show();
+    }); form.addView(calendar); form.addView(label("Horario de Madrid (España)",14));
+    JSONArray states = new JSONArray();
+    try { for(int i=0;i<SportsCatalog.STATES.length;i++) states.put(new JSONObject().put("id",SportsCatalog.STATES[i]).put("name",SportsCatalog.STATE_NAMES[i])); } catch(JSONException ignored) {}
+    Spinner state = choice(form,"Estado",states,existing==null?"scheduled":existing.optString("status","scheduled"),null);
+    EditText season = input(form,"Temporada",existing==null?"":existing.optString("season"));
+    EditText round = input(form,"Jornada o fase",existing==null?"":existing.optString("round"));
+    EditText venue = input(form,"Lugar",existing==null?"":existing.optString("venue"));
+    EditText description = input(form,"Descripción",existing==null?"":existing.optString("description")); description.setSingleLine(false);
+    CheckBox highlighted = new CheckBox(this); highlighted.setText("Destacar en portada"); highlighted.setChecked(existing!=null&&existing.optBoolean("featured")); form.addView(highlighted);
     String savedCover = existing == null ? "" : existing.optString("cover");
     EditText cover = input(form, "Enlace HTTPS de la foto de portada", savedCover.startsWith("https://") ? savedCover : "");
     cover.setTag(savedCover);
@@ -418,11 +467,16 @@ public class AdminActivity extends Activity {
         String title = name.getText().toString().trim(), photo = cover.getText().toString().trim();
         if (photo.isEmpty() && cover.getTag() instanceof String) photo = (String) cover.getTag();
         String channelId = ids.get(search.getText().toString());
+        if ((!home.getText().toString().trim().isEmpty() && referenceId(home).isEmpty()) || (!away.getText().toString().trim().isEmpty() && referenceId(away).isEmpty())) throw new JSONException("Selecciona los equipos de las sugerencias");
         if (title.isEmpty()) throw new JSONException("Escribe el nombre del evento");
         if (!SharedCatalog.validCover(photo)) throw new JSONException("Elige una foto o pega un enlace HTTPS de portada");
         if (channelId == null) throw new JSONException("Selecciona un canal de las sugerencias");
         String id = existing == null ? "evento-" + UUID.randomUUID() : existing.getString("id");
-        JSONObject event = new JSONObject().put("id", id).put("name", title).put("cover", photo).put("channelId", channelId);
+        JSONObject event = (existing == null ? new JSONObject() : new JSONObject(existing.toString())).put("id", id).put("name", title).put("cover", photo).put("channelId", channelId)
+            .put("startAt", SportsCatalog.fromMadrid(date.getText().toString().trim()+" "+time.getText().toString().trim()))
+            .put("featured", highlighted.isChecked()).put("leagueId", choiceId(league)).put("homeTeamId",referenceId(home)).put("awayTeamId",referenceId(away))
+            .put("status",choiceId(state)).put("season",season.getText().toString().trim()).put("round",round.getText().toString().trim())
+            .put("venue",venue.getText().toString().trim()).put("description",description.getText().toString().trim());
         JSONObject next = copy();
         JSONArray events = next.optJSONArray("events");
         if (events == null) events = new JSONArray();
@@ -434,6 +488,79 @@ public class AdminActivity extends Activity {
       } catch (Exception invalid) { error.setText(invalid.getMessage()); }
     }));
     dialog.show();
+  }
+
+  private void copyLink(String id) {
+    android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Evento",SportsCatalog.link(id)));
+    Toast.makeText(this,"Enlace del evento copiado",Toast.LENGTH_SHORT).show();
+  }
+  private android.text.TextWatcher watcher(Runnable run) {
+    return new android.text.TextWatcher() {
+      public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
+      public void onTextChanged(CharSequence s,int start,int before,int count) { run.run(); }
+      public void afterTextChanged(android.text.Editable text) {}
+    };
+  }
+  private Spinner choice(LinearLayout form,String label,JSONArray items,String selected,String empty) {
+    form.addView(label(label,14)); Spinner spinner=new Spinner(this);
+    java.util.List<String> names=new java.util.ArrayList<>(),ids=new java.util.ArrayList<>();
+    if(empty!=null){ names.add(empty);ids.add(""); }
+    if(items!=null)for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null){names.add(item.optString("name"));ids.add(item.optString("id"));}}
+    ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,names);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+    spinner.setAdapter(adapter);spinner.setTag(ids);if(ids.contains(selected))spinner.setSelection(ids.indexOf(selected));
+    form.addView(spinner,new LinearLayout.LayoutParams(-1,-2));return spinner;
+  }
+  @SuppressWarnings("unchecked") private String choiceId(Spinner view) {
+    java.util.List<String> ids=(java.util.List<String>)view.getTag();int index=view.getSelectedItemPosition();return index>=0&&index<ids.size()?ids.get(index):"";
+  }
+  private AutoCompleteTextView reference(LinearLayout form,String hint,JSONArray items,String selected) {
+    form.addView(label(hint,14)); AutoCompleteTextView input=new AutoCompleteTextView(this);input.setHint(hint);input.setContentDescription(hint);input.setSingleLine(true);input.setThreshold(1);
+    java.util.Map<String,String> ids=new java.util.LinkedHashMap<>();String initial="";
+    if(items!=null)for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null){String text=item.optString("name")+" · "+(i+1);ids.put(text,item.optString("id"));if(item.optString("id").equals(selected))initial=text;}}
+    input.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,new java.util.ArrayList<>(ids.keySet())));input.setText(initial,false);input.setTag(ids);form.addView(input,new LinearLayout.LayoutParams(-1,-2));return input;
+  }
+  @SuppressWarnings("unchecked") private String referenceId(AutoCompleteTextView view) {
+    String text=view.getText().toString();return ((java.util.Map<String,String>)view.getTag()).containsKey(text)?((java.util.Map<String,String>)view.getTag()).get(text):"";
+  }
+  private void entitySection(String kind) {
+    boolean team=kind.equals("teams");
+    body.addView(label(team?"MIS EQUIPOS":"MIS LIGAS",20)); addButton(team?"Crear equipo":"Crear liga",()->editEntity(kind,null));
+    EditText query=input(body,team?"Buscar equipo":"Buscar liga","");
+    LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);body.addView(rows);LinearLayout mainBody=body;
+    Runnable update=()->{rows.removeAllViews();body=rows;JSONArray items=catalog.optJSONArray(kind);
+      if(items!=null)for(int i=0;i<items.length();i++){
+        JSONObject item=items.optJSONObject(i);if(item==null||!item.optString("name").toLowerCase(java.util.Locale.ROOT).contains(query.getText().toString().trim().toLowerCase(java.util.Locale.ROOT)))continue;
+        addButton("Editar "+item.optString("name"),()->editEntity(kind,item));
+        addButton("Eliminar "+item.optString("name"),()->{
+          String id=item.optString("id");boolean used=false;JSONArray events=catalog.optJSONArray("events"),teams=catalog.optJSONArray("teams");
+          if(events!=null)for(int e=0;e<events.length();e++){JSONObject event=events.optJSONObject(e);if(event!=null&&(team?(id.equals(event.optString("homeTeamId"))||id.equals(event.optString("awayTeamId"))):id.equals(event.optString("leagueId"))))used=true;}
+          if(!team&&teams!=null)for(int t=0;t<teams.length();t++)if(id.equals(teams.optJSONObject(t).optString("leagueId")))used=true;
+          if(used){status.setText("No se puede eliminar: está en uso. Cambia primero los equipos o eventos asociados.");return;}
+          new AlertDialog.Builder(this).setTitle("¿Eliminar "+item.optString("name")+"?").setNegativeButton("Cancelar",null).setPositiveButton("Eliminar",(d,w)->{
+            try{JSONObject next=copy();next.put(kind,withoutChannel(next.getJSONArray(kind),id));publish(next);}catch(Exception error){fail(error);}
+          }).show();
+        });
+      }body=mainBody;
+    };query.addTextChangedListener(watcher(update));update.run();
+  }
+  private void editEntity(String kind,JSONObject existing) {
+    if(saving)return;boolean team=kind.equals("teams");LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(20),dp(8),dp(20),dp(8));
+    EditText name=input(form,team?"Nombre del equipo":"Nombre de la liga",existing==null?"":existing.optString("name"));
+    String saved=existing==null?"":existing.optString("logo");EditText logo=input(form,"Enlace HTTPS del logo o escudo (opcional)",saved.startsWith("https://")?saved:"");logo.setTag(saved);
+    Button upload=new Button(this);upload.setText("Elegir imagen");upload.setAllCaps(false);form.addView(upload);upload.setOnClickListener(v->{pendingCover=logo;try{startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),300);}catch(android.content.ActivityNotFoundException missing){logo.setError("Pega un enlace HTTPS");}});
+    Spinner league=team?choice(form,"Liga principal",catalog.optJSONArray("leagues"),existing==null?"":existing.optString("leagueId"),"Sin liga principal"):null;
+    TextView error=label("",14);form.addView(error);ScrollView scroll=new ScrollView(this);scroll.addView(form);
+    AlertDialog dialog=new AlertDialog.Builder(this).setTitle((existing==null?"Crear ":"Editar ")+(team?"equipo":"liga")).setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Guardar y publicar",null).create();
+    dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
+      String title=name.getText().toString().trim(),image=logo.getText().toString().trim();if(image.isEmpty()&&logo.getTag() instanceof String)image=(String)logo.getTag();
+      if(title.isEmpty())throw new JSONException("Escribe un nombre");if(!image.isEmpty()&&!SharedCatalog.validCover(image))throw new JSONException("Imagen no válida");
+      String id=existing==null?(team?"equipo-":"liga-")+UUID.randomUUID():existing.getString("id");
+      JSONObject entry=new JSONObject().put("id",id).put("name",title).put("logo",image);if(team)entry.put("leagueId",choiceId(league));
+      JSONObject next=copy();JSONArray items=next.optJSONArray(kind);if(items==null)items=new JSONArray();boolean replaced=false;
+      for(int i=0;i<items.length();i++)if(id.equals(items.getJSONObject(i).getString("id"))){items.put(i,entry);replaced=true;break;}if(!replaced)items.put(entry);
+      next.put(kind,items);SharedCatalog.validate(next);dialog.dismiss();publish(next);
+    }catch(Exception invalid){error.setText(invalid.getMessage());}}));dialog.show();
   }
 
   @Override

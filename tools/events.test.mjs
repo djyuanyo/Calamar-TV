@@ -14,7 +14,7 @@ test('event resolves its selected channel and keeps its playable link', () => {
   const data = catalog(), all = merge(null, data);
   const [event] = events(all, data);
   assert.equal(event.name, match.name); assert.equal(event.cover, match.cover);
-  assert.equal(event.id, channel.id); assert.equal(event.slug, all[0].slug);
+  assert.equal(event.id, match.id); assert.equal(event.slug, match.id); assert.equal(event.channelId, channel.id);
   assert.deepEqual(event.streams, channel.streams); assert.equal(event.event, true);
   assert.equal(all.length, 1); assert.equal(all[0].name, channel.name);
 });

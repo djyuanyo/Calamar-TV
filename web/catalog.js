@@ -1,3 +1,4 @@
+import { eventOrder, eventMeta } from './sports.js';
 import { httpTsSource } from './http-stream.js';
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
@@ -176,10 +177,17 @@ export function webPlayback(url) {
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
 
-/** Events always resolve their channel's current sources, never a saved copy of its links. */
+/** Each event has a stable identity and resolves the current channel sources. */
 export function events(channels, custom) {
-  return ((custom && custom.events) || []).flatMap((event) => {
+  return [...(custom?.events || [])].sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
-    return target ? [{ ...target, name: event.name, cover: event.cover, event: true, eventId: event.id }] : [];
+    return target ? [{ ...target, ...event, id: event.id, eventId: event.id, slug: event.id,
+      event: true, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
+      streams: target.streams, playable: target.playable }] : [];
   });
+}
+export function homeHighlights(channels, custom) {
+  const matches = events(channels, custom).filter(e => e.featured);
+  const picked = (custom?.featured || []).flatMap(id => channels.filter(c => c.id === id && c.playable));
+  return matches.length || picked.length ? [...matches, ...picked] : featured(channels, custom, 1);
 }

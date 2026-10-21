@@ -38,6 +38,13 @@ public class MainActivity extends Activity {
           return b.getByteCount();
         }
       };
+  FrameLayout heroHost;
+  List<Catalog.Channel> heroItems = Collections.emptyList();
+  int heroIndex;
+  boolean resumed;
+  final Runnable heroAdvance = new Runnable() { public void run() {
+    if (resumed && heroHost != null && heroItems.size() > 1) { showHero((heroIndex + 1) % heroItems.size(), false); }
+  }};
   final Handler handler = new Handler(Looper.getMainLooper());
   final Runnable refresh =
       new Runnable() {
@@ -329,12 +336,13 @@ public class MainActivity extends Activity {
 
   void render() {
     if (list == null) return;
+    handler.removeCallbacks(heroAdvance); heroHost = null;
     list.removeAllViews();
     message.setText(status());
     if (mode.equals("Favoritos")) {
       heading("Favoritos", "Mantén pulsado para quitar");
       List<Catalog.Channel> saved = new ArrayList<>();
-      for (Catalog.Channel c : channels) if (favorites.contains(c.id) && matches(c.name)) saved.add(c);
+      for (Catalog.Channel c : channels) if (favorites.contains(c.channelId) && matches(c.name)) saved.add(c);
       channelGrid(saved);
       if (saved.isEmpty()) list.addView(label("Mantén pulsado un canal para añadirlo a favoritos.", 15, Ui.MUTED));
       return;
@@ -356,18 +364,10 @@ public class MainActivity extends Activity {
     if (mode.equals("Canales")) {
       grid();
     } else {
-      List<Catalog.Channel> featured = Catalog.featured(channels, custom, 8);
+      List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
       List<Catalog.Channel> events = Catalog.events(channels, custom);
-      if (!events.isEmpty()) {
-        hero(events);
-        heading("Eventos", null);
-        carousel(events, events.size());
-        if (!featured.isEmpty()) { heading("Destacados", null); carousel(featured, 8); }
-      } else if (!featured.isEmpty()) hero(featured);
-      if (events.isEmpty() && featured.size() > 1) {
-        heading("Destacados", null);
-        carousel(featured.subList(1, featured.size()), 40);
-      }
+      if (!featured.isEmpty()) hero(featured);
+      if (!events.isEmpty()) { heading("Eventos", "Por fecha y hora"); carousel(events, events.size()); }
       for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels).entrySet()) {
         heading(e.getKey(), e.getValue().size() + " canales");
         carousel(e.getValue(), 40);
@@ -406,7 +406,19 @@ public class MainActivity extends Activity {
 
   /** The featured channel, large, with a row of the other featured ones to pick from. */
   void hero(List<Catalog.Channel> picks) {
-    list.addView(heroView(picks, 0), heroParams());
+    heroItems = picks; heroHost = new FrameLayout(this); heroIndex = 0;
+    list.addView(heroHost, heroParams()); showHero(0, false);
+  }
+
+  void showHero(int index, boolean user) {
+    if (heroHost == null || heroItems.isEmpty()) return;
+    boolean focused = heroHost.hasFocus();
+    heroIndex = index; heroHost.removeAllViews();
+    View next = heroView(heroItems, index); heroHost.addView(next, new FrameLayout.LayoutParams(-1, -1));
+    next.setAlpha(0f); next.animate().alpha(1f).setDuration(350).start();
+    if (focused || user) { View control = next.findViewWithTag("hero-watch"); if (control != null) control.requestFocus(); }
+    handler.removeCallbacks(heroAdvance);
+    if (resumed && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
   }
 
   View heroView(final List<Catalog.Channel> picks, final int index) {
@@ -422,7 +434,7 @@ public class MainActivity extends Activity {
       frame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
       image(cover, c.cover);
     }
-    int size = wide() ? 190 : 96;
+    int size = wide() ? 250 : 150;
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 20);
     FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(size), dp(size));
     lp.gravity = wide() ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Gravity.END | Gravity.TOP);
@@ -443,7 +455,7 @@ public class MainActivity extends Activity {
     content.setGravity(Gravity.BOTTOM);
     content.setPadding(dp(20), dp(20), dp(20), dp(20));
     TextView pill = Ui.livePill(this, "EN DIRECTO", 11);
-    content.addView(pill, new LinearLayout.LayoutParams(-2, -2));
+    if (c.event) { pill.setText(SportsCatalog.stateName(c.status)); content.addView(pill, new LinearLayout.LayoutParams(-2, -2)); }
     TextView title = new TextView(this);
     title.setText(c.name);
     title.setTextColor(Ui.FG);
@@ -454,9 +466,9 @@ public class MainActivity extends Activity {
     title.setPadding(0, dp(8), 0, 0);
     content.addView(title);
     TextView meta = new TextView(this);
-    StringBuilder line = new StringBuilder(c.group);
+    StringBuilder line = new StringBuilder(c.event ? c.meta : c.group);
     if (!c.region.isEmpty()) line.append(" · ").append(c.region);
-    line.append(" · ").append(c.own ? "Canal de Calamar TV" : "Emisión oficial en abierto");
+    if (!c.event) line.append(" · ").append(c.own ? "Canal de Calamar TV" : "Emisión oficial en abierto");
     meta.setText(line);
     meta.setTextColor(0xffd6dbe2);
     meta.setTextSize(14);
@@ -466,6 +478,7 @@ public class MainActivity extends Activity {
     Button watch = Ui.pill(this, "Ver ahora", Ui.Kind.ACCENT, false);
     watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
     watch.setCompoundDrawablePadding(dp(8));
+    watch.setTag("hero-watch");
     favoriteAction(watch, c);
     watch.setOnClickListener(
         new View.OnClickListener() {
@@ -491,7 +504,7 @@ public class MainActivity extends Activity {
 
     if (picks.size() > 1 && wide()) {
       LinearLayout row = row();
-      for (int i = 0; i < Math.min(picks.size(), 6); i++) {
+      for (int i = 0; i < picks.size(); i++) {
         final int pick = i;
         FrameLayout thumb = new FrameLayout(this);
         thumb.setTag("pick" + i);
@@ -515,13 +528,7 @@ public class MainActivity extends Activity {
         thumb.setOnClickListener(
             new View.OnClickListener() {
               public void onClick(View v) {
-                int at = list.indexOfChild(frame);
-                if (at < 0) return;
-                list.removeViewAt(at);
-                View next = heroView(picks, pick);
-                list.addView(next, at, heroParams());
-                View focus = next.findViewWithTag("pick" + pick);
-                if (focus != null) focus.requestFocus();
+                showHero(pick, true);
               }
             });
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(68), dp(44));
@@ -531,7 +538,9 @@ public class MainActivity extends Activity {
       FrameLayout.LayoutParams rp =
           new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.BOTTOM);
       rp.setMargins(0, 0, dp(40), dp(18));
-      frame.addView(row, rp);
+      HorizontalScrollView pickScroll = new HorizontalScrollView(this);
+      pickScroll.setHorizontalScrollBarEnabled(false); pickScroll.addView(row);
+      rp.width = dp(360); frame.addView(pickScroll, rp);
     }
     return frame;
   }
@@ -556,7 +565,7 @@ public class MainActivity extends Activity {
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
       image(cover, c.cover);
     }
-    int logoSize = Math.round(artHeight * 0.58f);
+    int logoSize = Math.round(artHeight * 0.86f);
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 10);
     art.addView(logo, new FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER));
     image(logo, c.logo);
@@ -564,16 +573,16 @@ public class MainActivity extends Activity {
     TextView badge = c.playable() ? Ui.livePill(this, "EN DIRECTO", 9) : Ui.tag(this, "SU WEB", 9);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
-    art.addView(badge, bp);
+    if (c.event) { badge.setText(SportsCatalog.stateName(c.status)); art.addView(badge, bp); }
     card.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
 
-    TextView name = text((favorites.contains(c.id) ? "★ " : "") + c.name, 15);
+    TextView name = text((favorites.contains(c.channelId) ? "★ " : "") + c.name, 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setSingleLine(true);
     name.setEllipsize(android.text.TextUtils.TruncateAt.END);
     name.setPadding(dp(2), dp(8), dp(2), 0);
     card.addView(name);
-    TextView sub = label(c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
+    TextView sub = label(c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
     sub.setSingleLine(true);
     sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
     sub.setPadding(dp(2), 0, dp(2), 0);
@@ -670,6 +679,7 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
+    resumed = false; handler.removeCallbacks(heroAdvance);
     handler.removeCallbacks(refresh);
     if (sharedListener != null) {
       sharedListener.remove();
@@ -679,6 +689,8 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
+    resumed = true;
+    if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);
     sharedListener =
@@ -831,10 +843,10 @@ public class MainActivity extends Activity {
 
   void favoriteAction(View view, Catalog.Channel channel) {
     view.setOnLongClickListener(v -> {
-      if (favorites.contains(channel.id)) favorites.remove(channel.id);
-      else favorites.add(channel.id);
+      if (favorites.contains(channel.channelId)) favorites.remove(channel.channelId);
+      else favorites.add(channel.channelId);
       getSharedPreferences("favorites", MODE_PRIVATE).edit().putStringSet("ids", new HashSet<>(favorites)).apply();
-      boolean added = favorites.contains(channel.id);
+      boolean added = favorites.contains(channel.channelId);
       Toast.makeText(this, added ? "Añadido a favoritos" : "Quitado de favoritos", Toast.LENGTH_SHORT).show();
       if (v instanceof ViewGroup) {
         ViewGroup card = (ViewGroup) v;

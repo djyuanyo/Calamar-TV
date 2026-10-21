@@ -134,3 +134,11 @@ Un reinicio de conexión (RESET) no demuestra por sí solo un fallo DNS. Este ca
 Las reglas publicadas están en `firebase/firestore.rules`; solo conceden lectura del documento público del catálogo y escritura a la cuenta indicada. El resto de rutas continúa cerrado. La base de datos Standard está en `europe-southwest1` (Madrid), con el plan Spark. GitHub Pages continúa siendo el alojamiento web.
 
 Pruebas aisladas con Node 24 y JDK 21: `cd firebase && npm install && npm test`. El emulador comprueba lectura pública limitada, rechazo de otras identidades, escrituras del administrador, revisiones, tamaño y marcas de tiempo. No modifica producción. La compilación Android sigue usando JDK 17.
+
+## Agenda y administración (2.5.0)
+
+El administrador tiene secciones para Canales, Eventos, Ligas y Equipos. Permite crear, editar, buscar y eliminar ligas y equipos con su logo o escudo; no se elimina una entidad mientras esté asociada a equipos o eventos. Los eventos admiten nombre, portada completa, canal existente, liga, local, visitante, fecha y hora de Madrid, temporada, jornada/fase, lugar, descripción, estado y destacado. La portada se puede subir como foto comprimida o añadir mediante URL HTTPS. Los registros anteriores sin agenda siguen siendo válidos y aparecen después de los que tienen fecha.
+
+Cada evento tiene una dirección estable `#/evento/ID`, independiente del nombre y canal. El administrador permite abrirla o copiarla (en Android: Copiar enlace del evento). El evento resuelve las fuentes actuales del canal al abrirlo. Los eventos se ordenan de forma cronológica y muestran liga y horario. Los destacados de eventos y canales comparten un único slider que avanza cada 5 segundos. La web incluye pausa y selección manual; Android detiene el temporizador al salir de la pantalla. Si no hay destacados se usa el primer canal disponible. Las tarjetas y la portada de canales no llevan la etiqueta En directo y muestran el logo ampliado; el reproductor conserva sus indicadores de directo.
+
+Pruebas: `tools/sports.test.mjs`, `SportsCatalogTest`, `CatalogEventsTest` y flujo en Chrome mediante `tools/browser_events_check.mjs` (catálogo aislado, sin escrituras reales en Firebase).
