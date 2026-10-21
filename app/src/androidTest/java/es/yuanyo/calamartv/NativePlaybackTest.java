@@ -14,7 +14,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.SocketPolicy;
 import okio.Buffer;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,7 +38,7 @@ public class NativePlaybackTest {
 
   private void playback(boolean stalled) throws Exception {
     try (MockWebServer server = new MockWebServer()) {
-      if (stalled) server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE));
+      if (stalled) server.enqueue(video().throttleBody(1, 5, TimeUnit.SECONDS));
       server.enqueue(video());
       server.start();
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.CLOUDFLARE);
@@ -63,6 +62,13 @@ public class NativePlaybackTest {
         }
         assertTrue("The native activity never decoded/played HTTP MPEG-TS", playing.get());
         assertEquals(stalled ? 2 : 1, server.getRequestCount());
+        if (stalled) scenario.onActivity(activity -> {
+          try {
+            Field field = NativePlayerActivity.class.getDeclaredField("mediaSystemRetry");
+            field.setAccessible(true);
+            assertTrue("A silent stall must switch to the device connection", field.getBoolean(activity));
+          } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
       }
     }
   }
