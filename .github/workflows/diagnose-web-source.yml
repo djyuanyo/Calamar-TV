@@ -18,66 +18,20 @@ jobs:
           node <<'JS'
           const { chromium } = require(process.env.RUNNER_TEMP + '/hls-probe/node_modules/playwright');
           (async () => {
-            const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
-            const page = await browser.newPage();
-            const requests = [];
-            const base='https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0';
-            const manifest=await page.request.get(base);
-            const segment=new URL((await manifest.text()).split('\n').filter(x=>x&&!x.startsWith('#')).pop(),base).href;
-            for(const [name,headers] of Object.entries({plain:{},range:{Range:'bytes=0-'},chrome:{'User-Agent':'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'},vlc:{'User-Agent':'VLC/3.0.21 LibVLC/3.0.21'},accept:{Accept:'*/*'}})) {
-              const response=await page.request.get(segment,{headers});
-              console.log('SEGMENT_PROBE',JSON.stringify({name,status:response.status(),size:(await response.body()).length}));
-            }
-            for(const [name,address] of Object.entries({withoutQuery:segment.split('?')[0],zeroOnly:segment.split('?')[0]+'?exp=0'})) {
-              const response=await page.request.get(address);
-              console.log('SEGMENT_PROBE',JSON.stringify({name,status:response.status(),size:(await response.body()).length}));
-            }
-            const http = await page.request.get('https://p7.streamhostingcdn.top/stream/36/index.m3u8?token=&exp=0');
-            console.log('HTTP_PROBE', JSON.stringify({status:http.status(),headers:http.headers(),body:(await http.text()).slice(0,3500)}));
-            page.on('response', response => {
-              const url = new URL(response.url());
-              if (url.hostname === 'p7.streamhostingcdn.top') requests.push({
-                stage: url.pathname.endsWith('.m3u8') ? 'playlist' : 'media',
-                status: response.status(),
-                referer: response.request().headers()['referer'] || null
-              });
+            const browser=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+            const page=await browser.newPage();
+            const seen=[];
+            page.on('response', async r=>{
+              const u=new URL(r.url());
+              if(u.pathname.endsWith('.m3u8')||u.pathname.endsWith('.ts')||u.hostname==='mediahostexpert.top'){
+                seen.push({host:u.hostname,path:u.pathname,status:r.status(),referer:r.request().headers().referer||null,origin:r.request().headers().origin||null});
+                if(u.pathname.endsWith('.m3u8')) console.log('SOURCE',JSON.stringify({host:u.hostname,path:u.pathname,parameters:[...u.searchParams.keys()],status:r.status()}));
+              }
             });
-            await page.addInitScript(() => {
-              window.__hlsProbe = { errors: [], codecs: [] };
-              let installed;
-              Object.defineProperty(window, 'Hls', {
-                configurable: true, get: () => installed,
-                set: Hls => {
-                  installed = new Proxy(Hls, { construct(target, args, newTarget) {
-                    const instance = Reflect.construct(target, args, newTarget);
-                    instance.on(Hls.Events.ERROR, (_event, data) => {
-                      window.__hlsProbe.errors.push({ fatal: !!data.fatal, type: data.type, details: data.details, http: data.response?.code || 0, errorType: data.error?.name });
-                    });
-                    instance.on(Hls.Events.BUFFER_CODECS, (_event, tracks) => {
-                      const codecs = {};
-                      for (const [name, track] of Object.entries(tracks)) codecs[name] = { codec: track.codec, levelCodec: track.levelCodec, container: track.container };
-                      window.__hlsProbe.codecs.push(codecs);
-                    });
-                    return instance;
-                  } });
-                }
-              });
-            });
-            await page.goto('https://djyuanyo.github.io/Calamar-TV/direct-player.html#https%3A%2F%2Fp7.streamhostingcdn.top%2Fstream%2F36%2Findex.m3u8%3Ftoken%3D%26exp%3D0', { waitUntil: 'domcontentloaded' });
+            const r=await page.goto('https://mediahostexpert.top/embed/player?config=2b03fafc-656e-4df7-9cc2-a620a5526af0',{referer:'https://www.matchdirect.live/',waitUntil:'domcontentloaded'});
+            console.log('PAGE',JSON.stringify({status:r.status(),scripts:await page.locator('script').evaluateAll(ss=>ss.map(s=>s.src||s.textContent.slice(0,12000)))}));
             await page.waitForTimeout(20000);
-            const report = await page.evaluate(() => {
-              const v = document.querySelector('#video');
-              return {
-                referrerPolicy: document.referrerPolicy,
-                hlsVersion: window.Hls?.version,
-                status: document.querySelector('#status')?.textContent,
-                video: v ? { readyState: v.readyState, paused: v.paused, time: v.currentTime, error: v.error?.code || 0, width: v.videoWidth, height: v.videoHeight } : null,
-                probe: window.__hlsProbe
-              };
-            });
-            report.requests = requests;
-            console.log('BROWSER_REPORT', JSON.stringify(report));
-            if (!(report.video?.time > 0 && report.video.width > 0)) process.exitCode = 1;
+            console.log('REPORT',JSON.stringify({requests:seen,video:await page.locator('video').evaluateAll(vs=>vs.map(v=>({time:v.currentTime,width:v.videoWidth,error:v.error?.code||0}))),text:(await page.locator('body').innerText()).slice(0,500)}));
             await browser.close();
-          })().catch(error => { console.log('BROWSER_PROBE_ERROR', error.name); process.exitCode = 1; });
+          })().catch(e=>{console.log('PROBE_ERROR',e.name,e.message.split('\n')[0]);process.exitCode=1});
           JS
