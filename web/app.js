@@ -1,4 +1,4 @@
-import { merge, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -70,11 +70,11 @@ function logo(c, cls) {
 function card(c) {
   return el(
     'button',
-    { class: 'card', type: 'button', style: `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
+    { class: c.event ? 'card event-card' : 'card', type: 'button', style: `--h:${hue(c.name)}`, onclick: () => open(c), title: c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
     el(
       'span',
       { class: 'art' },
-      logo(c),
+      c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
       el('span', { class: c.playable ? 'badge live' : 'badge' }, c.playable ? 'EN DIRECTO' : 'SU WEB'),
       c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
     ),
@@ -136,15 +136,15 @@ function heroSection(list, index = 0) {
       : null;
   let section = el(
     'section',
-    { class: 'hero', style: `--h:${hue(c.name)}`, 'aria-label': 'Canal destacado' },
+    { class: c.event ? 'hero event-hero' : 'hero', style: `--h:${hue(c.name)}`, 'aria-label': 'Canal destacado' },
     el('div', { class: 'hero-bg' }),
-    logo(c, 'hero-art'),
+    c.event ? el('img', { class: 'event-hero-cover', src: c.cover, alt: '', referrerpolicy: 'no-referrer' }) : logo(c, 'hero-art'),
     el(
       'div',
       { class: 'hero-body' },
       el('span', { class: 'live-pill' }, 'EN DIRECTO'),
       el('h1', {}, c.name),
-      el('p', { class: 'hero-meta' }, [c.group, c.region, c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
+      el('p', { class: 'hero-meta' }, [c.group, c.region, c.event ? 'Evento' : c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
       el(
         'div',
         { class: 'hero-actions' },
@@ -158,10 +158,13 @@ function heroSection(list, index = 0) {
 }
 
 function home() {
+  const matches = events(state.channels, state.custom);
   const list = featured(state.channels, state.custom, 8);
   const nodes = [];
-  if (list[0]) nodes.push(heroSection(list));
-  if (list.length > 1) nodes.push(sectionHead('Destacados'), rail(list.slice(1), { wide: true }));
+  if (matches.length) nodes.push(heroSection(matches), sectionHead('Eventos'), rail(matches, { wide: true, limit: matches.length }));
+  else if (list[0]) nodes.push(heroSection(list));
+  if (matches.length && list.length) nodes.push(sectionHead('Destacados'), rail(list, { wide: true }));
+  else if (list.length > 1) nodes.push(sectionHead('Destacados'), rail(list.slice(1), { wide: true }));
   for (const [group, channels] of groups(state.channels)) {
     nodes.push(sectionHead(group, el('a', { href: `#/canales/${encodeURIComponent(group)}` }, `Ver ${channels.length} canales`)), rail(channels));
   }
@@ -200,7 +203,7 @@ function channelsPage(selected) {
 function results(query) {
   const q = query.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
-  const found = state.channels.filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
+  const found = [...events(state.channels, state.custom), ...state.channels].filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
   return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(card)) : el('p', { class: 'status' }, 'No hay canales con ese nombre.')];
 }
 
@@ -432,24 +435,11 @@ document.getElementById('player-close').addEventListener('click', closePlayer);
 let routeVersion = 0;
 async function route() {
   const version = ++routeVersion;
-  const previousFootball = document.querySelector('#football-view');
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
-  if (page !== 'futbol' && previousFootball) {
-    const mod = await import('./football.js');
-    if (version !== routeVersion) return;
-    mod.leaveFootball();
-  }
-  if (page === 'futbol') {
-    if (!player.hidden) hidePlayer();
-    const mod = await import('./football.js');
-    if (version !== routeVersion || !location.hash.startsWith('#/futbol')) return;
-    await mod.renderFootball(view);
-    return;
-  }
   if (page === 'admin') {
     try {
       const admin = await import('./admin.js');

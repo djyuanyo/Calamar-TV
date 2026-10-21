@@ -462,3 +462,16 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .share-screen svg { flex:none; width:20px; height:20px; }
 .share-screen span { max-width:82px; line-height:1.15; }
 @media (max-width:720px) { .player-toolbar { flex-basis:100%; overflow-x:auto; padding-block:4px; } }
+
+/* Search sits directly below the header on phones, desktop and TV. */
+.top-inner { flex-wrap: wrap; }
+.top-inner .search { order: 10; flex: 1 0 100%; max-width: none; margin: 4px 0 12px; }
+.top-inner .admin-link { margin-left: auto; }
+.card .art > img.event-cover { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: inherit; }
+.event-hero-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.event-hero .hero-body, .event-hero .hero-picks { z-index: 2; }
+.event-hero::after { z-index: 1; content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,rgba(0,0,0,.86),rgba(0,0,0,.1)),linear-gradient(0deg,rgba(0,0,0,.65),transparent); pointer-events: none; }
+.event-preview { width: min(100%, 480px); aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; }
+.admin-tabs { margin: 20px 0; }
+.channel-options { max-height: 280px; overflow: auto; display: grid; gap: 8px; }
+.channel-options button { text-align: left; }

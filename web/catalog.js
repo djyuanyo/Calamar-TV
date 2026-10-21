@@ -175,3 +175,11 @@ export function webPlayback(url) {
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
+
+/** Events always resolve their channel's current sources, never a saved copy of its links. */
+export function events(channels, custom) {
+  return ((custom && custom.events) || []).flatMap((event) => {
+    const target = channels.find((c) => c.id === event.channelId && c.playable);
+    return target ? [{ ...target, name: event.name, cover: event.cover, event: true, eventId: event.id }] : [];
+  });
+}

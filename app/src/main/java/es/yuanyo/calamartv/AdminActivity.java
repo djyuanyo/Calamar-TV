@@ -30,6 +30,7 @@ public class AdminActivity extends Activity {
   private JSONObject catalog;
   private long revision;
   private boolean loading, saving;
+  private EditText pendingCover;
   private FirebaseAuth.AuthStateListener authListener;
 
   @Override
@@ -92,8 +93,7 @@ public class AdminActivity extends Activity {
     }
     body.addView(
         label(
-            "Los canales publicados son visibles para todos. Mis canales se conserva como lista"
-                + " local hasta que elijas publicar cada canal.",
+            "Publica canales y eventos para la web, Android y Android TV.",
             16));
     addButton("Cerrar sesión de Google", () -> SharedCatalog.auth(this).signOut());
     addButton("Recargar catálogo", this::load);
@@ -105,8 +105,23 @@ public class AdminActivity extends Activity {
       status.setText("Pulsa Recargar catálogo para conectar.");
       return;
     }
-    addButton("+ Añadir canal o evento", () -> edit(null));
-    addButton("Publicar desde Mis canales", this::chooseLocal);
+    addButton("Crear canal", () -> edit(null));
+    addButton("Crear evento", () -> editEvent(null));
+    JSONArray events = catalog.optJSONArray("events");
+    if (events != null) {
+      body.addView(label("EVENTOS PUBLICADOS · " + events.length(), 18));
+      for (int i = 0; i < events.length(); i++) {
+        JSONObject event = events.optJSONObject(i);
+        if (event == null) continue;
+        addButton("Editar evento: " + event.optString("name"), () -> editEvent(event));
+        addButton("Eliminar evento: " + event.optString("name"), () -> new AlertDialog.Builder(this)
+            .setTitle("¿Eliminar el evento?").setMessage(event.optString("name"))
+            .setNegativeButton("Cancelar", null).setPositiveButton("Eliminar", (d, w) -> {
+              try { JSONObject next = copy(); next.put("events", withoutChannel(next.getJSONArray("events"), event.getString("id"))); publish(next); }
+              catch (Exception error) { fail(error); }
+            }).show());
+      }
+    }
     JSONArray channels = catalog.optJSONArray("channels");
     body.addView(label("CANALES PUBLICADOS · " + channels.length(), 18));
     for (int i = 0; i < channels.length(); i++) {
@@ -126,13 +141,18 @@ public class AdminActivity extends Activity {
           () ->
               new AlertDialog.Builder(this)
                   .setTitle("¿Retirar del catálogo público?")
-                  .setMessage(channel.optString("name"))
+                  .setMessage(channel.optString("name") + " y sus eventos asociados")
                   .setNegativeButton("Cancelar", null)
                   .setPositiveButton(
                       "Eliminar",
                       (d, w) -> {
                         try {
                           JSONObject next = copy();
+                          JSONArray remaining = new JSONArray();
+                          JSONArray linked = next.optJSONArray("events");
+                          if (linked != null) for (int e = 0; e < linked.length(); e++)
+                            if (!id.equals(linked.getJSONObject(e).getString("channelId"))) remaining.put(linked.get(e));
+                          next.put("events", remaining);
                           next.put("channels", withoutChannel(next.getJSONArray("channels"), id));
                           next.put("featured", withoutId(next.getJSONArray("featured"), id));
                           next.put("hidden", withoutId(next.getJSONArray("hidden"), id));
@@ -289,7 +309,7 @@ public class AdminActivity extends Activity {
     scroll.addView(form);
     AlertDialog dialog =
         new AlertDialog.Builder(this)
-            .setTitle(existing == null ? "Añadir canal o evento" : "Editar canal")
+            .setTitle(existing == null ? "Crear canal" : "Editar canal")
             .setView(scroll)
             .setNegativeButton("Cancelar", null)
             .setPositiveButton("Guardar y publicar", null)
@@ -352,60 +372,101 @@ public class AdminActivity extends Activity {
     dialog.show();
   }
 
-  private void chooseLocal() {
-    if (saving || catalog == null) return;
-    JSONArray local = UserChannels.load(new File(getFilesDir(), "user-channels.json"));
-    if (local.length() == 0) {
-      status.setText("Todavía no tienes canales locales en Mis canales.");
-      return;
+  private void editEvent(JSONObject existing) {
+    if (catalog == null || saving) return;
+    JSONArray channels = catalog.optJSONArray("channels");
+    if (channels == null || channels.length() == 0) { status.setText("Crea primero un canal para el evento."); return; }
+    LinearLayout form = new LinearLayout(this);
+    form.setOrientation(LinearLayout.VERTICAL);
+    form.setPadding(dp(20), dp(8), dp(20), dp(8));
+    EditText name = input(form, "Nombre del evento", existing == null ? "" : existing.optString("name"));
+    EditText cover = input(form, "Enlace HTTPS de la foto de portada", existing == null ? "" : existing.optString("cover"));
+    Button upload = new Button(this);
+    upload.setText("Elegir foto de portada"); upload.setAllCaps(false);
+    upload.setOnClickListener(v -> {
+      pendingCover = cover;
+      try { startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 300); }
+      catch (android.content.ActivityNotFoundException missing) { cover.setError("Pega un enlace HTTPS a la imagen."); }
+    });
+    form.addView(upload);
+    form.addView(label("La foto ocupa toda la carátula del evento.", 14));
+    AutoCompleteTextView search = new AutoCompleteTextView(this);
+    search.setHint("Buscar y seleccionar un canal creado"); search.setSingleLine(true); search.setThreshold(1);
+    search.setContentDescription("Buscar canal del evento");
+    java.util.List<String> names = new java.util.ArrayList<>();
+    java.util.Map<String, String> ids = new java.util.HashMap<>();
+    String initial = "";
+    for (int i = 0; i < channels.length(); i++) {
+      JSONObject c = channels.optJSONObject(i);
+      if (c == null) continue;
+      String label = c.optString("name") + " · " + (i + 1);
+      names.add(label); ids.put(label, c.optString("id"));
+      if (existing != null && c.optString("id").equals(existing.optString("channelId"))) initial = label;
     }
-    String[] names = new String[local.length()];
-    for (int i = 0; i < names.length; i++) names[i] = local.optJSONObject(i).optString("name");
-    new AlertDialog.Builder(this)
-        .setTitle("Elige un canal local para publicar")
-        .setItems(
-            names,
-            (d, which) -> {
-              JSONObject selected = local.optJSONObject(which);
-              try {
-                JSONObject channel =
-                    new JSONObject()
-                        .put("id", "mio-" + UUID.randomUUID())
-                        .put("name", selected.optString("name"))
-                        .put("group", "Calamar TV")
-                        .put("logo", "")
-                        .put("streams", new JSONArray().put(selected.getString("url")));
-                new AlertDialog.Builder(this)
-                    .setTitle("¿Publicar para todos?")
-                    .setMessage(
-                        selected.optString("name")
-                            + "\n\n"
-                            + "El enlace será visible en la web y en la app. La copia local se"
-                            + " conserva.")
-                    .setNegativeButton("Cancelar", null)
-                    .setPositiveButton(
-                        "Publicar",
-                        (dialog, button) -> {
-                          try {
-                            JSONObject next = copy();
-                            for (int i = 0; i < next.getJSONArray("channels").length(); i++) {
-                              JSONObject c = next.getJSONArray("channels").getJSONObject(i);
-                              if (contains(c.getJSONArray("streams"), selected.getString("url")))
-                                throw new JSONException("Este enlace ya está publicado");
-                            }
-                            next.getJSONArray("channels").put(channel);
-                            publish(next);
-                          } catch (Exception error) {
-                            fail(error);
-                          }
-                        })
-                    .show();
-              } catch (Exception error) {
-                fail(error);
-              }
-            })
-        .setNegativeButton("Cancelar", null)
-        .show();
+    search.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, names));
+    search.setText(initial, false);
+    form.addView(search, new LinearLayout.LayoutParams(-1, -2));
+    TextView error = label("Selecciona el canal de la lista de sugerencias.", 14); form.addView(error);
+    ScrollView scroll = new ScrollView(this); scroll.addView(form);
+    AlertDialog dialog = new AlertDialog.Builder(this).setTitle(existing == null ? "Crear evento" : "Editar evento")
+        .setView(scroll).setNegativeButton("Cancelar", null).setPositiveButton("Guardar y publicar", null).create();
+    dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+      try {
+        String title = name.getText().toString().trim(), photo = cover.getText().toString().trim();
+        String channelId = ids.get(search.getText().toString());
+        if (title.isEmpty()) throw new JSONException("Escribe el nombre del evento");
+        if (!SharedCatalog.validCover(photo)) throw new JSONException("Elige una foto o pega un enlace HTTPS de portada");
+        if (channelId == null) throw new JSONException("Selecciona un canal de las sugerencias");
+        String id = existing == null ? "evento-" + UUID.randomUUID() : existing.getString("id");
+        JSONObject event = new JSONObject().put("id", id).put("name", title).put("cover", photo).put("channelId", channelId);
+        JSONObject next = copy();
+        JSONArray events = next.optJSONArray("events");
+        if (events == null) events = new JSONArray();
+        boolean replaced = false;
+        for (int i = 0; i < events.length(); i++) if (id.equals(events.getJSONObject(i).getString("id"))) { events.put(i, event); replaced = true; break; }
+        if (!replaced) events.put(event);
+        next.put("events", events); SharedCatalog.validate(next);
+        dialog.dismiss(); publish(next);
+      } catch (Exception invalid) { error.setText(invalid.getMessage()); }
+    }));
+    dialog.show();
+  }
+
+  @Override
+  protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+    if (requestCode != 300 || resultCode != RESULT_OK || data == null || data.getData() == null || pendingCover == null) return;
+    final EditText target = pendingCover; pendingCover = null;
+    final Uri uri = data.getData();
+    new android.os.AsyncTask<Void, Void, String>() {
+      protected String doInBackground(Void... unused) {
+        try {
+          android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+          options.inJustDecodeBounds = true;
+          try (java.io.InputStream in = getContentResolver().openInputStream(uri)) { android.graphics.BitmapFactory.decodeStream(in, null, options); }
+          options.inSampleSize = 1;
+          while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 960) options.inSampleSize *= 2;
+          options.inJustDecodeBounds = false;
+          android.graphics.Bitmap bitmap;
+          try (java.io.InputStream in = getContentResolver().openInputStream(uri)) { bitmap = android.graphics.BitmapFactory.decodeStream(in, null, options); }
+          if (bitmap == null) return null;
+          try {
+            for (int quality : new int[] {80, 65, 50, 35}) {
+              java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+              bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, out);
+              String encoded = "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+              if (encoded.length() <= 130000) return encoded;
+            }
+          } finally { bitmap.recycle(); }
+        } catch (Exception ignored) {}
+        return null;
+      }
+      protected void onPostExecute(String cover) {
+        if (isFinishing()) return;
+        if (cover == null) target.setError("No se pudo preparar la foto. Prueba una imagen más pequeña.");
+        else { target.setText(cover); Toast.makeText(AdminActivity.this, "Portada preparada", Toast.LENGTH_SHORT).show(); }
+      }
+    }.execute();
   }
 
   private JSONObject copy() throws JSONException {

@@ -1,6 +1,6 @@
 import { el, fetchJson } from './app.js';
 import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
-import { ADMIN_EMAIL } from './shared-catalog.js';
+import { ADMIN_EMAIL, validCover } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain } from './firebase.js';
 
 let saving = false;
@@ -108,8 +108,8 @@ function channelForm(existing, rerender) {
         }
       },
     },
-    el('h2', {}, existing ? `Editar ${existing.name}` : 'Añadir canal o evento'),
-    field('Nombre', name, 'Por ejemplo «Final Copa Regional» o «Canal Menciana».'),
+    el('h2', {}, existing ? `Editar ${existing.name}` : 'Crear canal'),
+    field('Nombre', name, 'Por ejemplo «Canal Menciana».'),
     field('Categoría', group, 'Elige una o escribe una nueva. Por defecto: Calamar TV.'),
     groupList,
     field('Logo (opcional)', logo),
@@ -142,7 +142,8 @@ function ownList(rerender) {
               class: 'btn small danger',
               type: 'button',
               onclick: async () => {
-                if (saving || !confirm(`¿Eliminar ${c.name}?`)) return;
+                if (saving || !confirm(`¿Eliminar ${c.name} y sus eventos asociados?`)) return;
+                data.events = (data.events || []).filter((e) => e.channelId !== c.id);
                 data.channels = data.channels.filter((x) => x.id !== c.id);
                 data.featured = data.featured.filter((id) => id !== c.id);
                 await guarded(() => saveFile(`admin: eliminar ${c.name}`), rerender);
@@ -230,6 +231,8 @@ export async function render(state) {
   // Keep the public view in this tab consistent with what was just saved.
   state.custom = file.data;
   state.channels = merge(state.tdt, file.data);
+  file.data.events ||= [];
+  const eventRoute = decodeURIComponent(location.hash).match(/^#\/admin\/(?:evento|editar-evento(?:\/(.+))?)$/);
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
   const shown = notice;
@@ -242,10 +245,83 @@ export async function render(state) {
       el('p', { class: 'lead' }, 'Los cambios se guardan en Firebase y se comparten con la web y la app. Tu cuenta de Google es la única autorizada para editar.'),
       shown ? el('p', { class: shown.startsWith('Guardado') ? 'ok' : 'error', role: 'status' }, shown) : null,
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      channelForm(existing, rerender),
-      el('div', { class: 'section-head' }, el('h2', {}, 'Tus canales y eventos')),
+      el('div', { class: 'actions admin-tabs' }, el('a', { class: eventRoute ? 'btn secondary' : 'btn', href: '#/admin' }, 'Crear canal'), el('a', { class: eventRoute ? 'btn' : 'btn secondary', href: '#/admin/evento' }, 'Crear evento')),
+      eventRoute ? eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender) : channelForm(existing, rerender),
+      el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')),
+      eventList(rerender),
+      el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')),
       ownList(rerender),
       ...tdtTools(state, rerender),
     ),
   ];
+}
+
+async function coverFromFile(file) {
+  if (!file || !file.type.startsWith('image/')) throw new Error('Elige una imagen.');
+  if (file.size > 15 * 1024 * 1024) throw new Error('La imagen supera los 15 MB.');
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 960 / Math.max(bitmap.width, bitmap.height));
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [.8, .65, .5, .35]) {
+      const data = canvas.toDataURL('image/jpeg', quality);
+      if (data.length <= 130000) return data;
+    }
+    throw new Error('La imagen es demasiado compleja. Usa una más pequeña o un enlace HTTPS.');
+  } finally { bitmap.close(); }
+}
+
+function eventForm(existing, rerender) {
+  const data = file.data;
+  const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
+  const cover = el('input', { type: 'text', value: existing?.cover || '', placeholder: 'https://…/partido.jpg' });
+  const preview = el('img', { class: 'event-preview', alt: 'Vista previa de la portada', hidden: !existing?.cover, src: existing?.cover });
+  const updatePreview = () => { preview.hidden = !validCover(cover.value.trim()); if (!preview.hidden) preview.src = cover.value.trim(); };
+  cover.addEventListener('input', updatePreview);
+  const status = el('p', { class: 'note', role: 'status' });
+  const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
+    try { status.textContent = 'Preparando portada…'; cover.value = await coverFromFile(upload.files[0]); updatePreview(); status.textContent = 'Portada preparada.'; }
+    catch (error) { status.textContent = error.message; }
+  } });
+  let selected = existing?.channelId || '';
+  const chosen = el('p', { class: 'note' });
+  const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales creados' });
+  const options = el('div', { class: 'channel-options', role: 'group', 'aria-label': 'Elegir canal' });
+  const draw = () => {
+    const channel = data.channels.find((c) => c.id === selected);
+    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}` : 'Selecciona un canal para reproducir el evento.';
+    const q = query.value.trim().toLocaleLowerCase('es');
+    const found = data.channels.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
+    options.replaceChildren(...found.map((c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`)));
+    if (!found.length) options.append(el('p', { class: 'note' }, data.channels.length ? 'Sin resultados.' : 'Crea primero un canal.'));
+  };
+  query.addEventListener('input', draw); draw();
+  return el('form', { class: 'form', onsubmit: async (event) => {
+    event.preventDefault(); if (saving) return;
+    try {
+      if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
+      if (!validCover(cover.value.trim())) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
+      if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
+      const entry = { id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: cover.value.trim(), channelId: selected };
+      data.events = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
+      status.textContent = 'Publicando…'; await saveFile(); rerender();
+    } catch (error) { status.textContent = explain(error); status.className = 'error'; }
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
+}
+
+function eventList(rerender) {
+  const data = file.data;
+  if (!data.events.length) return el('p', { class: 'note' }, 'Aún no hay eventos.');
+  return el('div', { class: 'list' }, data.events.map((event) => el('div', { class: 'item' },
+    el('img', { src: event.cover, alt: '', style: 'object-fit:cover' }),
+    el('div', { class: 'meta' }, el('b', {}, event.name), el('span', {}, data.channels.find((c) => c.id === event.channelId)?.name || 'Canal no disponible')),
+    el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),
+      el('button', { class: 'btn small danger', type: 'button', onclick: () => {
+        if (saving || !confirm(`¿Eliminar el evento ${event.name}?`)) return;
+        data.events = data.events.filter((e) => e.id !== event.id); guarded(() => saveFile(), rerender);
+      } }, 'Eliminar')))));
 }

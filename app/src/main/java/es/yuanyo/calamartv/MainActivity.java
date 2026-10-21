@@ -25,7 +25,8 @@ public class MainActivity extends Activity {
   TextView message;
   JSONObject tdt = new JSONObject(), custom = new JSONObject();
   List<Catalog.Channel> channels = new ArrayList<>();
-  JSONArray userChannels = new JSONArray();
+  String query = "";
+  final Set<String> favorites = new HashSet<>();
   String mode = "Inicio", group = "Todos", origin = "Catálogo incluido", loadError = "";
   long updatedAt = 0;
   boolean busy = false;
@@ -49,8 +50,9 @@ public class MainActivity extends Activity {
   public void onCreate(Bundle b) {
     super.onCreate(b);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     restore();
-    userChannels = UserChannels.load(userChannelFile());
+    favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet()));
     home();
   }
 
@@ -206,21 +208,36 @@ public class MainActivity extends Activity {
     admin.setOnClickListener(v -> startActivity(new Intent(this, AdminActivity.class)));
     addButton(mast, admin);
     root.addView(mast);
+    EditText search = new EditText(this);
+    search.setSingleLine(true);
+    search.setTextColor(Ui.FG);
+    search.setHintTextColor(Ui.MUTED);
+    search.setTextSize(16);
+    search.setHint("Buscar canales y eventos");
+    search.setContentDescription("Buscar canales y eventos");
+    search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+    search.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 24, 0));
+    search.setPadding(dp(18), dp(10), dp(18), dp(10));
+    search.setText(query);
+    LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, dp(48));
+    searchParams.setMargins(0, dp(6), 0, dp(8));
+    root.addView(search, searchParams);
+    search.addTextChangedListener(new android.text.TextWatcher() {
+      public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+      public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); render(); }
+      public void afterTextChanged(android.text.Editable s) {}
+    });
 
     LinearLayout nav = row();
-    for (final String m : new String[] {"Inicio", "Canales", "Fútbol", "Mis canales"}) {
+    for (final String m : new String[] {"Inicio", "Canales", "Favoritos"}) {
       nav.addView(
           tab(
               m,
               mode.equals(m),
               new View.OnClickListener() {
                 public void onClick(View v) {
-                  if ("Fútbol".equals(m)) {
-                    startActivity(new Intent(MainActivity.this, FootballActivity.class));
-                  } else {
-                    mode = m;
-                    home();
-                  }
+                  mode = m;
+                  home();
                 }
               }));
     }
@@ -314,8 +331,21 @@ public class MainActivity extends Activity {
     if (list == null) return;
     list.removeAllViews();
     message.setText(status());
-    if (mode.equals("Mis canales")) {
-      myChannels();
+    if (mode.equals("Favoritos")) {
+      heading("Favoritos", "Mantén pulsado para quitar");
+      List<Catalog.Channel> saved = new ArrayList<>();
+      for (Catalog.Channel c : channels) if (favorites.contains(c.id) && matches(c.name)) saved.add(c);
+      channelGrid(saved);
+      if (saved.isEmpty()) list.addView(label("Mantén pulsado un canal para añadirlo a favoritos.", 15, Ui.MUTED));
+      return;
+    }
+    if (!query.trim().isEmpty()) {
+      heading("Resultados", null);
+      List<Catalog.Channel> found = new ArrayList<>();
+      for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
+      for (Catalog.Channel c : channels) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
+      channelGrid(found);
+      if (found.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
       return;
     }
     if (channels.isEmpty()) {
@@ -327,8 +357,14 @@ public class MainActivity extends Activity {
       grid();
     } else {
       List<Catalog.Channel> featured = Catalog.featured(channels, custom, 8);
-      if (!featured.isEmpty()) hero(featured);
-      if (featured.size() > 1) {
+      List<Catalog.Channel> events = Catalog.events(channels, custom);
+      if (!events.isEmpty()) {
+        hero(events);
+        heading("Eventos", null);
+        carousel(events, events.size());
+        if (!featured.isEmpty()) { heading("Destacados", null); carousel(featured, 8); }
+      } else if (!featured.isEmpty()) hero(featured);
+      if (events.isEmpty() && featured.size() > 1) {
         heading("Destacados", null);
         carousel(featured.subList(1, featured.size()), 40);
       }
@@ -378,7 +414,14 @@ public class MainActivity extends Activity {
     final FrameLayout frame = new FrameLayout(this);
     frame.setBackground(Ui.heroBackground(this, Palette.hue(c.name)));
     frame.setClipToOutline(true);
+    favoriteAction(frame, c);
 
+    if (c.event) {
+      ImageView cover = new ImageView(this);
+      cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      frame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
+      image(cover, c.cover);
+    }
     int size = wide() ? 190 : 96;
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 20);
     FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(size), dp(size));
@@ -386,6 +429,7 @@ public class MainActivity extends Activity {
     lp.setMargins(0, wide() ? 0 : dp(18), dp(wide() ? 48 : 18), 0);
     frame.addView(logo, lp);
     image(logo, c.logo);
+    if (c.event) logo.setVisibility(View.GONE);
 
     View scrim = new View(this);
     scrim.setBackground(
@@ -422,6 +466,7 @@ public class MainActivity extends Activity {
     Button watch = Ui.pill(this, "Ver ahora", Ui.Kind.ACCENT, false);
     watch.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, Ui.BG, dp(18)), null, null, null);
     watch.setCompoundDrawablePadding(dp(8));
+    favoriteAction(watch, c);
     watch.setOnClickListener(
         new View.OnClickListener() {
           public void onClick(View v) {
@@ -466,6 +511,7 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER);
         thumb.addView(small, sp);
         image(small, picks.get(i).logo);
+        favoriteAction(thumb, picks.get(i));
         thumb.setOnClickListener(
             new View.OnClickListener() {
               public void onClick(View v) {
@@ -504,17 +550,24 @@ public class MainActivity extends Activity {
     art.setBackground(Ui.artBackground(this, Palette.hue(c.name), 12));
     art.setDuplicateParentStateEnabled(true);
     int artHeight = Math.round(dp(width) * 9f / 16f);
+    if (c.event) {
+      ImageView cover = new ImageView(this);
+      cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
+      image(cover, c.cover);
+    }
     int logoSize = Math.round(artHeight * 0.58f);
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 10);
     art.addView(logo, new FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER));
     image(logo, c.logo);
+    if (c.event) logo.setVisibility(View.GONE);
     TextView badge = c.playable() ? Ui.livePill(this, "EN DIRECTO", 9) : Ui.tag(this, "SU WEB", 9);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
     art.addView(badge, bp);
     card.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
 
-    TextView name = text(c.name, 15);
+    TextView name = text((favorites.contains(c.id) ? "★ " : "") + c.name, 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setSingleLine(true);
     name.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -525,6 +578,8 @@ public class MainActivity extends Activity {
     sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
+    card.setContentDescription(c.name + ". Mantén pulsado para añadir o quitar de favoritos");
+    favoriteAction(card, c);
     card.setOnClickListener(
         new View.OnClickListener() {
           public void onClick(View v) {
@@ -700,6 +755,13 @@ public class MainActivity extends Activity {
   }
 
   void image(final ImageView view, final String url) {
+    if (url != null && url.startsWith("data:image/")) {
+      try {
+        byte[] bytes = android.util.Base64.decode(url.substring(url.indexOf(',') + 1), android.util.Base64.DEFAULT);
+        view.setImageBitmap(BitmapFactory.decodeByteArray(bytes, 0, bytes.length));
+      } catch (IllegalArgumentException ignored) {}
+      return;
+    }
     if (url == null || !url.startsWith("https://")) return;
     Bitmap cached = images.get(url);
     if (cached != null) {
@@ -749,202 +811,46 @@ public class MainActivity extends Activity {
     }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
 
-  File userChannelFile() {
-    return new File(getFilesDir(), "user-channels.json");
+
+  boolean matches(String name) {
+    return normalizeSearch(name).contains(normalizeSearch(query.trim()));
   }
 
-  void myChannels() {
-    heading("Mis canales", userChannels.length() + " canales");
-    TextView help =
-        label(
-            "Añade enlaces de vídeo (.ts, .m3u8, .mpd, .mp4) o la página https de un reproductor:"
-                + " la app obtiene su fuente actual y la renueva al caducar. Se guardan solo en"
-                + " este dispositivo. Mantén pulsado un canal para editarlo o eliminarlo.",
-            12,
-            Ui.MUTED);
-    help.setPadding(dp(4), 0, dp(4), dp(6));
-    list.addView(help);
-    LinearLayout actions = row();
-    Button add = Ui.pill(this, "+  Añadir canal", Ui.Kind.ACCENT, false);
-    add.setOnClickListener(
-        new View.OnClickListener() {
-          public void onClick(View v) {
-            editChannel(-1);
-          }
-        });
-    LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, dp(46));
-    ap.setMargins(dp(4), dp(4), dp(4), dp(8));
-    actions.addView(add, ap);
-    list.addView(actions);
-    int cols = wide() ? 4 : 2, width = gridWidth(cols);
+  String normalizeSearch(String text) {
+    return java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+  }
+
+  void channelGrid(List<Catalog.Channel> items) {
+    int cols = wide() ? 4 : 2;
     LinearLayout r = null;
-    for (int i = 0; i < userChannels.length(); i++) {
-      final int index = i;
-      final JSONObject channel = userChannels.optJSONObject(i);
-      if (channel == null) continue;
-      if (i % cols == 0) {
-        r = row();
-        r.setGravity(Gravity.TOP);
-        list.addView(r);
+    for (int i = 0; i < items.size(); i++) {
+      if (i % cols == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
+      r.addView(card(items.get(i), gridWidth(cols)));
+    }
+  }
+
+  void favoriteAction(View view, Catalog.Channel channel) {
+    view.setOnLongClickListener(v -> {
+      if (favorites.contains(channel.id)) favorites.remove(channel.id);
+      else favorites.add(channel.id);
+      getSharedPreferences("favorites", MODE_PRIVATE).edit().putStringSet("ids", new HashSet<>(favorites)).apply();
+      boolean added = favorites.contains(channel.id);
+      Toast.makeText(this, added ? "Añadido a favoritos" : "Quitado de favoritos", Toast.LENGTH_SHORT).show();
+      if (v instanceof ViewGroup) {
+        ViewGroup card = (ViewGroup) v;
+        for (int i = 0; i < card.getChildCount(); i++) {
+          View child = card.getChildAt(i);
+          if (child instanceof TextView) { ((TextView) child).setText((added ? "★ " : "") + channel.name); break; }
+        }
       }
-      LinearLayout c = new LinearLayout(this);
-      c.setId(300000 + i);
-      c.setOrientation(LinearLayout.VERTICAL);
-      c.setPadding(dp(3), dp(3), dp(3), dp(8));
-      c.setFocusable(true);
-      c.setClickable(true);
-      Ui.scaleOnFocus(c, 1.03f);
-      FrameLayout art = new FrameLayout(this);
-      art.setBackground(Ui.artBackground(this, Palette.hue(channel.optString("name")), 12));
-      art.setDuplicateParentStateEnabled(true);
-      ImageView play = new ImageView(this);
-      int artHeight = Math.round(dp(width) * 9f / 16f);
-      int playSize = Math.round(artHeight * 0.4f);
-      play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.ACC, playSize));
-      art.addView(play, new FrameLayout.LayoutParams(playSize, playSize, Gravity.CENTER));
-      c.addView(art, new LinearLayout.LayoutParams(-1, artHeight));
-      TextView name = text(channel.optString("name"), 15);
-      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      name.setSingleLine(true);
-      name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      name.setPadding(dp(2), dp(8), dp(2), 0);
-      c.addView(name);
-      TextView host = label(Uri.parse(channel.optString("url")).getHost(), 12, Ui.MUTED);
-      host.setSingleLine(true);
-      host.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      host.setPadding(dp(2), 0, dp(2), 0);
-      c.addView(host);
-      c.setOnClickListener(
-          new View.OnClickListener() {
-            public void onClick(View v) {
-              playDirect(channel.optString("name"), channel.optString("url"));
-            }
-          });
-      c.setOnLongClickListener(
-          new View.OnLongClickListener() {
-            public boolean onLongClick(View v) {
-              channelOptions(index);
-              return true;
-            }
-          });
-      LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
-      p.setMargins(dp(4), dp(4), dp(6), dp(6));
-      r.addView(c, p);
-    }
-  }
-
-  void channelOptions(final int index) {
-    JSONObject channel = userChannels.optJSONObject(index);
-    if (channel == null) return;
-    new AlertDialog.Builder(this)
-        .setTitle(channel.optString("name"))
-        .setItems(
-            new String[] {"Reproducir", "Editar", "Eliminar"},
-            new android.content.DialogInterface.OnClickListener() {
-              public void onClick(android.content.DialogInterface d, int n) {
-                JSONObject current = userChannels.optJSONObject(index);
-                if (current == null) return;
-                if (n == 0) playDirect(current.optString("name"), current.optString("url"));
-                else if (n == 1) editChannel(index);
-                else confirmRemove(index);
-              }
-            })
-        .setNegativeButton("Volver", null)
-        .show();
-  }
-
-  void confirmRemove(final int index) {
-    JSONObject channel = userChannels.optJSONObject(index);
-    if (channel == null) return;
-    new AlertDialog.Builder(this)
-        .setMessage("¿Eliminar " + channel.optString("name") + "?")
-        .setPositiveButton(
-            "Eliminar",
-            new android.content.DialogInterface.OnClickListener() {
-              public void onClick(android.content.DialogInterface d, int n) {
-                storeChannels(UserChannels.remove(userChannels, index));
-              }
-            })
-        .setNegativeButton("Cancelar", null)
-        .show();
-  }
-
-  void editChannel(final int index) {
-    JSONObject existing = index >= 0 ? userChannels.optJSONObject(index) : null;
-    LinearLayout form = new LinearLayout(this);
-    form.setOrientation(LinearLayout.VERTICAL);
-    form.setPadding(dp(20), dp(8), dp(20), 0);
-    final EditText name = new EditText(this);
-    name.setHint("Nombre del canal");
-    name.setSingleLine(true);
-    name.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-    final EditText url = new EditText(this);
-    url.setHint("http://servidor:puerto/ruta/canal.ts");
-    url.setSingleLine(true);
-    url.setInputType(
-        android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-    if (existing != null) {
-      name.setText(existing.optString("name"));
-      url.setText(existing.optString("url"));
-    }
-    form.addView(name);
-    form.addView(url);
-    final AlertDialog dialog =
-        new AlertDialog.Builder(this)
-            .setTitle(existing == null ? "Añadir canal" : "Editar canal")
-            .setView(form)
-            .setPositiveButton("Guardar", null)
-            .setNegativeButton("Cancelar", null)
-            .create();
-    dialog.setOnShowListener(
-        new android.content.DialogInterface.OnShowListener() {
-          public void onShow(android.content.DialogInterface d) {
-            dialog
-                .getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(
-                    new View.OnClickListener() {
-                      public void onClick(View v) {
-                        String address = url.getText().toString();
-                        if (UserChannels.normalize(address) == null) {
-                          url.setError("Introduce un enlace que empiece por http:// o https://");
-                          return;
-                        }
-                        try {
-                          String title = name.getText().toString();
-                          storeChannels(
-                              index < 0
-                                  ? UserChannels.add(userChannels, title, address)
-                                  : UserChannels.replace(userChannels, index, title, address));
-                          dialog.dismiss();
-                        } catch (JSONException invalid) {
-                          url.setError("Enlace no válido");
-                        }
-                      }
-                    });
-          }
-        });
-    dialog.show();
-  }
-
-  void storeChannels(JSONArray updated) {
-    try {
-      UserChannels.save(userChannelFile(), updated);
-      userChannels = updated;
-    } catch (IOException e) {
-      Toast.makeText(this, "No se pudieron guardar los canales", Toast.LENGTH_LONG).show();
-    }
-    render();
-  }
-
-  void playDirect(String name, String address) {
-    if (UserChannels.normalize(address) == null) {
-      Toast.makeText(this, "Enlace no válido", Toast.LENGTH_LONG).show();
-      return;
-    }
-    android.content.Intent intent = new android.content.Intent(this, NativePlayerActivity.class);
-    // A player page is re-read for a current source and renewed before its token expires.
-    intent.putExtra(UserChannels.isPage(address) ? "page_url" : "media_url", address.trim());
-    intent.putExtra("title", name);
-    startActivity(intent);
+      if (mode.equals("Favoritos")) {
+        int id = v.getId();
+        render();
+        View replacement = root.findViewById(id);
+        if (replacement != null) replacement.requestFocus();
+        else { View first = list.getChildCount() > 1 ? list.getChildAt(1) : list; first.requestFocus(View.FOCUS_DOWN); }
+      }
+      return true;
+    });
   }
 }

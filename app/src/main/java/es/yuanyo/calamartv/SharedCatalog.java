@@ -70,9 +70,29 @@ final class SharedCatalog {
         if (UserChannels.normalize(streams.getString(j)) == null)
           throw new JSONException("Enlace no válido");
     }
+    if (data.has("events")) {
+      JSONArray events = data.getJSONArray("events");
+      Set<String> eventIds = new HashSet<>();
+      for (int i = 0; i < events.length(); i++) {
+        JSONObject event = events.getJSONObject(i);
+        String id = event.getString("id"), cover = event.getString("cover");
+        if (id.isEmpty() || !eventIds.add(id) || event.getString("name").trim().isEmpty()
+            || !ids.contains(event.getString("channelId")) || !validCover(cover))
+          throw new JSONException("Cada evento necesita nombre, portada y un canal creado");
+      }
+    }
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;
+  }
+
+  static boolean validCover(String cover) {
+    if (cover.startsWith("data:image/")) return cover.length() <= 180000
+        && cover.matches("^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$");
+    try {
+      java.net.URI uri = new java.net.URI(cover);
+      return "https".equals(uri.getScheme()) && uri.getHost() != null && uri.getUserInfo() == null;
+    } catch (Exception invalid) { return false; }
   }
 
   static JSONObject decode(DocumentSnapshot snapshot) throws JSONException {

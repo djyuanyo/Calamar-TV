@@ -17,12 +17,15 @@ public final class Catalog {
           "Autonómicos");
 
   public static final class Channel {
-    public final String id, name, group, region, logo, web;
+    public final String id, name, group, region, logo, web, cover;
+    public final boolean event;
     public final List<String> streams;
     public final boolean geo, own;
 
     Channel(JSONObject o, boolean own) {
       this.own = own;
+      event = o.optBoolean("event");
+      cover = o.optString("cover");
       id = o.optString("id");
       name = o.optString("name", "Canal");
       String g = o.optString("group").trim();
@@ -86,6 +89,27 @@ public final class Catalog {
     for (Channel c : channels) {
       if (out.size() >= limit) break;
       if (c.playable() && !out.contains(c)) out.add(c);
+    }
+    return out;
+  }
+
+  /** Resolve event references each time the catalog changes. */
+  public static List<Channel> events(List<Channel> channels, JSONObject custom) {
+    List<Channel> out = new ArrayList<>();
+    JSONArray events = custom == null ? null : custom.optJSONArray("events");
+    if (events == null) return out;
+    for (int i = 0; i < events.length(); i++) {
+      JSONObject event = events.optJSONObject(i);
+      if (event == null) continue;
+      for (Channel target : channels) if (target.id.equals(event.optString("channelId")) && target.playable()) {
+        try {
+          JSONObject card = new JSONObject().put("id", target.id).put("name", event.getString("name"))
+              .put("group", target.name).put("cover", event.getString("cover")).put("event", true)
+              .put("streams", new JSONArray(target.streams));
+          out.add(new Channel(card, true));
+        } catch (JSONException ignored) {}
+        break;
+      }
     }
     return out;
   }
