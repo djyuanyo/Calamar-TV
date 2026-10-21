@@ -56,7 +56,11 @@ public final class CastControls {
       toggle.setContentDescription("Reproducir o pausar en Chromecast");
       toggle.setOnClickListener(v -> {
         RemoteMediaClient remote = remote();
-        if (remote != null) { if (remote.isPaused()) remote.play(); else remote.pause(); }
+        if (remote != null) {
+          if (remote.isPaused()) {
+            if (CastSource.needsBridge(source.current())) send(); else remote.play();
+          } else remote.pause();
+        }
       });
       row.addView(toggle);
       sessions.addSessionManagerListener(listener, CastSession.class);

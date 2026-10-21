@@ -54,7 +54,11 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
     } finally { sending = false; update(); }
   };
   button.addEventListener('click', send);
-  toggle.addEventListener('click', () => controller?.playOrPause());
+  toggle.addEventListener('click', () => {
+    // A long pause may have stopped the idle server worker. Prepare it again before resuming.
+    if (remote?.isPaused && needsCastBridge(getSource()?.url)) send();
+    else controller?.playOrPause();
+  });
   disconnect.addEventListener('click', () => {
     context?.endCurrentSession(true);
     onDisconnect?.();
