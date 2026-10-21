@@ -263,6 +263,7 @@ function playSource(c, index) {
       // A fatal network error is no longer a buffering state. Keep the failure
       // visible and stop outstanding requests until the user retries.
       if (hls) hls.stopLoad();
+      if (stopTs) { stopTs(); stopTs = null; }
       video.pause();
       player.classList.remove('is-buffering');
       const failure = {
