@@ -24,6 +24,10 @@ android {
             minifyEnabled false
             if (System.getenv('CALAMAR_KEYSTORE_PATH')) signingConfig signingConfigs.distribution
         }
+        // With the permanent key the debug APK also updates the installed app instead of conflicting with it.
+        debug {
+            if (System.getenv('CALAMAR_KEYSTORE_PATH')) signingConfig signingConfigs.distribution
+        }
     }
     // The same catalog the web publishes is bundled as the offline fallback.
     sourceSets { main { assets.srcDirs += rootProject.file('data') } }

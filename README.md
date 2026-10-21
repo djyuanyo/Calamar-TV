@@ -109,7 +109,7 @@ La pestaña **Favoritos** sustituye la antigua lista local. Los archivos locales
 1. GitHub Pages solo publica repositorios privados con un plan de pago. Para el plan gratuito, haz público el repositorio (Settings → General → Danger Zone → Change visibility). El catálogo y la web no contienen credenciales; revisa igualmente el historial antes de hacerlo.
 2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 3. Ejecuta el workflow **Calamar TV · Web y catálogo** (Actions → Run workflow). La web queda en `https://djyuanyo.github.io/Calamar-TV/`.
-4. Para firmar la app y poder actualizarla, añade en Settings → Secrets and variables → Actions los secretos `CALAMAR_KEYSTORE_BASE64`, `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave se guarda fuera del repositorio. Todas las versiones deben firmarse con la misma; la primera APK firmada obliga a desinstalar una vez la versión de pruebas.
+4. Para firmar la app y poder actualizarla, añade en Settings → Secrets and variables → Actions los secretos `CALAMAR_KEYSTORE_BASE64` (el archivo .p12 en base64), `CALAMAR_KEYSTORE_PASSWORD`, `CALAMAR_KEY_ALIAS` y `CALAMAR_KEY_PASSWORD`. La clave se guarda fuera del repositorio. Con los secretos, la APK release y la debug se firman con la misma clave permanente (el registro de la compilación muestra sus huellas SHA-1 y SHA-256), así que cualquier APK nueva se instala encima de la anterior. La primera APK firmada obliga a desinstalar una vez las versiones anteriores. Las huellas deben estar añadidas en Firebase (Configuración del proyecto → app Android) para que funcione el acceso con Google en la app. Si falta el secreto, la compilación muestra un aviso.
 
 ## Compilación y pruebas
 
