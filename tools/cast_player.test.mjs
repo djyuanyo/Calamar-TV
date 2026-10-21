@@ -125,3 +125,13 @@ test('other public IPTV hosts use the same Cast adapter without per-domain setup
     assert.equal(needsCastBridge(`http://${host}/User/Pass/42`), false);
   }
 });
+
+
+test('closing the channel cancels compatibility preparation without another hosting request', async () => {
+  let calls = 0;
+  const result = await prepareCastSource('http://public.example/User/Pass/123', {
+    isCurrent: () => false, fetcher: async () => { calls++; },
+  });
+  assert.equal(result, null);
+  assert.equal(calls, 0);
+});

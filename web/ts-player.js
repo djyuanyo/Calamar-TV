@@ -8,23 +8,42 @@ export function tsRequest(address, relay = false) {
   return { url: TS_RELAY, headers: { 'X-Calamar-Source': btoa(String.fromCharCode(...bytes)) } };
 }
 
+export function videoFailure(error) {
+  const code = Number(error?.code) || 0;
+  if (code === 1) return null; // Intentional aborts while replacing a MediaSource are not failures.
+  return { details: code === 2 ? 'mediaNetworkError' : code === 3 ? 'mediaDecodeError'
+    : code === 4 ? 'codecUnsupported' : 'mediaElementError', mediaCode: code,
+    response: { code: 0 } };
+}
+
 export function mountTs({ library, video, address, relay = false, onFailure, onPlaying,
-  timers = globalThis }) {
+  onRecovering, timers = globalThis }) {
   if (!library?.getFeatureList().mseLivePlayback) {
     onFailure({ details: 'codecUnsupported' });
     return () => {};
   }
-  let current = null, timer = null, active = true, serial = 0, retries = 0, first = true;
+  let current = null, timer = null, active = true, serial = 0, retries = 0, wantsPlay = true;
   const clear = () => {
     timers.clearTimeout(timer);
     timer = null;
     serial++;
-    if (current) { current.pause(); current.destroy(); current = null; }
+    const old = current;
+    current = null; // Teardown may synchronously emit pause/error callbacks.
+    if (old) { old.pause(); old.destroy(); }
+  };
+  const fail = (request, network, data) => {
+    if (!active || request !== serial || !current) return;
+    if (network && retries++ < 2) {
+      clear();
+      onRecovering?.();
+      timer = timers.setTimeout(start, 1500);
+      return;
+    }
+    clear();
+    onFailure(data);
   };
   const start = () => {
     if (!active) return;
-    const resume = first || !video.paused;
-    first = false;
     clear();
     const request = serial;
     const source = tsRequest(address, relay);
@@ -35,33 +54,47 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
       });
       current = player;
       player.on(library.Events.ERROR, (type, detail, info) => {
-        if (!active || request !== serial) return;
         const network = type === library.ErrorTypes?.NETWORK_ERROR || /network/i.test(type);
-        if (network && retries++ < 2) {
-          clear();
-          timer = timers.setTimeout(start, 1500);
-          return;
-        }
-        clear();
-        onFailure({ details: network ? 'fragLoadError' : 'codecUnsupported',
+        fail(request, network, { details: network ? 'fragLoadError' : 'codecUnsupported',
           response: { code: Number.isInteger(info?.code) ? info.code : 0 } });
       });
       player.on(library.Events.LOADING_COMPLETE, () => {
         if (!active || request !== serial) return;
-        // The hosting caps each connection. Drain its buffer before opening the next one.
         const end = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : video.currentTime;
         timer = timers.setTimeout(start, Math.max(250, (end - video.currentTime - 0.5) * 1000));
       });
       player.attachMediaElement(video);
       player.load();
-      if (resume) player.play()?.catch(() => {}); // Respect a user pause across relay renewal.
+      if (wantsPlay) player.play()?.catch(() => {});
     } catch {
-      clear();
-      onFailure({ details: 'codecUnsupported' });
+      if (active && request === serial) {
+        clear();
+        onFailure({ details: 'codecUnsupported' });
+      }
     }
   };
-  const playing = () => { if (active) { retries = 0; onPlaying?.(); } };
-  video.addEventListener('playing', playing);
+  const playing = () => { if (active) { retries = 0; wantsPlay = true; onPlaying?.(); } };
+  const play = () => { if (active) wantsPlay = true; };
+  const pause = () => {
+    if (active && current && !video.ended && !video.error && video.readyState >= 2) wantsPlay = false;
+  };
+  const mediaError = () => {
+    if (!active || !current || !video.error) return;
+    const data = videoFailure(video.error);
+    if (!data) return;
+    const request = serial;
+    // Let the engine process the same event first; its retries invalidate this callback.
+    queueMicrotask(() => fail(request, data.mediaCode === 2, data));
+  };
+  for (const [name, listener] of [['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]]) {
+    video.addEventListener(name, listener);
+  }
   start();
-  return () => { active = false; clear(); video.removeEventListener('playing', playing); };
+  return () => {
+    active = false;
+    clear();
+    for (const [name, listener] of [['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]]) {
+      video.removeEventListener(name, listener);
+    }
+  };
 }

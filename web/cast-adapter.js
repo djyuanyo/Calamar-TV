@@ -5,12 +5,13 @@ import { httpTsSource } from './http-stream.js';
 export const needsCastBridge = httpTsSource;
 
 export async function prepareCastSource(address, { fetcher = globalThis.fetch,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onStatus = () => {} } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onStatus = () => {}, isCurrent = () => true } = {}) {
   if (!needsCastBridge(address)) return null;
   onStatus('Preparando el canal para la TV…');
   const bytes = new TextEncoder().encode(address);
   const headers = { 'X-Calamar-Source': btoa(String.fromCharCode(...bytes)) };
   for (let attempt = 0; attempt < 35; attempt++) {
+    if (!isCurrent()) return null;
     let response;
     try { response = await fetcher(`${CAST_BRIDGE}?action=start`, { headers, cache: 'no-store',
       signal: AbortSignal.timeout(10000), referrerPolicy: 'no-referrer' }); }

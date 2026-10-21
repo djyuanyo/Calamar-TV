@@ -54,8 +54,16 @@ test('diagnostic distinguishes failed playlists and fragments without disclosing
   const expiry = 1792143608 * 1000;
   const report = streamFailureReport({ details: 'levelLoadError', code: 403,
     url: 'https://cdn.example/live/mono.m3u8?token=private-secret', expiry });
-  assert.deepEqual(report, { stage: 'Lista de vídeo o audio', code: 403, host: 'cdn.example', expiresAt: '2026-10-16T09:40:08.000Z' });
+  assert.deepEqual(report, { stage: 'Lista de vídeo o audio', mediaCode: null, code: 403, host: 'cdn.example', expiresAt: '2026-10-16T09:40:08.000Z' });
   assert.equal(JSON.stringify(report).includes('private-secret'), false);
   assert.equal(streamFailureReport({ details: 'fragLoadError' }).stage, 'Fragmento de vídeo');
   assert.equal(streamFailureReport({ details: 'manifestLoadError', url: 'invalid' }).host, '');
+});
+
+
+test('server failures and browser decode failures are distinct from CORS', () => {
+  assert.match(explainStreamError({ details: 'fragLoadError', code: 502 }), /servidor.*puente/i);
+  assert.doesNotMatch(explainStreamError({ details: 'fragLoadError', code: 502 }), /CORS/);
+  assert.match(explainStreamError({ details: 'mediaDecodeError' }), /navegador.*vídeo/i);
+  assert.equal(streamFailureReport({ mediaCode: 3 }).mediaCode, 3);
 });

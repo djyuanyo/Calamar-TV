@@ -1,6 +1,7 @@
 import { merge, featured, groups, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { initControls, icon } from './player-controls.js';
-import { mountTs } from './ts-player.js';
+import { mountTs, videoFailure } from './ts-player.js';
+import { prepareCastSource } from './cast-adapter.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 
@@ -281,17 +282,19 @@ function playSource(c, index) {
         code: data?.response?.code || 0,
         url: data?.url || data?.frag?.url || source.url,
         expiry: source.expiry,
+        mediaCode: data?.mediaCode || 0,
       };
-      const reason = data ? explainStreamError(failure) : 'No se pudo reproducir esta emisión en el navegador.';
+      const reason = data?.userMessage || (data ? explainStreamError(failure) : 'No se pudo reproducir esta emisión en el navegador.');
       const report = streamFailureReport(failure);
       const diagnosis = el('details', {}, el('summary', {}, 'Ver detalle del fallo'),
         el('p', {}, `${report.stage} · ${report.code ? `HTTP ${report.code}` : 'Sin respuesta HTTP'}${report.host ? ` · ${report.host}` : ''}`),
+        report.mediaCode ? el('p', {}, `Error de vídeo del navegador: ${report.mediaCode === 3 ? 'decodificación' : report.mediaCode === 2 ? 'conexión interrumpida' : 'formato no compatible'} (código ${report.mediaCode}).`) : null,
         report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
         // Firebase may have delivered fresh URLs since playback began.
         const latest = state.channels.find((item) => item.id === c.id) || c;
         playSource(latest, 0);
-      } }, '↻ Reintentar');
+      } }, '↻ Refrescar');
       // Direct navigation may work even when hls.js fetches from GitHub Pages are
       // rejected by CORS or by the origin policy of the upstream CDN.
       // Use a real link instead of trying to proxy or bypass access controls.
@@ -314,11 +317,40 @@ function playSource(c, index) {
   };
   playerStatus.textContent = 'Conectando…';
   if (source.how.kind === 'ts') {
-    video.onplaying = () => { if (generation === playbackGeneration) playerStatus.textContent = ''; };
-    video.onerror = () => next();
+    video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+    video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
     controls.attach(null);
     stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
-      onFailure: (data) => queueMicrotask(() => next(data)),
+      onFailure: (data) => queueMicrotask(async () => {
+        if (generation !== playbackGeneration) return;
+        if (!source.how.relay || !/codec|decode|buffer/i.test(data?.details || '')) { next(data); return; }
+        if (stopTs) { stopTs(); stopTs = null; }
+        video.removeAttribute('src');
+        video.load();
+        playerStatus.textContent = 'Adaptando el vídeo para este navegador…';
+        try {
+          const compatible = await prepareCastSource(source.url, {
+            isCurrent: () => generation === playbackGeneration,
+            onStatus: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Adaptando el vídeo para este navegador…'; },
+          });
+          if (generation !== playbackGeneration || !compatible) return;
+          video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
+          if (window.Hls?.isSupported()) {
+            hls = new window.Hls({ lowLatencyMode: false });
+            hls.on(window.Hls.Events.ERROR, (_event, failure) => { if (failure.fatal) next(failure); });
+            hls.loadSource(compatible.url);
+            hls.attachMedia(video);
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
+          else { next({ details: 'codecUnsupported' }); return; }
+          controls.attach(hls);
+          video.play().catch(() => {
+            if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+          });
+        } catch (error) {
+          if (generation === playbackGeneration) next({ ...data, userMessage: error.message || 'No se pudo adaptar el vídeo en el hosting.' });
+        }
+      }),
+      onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la emisión…'; },
       onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
     });
     return;
@@ -334,8 +366,8 @@ function playSource(c, index) {
     video.src = source.url;
   }
   controls.attach(hls);
-  video.onplaying = () => { if (generation === playbackGeneration) playerStatus.textContent = ''; };
-  video.onerror = () => next();
+  video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+  video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
   video.play().catch(() => {
     if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
