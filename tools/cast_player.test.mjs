@@ -116,3 +116,12 @@ test('adapter rejects untrusted result URLs and does not mask installation error
   await assert.rejects(prepareCastSource(address, { fetcher: async () => response({ url: 'https://example.com/live.m3u8' }) }), /Respuesta no válida/);
   await assert.rejects(prepareCastSource(address, { fetcher: async () => ({ ...response({ error: 'Instala FFmpeg.' }), ok: false }) }), /Instala FFmpeg/);
 });
+
+
+test('other public IPTV hosts use the same Cast adapter without per-domain setup', () => {
+  assert.equal(needsCastBridge('http://neospaxy.top:8080/Test/Pass/57476'), true);
+  assert.equal(needsCastBridge('http://another.example/live/User/Pass/42.ts?token=A%2Bb'), true);
+  for (const host of ['localhost', '127.0.0.1', '10.0.0.2', '172.20.1.1', '192.168.1.2', '100.64.1.1']) {
+    assert.equal(needsCastBridge(`http://${host}/User/Pass/42`), false);
+  }
+});

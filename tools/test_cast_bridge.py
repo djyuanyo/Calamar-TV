@@ -18,7 +18,7 @@ class CastBridgeTest(unittest.TestCase):
         program = 'define("CALAMAR_CAST_TEST_ONLY", true); require ' + json.dumps(str(PHP)) + '; ' + expression
         return subprocess.check_output(['php', '-r', program], text=True)
 
-    def test_only_verified_provider_and_no_header_in_public_media_url(self):
+    def test_public_iptv_sources_and_no_private_hosts(self):
         sources = ['http://31.43.191.125:8080/Test/Pass/123',
                    'http://31.43.191.125:8080/Test/Pass/123.ts',
                    'http://127.0.0.1:8080/Test/Pass/123',
@@ -26,7 +26,22 @@ class CastBridgeTest(unittest.TestCase):
                    'http://user:pass@31.43.191.125:8080/Test/Pass/123',
                    'http://31.43.191.125:8080/Test/Pass/123#test']
         result = self.php('echo json_encode(array_map("castSourceAllowed", ' + json.dumps(sources) + '));')
-        self.assertEqual(json.loads(result), [True, True, False, False, False, False])
+        self.assertEqual(json.loads(result), [True, True, False, True, False, False])
+        result = self.php('echo json_encode([castSourceAllowed("http://neospaxy.top:8080/Test/Pass/57476"), castSourceAllowed("http://other.example/live/Test/Pass/1.ts?token=A%2Bb")]);')
+        self.assertEqual(json.loads(result), [True, True])
+
+    def test_dns_and_redirects_cannot_reach_private_addresses(self):
+        result = self.php('echo json_encode(['
+            'publicTarget("http://video.example/Test/Pass/1", fn($host) => ["127.0.0.1"]),'
+            'publicTarget("http://video.example/Test/Pass/1", fn($host) => ["8.8.8.8", "10.0.0.1"]),'
+            'publicTarget("http://video.example/Test/Pass/1", fn($host) => ["8.8.8.8"]),'
+            'redirectTarget("http://video.example/live/Test/Pass/1", "file:///etc/passwd")'
+            ']);')
+        data = json.loads(result)
+        self.assertIsNone(data[0])
+        self.assertIsNone(data[1])
+        self.assertEqual(data[2]['ip'], '8.8.8.8')
+        self.assertIsNone(data[3])
 
     def test_actual_hevc_ts_becomes_h264_aac_hls(self):
         with tempfile.TemporaryDirectory() as directory:

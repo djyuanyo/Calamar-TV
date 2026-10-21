@@ -1,0 +1,13 @@
+ACTUALIZACIÓN DEL PUENTE HTTP
+
+En cPanel, sube y extrae este ZIP en la misma carpeta donde están los PHP de Calamar.
+Acepta sobrescribir calamar-tv-relay.php y calamar-cast.php. Es importante subir también
+el nuevo calamar-http-source.php. Conserva la carpeta calamar-cast-bin: no hay que reinstalar FFmpeg.
+
+Después abre la web actualizada y vuelve a cargar el canal:
+https://djyuanyo.github.io/Calamar-TV/?http=2.3.4
+
+Admite MPEG-TS por HTTP y rutas IPTV /usuario/clave/id o /live/usuario/clave/id.ts
+con servidores públicos diferentes, sin configurar cada dominio individualmente.
+El formato, el estado del enlace y las restricciones del proveedor siguen importando.
+Para Chromecast desde Android con esos otros servidores, instala APK 2.3.4.

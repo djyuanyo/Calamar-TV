@@ -1,3 +1,4 @@
+import { httpTsSource } from './http-stream.js';
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
 export const GROUP_ORDER = [OWN_GROUP, 'Generalistas', 'Deportes', 'Informativos', 'Infantiles', 'Música', 'Autonómicos'];
@@ -163,9 +164,8 @@ export function webPlayback(url) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
-  const relayTs = u.protocol === 'http:' && u.hostname === '31.43.191.125' && u.port === '8080'
-    && !u.username && !u.password && /^\/[^/]+\/[^/]+\/\d+(?:\.ts)?$/.test(path);
-  if (relayTs) return { ok: true, kind: 'ts', relay: true };
+  if (httpTsSource(url)) return { ok: true, kind: 'ts', relay: true };
+  if (u.protocol === 'http:') return { ok: false, reason: 'Este enlace HTTP no es un flujo TS/IPTV compatible con el puente' };
   if (u.protocol !== 'https:') return { ok: false, reason: 'Este enlace usa http:// y el navegador lo bloquea en una web segura' };
   if (path.endsWith('.m3u8')) return { ok: true, kind: 'hls' };
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };

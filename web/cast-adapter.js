@@ -1,14 +1,8 @@
 export const CAST_BRIDGE = 'https://calamarmenciano.com/calamar-cast.php';
 
-// The server accepts only the HTTP IPTV provider already configured on this hosting.
-export function needsCastBridge(address) {
-  try {
-    const u = new URL(address);
-    return u.protocol === 'http:' && u.hostname === '31.43.191.125' && u.port === '8080'
-      && !u.username && !u.password && !u.search && !u.hash
-      && /^\/[^/]+\/[^/]+\/\d+(?:\.ts)?$/.test(u.pathname);
-  } catch { return false; }
-}
+import { httpTsSource } from './http-stream.js';
+
+export const needsCastBridge = httpTsSource;
 
 export async function prepareCastSource(address, { fetcher = globalThis.fetch,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onStatus = () => {} } = {}) {

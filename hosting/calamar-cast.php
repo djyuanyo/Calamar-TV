@@ -3,17 +3,13 @@
 declare(strict_types=1);
 ini_set('display_errors', '0');
 umask(0077);
+require_once __DIR__ . '/calamar-http-source.php';
 
 const CAST_PUBLIC_URL = 'https://calamarmenciano.com/calamar-cast.php';
 const CAST_INPUT_URL = 'https://calamarmenciano.com/calamar-tv-relay.php?stream=1';
 
 function castSourceAllowed(string $source): bool {
-    $u = @parse_url($source);
-    return is_array($u) && strlen($source) <= 2048 && !preg_match('/[\r\n]/', $source)
-        && ($u['scheme'] ?? '') === 'http' && ($u['host'] ?? '') === '31.43.191.125'
-        && ($u['port'] ?? 0) === 8080
-        && !isset($u['user']) && !isset($u['pass']) && !isset($u['query']) && !isset($u['fragment'])
-        && (bool)preg_match('~^/[^/]+/[^/]+/[0-9]+(?:[.]ts)?$~D', $u['path'] ?? '');
+    return httpTsSourceAllowed($source);
 }
 
 function castRoot(): string {
@@ -148,7 +144,7 @@ try {
         castReply(['error' => 'Origen no permitido.'], 403);
     }
     $source = base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
-    if (!is_string($source) || !castSourceAllowed($source)) castReply(['error' => 'Fuente no admitida por este adaptador.'], 400);
+    if (!is_string($source) || !castSourceAllowed($source) || publicTarget($source) === null) castReply(['error' => 'Fuente no admitida por este adaptador.'], 400);
     $cap = castCapabilities();
     if (!$cap['ready']) castReply(['error' => 'Instala el paquete Calamar Chromecast en el hosting y abre calamar-cast.php para comprobar FFmpeg.'], 503);
 

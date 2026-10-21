@@ -28,9 +28,20 @@ public final class CastSource {
   public static boolean needsBridge(String address) {
     try {
       URI u = URI.create(address);
-      return "http".equals(u.getScheme()) && "31.43.191.125".equals(u.getHost())
-          && u.getPort() == 8080 && u.getUserInfo() == null && u.getRawQuery() == null
-          && u.getRawFragment() == null && u.getRawPath().matches("/[^/]+/[^/]+/[0-9]+(?:\\.ts)?");
+      String host = u.getHost();
+      if (!"http".equalsIgnoreCase(u.getScheme()) || host == null || u.getUserInfo() != null
+          || u.getPort() == 0 || u.getPort() > 65535 || u.getRawFragment() != null || !host.matches("[a-zA-Z0-9.-]+")) return false;
+      host = host.toLowerCase(Locale.ROOT);
+      if (host.equals("localhost") || host.matches(".*\\.(localhost|local|internal)")) return false;
+      if (host.matches("[0-9]+(?:\\.[0-9]+){3}")) {
+        String[] parts = host.split("\\.");
+        int a = Integer.parseInt(parts[0]), b = Integer.parseInt(parts[1]);
+        if (a == 0 || a == 10 || a == 127 || a >= 224 || (a == 169 && b == 254)
+            || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168)
+            || (a == 100 && b >= 64 && b <= 127)) return false;
+      }
+      String path = u.getRawPath().toLowerCase(Locale.ROOT);
+      return path.endsWith(".ts") || path.matches("/(?:live/)?[^/]+/[^/]+/[0-9]+(?:\\.ts)?");
     } catch (Exception invalid) { return false; }
   }
 }

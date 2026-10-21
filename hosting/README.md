@@ -1,13 +1,16 @@
 # Puente de MPEG-TS para el alojamiento existente
 
-Subir `calamar-tv-relay.php` al `public_html` de `calamarmenciano.com`.
+Subir `calamar-http-source.php` y `calamar-tv-relay.php` al `public_html` de `calamarmenciano.com`.
 La web publicada solicita `https://calamarmenciano.com/calamar-tv-relay.php?stream=1`.
 El navegador transmite la URL original en `X-Calamar-Source`, nunca en la URL del puente.
 
-El destino inicial está limitado al servidor HTTP comprobado (`31.43.191.125:8080`)
-y a sus rutas `/usuario/clave/id` o `/usuario/clave/id.ts`. Los saltos de redirección
-se validan y fijan a IP públicas, manteniendo la comprobación TLS en HTTPS.
-No es un proxy de destino libre. No se incluye ningún enlace de canal con credenciales.
+Admite flujos HTTP MPEG-TS (`.ts`) y rutas IPTV `/usuario/clave/id`,
+`/usuario/clave/id.ts` o `/live/usuario/clave/id.ts`, en distintos servidores públicos
+sin añadir cada dominio por separado. Conserva las consultas y tokens tal como llegan.
+No sirve páginas web ni convierte cualquier archivo HTTP en un vídeo reproducible.
+Las direcciones privadas, locales y reservadas se rechazan; se validan todos los
+resultados DNS y cada redirección, y cURL fija la IP validada para evitar cambios DNS.
+No se incluye ningún enlace de canal con credenciales.
 
 El puente no impone un cupo de usuarios ni de conexiones simultáneas. Cada conexión
 se renueva al alcanzar 120 segundos o 64 MiB. El cliente renueva las conexiones que terminan. No ejecuta FFmpeg,
@@ -21,4 +24,4 @@ Los límites y la admisión de tráfico continuo dependen del plan del alojamien
 
 Después de verificar la integración, eliminar los PHP y JavaScript de diagnóstico
 `calamar-prueba-7f3c9b.php`, `calamar-video-test-9a62.php`, `calamar-video-test-9a62.js`
-y los ZIP subidos al servidor. Conservar únicamente el puente.
+y los ZIP subidos al servidor. Conservar el puente, calamar-http-source.php y los archivos de Chromecast que se estén usando.

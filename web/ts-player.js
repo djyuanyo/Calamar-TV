@@ -1,4 +1,4 @@
-/** HTTPS transport for the HTTP IPTV server verified on the owner's hosting. */
+/** HTTPS transport for public HTTP IPTV streams using the owner's hosting. */
 export const TS_RELAY = 'https://calamarmenciano.com/calamar-tv-relay.php?stream=1';
 
 export function tsRequest(address, relay = false) {

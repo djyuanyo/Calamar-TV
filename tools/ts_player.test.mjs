@@ -3,10 +3,14 @@ import assert from 'node:assert/strict';
 import { webPlayback } from '../web/catalog.js';
 import { mountTs, tsRequest, TS_RELAY } from '../web/ts-player.js';
 
-test('HTTP IPTV routes use the configured relay while unrelated HTTP stays blocked', () => {
+test('HTTP IPTV from different public hosts uses the relay while non-media pages stay blocked', () => {
   assert.deepEqual(webPlayback('http://31.43.191.125:8080/User/Pass/244'), { ok: true, kind: 'ts', relay: true });
   assert.equal(webPlayback('http://31.43.191.125:8080/User/Pass/244.ts').kind, 'ts');
-  assert.equal(webPlayback('http://other.example/User/Pass/244').ok, false);
+  assert.equal(webPlayback('http://other.example/User/Pass/244').ok, true);
+  assert.equal(webPlayback('http://neospaxy.top:8080/Test/Pass/57476').relay, true);
+  assert.equal(webPlayback('http://other.example/live/User/Pass/244.ts?token=A%2Bb').relay, true);
+  assert.equal(webPlayback('http://other.example/embed/player').ok, false);
+  assert.equal(webPlayback('http://127.0.0.1/User/Pass/244').ok, false);
   assert.equal(webPlayback('http://user:pass@31.43.191.125:8080/User/Pass/244').ok, false);
   assert.equal(webPlayback('https://example.com/live.ts').kind, 'ts');
   assert.equal(webPlayback('https://example.com/live.m3u8').kind, 'hls');
