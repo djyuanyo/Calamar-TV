@@ -63,7 +63,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean diagnosing;
   private boolean mediaHttp1;
   private String mediaProgress = "Sin descargas de vídeo registradas.";
-  private String pageUrl, documentUrl, currentUrl = "", title;
+  private String pageUrl, documentUrl, currentUrl = "", title, shareUrl;
 
   /** A user-added media link, played as is without page lookup or renewal. */
   private String directUrl;
@@ -81,6 +81,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onCreate(state);
     pageUrl = getIntent().getStringExtra("page_url");
     title = getIntent().getStringExtra("title");
+    shareUrl = getIntent().getStringExtra("share_url");
     footballFallback = getIntent().getBooleanExtra("football_fallback", false);
     ArrayList<String> urls = getIntent().getStringArrayListExtra("media_urls");
     if (urls == null) urls = new ArrayList<>();
@@ -146,6 +147,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       mediaHttp1 = false;
       if (directUrl != null) playDirect(); else resolveFresh();
     });
+    // Events, as on the web: their preview link (cover and name in WhatsApp) through the share sheet.
+    if (shareUrl != null) button(controls, "Compartir", this::share);
     castControls = new CastControls(this, controls,
         () -> !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
@@ -176,6 +179,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playerView.setControllerShowTimeoutMs(4000);
     // The controller's own full screen button: it hides the panel and the system bars.
     playerView.setFullscreenButtonClickListener(on -> setFullscreen(on));
+    // In full screen the panel lies over the video and comes and goes with the controls, as on the web.
+    playerView.setControllerVisibilityListener(
+        (PlayerView.ControllerVisibilityListener) visibility -> {
+          if (fullscreen) panel.setVisibility(visibility == View.VISIBLE ? View.VISIBLE : View.GONE);
+        });
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
     root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
     setContentView(root);
@@ -211,7 +219,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private void setFullscreen(boolean on) {
     if (fullscreen == on) return; // The controller reports back what we set; this stops the echo.
     fullscreen = on;
-    panel.setVisibility(on ? View.GONE : View.VISIBLE);
+    placePanel(on);
     root.setFitsSystemWindows(!on);
     applySystemBars(on);
     if (!isTelevision()) {
@@ -222,6 +230,35 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     playerView.setFullscreenButtonState(on);
     root.requestApplyInsets();
+  }
+
+  /**
+   * Outside full screen the panel sits above the video; in full screen it lies over the top of the
+   * video on a dark fade and shows only while the player controls do (a tap shows both).
+   */
+  private void placePanel(boolean overlay) {
+    android.view.ViewGroup parent = (android.view.ViewGroup) panel.getParent();
+    if (parent != null) parent.removeView(panel);
+    if (overlay) {
+      panel.setBackground(new android.graphics.drawable.GradientDrawable(
+          android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xd9000000, 0x00000000}));
+      panel.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 18));
+      stage.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+      panel.setVisibility(playerView.isControllerFullyVisible() ? View.VISIBLE : View.GONE);
+    } else {
+      panel.setBackground(null);
+      panel.setPadding(0, 0, 0, 0);
+      root.addView(panel, 0);
+      panel.setVisibility(View.VISIBLE);
+    }
+  }
+
+  private void share() {
+    Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT, title)
+        .putExtra(Intent.EXTRA_TEXT, shareUrl);
+    try { startActivity(Intent.createChooser(send, "Compartir " + (title == null ? "evento" : title))); }
+    catch (android.content.ActivityNotFoundException none) { Toast.makeText(this, shareUrl, Toast.LENGTH_LONG).show(); }
   }
 
   @SuppressWarnings("deprecation") // setSystemUiVisibility is the way before Android 11.
