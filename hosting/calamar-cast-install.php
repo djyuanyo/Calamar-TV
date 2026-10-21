@@ -29,32 +29,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if (!castCapabilities()['ready']) {
             $temporary = sys_get_temp_dir() . '/calamar-ffmpeg-' . bin2hex(random_bytes(12));
             if (!mkdir($temporary, 0700)) throw new RuntimeException('No se pudo crear la carpeta temporal.');
-            $archive = $temporary . '/ffmpeg.tar.xz'; $handle = fopen($archive, 'wb');
-            $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-20-13-08/ffmpeg-n8.1.3-18-g46d899d7a0-linux64-gpl-8.1.tar.xz';
+            $archive = $temporary . '/ffmpeg'; $handle = fopen($archive, 'wb');
+            $url = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64';
             $ch = curl_init($url);
             curl_setopt_array($ch, [CURLOPT_FILE => $handle, CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
                 CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_TIMEOUT => 240, CURLOPT_MAXREDIRS => 5,
-                CURLOPT_MAXFILESIZE_LARGE => 190000000, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
-                CURLOPT_USERAGENT => 'CalamarTV-FFmpeg-Installer/1.0']);
+                CURLOPT_MAXFILESIZE_LARGE => 90000000, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_USERAGENT => 'CalamarTV-FFmpeg-Installer/2.0']);
             $downloaded = curl_exec($ch); $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch); fclose($handle);
             if (!$downloaded || $http !== 200) throw new RuntimeException('No se pudo descargar FFmpeg de GitHub. Vuelve a intentarlo.');
-            if (hash_file('sha256', $archive) !== 'e2a70912ed207cf412a28aa83f2efde7f9fb5c65370af5ad007ad60076d704a6') {
+            if (hash_file('sha256', $archive) !== 'e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99') {
                 throw new RuntimeException('La descarga no coincide con la firma SHA-256 esperada. No se ha ejecutado.');
             }
-            $listing = []; $code = 0;
-            exec('tar -tJf ' . escapeshellarg($archive) . ' 2>/dev/null', $listing, $code);
-            $entry = null;
-            foreach ($listing as $line) if (preg_match('~^[a-zA-Z0-9._-]+/bin/ffmpeg$~D', $line)) $entry = $line;
-            if ($code !== 0 || $entry === null) throw new RuntimeException('El hosting necesita tar con soporte xz para instalar FFmpeg.');
-            $output = [];
-            exec('tar -xJf ' . escapeshellarg($archive) . ' -C ' . escapeshellarg($temporary)
-                . ' --strip-components=2 ' . escapeshellarg($entry) . ' 2>/dev/null', $output, $code);
-            if ($code !== 0 || !is_file($temporary . '/ffmpeg')) throw new RuntimeException('No se pudo extraer FFmpeg.');
-            if (!copy($temporary . '/ffmpeg', $folder . '/ffmpeg')) throw new RuntimeException('No se pudo guardar FFmpeg.');
+            // Raw portable Linux binary: no archive utility is required on the hosting.
+            if (!copy($archive, $folder . '/ffmpeg')) throw new RuntimeException('No se pudo guardar FFmpeg.');
             chmod($folder . '/ffmpeg', 0700);
-            file_put_contents($folder . '/ORIGEN.txt', "FFmpeg GPL v3 de BtbN/FFmpeg-Builds\nDescarga original: $url\nCódigo y configuración: https://github.com/BtbN/FFmpeg-Builds\nFFmpeg: https://github.com/FFmpeg/FFmpeg/tree/46d899d7a0\nLicencia: https://www.gnu.org/licenses/gpl-3.0.html\n");
+            file_put_contents($folder . '/ORIGEN.txt', "FFmpeg GPL v3 de eugeneware/ffmpeg-static\nDescarga original: $url\nCódigo y configuración: https://github.com/eugeneware/ffmpeg-static\nFFmpeg: https://ffmpeg.org/releases/ffmpeg-7.0.2.tar.xz\nLicencia: https://www.gnu.org/licenses/gpl-3.0.html\n");
         }
         if (!castCapabilities()['ready']) throw new RuntimeException('FFmpeg se ha descargado, pero este servidor no permite ejecutarlo o no es compatible con Linux x86_64/glibc.');
         $message = 'Instalación completada. Ya puedes enviar el canal desde Calamar TV a Chromecast.';
@@ -72,7 +64,7 @@ header('Content-Type: text/html; charset=utf-8');
 ?>
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Instalar Calamar Chromecast</title><style>body{font:16px Arial,sans-serif;max-width:650px;margin:40px auto;padding:20px;background:#0b0d10;color:#f5f5f5}button{font:inherit;padding:14px 22px;background:#d6ff00;border:0;border-radius:8px;cursor:pointer}p{line-height:1.6}a{color:#d6ff00}</style>
-<h1>Calamar Chromecast</h1><p>Instala el conversor para enviar el canal TS/HEVC a la TV. La descarga de FFmpeg ocupa unos 150 MB y puede tardar varios minutos. Se descarga del proyecto original y se verifica su SHA-256 antes de ejecutarlo.</p>
+<h1>Calamar Chromecast · instalador 2</h1><p>Instala el conversor para enviar el canal TS/HEVC a la TV. La descarga de FFmpeg ocupa unos 80 MB, sin necesidad de tar ni xz y puede tardar varios minutos. Se descarga del proyecto original y se verifica su SHA-256 antes de ejecutarlo.</p>
 <?php if ($message !== '') echo '<p role="status">' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>'; ?>
 <form method="post"><input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>"><button type="submit">Instalar y comprobar FFmpeg</button></form>
 <p><a href="calamar-cast.php">Comprobar estado de Chromecast</a></p>

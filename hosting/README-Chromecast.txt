@@ -10,9 +10,9 @@ CALAMAR CHROMECAST — instalación en el hosting existente
 5. Tras instalar, elimina calamar-cast-install.php. Conserva calamar-cast.php,
    calamar-tv-relay.php y la carpeta calamar-cast-bin que habrá creado.
 
-La instalación descarga FFmpeg Linux x86_64 del proyecto BtbN/FFmpeg-Builds,
+La instalación descarga FFmpeg Linux x86_64 portable del proyecto eugeneware/ffmpeg-static,
 verifica el SHA-256 del archivo exacto y le concede permisos de ejecución.
-Requiere PHP 8.1+, cURL, exec/shell_exec, tar+xz, flock y permiso del hosting
+Requiere PHP 8.1+, cURL, exec/shell_exec, flock y permiso del hosting
 para ejecutar procesos. No requiere acceso SSH ni root. Si el servidor bloquea
 los procesos, la página lo indica: JavaScript y el botón Cast no pueden suplirlo.
 
@@ -28,3 +28,5 @@ No hay un cupo de espectadores configurado. CPU, procesos simultáneos, disco y
 transferencia siguen sujetos a la capacidad y condiciones del hosting contratado.
 No se contratan servicios ni se activan pagos, pero no se promete capacidad ilimitada.
 La instalación y el envío deben verificarse en el hosting y en un Chromecast real.
+
+Instalador 2: descarga el ejecutable directamente, sin tar ni xz.

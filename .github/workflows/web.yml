@@ -22,6 +22,10 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      - name: Comprobar instalador de Chromecast
+        run: |
+          php -l hosting/calamar-cast.php
+          php -l hosting/calamar-cast-install.php
       - name: Probar el lector de TDTChannels
         run: python -m unittest discover -s tools -p 'test_*.py'
       - name: Probar los enlaces de los canales
