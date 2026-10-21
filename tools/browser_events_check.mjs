@@ -341,10 +341,12 @@ try {
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
   await page.locator('.nav a', { hasText: 'Películas' }).click();
-  // Category chips (TMDB genres of the section) between the search box and the posters.
-  await page.getByRole('button', { name: 'Ciencia ficción', exact: true }).click();
+  // Category drop-down (TMDB genres of the section) next to the section search; no channels search here.
+  await page.locator('.poster-card').first().waitFor();
+  assert.equal(await page.locator('#search').isHidden(), true, 'the channels and events search is hidden in the library');
+  await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
-  await page.getByRole('button', { name: 'Todas', exact: true }).click();
+  await page.getByLabel('Categoría', { exact: true }).selectOption('');
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
@@ -363,15 +365,15 @@ try {
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
   await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
-  // An episode opens its own page (Capítulo 1, its name and synopsis) with the play button.
-  await page.locator('.episode', { hasText: 'Capítulo 1' }).click();
-  await page.getByRole('heading', { name: 'Capítulo 1', exact: true }).waitFor();
+  // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
+  assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');
+  await page.locator('.episode', { hasText: 'Vuelta a empezar' }).click();
+  await page.getByRole('heading', { name: 'Vuelta a empezar', exact: true }).waitFor();
   assert.ok(page.url().endsWith('#/series/spaco/capitulo/e1001'));
-  assert.equal(await page.locator('.episode-name').textContent(), 'Vuelta a empezar');
   assert.equal(await page.locator('#player').isHidden(), true);
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Capítulo 1');
+  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Vuelta a empezar');
   // When it ends the next episode starts by itself.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
   await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
@@ -383,7 +385,10 @@ try {
     name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
   await page.goto(base + '/#/inicio');
   await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
+  assert.equal(await page.locator('#search').isVisible(), true, 'the channels and events search is back outside the library');
   assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
+  assert.ok(await page.evaluate(() => { const slider = document.querySelector('.highlight-slider'), row = document.querySelector('.continue-rail');
+    return !!slider && !!(slider.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Continuar viendo comes under the featured slider');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
   await page.locator('.continue-card a').click();
   await page.locator('#player:not([hidden])').waitFor();

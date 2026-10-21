@@ -55,6 +55,11 @@ final class Library {
       return "Capítulo " + episode;
     }
 
+    /** The episode's name from TMDB when it has one; otherwise «Capítulo N». */
+    String title() {
+      return name.isEmpty() ? label() : name;
+    }
+
     String seasonLabel() {
       return "Temporada " + season;
     }
@@ -134,9 +139,9 @@ final class Library {
       return out;
     }
 
-    /** The player's title: «Los hombres de Paco · T1 · Capítulo 1». */
+    /** The player's title: «Los hombres de Paco · T1 · Piloto» (or «· Capítulo 1» without a name). */
     String episodeTitle(Episode e) {
-      return title + " · T" + e.season + " · " + e.label();
+      return title + " · T" + e.season + " · " + e.title();
     }
 
     /** The episode after this one in season and episode order, or null after the last. */
@@ -158,7 +163,7 @@ final class Library {
       try {
         o.put("key", e == null ? id : e.id).put("section", section).put("item", id).put("episode", e == null ? "" : e.id)
             .put("url", e == null ? url : e.url).put("title", e == null ? title : episodeTitle(e)).put("name", title)
-            .put("sub", e == null ? (year > 0 ? String.valueOf(year) : "") : e.seasonLabel() + " · " + e.label() + (e.name.isEmpty() ? "" : " · " + e.name))
+            .put("sub", e == null ? (year > 0 ? String.valueOf(year) : "") : e.seasonLabel() + " · " + e.title())
             .put("image", e != null && !e.still.isEmpty() ? e.still : !backdrop.isEmpty() ? backdrop : poster);
       } catch (JSONException impossible) {
         throw new IllegalStateException(impossible);

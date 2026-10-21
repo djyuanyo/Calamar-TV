@@ -42,6 +42,8 @@ export const itemYear = (item) => item.tmdb?.year || item.year || '';
 const norm = (s) => String(s).toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
 // «1x01» in the file name is season 1, episode 1: it is shown as «Capítulo 1» of «Temporada 1».
 export const episodeLabel = (e) => `Capítulo ${e.episode}`;
+/** The episode's name from TMDB when it has one; otherwise «Capítulo N». */
+export const episodeTitle = (e) => e.name || episodeLabel(e);
 export const seasonLabel = (e) => `Temporada ${e.season}`;
 export const episodePath = (section, item, e) => `#/${section.page}/${encodeURIComponent(item.id)}/capitulo/${encodeURIComponent(e.id)}`;
 /** The next episode of the series (episodes come in season and episode order), or null after the last. */
@@ -54,12 +56,12 @@ export function nextEpisode(item, episode) {
 /** What the player needs to play a film or an episode (the same player as the channels). */
 export function playable(section, item, episode = null) {
   const target = episode || item, info = item.tmdb || {};
-  return { id: target.id, name: episode ? `${itemTitle(item)} · T${episode.season} · ${episodeLabel(episode)}` : itemTitle(item),
+  return { id: target.id, name: episode ? `${itemTitle(item)} · T${episode.season} · ${episodeTitle(episode)}` : itemTitle(item),
     streams: [target.url], playable: true, vod: true, logo: '', group: section.label, region: '',
     path: `#/${section.page}/${encodeURIComponent(item.id)}/ver${episode ? `/${encodeURIComponent(episode.id)}` : ''}`,
     // Saved in «Continuar viendo»: enough to draw its card and come back without the library.
     progress: { key: target.id, page: section.page, item: item.id, episode: episode?.id || '',
-      name: itemTitle(item), sub: episode ? `${seasonLabel(episode)} · ${episodeLabel(episode)}${episode.name ? ` · ${episode.name}` : ''}` : String(itemYear(item) || section.label),
+      name: itemTitle(item), sub: episode ? `${seasonLabel(episode)} · ${episodeTitle(episode)}` : String(itemYear(item) || section.label),
       image: episode?.still || info.backdrop || info.poster || '' },
     next: episode ? () => { const n = nextEpisode(item, episode); return n ? playable(section, item, n) : null; } : null };
 }
@@ -121,14 +123,11 @@ export function libraryPage(el, section, library) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const grid = el('div', { class: 'poster-grid' });
-  // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
+  // Categories: a drop-down with the TMDB genres of the titles in this section; one narrows the grid.
   const genres = [...new Set(items.flatMap((item) => item.tmdb?.genres || []))].sort((a, b) => a.localeCompare(b, 'es'));
-  let genre = '';
-  const chips = el('div', { class: 'chips library-genres-filter', role: 'group', 'aria-label': 'Categorías' });
-  const drawChips = () => chips.replaceChildren(...['', ...genres].map((g) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(g === genre),
-    onclick: () => { genre = g; drawChips(); draw(); } }, g || 'Todas')));
+  const picker = el('select', { 'aria-label': 'Categoría' }, ['', ...genres].map((g) => el('option', { value: g }, g || 'Todas las categorías')));
   const draw = () => {
-    const q = norm(query.value.trim());
+    const q = norm(query.value.trim()), genre = picker.value;
     const found = items.filter((item) => (!genre || (item.tmdb?.genres || []).includes(genre))
       && norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')}`).includes(q));
     grid.replaceChildren(...found.map((item) => el('a', { class: 'poster-card', href: `#/${section.page}/${encodeURIComponent(item.id)}`, title: itemTitle(item) },
@@ -138,10 +137,11 @@ export function libraryPage(el, section, library) {
     if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : genre && !q ? `No hay títulos de ${genre}.` : 'No hay títulos con ese nombre.'));
   };
   query.addEventListener('input', draw);
-  drawChips();
+  picker.addEventListener('change', draw);
   draw();
   return [el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, `${items.length} ${items.length === 1 ? section.one : section.label.toLowerCase()}`)),
-    el('label', { class: 'search library-search' }, query), ...(genres.length ? [chips] : []), grid, attribution(el, library)];
+    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query), genres.length ? el('label', { class: 'library-genre' }, picker) : null),
+    grid, attribution(el, library)];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
@@ -169,7 +169,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       chips.replaceChildren(...seasons.map((s) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(s === chosen), onclick: () => { chosen = s; draw(); } }, `Temporada ${s}`)));
       list.replaceChildren(...item.episodes.filter((e) => e.season === chosen).map((e) => el('a', { class: 'episode', href: episodePath(section, item, e) },
         el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)), bar(el, saved(e.id))),
-        el('span', { class: 'episode-text' }, el('b', {}, episodeLabel(e)), e.name ? el('em', {}, e.name) : null, e.overview ? el('span', {}, e.overview) : null),
+        el('span', { class: 'episode-text' }, el('b', {}, episodeTitle(e)), e.overview ? el('span', {}, e.overview) : null),
         el('span', { class: 'episode-play', 'aria-hidden': 'true' }, '›'))));
     };
     draw();
@@ -200,11 +200,10 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
     el('div', { class: 'library-info' },
       el('a', { class: 'library-back', href: `#/${section.page}/${encodeURIComponent(item.id)}/temporada/${episode.season}` }, `‹ ${itemTitle(item)}`),
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
-      el('h1', {}, episodeLabel(episode)),
-      episode.name ? el('p', { class: 'episode-name' }, episode.name) : null,
+      el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
       playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)),
-      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeLabel(next)} ›`) : null)),
+      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
     attribution(el, library)];
 }
 

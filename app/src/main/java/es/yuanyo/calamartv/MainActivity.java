@@ -260,6 +260,7 @@ public class MainActivity extends Activity {
               mode.equals(m),
               new View.OnClickListener() {
                 public void onClick(View v) {
+                  if ((Library.section(m) != null) != (Library.section(mode) != null)) query = "";
                   mode = m;
                   home();
                 }
@@ -398,8 +399,9 @@ public class MainActivity extends Activity {
     } else {
       List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
       List<Catalog.Channel> events = Catalog.events(channels, custom);
-      if (Library.visible(custom)) continueRow();
       if (!featured.isEmpty()) hero(featured);
+      // Films and episodes left half watched come right under the featured slider.
+      if (Library.visible(custom)) continueRow();
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
@@ -739,10 +741,9 @@ public class MainActivity extends Activity {
 
     TextView name = text((favorites.contains(c.channelId) ? "★ " : "") + c.name, 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(8), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView sub = label(c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
     sub.setSingleLine(!c.event);
     if (c.event) { sub.setMaxLines(2); sub.setMinLines(2); }
@@ -757,7 +758,8 @@ public class MainActivity extends Activity {
             open(c);
           }
         });
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
@@ -1072,6 +1074,7 @@ public class MainActivity extends Activity {
 
   Library.Data library;
   String genre = "", genreSection = "";
+  final int genrePickerId = View.generateViewId();
   boolean libraryBusy;
   long libraryAt;
   String libraryError = "";
@@ -1118,27 +1121,30 @@ public class MainActivity extends Activity {
       if (matches(item.title) && (genre.isEmpty() || item.genres.contains(genre))) items.add(item);
     heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
     if (!genres.isEmpty()) {
-      LinearLayout chips = row();
-      List<String> options = new ArrayList<>();
+      // A drop-down: the button shows the category chosen and opens the list of them.
+      final List<String> options = new ArrayList<>();
       options.add("");
       options.addAll(genres);
-      for (final String g : options) {
-        Button chip = Ui.pill(this, g.isEmpty() ? "Todas" : g, g.equals(genre) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
-        chip.setId(400000 + Math.abs(g.hashCode() % 90000));
-        chip.setOnClickListener(v -> {
-          genre = g;
+      final Button picker = Ui.pill(this, (genre.isEmpty() ? "Todas las categorías" : genre) + "  ▾", Ui.Kind.SURFACE, true);
+      picker.setId(genrePickerId);
+      picker.setContentDescription("Categoría: " + (genre.isEmpty() ? "todas" : genre));
+      picker.setOnClickListener(v -> {
+        PopupMenu menu = new PopupMenu(this, picker);
+        for (int i = 0; i < options.size(); i++) menu.getMenu().add(0, i, i, options.get(i).isEmpty() ? "Todas las categorías" : options.get(i));
+        menu.setOnMenuItemClickListener(choice -> {
+          genre = options.get(choice.getItemId());
           render();
-          View again = root.findViewById(v.getId());
+          View again = root.findViewById(genrePickerId);
           if (again != null) again.requestFocus();
+          return true;
         });
-        addButton(chips, chip);
-      }
-      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
-      chipScroll.setHorizontalScrollBarEnabled(false);
-      chipScroll.addView(chips);
+        menu.show();
+      });
+      LinearLayout pickerRow = row();
+      addButton(pickerRow, picker);
       LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
       cp.setMargins(0, dp(6), 0, dp(16));
-      list.addView(chipScroll, cp);
+      list.addView(pickerRow, cp);
     }
     if (items.isEmpty())
       list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
@@ -1179,16 +1185,16 @@ public class MainActivity extends Activity {
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 1.5f)));
     TextView name = text(item.title, 13);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(6), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView sub = label(item.year > 0 ? String.valueOf(item.year) : item.series ? "Serie" : "", 11, Ui.MUTED);
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
     card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : ""));
     card.setOnClickListener(v -> libraryDetail(Library.section(mode), item));
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
@@ -1306,17 +1312,10 @@ public class MainActivity extends Activity {
     r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 160 : 112), dp(wide() ? 90 : 63)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
-    TextView name = text(e.label(), 15);
+    TextView name = text(e.title(), 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(12), 0, dp(4), 0);
     texts.addView(name);
-    if (!e.name.isEmpty()) {
-      TextView subtitle = label(e.name, 13, 0xffd6dbe2);
-      subtitle.setSingleLine(true);
-      subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      subtitle.setPadding(dp(12), 0, dp(4), 0);
-      texts.addView(subtitle);
-    }
     JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
     if (saved != null) texts.addView(progressBar(saved), progressBarParams(dp(12)));
     if (!e.overview.isEmpty()) {
@@ -1327,12 +1326,21 @@ public class MainActivity extends Activity {
       texts.addView(about);
     }
     r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-    r.setContentDescription(e.seasonLabel() + ", " + e.label() + (e.name.isEmpty() ? "" : ", " + e.name));
+    r.setContentDescription(e.seasonLabel() + ", " + e.title());
     r.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.setMargins(0, dp(4), 0, dp(4));
     r.setLayoutParams(p);
     return r;
+  }
+
+  /** Long names are shown whole, on as many lines as they need, with balanced line lengths. */
+  void wholeName(TextView name) {
+    name.setSingleLine(false);
+    name.setMaxLines(Integer.MAX_VALUE);
+    name.setEllipsize(null);
+    if (Build.VERSION.SDK_INT >= 29) name.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_BALANCED);
+    name.setLineSpacing(0, 1.05f);
   }
 
   TextView noPad(TextView v) {
@@ -1416,15 +1424,10 @@ public class MainActivity extends Activity {
     body.setPadding(dp(gutter() + 6), 0, dp(gutter() + 6), 0);
     page.addView(body);
     body.addView(noPad(label(item.title + " · " + e.seasonLabel(), 14, Ui.MUTED)));
-    TextView title = text(e.label(), wide() ? 34 : 28);
+    TextView title = text(e.title(), wide() ? 34 : 28);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setPadding(0, dp(2), 0, 0);
     body.addView(title);
-    if (!e.name.isEmpty()) {
-      TextView name = noPad(text(e.name, 19));
-      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      body.addView(name);
-    }
     String about = !e.overview.isEmpty() ? e.overview : !item.overview.isEmpty() ? item.overview : "Sin descripción.";
     TextView overview = label(about, 15, 0xffd6dbe2);
     overview.setPadding(0, dp(10), 0, dp(10));
@@ -1432,7 +1435,7 @@ public class MainActivity extends Activity {
     playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
-      Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.label() + " ›", Ui.Kind.SURFACE, true);
+      Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
       following.setOnClickListener(v -> { dialog.dismiss(); episodePage(section, item, next); });
       LinearLayout r = row();
       addButton(r, following);
@@ -1476,7 +1479,7 @@ public class MainActivity extends Activity {
         if (e == null) continue;
         Library.Episode next = item.next(e);
         if (next == null) return;
-        Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.label(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.title(), Toast.LENGTH_SHORT).show();
         playEntry(item.entry(section[0], next), false);
         return;
       }
@@ -1532,10 +1535,9 @@ public class MainActivity extends Activity {
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 9f / 16f)));
     TextView name = text(entry.optString("name"), 15);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setSingleLine(true);
-    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    wholeName(name);
     name.setPadding(dp(2), dp(8), dp(2), 0);
-    card.addView(name);
+    card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
     long left = entry.optLong("duration") - entry.optLong("position");
     String sub = entry.optString("sub") + (entry.optLong("duration") > 0 ? (entry.optString("sub").isEmpty() ? "" : " · ") + "quedan " + Math.max(1, Math.round(left / 60000f)) + " min" : "");
     TextView subtitle = label(sub, 12, Ui.MUTED);
@@ -1551,7 +1553,8 @@ public class MainActivity extends Activity {
       render();
       return true;
     });
-    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+    // As tall as the tallest card of its row, so the line under every name sits at the same height.
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
     card.setLayoutParams(p);
     return card;
