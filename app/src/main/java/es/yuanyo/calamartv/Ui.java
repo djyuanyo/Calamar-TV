@@ -250,6 +250,8 @@ final class Ui {
   }
 
   /** A channel logo with rounded corners; without a picture it shows the channel's initials. */
+  // Shared with platform-themed activities; logos use explicit drawing and no support tinting.
+  @android.annotation.SuppressLint("AppCompatCustomView")
   static final class LogoView extends ImageView {
     private final String initials;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
