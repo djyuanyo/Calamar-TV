@@ -30,8 +30,9 @@ import java.util.List;
 
 /**
  * Multi-screen: several channels or events at once, as on the web. Two share the screen top and
- * bottom; three or more make a grid on a horizontal screen. Only the tile with sound plays audio; a
- * tap (or the remote's focus on TV) moves the sound to another tile. Each tile tries its links in order.
+ * bottom; three or more make a grid on a horizontal screen. Only the tile with sound plays audio. A tap
+ * shows the buttons (exit, and a sound button per tile) for a few seconds; only a sound button moves
+ * the sound, or on TV the remote's focus. Each tile tries its links in order.
  */
 // Same Media3 player settings (resize mode, buffering indicator) as NativePlayerActivity.
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
@@ -40,6 +41,10 @@ public final class MultiPlayerActivity extends Activity {
   static final String TITLES = "titles", STREAMS = "streams";
 
   private final List<Tile> tiles = new ArrayList<>();
+  private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+  private final Runnable hide = () -> showControls(false);
+  private LinearLayout bar;
+  private boolean controls;
   private int sound;
 
   private final class Tile {
@@ -47,7 +52,7 @@ public final class MultiPlayerActivity extends Activity {
     final List<String> urls;
     final FrameLayout frame;
     final PlayerView view;
-    final TextView name, status;
+    final TextView name, status, soundButton;
     ExoPlayer player;
     int next;
 
@@ -82,9 +87,23 @@ public final class MultiPlayerActivity extends Activity {
       status.setTextSize(13);
       status.setGravity(Gravity.CENTER);
       frame.addView(status, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+      soundButton = new TextView(MultiPlayerActivity.this);
+      soundButton.setGravity(Gravity.CENTER);
+      soundButton.setTextSize(22);
+      soundButton.setFocusable(true);
+      soundButton.setClickable(true);
+      soundButton.setVisibility(View.GONE);
+      int size = Ui.dp(MultiPlayerActivity.this, 52);
+      FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(size, size, Gravity.BOTTOM | Gravity.END);
+      sp.setMargins(0, 0, Ui.dp(MultiPlayerActivity.this, 10), Ui.dp(MultiPlayerActivity.this, 10));
+      frame.addView(soundButton, sp);
       final int index = tiles.size();
-      frame.setOnClickListener(v -> listen(index));
-      frame.setOnFocusChangeListener((v, focused) -> { if (focused) listen(index); });
+      soundButton.setContentDescription("Oír " + title);
+      soundButton.setOnClickListener(v -> { listen(index); showControls(true); });
+      // A tap shows or hides the buttons; it never moves the sound (the sound button does).
+      frame.setOnClickListener(v -> showControls(!controls));
+      // On TV there is no touch: moving to a tile with the remote gives it the sound.
+      frame.setOnFocusChangeListener((v, focused) -> { if (focused && !v.isInTouchMode()) listen(index); });
     }
 
     void start() {
@@ -159,7 +178,25 @@ public final class MultiPlayerActivity extends Activity {
       }
       rows.addView(row, new LinearLayout.LayoutParams(-1, 0, 1));
     }
-    setContentView(rows);
+    FrameLayout screen = new FrameLayout(this);
+    screen.addView(rows, new FrameLayout.LayoutParams(-1, -1));
+    bar = new LinearLayout(this);
+    bar.setGravity(Gravity.CENTER_VERTICAL);
+    bar.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 18));
+    bar.setBackground(new android.graphics.drawable.GradientDrawable(
+        android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xd9000000, 0x00000000}));
+    android.widget.Button exit = Ui.pill(this, "✕ Salir", Ui.Kind.SURFACE, true);
+    exit.setOnClickListener(v -> finish());
+    bar.addView(exit, new LinearLayout.LayoutParams(-2, Ui.dp(this, 40)));
+    TextView hint = new TextView(this);
+    hint.setText("Pulsa 🔊 en un vídeo para oírlo");
+    hint.setTextColor(Ui.MUTED);
+    hint.setTextSize(13);
+    hint.setGravity(Gravity.CENTER);
+    bar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
+    bar.setVisibility(View.GONE);
+    screen.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+    setContentView(screen);
     immersive();
     showSound();
   }
@@ -195,7 +232,30 @@ public final class MultiPlayerActivity extends Activity {
       tile.name.setText((i == sound ? "🔊 " : "") + tile.title);
       tile.name.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0x99000000, 6, 0, 0));
       tile.name.setTextColor(i == sound ? Ui.BG : Color.WHITE);
+      tile.soundButton.setText(i == sound ? "🔊" : "🔇");
+      tile.soundButton.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0xa6000000, 26, 2, i == sound ? Ui.ACC : 0xb3ffffff));
     }
+  }
+
+  /** The exit bar and the sound buttons, for 4 seconds after a tap. */
+  private void showControls(boolean on) {
+    controls = on;
+    handler.removeCallbacks(hide);
+    bar.setVisibility(on ? View.VISIBLE : View.GONE);
+    int columns = MultiScreen.grid(tiles.size())[1];
+    for (int i = 0; i < tiles.size(); i++) {
+      Tile tile = tiles.get(i);
+      tile.soundButton.setVisibility(on ? View.VISIBLE : View.GONE);
+      // Names of the top row move below the bar while it is shown.
+      tile.name.setTranslationY(on && i < columns ? Ui.dp(this, 54) : 0);
+    }
+    if (on) handler.postDelayed(hide, 4000);
+  }
+
+  @Override
+  protected void onDestroy() {
+    handler.removeCallbacks(hide);
+    super.onDestroy();
   }
 
   @SuppressWarnings("deprecation") // setSystemUiVisibility is the way before Android 11.

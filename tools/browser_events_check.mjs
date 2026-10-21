@@ -157,6 +157,11 @@ try {
   assert.deepEqual(await page.locator('.multi-grid').evaluate(g => [getComputedStyle(g).gridTemplateRows.split(' ').length, getComputedStyle(g).gridTemplateColumns.split(' ').length]), [2, 1]);
   assert.ok(requests.includes('https://example.com/two.mp4'));
   assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [false, true]);
+  // The buttons stay hidden until a tap; a tap shows them without changing the sound.
+  assert.equal(await page.locator('.multi').evaluate(m => m.classList.contains('idle')), true);
+  await page.locator('.multi-tile').nth(1).click();
+  assert.equal(await page.locator('.multi').evaluate(m => m.classList.contains('idle')), false);
+  assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [false, true]);
   await page.getByRole('button', { name: '✕ Salir', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('.multi') && location.hash === '#/multipantalla');
   await page.getByRole('button', { name: 'Local vs visitante', exact: true }).click();
@@ -164,7 +169,11 @@ try {
   await page.locator('.multi .multi-tile').nth(2).waitFor();
   assert.deepEqual(await page.locator('.multi-grid').evaluate(g => [getComputedStyle(g).gridTemplateRows.split(' ').length, getComputedStyle(g).gridTemplateColumns.split(' ').length]), [2, 2]);
   await page.locator('.multi-tile').nth(2).click();
+  assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [false, true, true]);
+  await page.getByRole('button', { name: 'Oír Local vs visitante', exact: true }).click();
   assert.deepEqual(await page.locator('.multi-tile video').evaluateAll(v => v.map(x => x.muted)), [true, true, false]);
+  await page.clock.fastForward(4100);
+  assert.equal(await page.locator('.multi').evaluate(m => m.classList.contains('idle')), true);
   await page.goBack();
   await page.waitForFunction(() => !document.querySelector('.multi'));
   await page.locator('.admin-link').click();
