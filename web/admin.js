@@ -140,7 +140,7 @@ function channelForm(existing, rerender, state) {
     field('Categoría', groupSelect, 'Elige una de la lista o «Nueva categoría» para escribirla.'),
     groupNewField,
     field('Logo (opcional)', logo),
-    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8 y .ts por HTTPS, y los enlaces TS del servidor HTTP configurado. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos MKV/AVI guardados en calamarmenciano.com (el hosting adapta su sonido). La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
