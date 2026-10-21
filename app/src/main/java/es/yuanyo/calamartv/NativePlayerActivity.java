@@ -44,8 +44,9 @@ import java.util.concurrent.Executors;
 
 /** Page -> current media source -> Media3. Signed media URLs are kept in memory only. */
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
-public final class NativePlayerActivity extends androidx.fragment.app.FragmentActivity {
+public final class NativePlayerActivity extends androidx.appcompat.app.AppCompatActivity {
   private CastControls castControls;
+  private boolean castPlayback;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final List<VideoResolver.Source> sources = new ArrayList<>();
@@ -134,6 +135,7 @@ public final class NativePlayerActivity extends androidx.fragment.app.FragmentAc
         () -> !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
         title, () -> {
+          castPlayback = true;
           if (player != null) player.pause();
           if (browser != null) browser.onPause();
           handler.removeCallbacks(renewal);
@@ -314,6 +316,11 @@ public final class NativePlayerActivity extends androidx.fragment.app.FragmentAc
   protected void onStart() {
     super.onStart();
     active = true;
+    if (castPlayback && castControls != null && castControls.connected()) {
+      status.setText("Reproduciendo en Chromecast. Usa los controles TV.");
+      return;
+    }
+    castPlayback = false;
     if (directUrl != null && webMode) openDirectWeb();
     else if (directUrl != null) playDirect();
     else if (pageUrl != null) resolveFresh();
@@ -413,6 +420,7 @@ public final class NativePlayerActivity extends androidx.fragment.app.FragmentAc
 
   private void playSource(VideoResolver.Source source) {
     if (!active) return;
+    castPlayback = false;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {
       problem("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");

@@ -26,6 +26,7 @@ public final class CastControls {
   private final Runnable sent;
   private SessionManager sessions;
   private Button send, toggle;
+  private MediaRouteButton route;
   private boolean destroyed;
 
   public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
@@ -33,7 +34,15 @@ public final class CastControls {
     this.activity = activity; this.source = source; this.title = title; this.sent = sent;
     try {
       sessions = CastContext.getSharedInstance(activity).getSessionManager();
-      MediaRouteButton route = new MediaRouteButton(activity);
+      route = new MediaRouteButton(activity) {
+        @Override public boolean performClick() {
+          if (!connected() && CastSource.contentType(source.current()) == null) {
+            message("Esta fuente TS/HEVC necesita adaptación antes de enviarla a Chromecast.");
+            return true;
+          }
+          return super.performClick();
+        }
+      };
       route.setContentDescription("Enviar a Chromecast");
       route.setBackgroundColor(Color.TRANSPARENT);
       row.addView(route, new LinearLayout.LayoutParams(Ui.dp(activity, 48), Ui.dp(activity, 48)));
@@ -51,6 +60,9 @@ public final class CastControls {
       update();
     } catch (RuntimeException unavailable) {
       sessions = null; // Some Android TV devices do not include Google Play services.
+      if (route != null) route.setVisibility(View.GONE);
+      if (send != null) send.setVisibility(View.GONE);
+      if (toggle != null) toggle.setVisibility(View.GONE);
     }
   }
 
