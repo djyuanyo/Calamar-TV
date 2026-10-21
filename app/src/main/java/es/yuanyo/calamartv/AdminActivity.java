@@ -75,12 +75,6 @@ public class AdminActivity extends Activity {
     status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);
     body.addView(status);
     if (!SharedCatalog.administrator(SharedCatalog.auth(this).getCurrentUser())) {
-      body.addView(
-          label(
-              "Entra con "
-                  + SharedCatalog.ADMIN_EMAIL
-                  + " para publicar canales y eventos en la web y la app.",
-              17));
       addButton("Continuar con Google", this::signIn);
       if (SharedCatalog.auth(this).getCurrentUser() != null) {
         status.setText("La cuenta seleccionada no es administradora.");

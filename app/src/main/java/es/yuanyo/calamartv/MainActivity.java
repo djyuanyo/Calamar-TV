@@ -215,9 +215,16 @@ public class MainActivity extends Activity {
           }
         });
     addButton(mast, refreshButton);
-    Button admin = Ui.pill(this, "Administrar", Ui.Kind.GHOST, true);
+    // Icon only (account silhouette); the name stays for screen readers and as a tooltip.
+    ImageButton admin = new ImageButton(this);
+    admin.setImageDrawable(Ui.icon(Ui.Icon.ADMIN, Ui.MUTED, dp(22)));
+    admin.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
+    admin.setContentDescription("Administración");
+    if (android.os.Build.VERSION.SDK_INT >= 26) admin.setTooltipText("Administración");
     admin.setOnClickListener(v -> startActivity(new Intent(this, AdminActivity.class)));
-    addButton(mast, admin);
+    LinearLayout.LayoutParams adminSize = new LinearLayout.LayoutParams(dp(44), dp(44));
+    adminSize.setMargins(dp(4), dp(4), dp(4), dp(4));
+    mast.addView(admin, adminSize);
     root.addView(mast);
     EditText search = new EditText(this);
     search.setSingleLine(true);

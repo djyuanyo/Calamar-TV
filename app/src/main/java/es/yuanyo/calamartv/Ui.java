@@ -212,7 +212,8 @@ final class Ui {
 
   enum Icon {
     PLAY,
-    BACK
+    BACK,
+    ADMIN
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -236,6 +237,15 @@ final class Ui {
         path.lineTo(19f, 12f);
         path.close();
         paint.setStyle(Paint.Style.FILL);
+      } else if (icon == Icon.ADMIN) {
+        // Account silhouette: head and shoulders, as the web's admin button.
+        path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);
+        path.moveTo(5f, 20f);
+        path.cubicTo(5f, 15.8f, 8.1f, 13.4f, 12f, 13.4f);
+        path.cubicTo(15.9f, 13.4f, 19f, 15.8f, 19f, 20f);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
       } else {
         path.moveTo(15f, 5f);
         path.lineTo(8f, 12f);

@@ -87,6 +87,8 @@ button { -webkit-tap-highlight-color: transparent; }
   letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--line); transition: color 0.15s, border-color 0.15s;
 }
 .admin-link:hover, .admin-link[aria-current="page"] { color: var(--fg); border-color: var(--muted); }
+/* Icon only: a round button with the account silhouette. */
+.admin-link { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; }
 
 main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px; width: 100%; margin: 0 auto; }
 .status { color: var(--muted); }
