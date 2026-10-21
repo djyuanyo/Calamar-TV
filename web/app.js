@@ -429,7 +429,7 @@ let stopTs = null;
 let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
-const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden });
+const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
 initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),

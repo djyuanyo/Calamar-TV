@@ -583,7 +583,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (state == Player.STATE_READY) {
               cancelBufferingTimeout();
               status.setText("Reproductor nativo · " + source.label + " · " + engineName());
-              livePill.setVisibility(instance.isCurrentMediaItemLive() ? View.VISIBLE : View.GONE);
+              livePill.setVisibility(instance.isCurrentMediaItemLive() && progressEntry == null ? View.VISIBLE : View.GONE);
             } else if (state == Player.STATE_BUFFERING) {
               status.setText("Cargando vídeo…");
               armBufferingTimeout(instance, source);

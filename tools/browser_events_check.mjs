@@ -349,6 +349,9 @@ try {
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
+  // Films are not live: no «En directo» pill or live button, whatever the stream says.
+  await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));
+  assert.equal(await page.locator('#player-pill').isHidden(), true);
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');

@@ -47,7 +47,7 @@ function store(key, value) {
   return null;
 }
 
-export function initControls({ root, video, onClose, canClose = () => true }) {
+export function initControls({ root, video, onClose, canClose = () => true, onDemand = () => false }) {
   const $ = (id) => root.querySelector(`#${id}`);
   const els = {
     play: $('ctl-play'),
@@ -126,12 +126,15 @@ export function initControls({ root, video, onClose, canClose = () => true }) {
   // hls.js reports a finite duration for a live stream, so ask its playlist; plain files have no playlist
   // and are live only when the browser says the duration is infinite.
   let hlsLive = null;
-  const isLive = () => (hls && hlsLive !== null ? hlsLive : !Number.isFinite(video.duration));
+  // Films and episodes are never «En directo», even while the hosting is still converting them (a
+  // growing HLS list): they get the progress bar as soon as their length is known.
+  const isLive = () => (onDemand() ? !(Number.isFinite(video.duration) && video.duration > 0)
+    : hls && hlsLive !== null ? hlsLive : !Number.isFinite(video.duration));
   const refreshTime = () => {
     const live = isLive();
     root.classList.toggle('is-live', live);
-    els.live.hidden = !live;
-    els.pill.hidden = !live;
+    els.live.hidden = !live || onDemand();
+    els.pill.hidden = !live || onDemand();
     els.seek.hidden = live;
     els.time.hidden = live;
     if (!live) {
