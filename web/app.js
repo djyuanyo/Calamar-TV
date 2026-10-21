@@ -5,10 +5,14 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
+import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS } from './audience.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
 let sharedStarted = false;
+// Firebase loads on demand so the bundled catalog works even when it cannot be reached.
+let firebase = null;
+const shared = () => (firebase ||= import('./firebase.js'));
 let sharedValue = null;
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
@@ -26,7 +30,7 @@ export async function loadCatalog() {
   if (!sharedStarted) {
     sharedStarted = true;
     // Keep the bundled catalog usable even if Firebase cannot be reached.
-    import('./firebase.js').then(({ watchCatalog }) => watchCatalog(custom, ({ data }) => {
+    shared().then(({ watchCatalog }) => watchCatalog(custom, ({ data }) => {
       sharedValue = data;
       state.custom = data;
       state.channels = merge(state.tdt, data);
@@ -76,12 +80,18 @@ function card(c) {
       'span',
       { class: 'art' },
       c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
-      c.event ? el('span', { class: 'badge' }, EVENT_STATES[c.status || 'scheduled']) : null,
+      c.event ? eventBadge(c, 'badge') : null,
       c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
     ),
     el('span', { class: 'name' }, c.name),
     el('span', { class: 'sub' }, c.event ? c.meta || c.channelName : c.region || c.group),
   );
+}
+
+/** Until an event starts its badge shows the date and time; then «En directo». */
+function eventBadge(c, cls) {
+  const label = eventLabel(c, Date.now(), EVENT_STATES);
+  return el('span', { class: `${cls}${label.live ? ' live' : ''}${label.upcoming ? ' upcoming' : ''}` }, label.text);
 }
 
 function sectionHead(title, aside) {
@@ -114,30 +124,60 @@ function scheduleHighlight() {
   if (!highlightHost || highlightItems.length < 2 || document.hidden) return;
   highlightTimer = setTimeout(() => {
     if (!highlightHost?.isConnected || !player.hidden) return;
-    showHighlight((highlightIndex + 1) % highlightItems.length);
+    showHighlight(highlightIndex + 1);
   }, 5000);
 }
 function showHighlight(index, user = false) {
   if (!highlightHost) return;
   const focused = highlightHost.contains(document.activeElement);
-  highlightIndex = index;
-  const controls = highlightItems.length > 1 ? el('button', { class: 'slider-pause', type: 'button', onclick: (e) => {
-      const paused = e.currentTarget.getAttribute('aria-pressed') !== 'true';
-      e.currentTarget.setAttribute('aria-pressed', String(paused));
-      highlightHost.dataset.paused = String(paused);
-      e.currentTarget.textContent = paused ? 'Reanudar portada' : 'Pausar portada';
-      if (paused) clearTimeout(highlightTimer); else scheduleHighlight();
-    }, 'aria-pressed': highlightHost.dataset.paused || 'false' }, highlightHost.dataset.paused === 'true' ? 'Reanudar portada' : 'Pausar portada') : null;
-  highlightHost.replaceChildren(heroSection(highlightItems, index), ...(controls ? [controls] : []));
-  if (focused || user) (highlightHost.querySelectorAll('.pick')[index] || highlightHost.querySelector('button')).focus({ preventScroll: true });
-  if (highlightHost.dataset.paused !== 'true') scheduleHighlight();
+  highlightIndex = (index + highlightItems.length) % highlightItems.length;
+  const dots = highlightItems.length > 1 ? el('div', { class: 'slider-dots', role: 'group', 'aria-label': 'Elegir destacado' },
+    highlightItems.map((item, i) => el('button', { type: 'button', 'aria-label': item.name, 'aria-pressed': String(i === highlightIndex), onclick: () => showHighlight(i, true) }))) : null;
+  highlightHost.replaceChildren(heroSection(highlightItems, highlightIndex), ...(dots ? [dots] : []));
+  if (focused || user) (highlightHost.querySelectorAll('.pick')[highlightIndex] || highlightHost.querySelector('button')).focus({ preventScroll: true });
+  scheduleHighlight();
 }
+/** Moves on its own every 5 seconds; it can also be swiped (touch or mouse) or moved with the arrow keys. */
 function highlightSlider(items) {
   highlightItems = items; highlightIndex = 0;
-  highlightHost = el('div', { class: 'highlight-slider', 'aria-label': 'Destacados de portada' });
-  showHighlight(0); return highlightHost;
+  const host = highlightHost = el('div', { class: 'highlight-slider', 'aria-roledescription': 'carrusel', 'aria-label': 'Destacados de portada' });
+  let start = null, swiped = false;
+  host.addEventListener('pointerdown', (e) => {
+    swiped = false;
+    if (highlightItems.length < 2 || (e.pointerType === 'mouse' && e.button !== 0) || e.target.closest('.hero-picks, .slider-dots')) return;
+    start = { x: e.clientX, y: e.clientY };
+    clearTimeout(highlightTimer);
+  });
+  host.addEventListener('pointerup', (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    start = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) { swiped = true; showHighlight(highlightIndex + (dx < 0 ? 1 : -1)); }
+    else scheduleHighlight();
+  });
+  host.addEventListener('pointercancel', () => { start = null; scheduleHighlight(); });
+  // A swipe that ends over a button must not also open the channel.
+  host.addEventListener('click', (e) => { if (swiped) { swiped = false; e.preventDefault(); e.stopPropagation(); } }, true);
+  host.addEventListener('dragstart', (e) => e.preventDefault());
+  host.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' || highlightItems.length < 2 || e.target.matches('input, textarea, select')) return;
+    e.preventDefault(); showHighlight(highlightIndex + (e.key === 'ArrowRight' ? 1 : -1), true);
+  });
+  showHighlight(0); return host;
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(highlightTimer); else if (highlightHost?.dataset.paused !== 'true') scheduleHighlight(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(highlightTimer); else scheduleHighlight(); });
+
+// When an event reaches its start time the home page is redrawn so its badge changes to «En directo».
+let startTimer = null;
+function scheduleStartRefresh(list) {
+  clearTimeout(startTimer);
+  const wait = nextStart(list);
+  if (wait === null) return;
+  startTimer = setTimeout(() => {
+    if (player.hidden && !location.hash.startsWith('#/admin') && !search.value.trim()) route();
+    else scheduleStartRefresh(list);
+  }, Math.min(wait + 500, 6 * 3600000));
+}
 
 function heroSection(list, index = 0) {
   const c = list[index];
@@ -172,7 +212,7 @@ function heroSection(list, index = 0) {
     el(
       'div',
       { class: 'hero-body' },
-      c.event ? el('span', { class: 'event-state' }, EVENT_STATES[c.status || 'scheduled']) : null,
+      c.event ? eventBadge(c, 'event-state') : null,
       el('h1', {}, c.name),
       el('p', { class: 'hero-meta' }, c.event ? c.meta || c.channelName : [c.group, c.region, c.own ? 'Canal de Calamar TV' : 'Emisión oficial en abierto'].filter(Boolean).join(' · ')),
       el(
@@ -190,6 +230,7 @@ function heroSection(list, index = 0) {
 function home() {
   const matches = events(state.channels, state.custom);
   const list = homeHighlights(state.channels, state.custom);
+  scheduleStartRefresh(matches);
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
   if (matches.length) nodes.push(sectionHead('Eventos'), rail(matches, { wide: true, limit: matches.length }));
@@ -404,6 +445,43 @@ function playSource(c, index) {
   });
 }
 
+// ---- Audience -------------------------------------------------------------------------------
+// While the player is open this tab reports what it watches once a minute and shows how many
+// people are watching the same channel or event. Nothing about the viewer is stored.
+const viewersBadge = document.getElementById('player-viewers');
+let watching = null;
+function showViewers(count) {
+  viewersBadge.hidden = !Number.isInteger(count) || count < 1;
+  viewersBadge.querySelector('b').textContent = count > 999 ? `${(count / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mil` : String(count);
+  const text = count === 1 ? '1 persona viendo' : `${count} personas viendo`;
+  viewersBadge.querySelector('.sr').textContent = text;
+  viewersBadge.title = text;
+}
+function startAudience(c, visit = true) {
+  const target = audienceTarget(c);
+  if (watching?.target === target) return;
+  stopAudience();
+  const session = { target, id: sessionId(), timers: [] };
+  watching = session;
+  const live = () => watching === session;
+  const count = () => shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
+  const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
+  beat().then(() => { if (live()) count(); });
+  session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
+  // One visit per opening; refreshes of the same player are not new visits.
+  if (visit) shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))).catch(() => {});
+}
+function stopAudience() {
+  if (!watching) return;
+  const session = watching;
+  watching = null;
+  for (const timer of session.timers) clearInterval(timer);
+  showViewers(0);
+  shared().then((f) => f.leave(session.id)).catch(() => {});
+}
+window.addEventListener('pagehide', stopAudience);
+window.addEventListener('pageshow', (e) => { if (e.persisted && current && !player.hidden) startAudience(current, false); });
+
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
 let current = null;
 let pushed = false;
@@ -428,12 +506,14 @@ function open(c, fromRoute = false) {
   for (const n of behind()) n.inert = true;
   controls.wake();
   document.getElementById('player-close').focus();
+  startAudience(c);
   playSource(c, 0);
 }
 
 function hidePlayer() {
   if (controls.isFullscreen()) controls.leaveFullscreen();
   stop();
+  stopAudience();
   current = null;
   player.hidden = true;
   document.body.style.overflow = '';

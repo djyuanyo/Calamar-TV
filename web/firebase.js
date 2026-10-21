@@ -1,8 +1,9 @@
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
+import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, minuteOf } from './audience.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -43,6 +44,31 @@ export async function publishCatalog(data, expectedRevision) {
   });
   return expectedRevision + 1;
 }
+
+// ---- Audience ---------------------------------------------------------------------------------
+export const beat = (session, target) => setDoc(doc(db, AUDIENCE_PATH, session), { ...presence(target), updatedAt: serverTimestamp() });
+export const leave = (session) => deleteDoc(doc(db, AUDIENCE_PATH, session));
+export async function viewers(target) {
+  const snapshot = await getCountFromServer(query(collection(db, AUDIENCE_PATH), where('beat', 'in', liveBeats(target))));
+  return snapshot.data().count;
+}
+/** Every presence seen in the last minutes; the admin panel groups them by channel and event. */
+export async function audience() {
+  const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '>=', minuteOf() - 2)));
+  return snapshot.docs.map((d) => d.data());
+}
+/** Presence left behind by closed tabs; removing it keeps the collection small. */
+export async function purgeAudience() {
+  const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '<', minuteOf() - 10)));
+  await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+}
+export const recordVisit = (day, key) => setDoc(doc(db, VISITS_PATH, day), { last: key, [key]: increment(1) }, { merge: true });
+/** Daily visit documents between two YYYY-MM-DD days, both included. */
+export async function visits(from, to) {
+  const snapshot = await getDocs(query(collection(db, VISITS_PATH), where(documentId(), '>=', from), where(documentId(), '<=', to)));
+  return snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+}
+
 export function explain(error) {
   const messages = {
     'auth/popup-closed-by-user': 'Has cerrado la ventana de Google. Puedes volver a entrar.',

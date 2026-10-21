@@ -2,7 +2,8 @@ import { eventOrder, eventMeta, eventPath, localDateTime, madridInstant, EVENT_S
 import { el, fetchJson } from './app.js';
 import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain } from './firebase.js';
+import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
+import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 
 let saving = false;
 let file = null;
@@ -237,7 +238,7 @@ export async function render(state) {
   const eventRoute = decodeURIComponent(location.hash).match(/^#\/admin\/(?:evento|editar-evento(?:\/(.+))?)$/);
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
-  const section = location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const section = location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -248,8 +249,8 @@ export async function render(state) {
       el('p', { class: 'lead' }, 'Los cambios se guardan en Firebase y se comparten con la web y la app. Tu cuenta de Google es la única autorizada para editar.'),
       shown ? el('p', { class: shown.startsWith('Guardado') ? 'ok' : 'error', role: 'status' }, shown) : null,
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, el('b', {}, file.data[key].length), label))),
-      ...(section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : el('b', {}, file.data[key].length), label))),
+      ...(section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
       ] : [channelForm(existing, rerender), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...tdtTools(state, rerender)]),
@@ -405,4 +406,143 @@ function entityPanel(kind, rerender) {
     } }, 'Eliminar')))));
   query.addEventListener('input', draw); draw();
   return [form, el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
+}
+
+// ---- Statistics ---------------------------------------------------------------------------------
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const statsView = { mode: 'day', day: '', month: '', year: '', only: null };
+
+/** Names for every channel and event, including TDT channels that are hidden from the public. */
+function statsNames(state) {
+  const names = new Map();
+  for (const c of [...merge(state.tdt || { channels: [] }, null), ...file.data.channels]) {
+    names.set(visitKey('channel', c.id), c.name); names.set(`c:${c.id}`, c.name);
+  }
+  for (const e of file.data.events) {
+    const label = `${e.name}${e.startAt ? ` · ${eventMeta({ startAt: e.startAt }, null)}` : ''}`;
+    names.set(visitKey('event', e.id), label); names.set(`e:${e.id}`, label);
+  }
+  return names;
+}
+
+const plural = (n, one, many) => `${n.toLocaleString('es-ES')} ${n === 1 ? one : many}`;
+const shiftDay = (day, delta) => new Date(Date.parse(`${day}T12:00:00Z`) + delta * 86400000).toISOString().slice(0, 10);
+
+/** People watching right now, shown on the statistics tab. */
+function liveTile() {
+  const value = el('b', { title: 'Personas viendo ahora' }, '…');
+  audience().then((docs) => { value.textContent = [...liveCounts(docs).values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES'); }).catch(() => { value.textContent = '–'; });
+  return value;
+}
+
+function statsPanel(state) {
+  const names = statsNames(state);
+  const today = madridDay();
+  statsView.day ||= today; statsView.month ||= today.slice(0, 7); statsView.year ||= today.slice(0, 4);
+
+  // Live: refreshed every 20 seconds while this page is open.
+  const liveBody = el('div', { class: 'stats-live' }, el('p', { class: 'note' }, 'Cargando espectadores…'));
+  const liveTotal = el('b', {}, '–');
+  const updated = el('span', { class: 'note' });
+  const drawLive = async () => {
+    try {
+      const counts = liveCounts(await audience());
+      const lists = { c: [], e: [] };
+      for (const [target, viewers] of counts) lists[target[0]]?.push({ name: names.get(target) || target.slice(2), viewers });
+      liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
+      updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+      const column = (title, list, empty) => el('div', { class: 'stats-card' }, el('h3', {}, title),
+        list.length ? el('ol', { class: 'stats-rank' }, list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es'))
+          .map((item) => el('li', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))))) : el('p', { class: 'note' }, empty));
+      liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'));
+    } catch (error) { liveBody.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer los espectadores: ${explain(error)}`)); }
+  };
+  // Stops by itself once the panel leaves the page; a redrawn panel starts its own timer.
+  const tick = () => { if (!liveBody.isConnected) return; drawLive(); setTimeout(tick, 20000); };
+  drawLive(); setTimeout(tick, 20000);
+  purgeAudience().catch(() => {});
+
+  // History: one document per Madrid day with one counter per channel and event.
+  const history = el('div', { class: 'stats-history' }, el('p', { class: 'note' }, 'Cargando visitas…'));
+  const modes = [['day', 'Día'], ['month', 'Mes'], ['year', 'Año'], ['all', 'Por años']];
+  const modeButtons = el('div', { class: 'chips', role: 'group', 'aria-label': 'Periodo' }, modes.map(([mode, label]) =>
+    el('button', { class: 'chip', type: 'button', 'aria-pressed': String(statsView.mode === mode), onclick: () => { statsView.mode = mode; statsView.only = null; redraw(); } }, label)));
+  const picker = el('div', { class: 'stats-picker' });
+  const redraw = () => {
+    for (const [i, button] of [...modeButtons.children].entries()) button.setAttribute('aria-pressed', String(modes[i][0] === statsView.mode));
+    const input = statsView.mode === 'day' ? el('input', { type: 'date', value: statsView.day, max: today })
+      : statsView.mode === 'month' ? el('input', { type: 'month', value: statsView.month, max: today.slice(0, 7) })
+      : statsView.mode === 'year' ? el('select', {}, Array.from({ length: Number(today.slice(0, 4)) - 2025 }, (_, i) => String(2026 + i)).reverse().map((y) => el('option', { value: y }, y))) : null;
+    if (input) {
+      if (statsView.mode === 'year') input.value = statsView.year;
+      input.addEventListener('change', () => { if (input.value) { statsView[statsView.mode] = input.value; statsView.only = null; load(); } });
+      picker.replaceChildren(field(statsView.mode === 'day' ? 'Día' : statsView.mode === 'month' ? 'Mes' : 'Año', input));
+    } else picker.replaceChildren();
+    load();
+  };
+  let request = 0;
+  const load = async () => {
+    const mine = ++request;
+    const { mode } = statsView;
+    const [from, to] = mode === 'day' ? [shiftDay(statsView.day, -29), statsView.day]
+      : mode === 'month' ? [`${statsView.month}-01`, `${statsView.month}-31`]
+      : mode === 'year' ? [`${statsView.year}-01-01`, `${statsView.year}-12-31`] : ['2000-01-01', '2999-12-31'];
+    history.replaceChildren(el('p', { class: 'note' }, 'Cargando visitas…'));
+    try {
+      const days = await visits(from, to);
+      if (mine === request) history.replaceChildren(...visitReport(days, names, from, to));
+    } catch (error) { if (mine === request) history.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer las visitas: ${explain(error)}`)); }
+  };
+  redraw();
+  return [
+    el('div', { class: 'section-head' }, el('h2', {}, 'En vivo ahora'), updated),
+    el('p', { class: 'stats-total' }, liveTotal, ' personas viendo en este momento'),
+    liveBody,
+    el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
+    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal o un evento cuenta como una visita (días según el horario de Madrid).'),
+    el('div', { class: 'stats-controls' }, modeButtons, picker),
+    history,
+  ];
+}
+
+function visitReport(days, names, from, to) {
+  const { mode, only } = statsView;
+  // Tables: the selected day, month, year or everything.
+  const tableDays = mode === 'day' ? days.filter((d) => d.id === statsView.day) : days;
+  const { totals } = summarize(tableDays);
+  const sum = (prefix) => [...totals].filter(([k]) => k.startsWith(prefix)).reduce((a, [, v]) => a + v, 0);
+  const period = mode === 'day' ? new Date(`${statsView.day}T12:00:00Z`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    : mode === 'month' ? `${MONTHS[Number(statsView.month.slice(5)) - 1]} ${statsView.month.slice(0, 4)}` : mode === 'year' ? statsView.year : 'desde el principio';
+  const table = (title, prefix) => {
+    const rows = [...totals].filter(([k]) => k.startsWith(prefix)).sort((a, b) => b[1] - a[1]);
+    const top = rows[0]?.[1] || 1;
+    return el('div', { class: 'stats-card' }, el('h3', {}, `${title} · ${plural(sum(prefix), 'visita', 'visitas')}`),
+      rows.length ? el('table', { class: 'stats-table' }, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, prefix === 'c_' ? 'Canal' : 'Evento'), el('th', { scope: 'col' }, 'Visitas'))),
+        el('tbody', {}, rows.map(([key, value]) => el('tr', { 'aria-selected': String(key === only) },
+          el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver su evolución en la gráfica', onclick: () => { statsView.only = key === only ? null : key; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } },
+            el('span', { class: 'share', style: `--w:${Math.max(2, Math.round(value / top * 100))}%`, 'aria-hidden': 'true' }), names.get(key) || `${key.slice(2)} (eliminado)`)),
+          el('td', {}, value.toLocaleString('es-ES'))))))
+        : el('p', { class: 'note' }, `Sin visitas a ${title.toLowerCase()} en este periodo.`));
+  };
+  // Chart: day by day (30 days or one month), month by month, or year by year.
+  const { buckets } = summarize(days, mode === 'year' ? 'month' : mode === 'all' ? 'year' : 'day', only);
+  let keys;
+  if (mode === 'year') keys = Array.from({ length: 12 }, (_, i) => `${statsView.year}-${String(i + 1).padStart(2, '0')}`);
+  else if (mode === 'all') { const years = days.map((d) => Number(d.id.slice(0, 4))); keys = years.length ? Array.from({ length: Math.max(...years) - Math.min(...years) + 1 }, (_, i) => String(Math.min(...years) + i)) : []; }
+  else { keys = []; for (let d = from; d <= to && keys.length < 31; d = shiftDay(d, 1)) if (d.slice(0, 7) === from.slice(0, 7) || mode === 'day') keys.push(d); }
+  const label = (key) => key.length === 4 ? key : key.length === 7 ? MONTHS[Number(key.slice(5)) - 1] : String(Number(key.slice(8)));
+  const full = (key) => key.length === 4 ? key : key.length === 7 ? `${MONTHS[Number(key.slice(5)) - 1]} ${key.slice(0, 4)}` : new Date(`${key}T12:00:00Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const max = Math.max(1, ...keys.map((k) => buckets.get(k) || 0));
+  const chart = keys.length ? el('div', { class: 'stats-chart', role: 'img', 'aria-label': `Visitas por ${mode === 'year' ? 'mes' : mode === 'all' ? 'año' : 'día'}` },
+    keys.map((key) => { const value = buckets.get(key) || 0; return el('div', { class: 'bar', 'data-current': String(mode === 'day' && key === statsView.day), title: `${full(key)}: ${plural(value, 'visita', 'visitas')}` },
+      el('span', { class: 'value' }, value ? value.toLocaleString('es-ES') : ''), el('span', { class: 'fill', style: `--h:${value / max * 100}%` }), el('span', { class: 'tick' }, label(key))); }))
+    : el('p', { class: 'note' }, 'Todavía no hay visitas registradas.');
+  return [
+    el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_') + sum('e_'), 'visita', 'visitas')), ` · ${period}`),
+    el('div', { class: 'stats-card stats-chart-card' },
+      el('h3', {}, `${only ? `Evolución de ${names.get(only) || only.slice(2)}` : 'Evolución de todas las visitas'} · ${mode === 'day' ? 'últimos 30 días' : mode === 'month' ? 'día a día' : mode === 'year' ? 'mes a mes' : 'año a año'}`),
+      only ? el('button', { type: 'button', class: 'ghost', onclick: () => { statsView.only = null; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } }, 'Ver todas') : null,
+      chart),
+    el('div', { class: 'stats-live' }, table('Canales', 'c_'), table('Eventos', 'e_')),
+  ];
 }

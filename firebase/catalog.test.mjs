@@ -1,7 +1,8 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp, increment, query, where } from 'firebase/firestore';
 let env;
 const path = 'calamarCatalog/custom';
 const data = { json: '{"channels":[],"featured":[],"hidden":[]}', revision: 1 };
@@ -39,4 +40,45 @@ test('reject extra fields, oversized data, forged timestamps and invalid revisio
     await assertFails(setDoc(ref, value(invalid)));
   }
   await assertFails(setDoc(doc(admin(), 'calamarCatalog/other'), value()));
+});
+
+const session = 'A'.repeat(24);
+const minute = () => Math.floor(Date.now() / 60000);
+const beat = (overrides = {}) => {
+  const target = overrides.target ?? 'c:la-1', m = overrides.minute ?? minute();
+  return { target, minute: m, beat: `${target}|${m}`, updatedAt: serverTimestamp(), ...overrides };
+};
+const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid' }).format(new Date());
+test('anyone can report and count viewers without personal data', async () => {
+  const db = env.unauthenticatedContext().firestore();
+  await assertSucceeds(setDoc(doc(db, 'calamarAudience', session), beat()));
+  await assertSucceeds(setDoc(doc(db, 'calamarAudience', session), beat({ target: 'e:evento-1' })));
+  await assertSucceeds(getDocs(query(collection(db, 'calamarAudience'), where('beat', 'in', [`e:evento-1|${minute()}`]))));
+  await assertSucceeds(deleteDoc(doc(db, 'calamarAudience', session)));
+});
+test('presence rejects extra fields, bad ids, forged beats and distant minutes', async () => {
+  const db = env.unauthenticatedContext().firestore();
+  for (const invalid of [{ email: 'x@example.com' }, { target: 'x:la-1' }, { beat: 'c:other|1' }, { minute: minute() - 10 }, { minute: '1' }, { updatedAt: new Date(0) }]) {
+    await assertFails(setDoc(doc(db, 'calamarAudience', session), beat(invalid)));
+  }
+  await assertFails(setDoc(doc(db, 'calamarAudience', 'short'), beat()));
+});
+test('visits add one to one key of today and only the admin reads them', async () => {
+  const db = env.unauthenticatedContext().firestore();
+  const ref = doc(db, 'calamarVisits', today());
+  const visit = (key, extra = {}) => ({ last: key, [key]: increment(1), ...extra });
+  await assertSucceeds(setDoc(ref, visit('c_la-1'), { merge: true }));
+  await assertSucceeds(setDoc(ref, visit('c_la-1'), { merge: true }));
+  await assertSucceeds(setDoc(ref, visit('e_evento-1'), { merge: true }));
+  await assertFails(setDoc(ref, visit('c_la-1', { 'c_la-1': increment(5) }), { merge: true }));
+  await assertFails(setDoc(ref, visit('c_la-1', { 'c_la-2': increment(1) }), { merge: true }));
+  await assertFails(setDoc(ref, visit('e_evento-1', { last: 'c_la-1' }), { merge: true }));
+  await assertFails(setDoc(ref, visit('bad key'), { merge: true }));
+  await assertFails(setDoc(ref, { last: 'c_la-1', 'c_la-1': 1 }));
+  await assertFails(setDoc(doc(db, 'calamarVisits', '2001-01-01'), visit('c_la-1'), { merge: true }));
+  await assertFails(setDoc(doc(db, 'calamarVisits', 'today'), visit('c_la-1'), { merge: true }));
+  await assertFails(getDoc(ref));
+  await assertFails(deleteDoc(ref));
+  const stats = await assertSucceeds(getDoc(doc(admin(), 'calamarVisits', today())));
+  assert.deepEqual(stats.data(), { last: 'e_evento-1', 'c_la-1': 2, 'e_evento-1': 1 });
 });

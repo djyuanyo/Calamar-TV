@@ -21,6 +21,15 @@ export const login = async () => {}, logout = async () => {}, explain = e => e.m
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
 export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
 export const watchCatalog = (fallback, next) => { next({ data: structuredClone(catalog) }); return () => {}; };
+const present = new Map();
+window.__visits = [];
+export const beat = async (session, target) => { present.set(session, target); };
+export const leave = async session => { present.delete(session); };
+export const viewers = async target => [...present.values()].filter(t => t === target).length + 2;
+export const audience = async () => [...present.values()].map(target => ({ target, minute: Math.floor(Date.now() / 60000) }));
+export const purgeAudience = async () => {};
+export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
+export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
 `;
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
@@ -39,7 +48,7 @@ let browser;
 try {
   browser = await chromium.launch({ headless: true, ...(process.env.CALAMAR_CHROME_CHANNEL ? { channel: process.env.CALAMAR_CHROME_CHANNEL } : {}) });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await page.clock.install();
+  await page.clock.install({ time: new Date('2026-11-30T12:00:00Z') });
   const errors = [], requests = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => requests.push(request.url()));
@@ -90,20 +99,50 @@ try {
   assert.ok(Math.abs(dimensions.cover.width - dimensions.art.width) < 1);
   assert.ok(Math.abs(dimensions.cover.height - dimensions.art.height) < 1);
   assert.equal(await page.locator('.card:not(.event-card) .badge.live').count(), 0);
-  assert.equal(await page.locator('.highlight-slider .hero h1').textContent(), 'Local vs visitante');
+  // Until the event starts its badge shows when it starts instead of a live label.
+  assert.equal(await page.locator('.event-card .badge').textContent(), 'mar 1 dic · 21:00');
+  assert.equal(await page.locator('.highlight-slider .event-state').textContent(), 'mar 1 dic · 21:00');
+  const heroTitle = () => page.locator('.highlight-slider .hero h1').textContent();
+  assert.equal(await heroTitle(), 'Local vs visitante');
+  assert.equal(await page.getByRole('button', { name: /Pausar portada|Reanudar portada/ }).count(), 0);
   await page.clock.fastForward(5001);
-  assert.equal(await page.locator('.highlight-slider .hero h1').textContent(), 'Sports Two');
-  await page.getByRole('button', { name: 'Pausar portada', exact: true }).click();
+  assert.equal(await heroTitle(), 'Sports Two');
   await page.clock.fastForward(5001);
-  assert.equal(await page.locator('.highlight-slider .hero h1').textContent(), 'Sports Two');
+  assert.equal(await heroTitle(), 'Local vs visitante');
+  // Swiping left shows the next highlight without opening the channel under the finger.
+  const box = await page.locator('.highlight-slider .hero').boundingBox();
+  const swipe = async (from, to) => {
+    await page.mouse.move(box.x + box.width * from, box.y + box.height * 0.7);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * to, box.y + box.height * 0.7, { steps: 5 });
+    await page.mouse.up();
+  };
+  await swipe(0.8, 0.2);
+  assert.equal(await heroTitle(), 'Sports Two');
+  await swipe(0.2, 0.8);
+  assert.equal(await heroTitle(), 'Local vs visitante');
+  assert.equal(await page.locator('#player').isHidden(), true);
+  await page.locator('.slider-dots button').nth(1).click();
+  assert.equal(await heroTitle(), 'Sports Two');
   await page.locator('.event-card').click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.match(page.url(), /#\/evento\/evento-/);
   assert.ok(page.url().endsWith(published.events[0].id));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
   assert.ok(requests.includes('https://example.com/one.mp4'));
+  await page.locator('#player-viewers:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-viewers b').textContent(), '3');
+  assert.equal(await page.locator('#player-viewers .sr').textContent(), '3 personas viendo');
+  assert.deepEqual(await page.evaluate(() => window.__visits), [['2026-11-30', `e_${published.events[0].id}`]]);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  assert.equal(await page.locator('#player-viewers').isHidden(), true);
   await page.locator('.admin-link').click();
+  await page.locator('.admin-stats a').filter({ hasText: 'Estadísticas' }).click();
+  await page.getByRole('heading', { name: 'En vivo ahora', exact: true }).waitFor();
+  await page.locator('.stats-table').filter({ hasText: 'Sports One' }).waitFor();
+  assert.match(await page.locator('.stats-total').last().textContent(), /3 visitas/);
+  await page.getByRole('button', { name: 'Año', exact: true }).click();
+  assert.equal(await page.locator('.stats-chart .bar').count(), 12);
   await page.locator('.admin-stats a').filter({ hasText: 'Eventos' }).click();
   await page.locator('.item').filter({ hasText: 'Local vs visitante' }).getByRole('link', { name: 'Editar', exact: true }).click();
   await page.getByRole('heading', { name: 'Editar evento', exact: true }).waitFor();
@@ -125,5 +164,5 @@ try {
   await page.locator('.item').filter({ hasText: 'Sports Two' }).filter({ hasText: 'enlace(s)' }).getByRole('button', { name: 'Eliminar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.length === 0 && window.__published.channels.length === 1);
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, abrir reproducción, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
