@@ -573,9 +573,9 @@ public class MainActivity extends Activity {
       for (int i = 0; i < picks.size(); i++) {
         View dot = new View(this);
         dot.setBackground(Ui.shape(this, i == index ? Ui.ACC : 0x73ffffff, 4, 0, 0));
-        LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(i == index ? 22 : 8), dp(8));
-        size.setMargins(dp(3), 0, dp(3), 0);
-        dots.addView(dot, size);
+        LinearLayout.LayoutParams dotSize = new LinearLayout.LayoutParams(dp(i == index ? 22 : 8), dp(8));
+        dotSize.setMargins(dp(3), 0, dp(3), 0);
+        dots.addView(dot, dotSize);
       }
       dots.setContentDescription("Destacado " + (index + 1) + " de " + picks.size() + ". Desliza para ver otro.");
       FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
