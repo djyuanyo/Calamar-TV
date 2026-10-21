@@ -278,6 +278,16 @@ try {
   scoreOffline = true;
   await page.clock.fastForward(31000);
   await page.locator('#player-title .player-score').getByText('Marcador no disponible', { exact: true }).waitFor();
+  // Every event card opens, including the second item of a rail (map's index is not a picker).
+  await page.evaluate(() => {
+    const c=JSON.parse(sessionStorage.getItem('catalog'));
+    c.events.push({ ...c.events[0], id:'zz-other-event', name:'Otro partido', featured:false, matchUrl:'', matchId:'', matchDate:'' });
+    sessionStorage.setItem('catalog',JSON.stringify(c));
+  });
+  await page.goto(base + '/?regression=2#/inicio');
+  await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
+  assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id),'player');
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

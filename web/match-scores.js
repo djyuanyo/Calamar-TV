@@ -59,7 +59,7 @@ export async function resolveMatch(value, startAt, fetcher = globalThis.fetch) {
   const day = ms => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
   const board = await json(`${API}scoreboard?dates=${day(date - 86400000)}-${day(date + 86400000)}&limit=1000`, fetcher);
   const event = identifyMatch(board, new URL(googleUrl).searchParams.get('q'), startAt);
-  return { matchUrl, matchId: String(event.id), matchDate: event.date, result: matchResult(event) };
+  return { matchUrl, matchId: String(event.id), matchDate: new Date(event.date).toISOString(), result: matchResult(event) };
 }
 const cache = new Map();
 export async function fetchMatch(id, fetcher = globalThis.fetch) {

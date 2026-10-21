@@ -649,7 +649,7 @@ public class MainActivity extends Activity {
   }
   void updateScores(View view){
     if(view==null)return;
-    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();MatchScores.Result score=matchResults.get(c.matchId);((TextView)view).setText(score==null?"Marcador no disponible":score.text);}
+    if(view instanceof TextView && view.getTag() instanceof Catalog.Channel){Catalog.Channel c=(Catalog.Channel)view.getTag();MatchScores.Result score=matchResults.get(c.matchId);((TextView)view).setText(score==null?"Marcador no disponible":score.text);view.setContentDescription(((TextView)view).getText()+". Resultados: ESPN");}
     if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)updateScores(group.getChildAt(i));}
   }
   TextView eventBadge(Catalog.Channel c, float sp) {
@@ -791,7 +791,7 @@ public class MainActivity extends Activity {
     }
     final List<Catalog.Channel> selected=new ArrayList<>();
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(16),dp(8),dp(16),dp(8));
-    EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Buscar eventos o canales");search.setTextColor(Ui.FG);panel.addView(search,new LinearLayout.LayoutParams(-1,-2));
+    EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Buscar eventos o canales");search.setTextColor(Ui.FG);search.setHintTextColor(Ui.MUTED);panel.addView(search,new LinearLayout.LayoutParams(-1,-2));
     TextView count=text("Elige de 2 a "+MultiScreen.MAX,14);panel.addView(count);
     ScrollView scroll=new ScrollView(this);LinearLayout grid=new LinearLayout(this);grid.setOrientation(LinearLayout.VERTICAL);scroll.addView(grid);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
     Button watch=new Button(this);watch.setText("Ver a la vez");watch.setAllCaps(false);watch.setEnabled(false);panel.addView(watch);

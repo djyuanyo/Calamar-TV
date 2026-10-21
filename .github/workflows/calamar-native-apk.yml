@@ -32,6 +32,7 @@ jobs:
           php -l hosting/calamar-video.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
+          python -m unittest discover -s tools -p 'test_match_resolver.py' -v
           python -m unittest discover -s tools -p 'test_cast_bridge.py' -v
           python -m unittest discover -s tools -p 'test_video_bridge.py' -v
       - name: Compilar release y debug con validación
