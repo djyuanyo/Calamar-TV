@@ -2,7 +2,8 @@ package es.yuanyo.calamartv;
 
 import android.graphics.Color;
 import android.view.View;
-import android.widget.Button;
+import android.widget.TextView;
+import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 import androidx.fragment.app.FragmentActivity;
@@ -25,7 +26,8 @@ public final class CastControls {
   private final String title;
   private final Runnable sent;
   private SessionManager sessions;
-  private Button send, toggle;
+  private LinearLayout control;
+  private String lastSent;
   private MediaRouteButton route;
   private boolean destroyed;
   private boolean preparing;
@@ -43,39 +45,46 @@ public final class CastControls {
             message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
             return true;
           }
+          if (connected() && !java.util.Objects.equals(lastSent, source.current())) send();
           return super.performClick();
         }
       };
-      route.setContentDescription("Enviar a Chromecast");
+      route.setContentDescription("Compartir pantalla");
+      route.setFocusable(false);
+      route.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       route.setBackgroundColor(Color.TRANSPARENT);
-      row.addView(route, new LinearLayout.LayoutParams(Ui.dp(activity, 48), Ui.dp(activity, 48)));
+      control = new LinearLayout(activity);
+      control.setGravity(Gravity.CENTER_VERTICAL);
+      control.setPadding(Ui.dp(activity, 6), 0, Ui.dp(activity, 8), 0);
+      control.setBackground(Ui.focusFill(activity, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
+      control.setFocusable(true);
+      control.setContentDescription("Compartir pantalla");
+      control.setOnClickListener(v -> route.performClick());
+      control.addView(route, new LinearLayout.LayoutParams(Ui.dp(activity, 24), Ui.dp(activity, 40)));
+      TextView label = new TextView(activity);
+      label.setText("Compartir pantalla");
+      label.setTextColor(Ui.FG); label.setTextSize(12);
+      label.setMaxWidth(Ui.dp(activity, 75)); label.setMaxLines(2);
+      label.setGravity(Gravity.CENTER);
+      label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      label.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+      label.setPadding(Ui.dp(activity, 4), 0, 0, 0);
+      control.addView(label);
+      LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-2, Ui.dp(activity, 40));
+      size.setMargins(Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4));
+      row.addView(control, size);
       CastButtonFactory.setUpMediaRouteButton(activity, route);
-      send = new Button(activity); send.setText("Enviar a TV");
-      send.setOnClickListener(v -> send()); row.addView(send);
-      toggle = new Button(activity); toggle.setText("⏯ TV");
-      toggle.setContentDescription("Reproducir o pausar en Chromecast");
-      toggle.setOnClickListener(v -> {
-        RemoteMediaClient remote = remote();
-        if (remote != null) {
-          if (remote.isPaused()) {
-            if (CastSource.needsBridge(source.current())) send(); else remote.play();
-          } else remote.pause();
-        }
-      });
-      row.addView(toggle);
       sessions.addSessionManagerListener(listener, CastSession.class);
       update();
     } catch (RuntimeException unavailable) {
       sessions = null; // Some Android TV devices do not include Google Play services.
       if (route != null) route.setVisibility(View.GONE);
-      if (send != null) send.setVisibility(View.GONE);
-      if (toggle != null) toggle.setVisibility(View.GONE);
+      if (control != null) control.setVisibility(View.GONE);
     }
   }
 
   private void update() {
-    if (send != null) send.setVisibility(connected() ? View.VISIBLE : View.GONE);
-    if (toggle != null) toggle.setVisibility(connected() ? View.VISIBLE : View.GONE);
+    if (control != null) control.setActivated(connected());
   }
 
   public boolean connected() {
@@ -133,8 +142,9 @@ public final class CastControls {
         .setResultCallback(result -> {
           if (destroyed) return;
           if (result.getStatus().isSuccess()) {
+            lastSent = original;
             if (original.equals(source.current())) sent.run();
-            message("Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.");
+            message("Reproduciendo en Chromecast. Pulsa Compartir pantalla para pausar o desconectar.");
           } else message("Chromecast no pudo cargar esta fuente. Comprueba el formato y el acceso del televisor al enlace.");
         });
   }
@@ -144,7 +154,7 @@ public final class CastControls {
     @Override public void onSessionStarted(CastSession session, String id) { update(); send(); }
     @Override public void onSessionStartFailed(CastSession session, int error) { update(); message("No se pudo conectar con Chromecast."); }
     @Override public void onSessionEnding(CastSession session) {}
-    @Override public void onSessionEnded(CastSession session, int error) { update(); message("Chromecast desconectado. Pulsa Reintentar para seguir en el dispositivo."); }
+    @Override public void onSessionEnded(CastSession session, int error) { update(); message("Chromecast desconectado. Pulsa Refrescar para seguir en el dispositivo."); }
     @Override public void onSessionResuming(CastSession session, String id) {}
     @Override public void onSessionResumed(CastSession session, boolean suspended) { update(); }
     @Override public void onSessionResumeFailed(CastSession session, int error) { update(); }

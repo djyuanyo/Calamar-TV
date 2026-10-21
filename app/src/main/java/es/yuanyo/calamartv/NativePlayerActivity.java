@@ -129,8 +129,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
     LinearLayout controls = new LinearLayout(this);
     controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
-    button(controls, "DNS", this::chooseDns);
-    button(controls, "Diagnóstico", this::diagnose);
+    ImageButton fullscreenButton = new ImageButton(this);
+    fullscreenButton.setImageResource(R.drawable.ic_player_fullscreen);
+    fullscreenButton.setContentDescription("Pantalla completa");
+    fullscreenButton.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+    fullscreenButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
+    fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
+    LinearLayout.LayoutParams fullscreenSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
+    fullscreenSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+    controls.addView(fullscreenButton, fullscreenSize);
+    button(controls, "Fuentes", this::chooseSource);
+    button(controls, "Refrescar", () -> {
+      automaticAttempts = 0;
+      mediaHttp1 = false;
+      if (directUrl != null) playDirect(); else resolveFresh();
+    });
     castControls = new CastControls(this, controls,
         () -> !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
@@ -140,39 +153,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           if (browser != null) browser.onPause();
           handler.removeCallbacks(renewal);
           handler.removeCallbacks(renewalRequest);
-          status.setText("Reproduciendo en Chromecast. Usa los controles TV.");
+          status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
         });
-    if (directUrl != null) {
-      button(
-          controls,
-          "Reintentar",
-          () -> {
-            automaticAttempts = 0;
-            mediaHttp1 = false;
-            playDirect();
-          });
-      if (directUrls.size() > 1) button(controls, "Fuentes", this::chooseSource);
-      button(
-          controls,
-          "Modo nativo",
-          () -> {
-            mediaHttp1 = false;
-            playDirect();
-          });
-      button(controls, "Modo web", this::openDirectWeb);
-    } else {
-      button(
-          controls,
-          "Renovar",
-          () -> {
-            automaticAttempts = 0;
-            resolveFresh();
-          });
-      button(controls, "Fuentes", this::chooseSource);
-      button(controls, "Modo web", this::openWeb);
-      button(controls, "Chrome / navegador", this::openBrowser);
-    }
-    button(controls, "Pantalla completa", () -> setFullscreen(!fullscreen));
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
     scroll.addView(controls);
@@ -199,6 +181,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void button(LinearLayout row, String text, Runnable action) {
     Button b = Ui.pill(this, text, Ui.Kind.SURFACE, true);
+    b.setTextSize(12);
+    b.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);
     b.setFocusable(true);
     b.setOnClickListener(v -> action.run());
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(this, 40));
@@ -317,7 +301,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onStart();
     active = true;
     if (castPlayback && castControls != null && castControls.connected()) {
-      status.setText("Reproduciendo en Chromecast. Usa los controles TV.");
+      status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
       return;
     }
     castPlayback = false;
@@ -577,8 +561,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       }
       problem(
           directUrl != null
-              ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Reintentar."
-              : "No se pudo recuperar la emisión. Pulsa Renovar, Fuentes o Modo web.");
+              ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Refrescar."
+              : "No se pudo recuperar la emisión. Pulsa Refrescar o Fuentes.");
       return;
     }
     status.setText(message);
