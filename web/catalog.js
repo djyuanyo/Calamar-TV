@@ -94,8 +94,12 @@ export function featured(channels, custom, limit) {
   return out;
 }
 
-export function groups(channels) {
-  const map = new Map(GROUP_ORDER.map((g) => [g, []]));
+/**
+ * Categories in display order: the order saved by the administrator (catalog `groupOrder`), then the
+ * default categories, then any other category alphabetically.
+ */
+export function groups(channels, order = []) {
+  const map = new Map([...(Array.isArray(order) ? order : []), ...GROUP_ORDER].map((g) => [g, []]));
   const extra = new Map();
   for (const c of channels) (map.get(c.group) || extra.get(c.group) || extra.set(c.group, []).get(c.group)).push(c);
   for (const g of [...extra.keys()].sort()) map.set(g, extra.get(g));
@@ -185,6 +189,19 @@ export function events(channels, custom) {
       event: true, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
       streams: target.streams, playable: target.playable }] : [];
   });
+}
+/** Home rows: one per league (with its logo), ordered by its next event; events without league last. */
+export function eventRows(list, custom) {
+  const leagues = new Map((custom?.leagues || []).map((l) => [l.id, l]));
+  const rows = new Map();
+  for (const event of list) {
+    const league = leagues.get(event.leagueId);
+    const key = league ? league.id : '';
+    if (!rows.has(key)) rows.set(key, { id: key, name: league ? league.name : 'Otros eventos', logo: https(league?.logo) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
+    rows.get(key).events.push(event);
+  }
+  const out = [...rows.values()];
+  return [...out.filter((r) => r.id), ...out.filter((r) => !r.id)];
 }
 export function homeHighlights(channels, custom) {
   const matches = events(channels, custom).filter(e => e.featured);

@@ -90,6 +90,9 @@ try {
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
   await page.locator('.event-card').waitFor();
   assert.equal(await page.locator('a[data-route=futbol]').count(), 0);
+  // The home page lists only events, in one row per league with its name.
+  assert.equal(await page.locator('main .rail .card:not(.event-card)').count(), 0);
+  assert.equal(await page.locator('main .section-head h2').first().textContent(), 'Liga de prueba');
   const dimensions = await page.evaluate(() => {
     const cover = document.querySelector('.event-card .event-cover'), art = cover.parentElement;
     const header = document.querySelector('.brand').getBoundingClientRect(), search = document.querySelector('.search').getBoundingClientRect();
@@ -165,6 +168,22 @@ try {
   await page.locator('.admin-stats a').filter({ hasText: 'Canales' }).click();
   await page.locator('.item').filter({ hasText: 'Sports Two' }).filter({ hasText: 'enlace(s)' }).getByRole('button', { name: 'Eliminar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.length === 0 && window.__published.channels.length === 1);
+  // A channel in a new category, then that category first in the channels menu.
+  await page.getByLabel('Nombre', { exact: true }).fill('Cine Uno');
+  await page.getByLabel('Categoría', { exact: true }).selectOption({ label: '+ Nueva categoría…' });
+  await page.getByLabel('Nueva categoría', { exact: true }).fill('Cine');
+  await page.getByLabel('Enlaces', { exact: true }).fill('https://example.com/cine.mp4');
+  await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await page.waitForFunction(() => window.__published.channels.some(c => c.group === 'Cine'));
+  await page.getByRole('heading', { name: 'Orden de categorías', exact: true }).waitFor();
+  assert.deepEqual(await page.locator('.order-list li span').allTextContents(), ['Deportes', 'Cine']);
+  await page.getByRole('button', { name: 'Subir Cine', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar orden', exact: true }).click();
+  await page.waitForFunction(() => window.__published.groupOrder?.[0] === 'Cine');
+  await page.goto(base + '/#/canales');
+  await page.locator('main .section-head h2').first().waitFor();
+  assert.deepEqual(await page.locator('main .section-head h2').allTextContents(), ['Cine', 'Deportes']);
+  assert.deepEqual(await page.locator('.chips .chip').allTextContents(), ['Todos', 'Cine', 'Deportes']);
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, categoría nueva y orden de categorías, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

@@ -301,7 +301,7 @@ public class MainActivity extends Activity {
     if (!mode.equals("Canales")) return;
     List<String> names = new ArrayList<>();
     names.add("Todos");
-    names.addAll(Catalog.groups(channels).keySet());
+    names.addAll(Catalog.groups(channels, custom).keySet());
     for (final String g : names) {
       Button b = Ui.pill(this, g, g.equals(group) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
       b.setOnClickListener(
@@ -315,6 +315,17 @@ public class MainActivity extends Activity {
       b.setId(1000 + Math.abs(g.hashCode() % 90000));
       addButton(filters, b);
     }
+  }
+
+  /** Puts the league logo before the title of the heading just added. */
+  void leagueLogo(String url) {
+    LinearLayout r = (LinearLayout) list.getChildAt(list.getChildCount() - 1);
+    ImageView logo = new ImageView(this);
+    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(30), dp(30));
+    lp.setMargins(dp(4), 0, 0, 0);
+    r.addView(logo, 1, lp);
+    image(logo, url);
   }
 
   void heading(String title, String sub) {
@@ -367,27 +378,13 @@ public class MainActivity extends Activity {
       List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
       List<Catalog.Channel> events = Catalog.events(channels, custom);
       if (!featured.isEmpty()) hero(featured);
-      if (!events.isEmpty()) { heading("Eventos", "Por fecha y hora"); carousel(events, events.size()); }
-      for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels).entrySet()) {
-        heading(e.getKey(), e.getValue().size() + " canales");
-        carousel(e.getValue(), 40);
-        if (e.getValue().size() > 40) {
-          final String g = e.getKey();
-          LinearLayout more = row();
-          addButton(
-              more,
-              button(
-                  "Ver los " + e.getValue().size() + " canales",
-                  new View.OnClickListener() {
-                    public void onClick(View v) {
-                      mode = "Canales";
-                      group = g;
-                      home();
-                    }
-                  }));
-          list.addView(more);
-        }
+      // Only events on the home page: one row per league, each in date order.
+      for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
+        heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
+        if (!row.logo.isEmpty()) leagueLogo(row.logo);
+        carousel(row.events, row.events.size());
       }
+      if (events.isEmpty()) list.addView(label("Todavía no hay eventos. Abre Canales para ver todos los canales.", 15, MUTED));
     }
     TextView note =
         label(
@@ -625,7 +622,7 @@ public class MainActivity extends Activity {
   void grid() {
     int columns = wide() ? 4 : 2;
     int width = gridWidth(columns);
-    for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels).entrySet()) {
+    for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels, custom).entrySet()) {
       if (!group.equals("Todos") && !group.equals(e.getKey())) continue;
       heading(e.getKey(), e.getValue().size() + " canales");
       String region = null;

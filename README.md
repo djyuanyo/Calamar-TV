@@ -156,3 +156,11 @@ Las portadas y tarjetas de eventos con fecha muestran el día y la hora de inici
 **Publicar las reglas** es necesario para que funcione: Firebase Console → Firestore → Reglas → pegar `firebase/firestore.rules` → Publicar (o `firebase deploy --only firestore:rules --project menciamedia`). Con el plan Spark cada espectador hace una escritura por minuto y una lectura cada 30 segundos; la cuota gratuita (20 000 escrituras y 50 000 lecturas al día) cubre unas 300 horas de visionado diarias. Por ahora solo cuenta la web: la app Android todavía no informa de espectadores ni visitas.
 
 Pruebas: `tools/audience.test.mjs`, reglas en `firebase/catalog.test.mjs` y el flujo de Chrome.
+
+## Portada de eventos y orden de categorías (2.7.0)
+
+La página de inicio (web y app) muestra el slider de destacados y, debajo, solo los eventos creados: una fila por liga con su logo y su nombre, ordenadas por el próximo evento de cada liga, y los eventos de cada fila por fecha y hora, del más próximo al más lejano. Los eventos sin liga van al final en «Otros eventos». Los canales siguen en el menú **Canales**.
+
+En **Admin → Canales → Orden de categorías** se sube o baja cada categoría y se guarda con **Guardar orden** (campo `groupOrder` del catálogo). Ese orden se aplica al menú Canales de la web y de la app; las categorías que se creen después aparecen al final. **Volver al orden por defecto** elimina el orden guardado.
+
+Al crear o editar un canal, la categoría se elige en un desplegable con las categorías existentes o con **+ Nueva categoría…** para escribir una nueva. En la app Android el campo permite escribir o elegir de la lista.

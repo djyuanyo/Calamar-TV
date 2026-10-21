@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { madridInstant, localDateTime, eventPath } from '../web/sports.js';
-import { events, homeHighlights, merge } from '../web/catalog.js';
+import { events, eventRows, groups, homeHighlights, merge } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
 const channel = { id:'sports', name:'Sports', streams:['https://example.com/live.m3u8'] };
 const make = () => ({ channels:[channel], featured:['sports'], hidden:[], leagues:[{id:'liga',name:'Mi Liga'}], teams:[{id:'home',name:'Local',leagueId:'liga'},{id:'away',name:'Visitante'}], events:[{id:'match',name:'Partido',cover:'https://example.com/photo.jpg',channelId:'sports',leagueId:'liga',homeTeamId:'home',awayTeamId:'away',startAt:'2026-12-01T20:00:00.000Z',featured:true}] });
@@ -31,4 +31,19 @@ test('validates relationships, repeated teams, dates and featured types',()=>{
     const data=make();Object.assign(data.events[0],change);assert.throws(()=>validateCatalog(data));
   }
   const data=make();data.teams[0].leagueId='missing';assert.throws(()=>validateCatalog(data));
+});
+test('home rows group events by league in date order, events without league last',()=>{
+  const data=make(); data.leagues.push({id:'copa',name:'Copa',logo:'https://example.com/copa.png'});
+  data.events.push({...data.events[0],id:'cup',leagueId:'copa',startAt:'2026-11-15T20:00:00Z',featured:false},{...data.events[0],id:'free',leagueId:'',startAt:'2026-10-01T20:00:00Z',featured:false},{...data.events[0],id:'early',startAt:'2026-11-20T20:00:00Z',featured:false});
+  const rows=eventRows(events(merge(null,data),data),data);
+  assert.deepEqual(rows.map(r=>r.name),['Copa','Mi Liga','Otros eventos']);
+  assert.deepEqual(rows.map(r=>r.events.map(e=>e.id)),[['cup'],['early','match'],['free']]);
+  assert.equal(rows[0].logo,'https://example.com/copa.png'); assert.equal(rows[1].logo,'');
+});
+test('category order saved by the administrator comes first, unknown categories after',()=>{
+  const list=[{group:'Deportes'},{group:'Zeta'},{group:'Calamar TV'},{group:'Alfa'}];
+  assert.deepEqual([...groups(list).keys()],['Calamar TV','Deportes','Alfa','Zeta']);
+  assert.deepEqual([...groups(list,['Zeta','Deportes']).keys()],['Zeta','Deportes','Calamar TV','Alfa']);
+  const data=make(); data.groupOrder=['Zeta','Deportes']; validateCatalog(data);
+  for (const bad of [['A','A'],[''],[1],'Deportes']) { data.groupOrder=bad; assert.throws(()=>validateCatalog(data)); }
 });
