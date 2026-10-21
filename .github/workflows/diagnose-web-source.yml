@@ -28,10 +28,10 @@ jobs:
                 if(u.pathname.endsWith('.m3u8')) console.log('SOURCE',JSON.stringify({host:u.hostname,path:u.pathname,parameters:[...u.searchParams.keys()],status:r.status()}));
               }
             });
-            const r=await page.goto('https://mediahostexpert.top/embed/player?config=2b03fafc-656e-4df7-9cc2-a620a5526af0',{referer:'https://www.matchdirect.live/',waitUntil:'domcontentloaded'});
-            console.log('PAGE',JSON.stringify({status:r.status(),scripts:await page.locator('script').evaluateAll(ss=>ss.map(s=>s.src||s.textContent.slice(0,12000)))}));
+            await page.goto('https://djyuanyo.github.io/Calamar-TV/',{waitUntil:'domcontentloaded'});
+            await page.evaluate(()=>{document.body.innerHTML='';const f=document.createElement('iframe');f.src='https://mediahostexpert.top/embed/player?config=2b03fafc-656e-4df7-9cc2-a620a5526af0';f.allow='autoplay; fullscreen; picture-in-picture';document.body.append(f)});
             await page.waitForTimeout(20000);
-            console.log('REPORT',JSON.stringify({requests:seen,video:await page.locator('video').evaluateAll(vs=>vs.map(v=>({time:v.currentTime,width:v.videoWidth,error:v.error?.code||0}))),text:(await page.locator('body').innerText()).slice(0,500)}));
+            console.log('REPORT',JSON.stringify({requests:seen,video:await Promise.all(page.frames().map(f=>f.locator('video').evaluateAll(vs=>vs.map(v=>({time:v.currentTime,width:v.videoWidth,error:v.error?.code||0}))).catch(()=>[]))),text:(await page.locator('body').innerText()).slice(0,500)}));
             await browser.close();
           })().catch(e=>{console.log('PROBE_ERROR',e.name,e.message.split('\n')[0]);process.exitCode=1});
           JS
