@@ -1,0 +1,23 @@
+name: Calamar TV · Eventos en navegador
+on:
+  push:
+    paths: ['web/**', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
+  pull_request:
+    paths: ['web/**', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: npm install --prefix /tmp/calamar-ui --no-audit --no-fund playwright@1.58.2
+      - name: Probar eventos con catálogo aislado
+        env:
+          CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
+          CALAMAR_CHROME_CHANNEL: chrome
+        run: node tools/browser_events_check.mjs

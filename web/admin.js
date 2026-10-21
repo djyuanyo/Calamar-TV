@@ -1,6 +1,6 @@
 import { el, fetchJson } from './app.js';
 import { GROUP_ORDER, OWN_GROUP, merge } from './catalog.js';
-import { ADMIN_EMAIL, validCover } from './shared-catalog.js';
+import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain } from './firebase.js';
 
 let saving = false;
@@ -306,7 +306,9 @@ function eventForm(existing, rerender) {
       if (!validCover(cover.value.trim())) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
       if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
       const entry = { id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: cover.value.trim(), channelId: selected };
-      data.events = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
+      const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
+      validateCatalog({ ...data, events: updated });
+      data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
   } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime antes de guardarse.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
