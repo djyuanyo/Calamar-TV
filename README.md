@@ -179,3 +179,7 @@ En **Admin → Canales → Categorías**:
 ## Icono y favicon (2.8.1)
 
 El icono de la app (también el icono adaptable de Android 8+), el banner de Android TV y los favicons de la web salen del logo de la cabecera (`web/assets/calamar-menciano-tv.png`). Si el logo cambia, se regeneran con `python tools/make_icons.py` (requiere Pillow).
+
+## Reproductor a pantalla completa (2.8.2)
+
+En la app, los canales y eventos se abren directamente a pantalla completa (sin barras del sistema y, en el móvil, en horizontal). El botón de pantalla completa del reproductor muestra el panel con fuentes, DNS y diagnóstico; Atrás cierra el reproductor. Si hay un error que leer, el reproductor sale de la pantalla completa para mostrarlo.
