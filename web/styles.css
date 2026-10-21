@@ -449,6 +449,8 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 /* Original supplied crest, contained without cropping or stretching. */
 .header-brand-logo { display:block; height:80px; width:74px; object-fit:contain; }
 @media (max-width:640px) { .header-brand-logo { height:64px; width:59px; } }
+/* The public web is still in testing. */
+.beta-tag { display:inline-block; padding:3px 9px; border:1.5px solid var(--accent); border-radius:999px; color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; line-height:1.2; }
 
 /* Same action order as Android; standard playback controls remain below the video. */
 .player-toolbar { display:flex; align-items:center; gap:6px; flex:none; }
