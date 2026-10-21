@@ -684,9 +684,7 @@ public class AdminActivity extends Activity {
   /** Write a category or pick one already used; the list opens when the field gets focus. */
   private EditText categoryInput(LinearLayout form, String value) {
     LinkedHashSet<String> names = new LinkedHashSet<>();
-    JSONArray order = catalog.optJSONArray("groupOrder");
-    if (order != null) for (int i = 0; i < order.length(); i++) names.add(order.optString(i));
-    names.addAll(Catalog.GROUP_ORDER);
+    for (Catalog.Category c : Catalog.categories(catalog)) names.add(c.name);
     JSONArray channels = catalog.optJSONArray("channels");
     if (channels != null) for (int i = 0; i < channels.length(); i++) {
       String g = channels.optJSONObject(i) == null ? "" : channels.optJSONObject(i).optString("group").trim();

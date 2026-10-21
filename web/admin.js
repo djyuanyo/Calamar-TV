@@ -1,6 +1,6 @@
 import { eventOrder, eventMeta, eventPath, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
-import { OWN_GROUP, merge, groups } from './catalog.js';
+import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
@@ -72,19 +72,24 @@ function validStreams(text) {
   return out;
 }
 
-/** Every category with channels, in the order the channels menu shows them. */
-const categoryNames = (state) => [...new Set([...groups(state.channels, file.data.groupOrder).keys(), OWN_GROUP])];
+/** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
+function allCategories(state) {
+  const list = categoryList(file.data);
+  const used = [...merge(state.tdt || { channels: [] }, null).map((c) => c.category), ...file.data.channels.map((c) => c.group || OWN_GROUP)];
+  for (const g of used) if (!list.some((c) => c.id === g || c.name === g)) list.push({ id: g, name: g, color: defaultColor(g) });
+  return list;
+}
 
 const NEW_GROUP = '\u0000nueva';
 function channelForm(existing, rerender, state) {
   const data = file.data;
   const name = el('input', { required: true, value: existing ? existing.name : '' });
   // Pick an existing category or write a new one.
-  const categories = categoryNames(state);
-  const current = existing ? existing.group || OWN_GROUP : OWN_GROUP;
-  const groupSelect = el('select', {}, categories.map((g) => el('option', { value: g }, g)), el('option', { value: NEW_GROUP }, '+ Nueva categoría…'));
-  groupSelect.value = categories.includes(current) ? current : NEW_GROUP;
-  const groupNew = el('input', { placeholder: 'Nombre de la nueva categoría', maxlength: '80', value: categories.includes(current) ? '' : current });
+  const categories = allCategories(state);
+  const current = resolveCategory(existing ? existing.group || OWN_GROUP : OWN_GROUP, categories).id;
+  const groupSelect = el('select', {}, categories.map((c) => el('option', { value: c.id }, c.name)), el('option', { value: NEW_GROUP }, '+ Nueva categoría…'));
+  groupSelect.value = categories.some((c) => c.id === current) ? current : NEW_GROUP;
+  const groupNew = el('input', { placeholder: 'Nombre de la nueva categoría', maxlength: '80', value: categories.some((c) => c.id === current) ? '' : current });
   const groupNewField = field('Nueva categoría', groupNew);
   groupNewField.hidden = groupSelect.value !== NEW_GROUP;
   groupSelect.addEventListener('change', () => { groupNewField.hidden = groupSelect.value !== NEW_GROUP; if (!groupNewField.hidden) groupNew.focus(); });
@@ -110,6 +115,12 @@ function channelForm(existing, rerender, state) {
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
           if (!channel.group) throw new Error('Escribe el nombre de la nueva categoría.');
+          if (groupSelect.value === NEW_GROUP) {
+            // A name already in use joins that category; a new one is added at the end with its colour.
+            const same = categories.find((c) => c.name.toLocaleLowerCase('es') === channel.group.toLocaleLowerCase('es'));
+            if (same) channel.group = same.id;
+            else data.categories = [...categories, { id: channel.group, name: channel.group, color: defaultColor(channel.group) }];
+          }
           if (existing) data.channels[data.channels.findIndex((c) => c.id === existing.id)] = channel;
           else data.channels.push(channel);
           data.featured = data.featured.filter((id) => id !== channel.id);
@@ -147,7 +158,7 @@ function ownList(rerender) {
         'div',
         { class: 'item' },
         c.logo ? el('img', { src: c.logo, alt: '' }) : el('span', { class: 'thumb' }),
-        el('div', { class: 'meta' }, el('b', {}, `${data.featured.includes(c.id) ? '★ ' : ''}${c.name}`), el('span', {}, `${c.group || OWN_GROUP} · ${(c.streams || []).length} enlace(s)`)),
+        el('div', { class: 'meta' }, el('b', {}, `${data.featured.includes(c.id) ? '★ ' : ''}${c.name}`), el('span', {}, `${resolveCategory(c.group || OWN_GROUP, categoryList(data)).name} · ${(c.streams || []).length} enlace(s)`)),
         el(
           'div',
           { class: 'actions' },
@@ -173,30 +184,93 @@ function ownList(rerender) {
   );
 }
 
-/** Order of the categories in the channels menu, saved in the catalog as `groupOrder`. */
-function groupOrderPanel(state, rerender) {
-  const order = categoryNames(state).filter((g) => groups(state.channels).has(g));
+/**
+ * Categories of the channels menu: order (drag the handle, or arrow keys on it), name and card colour,
+ * plus new categories. Saved in the catalog as `categories`; an `id` never changes so channels keep it.
+ */
+function categoriesPanel(state, rerender) {
+  const rows = allCategories(state).map((c) => ({ ...c }));
+  const merged = merge(state.tdt || { channels: [] }, file.data);
+  const count = (row) => merged.filter((c) => resolveCategory(c.category, rows).id === row.id).length
+    + file.data.channels.filter((c) => !merged.some((m) => m.id === c.id) && resolveCategory(c.group || OWN_GROUP, rows).id === row.id).length;
   const list = el('ol', { class: 'order-list' });
   const status = el('p', { class: 'note', role: 'status' });
-  const draw = (focus) => {
-    list.replaceChildren(...order.map((g, i) => el('li', {}, el('b', { class: 'order-n' }, i + 1), el('span', {}, g),
-      el('button', { class: 'btn small secondary', type: 'button', 'aria-label': `Subir ${g}`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
-      el('button', { class: 'btn small secondary', type: 'button', 'aria-label': `Bajar ${g}`, disabled: i === order.length - 1, onclick: () => move(i, 1) }, '↓'))));
-    if (focus) list.querySelector(`[aria-label="${focus}"]:not([disabled])`)?.focus();
+  const changed = () => { status.textContent = 'Cambios sin guardar.'; status.className = 'note'; };
+  const move = (li, to) => {
+    const items = [...list.children];
+    to = Math.max(0, Math.min(items.length - 1, to));
+    const from = items.indexOf(li);
+    if (from === to) return;
+    list.insertBefore(li, items[to + (to > from ? 1 : 0)] || null);
+    numbers(); changed();
   };
-  const move = (i, step) => {
-    const [g] = order.splice(i, 1);
-    order.splice(i + step, 0, g);
-    status.textContent = 'Orden sin guardar.';
-    draw(`${step < 0 ? 'Subir' : 'Bajar'} ${g}`);
+  const numbers = () => [...list.children].forEach((li, i) => { li.querySelector('.order-n').textContent = i + 1; });
+  const item = (row) => {
+    const n = count(row);
+    const handle = el('button', { class: 'drag-handle', type: 'button', 'aria-label': `Mover ${row.name}`, title: 'Arrastra para cambiar el orden (o usa las flechas)' }, '⠿');
+    const color = el('input', { type: 'color', value: row.color, 'aria-label': `Color de ${row.name}` });
+    const name = el('input', { value: row.name, maxlength: '80', 'aria-label': `Nombre de la categoría ${row.name}` });
+    color.addEventListener('input', () => { row.color = color.value; li.style.setProperty('--c', row.color); changed(); });
+    name.addEventListener('input', () => { row.name = name.value; handle.setAttribute('aria-label', `Mover ${name.value}`); changed(); });
+    const remove = n ? null : el('button', { class: 'btn small danger', type: 'button', 'aria-label': `Eliminar ${row.name}`, onclick: () => { li.remove(); numbers(); changed(); } }, 'Eliminar');
+    const li = el('li', { style: `--c:${row.color}` }, handle, el('b', { class: 'order-n' }), el('span', { class: 'swatch', 'aria-hidden': 'true' }), name, color,
+      el('small', {}, n === 1 ? '1 canal' : `${n} canales`), remove);
+    li._row = row;
+    handle.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault(); move(li, [...list.children].indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)); handle.focus();
+    });
+    // Dragging works with mouse, finger or pen: the row follows the pointer and drops between the others.
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // Listen on the window: moving the row in the page drops any pointer capture on it.
+      e.preventDefault(); li.classList.add('dragging');
+      const follow = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        const others = [...list.children].filter((x) => x !== li);
+        const to = others.filter((x) => { const r = x.getBoundingClientRect(); return ev.clientY > r.top + r.height / 2; }).length;
+        if (to !== [...list.children].indexOf(li)) { list.insertBefore(li, others[to] || null); numbers(); changed(); }
+      };
+      const drop = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        li.classList.remove('dragging');
+        window.removeEventListener('pointermove', follow); window.removeEventListener('pointerup', drop); window.removeEventListener('pointercancel', drop);
+      };
+      window.addEventListener('pointermove', follow); window.addEventListener('pointerup', drop); window.addEventListener('pointercancel', drop);
+    });
+    return li;
   };
-  draw();
-  return [el('div', { class: 'section-head' }, el('h2', {}, 'Orden de categorías')),
-    el('p', { class: 'note' }, 'Así aparecen las categorías en el menú Canales de la web y de la app. Las categorías nuevas se añaden al final.'),
+  list.append(...rows.map(item)); numbers();
+  const newName = el('input', { maxlength: '80', placeholder: 'Por ejemplo «Cine»' });
+  const newColor = el('input', { type: 'color', value: '#2d5a8a' });
+  newName.addEventListener('input', () => { if (!newColor.dataset.picked) newColor.value = defaultColor(newName.value.trim()); });
+  newColor.addEventListener('input', () => { newColor.dataset.picked = '1'; });
+  const add = () => {
+    const value = newName.value.trim();
+    if (!value) { status.textContent = 'Escribe el nombre de la nueva categoría.'; status.className = 'error'; return; }
+    const taken = [...list.children].some((li) => li._row.name.trim().toLocaleLowerCase('es') === value.toLocaleLowerCase('es') || li._row.id === value);
+    if (taken) { status.textContent = `Ya existe la categoría «${value}».`; status.className = 'error'; return; }
+    list.append(item({ id: value, name: value, color: newColor.value })); numbers(); changed();
+    newName.value = ''; delete newColor.dataset.picked;
+  };
+  newName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  return [el('div', { class: 'section-head' }, el('h2', {}, 'Categorías')),
+    el('p', { class: 'note' }, 'Arrastra ⠿ para ordenar el menú Canales de la web y de la app. Cambia el nombre o el color de fondo de las tarjetas de cada categoría.'),
     list,
+    el('div', { class: 'category-add' }, field('Nombre de la nueva categoría', newName), field('Color de la nueva categoría', newColor), el('button', { class: 'btn secondary', type: 'button', onclick: add }, 'Añadir categoría')),
     el('div', { class: 'actions' },
-      el('button', { class: 'btn', type: 'button', onclick: () => { if (saving) return; file.data.groupOrder = [...order]; guarded(() => saveFile(), rerender); } }, 'Guardar orden'),
-      file.data.groupOrder ? el('button', { class: 'ghost', type: 'button', onclick: () => { if (saving) return; delete file.data.groupOrder; guarded(() => saveFile(), rerender); } }, 'Volver al orden por defecto') : null),
+      el('button', { class: 'btn', type: 'button', onclick: () => {
+        if (saving) return;
+        const categories = [...list.children].map((li) => ({ id: li._row.id, name: li._row.name.trim(), color: li._row.color.toLowerCase() }));
+        try { validateCatalog({ ...file.data, categories }); }
+        catch (error) { status.textContent = error.message; status.className = 'error'; return; }
+        file.data.categories = categories; delete file.data.groupOrder;
+        guarded(() => saveFile(), rerender);
+      } }, 'Guardar categorías'),
+      file.data.categories || file.data.groupOrder ? el('button', { class: 'ghost', type: 'button', onclick: () => {
+        if (saving || !confirm('¿Volver a los nombres, colores y orden por defecto? Las categorías creadas sin canales se perderán.')) return;
+        delete file.data.categories; delete file.data.groupOrder; guarded(() => saveFile(), rerender);
+      } }, 'Restablecer') : null),
     status];
 }
 
@@ -293,7 +367,7 @@ export async function render(state) {
       ...(section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
-      ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...groupOrderPanel(state, rerender), ...tdtTools(state, rerender)]),
+      ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
   ];
 }

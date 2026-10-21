@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { madridInstant, localDateTime, eventPath } from '../web/sports.js';
-import { events, eventRows, groups, homeHighlights, merge } from '../web/catalog.js';
+import { events, eventRows, groups, homeHighlights, merge, categoryList, resolveCategory, defaultColor } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
 const channel = { id:'sports', name:'Sports', streams:['https://example.com/live.m3u8'] };
 const make = () => ({ channels:[channel], featured:['sports'], hidden:[], leagues:[{id:'liga',name:'Mi Liga'}], teams:[{id:'home',name:'Local',leagueId:'liga'},{id:'away',name:'Visitante'}], events:[{id:'match',name:'Partido',cover:'https://example.com/photo.jpg',channelId:'sports',leagueId:'liga',homeTeamId:'home',awayTeamId:'away',startAt:'2026-12-01T20:00:00.000Z',featured:true}] });
@@ -46,4 +46,16 @@ test('category order saved by the administrator comes first, unknown categories 
   assert.deepEqual([...groups(list,['Zeta','Deportes']).keys()],['Zeta','Deportes','Calamar TV','Alfa']);
   const data=make(); data.groupOrder=['Zeta','Deportes']; validateCatalog(data);
   for (const bad of [['A','A'],[''],[1],'Deportes']) { data.groupOrder=bad; assert.throws(()=>validateCatalog(data)); }
+});
+test('each category has one colour for all its cards, and can be renamed, recoloured and reordered',()=>{
+  const tdt={channels:[{id:'gol',name:'Gol',group:'Deportes',streams:['https://example.com/g.m3u8']},{id:'tele',name:'Tele',group:'Deportes',streams:['https://example.com/t.m3u8']},{id:'la-1',name:'La 1',group:'Generalistas',streams:['https://example.com/l.m3u8']}]};
+  let all=merge(tdt,{channels:[],featured:[],hidden:[]});
+  assert.equal(all[0].color,'#1d7a40'); assert.equal(all[1].color,all[0].color); assert.equal(all[2].color,'#1f4f8f');
+  assert.equal(defaultColor('Cine'),defaultColor('Cine')); assert.match(defaultColor('Cine'),/^#[0-9a-f]{6}$/);
+  const custom={channels:[{id:'mine',name:'Mio',group:'Cine',streams:['https://example.com/m.m3u8']}],featured:[],hidden:[],categories:[{id:'Cine',name:'Cine',color:'#123456'},{id:'Deportes',name:'Fútbol',color:'#aa0000'},{id:'Generalistas',name:'Generalistas',color:'#1f4f8f'}]};
+  validateCatalog(custom); all=merge(tdt,custom);
+  assert.deepEqual(all.map(c=>[c.id,c.group,c.color,c.category]),[['mine','Cine','#123456','Cine'],['gol','Fútbol','#aa0000','Deportes'],['tele','Fútbol','#aa0000','Deportes'],['la-1','Generalistas','#1f4f8f','Generalistas']]);
+  assert.deepEqual([...groups(all,categoryList(custom).map(c=>c.name)).keys()],['Cine','Fútbol','Generalistas']);
+  assert.equal(resolveCategory('Fútbol',categoryList(custom)).id,'Deportes');
+  for (const bad of [[{id:'a',name:'A',color:'red'}],[{id:'a',name:'A',color:'#000000'},{id:'b',name:'a',color:'#000000'}],[{id:'',name:'A',color:'#000000'}]]) { custom.categories=bad; assert.throws(()=>validateCatalog(custom)); }
 });

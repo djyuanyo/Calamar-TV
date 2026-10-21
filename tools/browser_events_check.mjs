@@ -175,15 +175,39 @@ try {
   await page.getByLabel('Enlaces', { exact: true }).fill('https://example.com/cine.mp4');
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.channels.some(c => c.group === 'Cine'));
-  await page.getByRole('heading', { name: 'Orden de categorías', exact: true }).waitFor();
-  assert.deepEqual(await page.locator('.order-list li span').allTextContents(), ['Deportes', 'Cine']);
-  await page.getByRole('button', { name: 'Subir Cine', exact: true }).click();
-  await page.getByRole('button', { name: 'Guardar orden', exact: true }).click();
-  await page.waitForFunction(() => window.__published.groupOrder?.[0] === 'Cine');
+  await page.getByRole('heading', { name: 'Categorías', exact: true }).waitFor();
+  const names = () => page.locator('.order-list li input:not([type=color])').evaluateAll(inputs => inputs.map(i => i.value));
+  assert.deepEqual((await names()).slice(-2), ['Autonómicos', 'Cine']);
+  // Drag Cine to the top with the handle, rename Deportes, change its colour and add an empty category.
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.locator('.order-list').scrollIntoViewIfNeeded();
+  const from = await page.getByRole('button', { name: 'Mover Cine', exact: true }).boundingBox();
+  const to = await page.getByRole('button', { name: 'Mover Calamar TV', exact: true }).boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + 2, { steps: 12 });
+  await page.mouse.up();
+  assert.equal((await names())[0], 'Cine');
+  await page.getByRole('button', { name: 'Mover Calamar TV', exact: true }).press('ArrowUp');
+  assert.deepEqual((await names()).slice(0, 2), ['Calamar TV', 'Cine']);
+  await page.getByLabel('Nombre de la categoría Deportes', { exact: true }).fill('Fútbol');
+  await page.getByLabel('Color de Deportes', { exact: true }).fill('#aa0000');
+  await page.getByLabel('Nombre de la nueva categoría', { exact: true }).fill('Series');
+  await page.getByRole('button', { name: 'Añadir categoría', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar categorías', exact: true }).click();
+  await page.waitForFunction(() => window.__published.categories?.some(c => c.name === 'Fútbol'));
+  const saved = await page.evaluate(() => window.__published.categories);
+  assert.deepEqual(saved.slice(0, 2).map(c => c.id), ['Calamar TV', 'Cine']);
+  assert.deepEqual(saved.find(c => c.id === 'Deportes'), { id: 'Deportes', name: 'Fútbol', color: '#aa0000' });
+  assert.equal(saved.at(-1).name, 'Series');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => window.__published.groupOrder), undefined);
   await page.goto(base + '/#/canales');
   await page.locator('main .section-head h2').first().waitFor();
-  assert.deepEqual(await page.locator('main .section-head h2').allTextContents(), ['Cine', 'Deportes']);
-  assert.deepEqual(await page.locator('.chips .chip').allTextContents(), ['Todos', 'Cine', 'Deportes']);
+  assert.deepEqual(await page.locator('main .section-head h2').allTextContents(), ['Cine', 'Fútbol']);
+  assert.deepEqual(await page.locator('.chips .chip').allTextContents(), ['Todos', 'Cine', 'Fútbol']);
+  // Every card of a category shares its colour.
+  assert.equal(await page.locator('.card', { hasText: 'Sports One' }).evaluate(card => card.style.getPropertyValue('--c')), '#aa0000');
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, categoría nueva y orden de categorías, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, categorías con orden arrastrable, nombre y color, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

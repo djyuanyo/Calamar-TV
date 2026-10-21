@@ -161,6 +161,17 @@ Pruebas: `tools/audience.test.mjs`, reglas en `firebase/catalog.test.mjs` y el f
 
 La página de inicio (web y app) muestra el slider de destacados y, debajo, solo los eventos creados: una fila por liga con su logo y su nombre, ordenadas por el próximo evento de cada liga, y los eventos de cada fila por fecha y hora, del más próximo al más lejano. Los eventos sin liga van al final en «Otros eventos». Los canales siguen en el menú **Canales**.
 
-En **Admin → Canales → Orden de categorías** se sube o baja cada categoría y se guarda con **Guardar orden** (campo `groupOrder` del catálogo). Ese orden se aplica al menú Canales de la web y de la app; las categorías que se creen después aparecen al final. **Volver al orden por defecto** elimina el orden guardado.
+El orden, nombre y color de las categorías se gestionan en **Admin → Canales → Categorías** (ver 2.8.0).
 
 Al crear o editar un canal, la categoría se elige en un desplegable con las categorías existentes o con **+ Nueva categoría…** para escribir una nueva. En la app Android el campo permite escribir o elegir de la lista.
+
+## Colores y gestión de categorías (2.8.0)
+
+Las tarjetas de los canales tienen el color de su categoría: todos los canales de Deportes del mismo color, todos los de Generalistas de otro, etc. Colores por defecto: Calamar TV verde oliva, Generalistas azul, Deportes verde, Informativos rojo, Infantiles naranja, Música morado y Autonómicos turquesa; las demás categorías reciben un color fijo según su nombre.
+
+En **Admin → Canales → Categorías**:
+
+- Se arrastra ⠿ (ratón o dedo) para cambiar el orden del menú Canales; con el teclado, flechas arriba/abajo sobre ⠿.
+- Se cambia el nombre y el color de cada categoría. Los canales guardan el identificador original de la categoría, así que renombrar «Deportes» como «Fútbol» mueve también los canales TDT de Deportes.
+- **Añadir categoría** crea una categoría nueva con su color (aparece en el desplegable de los canales). Las categorías sin canales se pueden eliminar.
+- **Guardar categorías** publica los cambios (campo `categories` del catálogo: `id`, `name`, `color`), que se aplican en la web y en la app. **Restablecer** vuelve a los valores por defecto.

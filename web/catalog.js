@@ -3,6 +3,30 @@ import { httpTsSource } from './http-stream.js';
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
 export const GROUP_ORDER = [OWN_GROUP, 'Generalistas', 'Deportes', 'Informativos', 'Infantiles', 'Música', 'Autonómicos'];
+/** Card background of each category until the administrator picks another one. */
+export const CATEGORY_COLORS = { [OWN_GROUP]: '#5a6b12', Generalistas: '#1f4f8f', Deportes: '#1d7a40', Informativos: '#8f2c2c', Infantiles: '#b35c14', 'Música': '#6a2f8f', 'Autonómicos': '#1c7373' };
+const EXTRA_COLORS = ['#7a5418', '#2d5a8a', '#8a2d63', '#4a6b2a', '#5c3d8a', '#8a4a2d', '#2d7a6b', '#6b6b2d'];
+export function defaultColor(name) {
+  if (CATEGORY_COLORS[name]) return CATEGORY_COLORS[name];
+  let h = 0;
+  for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return EXTRA_COLORS[h % EXTRA_COLORS.length];
+}
+
+/**
+ * Categories in the administrator's order: `categories` ([{ id, name, color }]) when saved, otherwise
+ * the older `groupOrder` and the defaults. `id` is the category a channel stores; `name` is shown.
+ */
+export function categoryList(custom) {
+  if (Array.isArray(custom?.categories)) return custom.categories.map((c) => ({ id: c.id, name: c.name, color: c.color }));
+  const order = Array.isArray(custom?.groupOrder) ? custom.groupOrder : [];
+  return [...new Set([...order, ...GROUP_ORDER])].map((g) => ({ id: g, name: g, color: defaultColor(g) }));
+}
+
+/** The category of a stored group: by id, else by shown name, else a new one with its default colour. */
+export function resolveCategory(group, list) {
+  return list.find((c) => c.id === group) || list.find((c) => c.name === group) || { id: group, name: group, color: defaultColor(group) };
+}
 
 function validUrl(value) {
   try {
@@ -62,6 +86,14 @@ export function merge(tdt, custom) {
     if (!c.id || hidden.has(c.id) || ids.has(c.id)) continue;
     ids.add(c.id);
     if (c.playable || c.web) out.push(c);
+  }
+  // Shown category name and card colour follow the administrator's categories.
+  const categories = categoryList(custom);
+  for (const c of out) {
+    const category = resolveCategory(c.group, categories);
+    c.category = c.group;
+    c.group = category.name;
+    c.color = category.color;
   }
   // The link of every channel comes from its name; repeated names get -2, -3…
   const used = new Set();

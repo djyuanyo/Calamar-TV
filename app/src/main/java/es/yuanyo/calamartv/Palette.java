@@ -52,6 +52,20 @@ final class Palette {
     return Math.max(0, Math.min(255, Math.round(value * 255f)));
   }
 
+  /** ARGB of a #rrggbb colour; grey when the text is not one. */
+  static int parse(String hex) {
+    if (hex == null || !hex.matches("#[0-9a-fA-F]{6}")) return 0xff3a4250;
+    return 0xff000000 | Integer.parseInt(hex.substring(1), 16);
+  }
+
+  /** The same colour with each channel scaled by {@code factor} (0..1), for the end of a gradient. */
+  static int darker(int argb, float factor) {
+    return 0xff000000
+        | channel((argb >> 16 & 0xff) / 255f * factor) << 16
+        | channel((argb >> 8 & 0xff) / 255f * factor) << 8
+        | channel((argb & 0xff) / 255f * factor);
+  }
+
   /** Up to two initials, for a channel without a usable logo. */
   static String initials(String name) {
     StringBuilder out = new StringBuilder();

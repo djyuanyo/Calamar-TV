@@ -16,7 +16,56 @@ public final class Catalog {
           OWN_GROUP, "Generalistas", "Deportes", "Informativos", "Infantiles", "Música",
           "Autonómicos");
 
+  /** Card background of each category until the administrator picks another one (as in web/catalog.js). */
+  static final Map<String, String> CATEGORY_COLORS = new HashMap<>();
+  static {
+    CATEGORY_COLORS.put(OWN_GROUP, "#5a6b12"); CATEGORY_COLORS.put("Generalistas", "#1f4f8f");
+    CATEGORY_COLORS.put("Deportes", "#1d7a40"); CATEGORY_COLORS.put("Informativos", "#8f2c2c");
+    CATEGORY_COLORS.put("Infantiles", "#b35c14"); CATEGORY_COLORS.put("Música", "#6a2f8f");
+    CATEGORY_COLORS.put("Autonómicos", "#1c7373");
+  }
+  private static final String[] EXTRA_COLORS = {"#7a5418", "#2d5a8a", "#8a2d63", "#4a6b2a", "#5c3d8a", "#8a4a2d", "#2d7a6b", "#6b6b2d"};
+
+  static String defaultColor(String name) {
+    String color = CATEGORY_COLORS.get(name);
+    return color != null ? color : EXTRA_COLORS[Palette.hue(name) % EXTRA_COLORS.length];
+  }
+
+  /** A category: `id` is what channels store, `name` is shown, `color` is the card background. */
+  public static final class Category {
+    public final String id, name, color;
+    Category(String id, String name, String color) { this.id = id; this.name = name; this.color = color; }
+  }
+
+  /** The administrator's categories in order (`categories`), else the older `groupOrder` and the defaults. */
+  public static List<Category> categories(JSONObject custom) {
+    List<Category> out = new ArrayList<>();
+    JSONArray saved = custom == null ? null : custom.optJSONArray("categories");
+    if (saved != null) {
+      for (int i = 0; i < saved.length(); i++) {
+        JSONObject c = saved.optJSONObject(i);
+        if (c != null) out.add(new Category(c.optString("id"), c.optString("name"), c.optString("color")));
+      }
+      return out;
+    }
+    LinkedHashSet<String> names = new LinkedHashSet<>();
+    JSONArray order = custom == null ? null : custom.optJSONArray("groupOrder");
+    if (order != null) for (int i = 0; i < order.length(); i++) names.add(order.optString(i));
+    names.addAll(GROUP_ORDER);
+    for (String g : names) out.add(new Category(g, g, defaultColor(g)));
+    return out;
+  }
+
+  /** The category of a stored group: by id, else by shown name, else a new one with its default colour. */
+  static Category resolve(String group, List<Category> list) {
+    for (Category c : list) if (c.id.equals(group)) return c;
+    for (Category c : list) if (c.name.equals(group)) return c;
+    return new Category(group, group, defaultColor(group));
+  }
+
   public static final class Channel {
+    public final int color;
+    public final String category;
     public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId;
     public final boolean highlighted;
     public final boolean event;
@@ -24,6 +73,10 @@ public final class Catalog {
     public final boolean geo, own;
 
     Channel(JSONObject o, boolean own) {
+      this(o, own, null);
+    }
+
+    Channel(JSONObject o, boolean own, List<Category> categories) {
       this.own = own;
       event = o.optBoolean("event");
       cover = o.optString("cover");
@@ -34,7 +87,10 @@ public final class Catalog {
       id = o.optString("id");
       name = o.optString("name", "Canal");
       String g = o.optString("group").trim();
-      group = g.isEmpty() ? (own ? OWN_GROUP : "Otros") : g;
+      category = g.isEmpty() ? (own ? OWN_GROUP : "Otros") : g;
+      Category shown = resolve(category, categories == null ? Catalog.categories(null) : categories);
+      group = shown.name;
+      color = Palette.parse(shown.color);
       region = o.optString("region");
       logo = https(o.optString("logo"));
       web = https(o.optString("web"));
@@ -63,12 +119,13 @@ public final class Catalog {
     Set<String> hidden = strings(custom == null ? null : custom.optJSONArray("hidden"));
     List<Channel> out = new ArrayList<>();
     Set<String> ids = new HashSet<>();
+    List<Category> categories = categories(custom);
     JSONArray own = custom == null ? null : custom.optJSONArray("channels");
     if (own != null)
       for (int i = 0; i < own.length(); i++) {
         JSONObject o = own.optJSONObject(i);
         if (o == null || o.optBoolean("hidden")) continue;
-        Channel c = new Channel(o, true);
+        Channel c = new Channel(o, true, categories);
         if (!c.id.isEmpty() && c.playable() && ids.add(c.id)) out.add(c);
       }
     JSONArray list = tdt == null ? null : tdt.optJSONArray("channels");
@@ -76,7 +133,7 @@ public final class Catalog {
       for (int i = 0; i < list.length(); i++) {
         JSONObject o = list.optJSONObject(i);
         if (o == null) continue;
-        Channel c = new Channel(o, false);
+        Channel c = new Channel(o, false, categories);
         if (c.id.isEmpty() || hidden.contains(c.id) || !ids.add(c.id)) continue;
         if (c.playable() || !c.web.isEmpty()) out.add(c);
       }
@@ -156,12 +213,11 @@ public final class Catalog {
     return groups(channels, null);
   }
 
-  /** The order saved by the administrator (`groupOrder`) comes first, then the default order. */
+  /** The administrator's category order comes first, then the default order, then the rest alphabetically. */
   public static LinkedHashMap<String, List<Channel>> groups(List<Channel> channels, JSONObject custom) {
     TreeMap<String, List<Channel>> extra = new TreeMap<>();
     LinkedHashMap<String, List<Channel>> out = new LinkedHashMap<>();
-    JSONArray order = custom == null ? null : custom.optJSONArray("groupOrder");
-    if (order != null) for (int i = 0; i < order.length(); i++) out.put(order.optString(i), new ArrayList<Channel>());
+    for (Category k : categories(custom)) if (!out.containsKey(k.name)) out.put(k.name, new ArrayList<Channel>());
     for (String g : GROUP_ORDER) if (!out.containsKey(g)) out.put(g, new ArrayList<Channel>());
     for (Channel c : channels) {
       List<Channel> bucket = out.get(c.group);

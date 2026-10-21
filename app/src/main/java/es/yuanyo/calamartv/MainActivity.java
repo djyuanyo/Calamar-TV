@@ -558,7 +558,7 @@ public class MainActivity extends Activity {
     Ui.scaleOnFocus(card, 1.03f);
 
     FrameLayout art = new FrameLayout(this);
-    art.setBackground(Ui.artBackground(this, Palette.hue(c.name), 12));
+    art.setBackground(c.event ? Ui.artBackground(this, Palette.hue(c.name), 12) : Ui.categoryBackground(this, c.color, 12));
     art.setDuplicateParentStateEnabled(true);
     int artHeight = Math.round(dp(width) * 9f / 16f);
     if (c.event) {

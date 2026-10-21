@@ -24,6 +24,16 @@ export function validateCatalog(data) {
   if (data.groupOrder !== undefined && (!Array.isArray(data.groupOrder) || data.groupOrder.length > 200
       || data.groupOrder.some((g) => typeof g !== 'string' || !g.trim() || g.length > 80)
       || new Set(data.groupOrder).size !== data.groupOrder.length)) throw new Error('El orden de categorías no es válido.');
+  if (data.categories !== undefined) {
+    const ids = new Set(), names = new Set();
+    if (!Array.isArray(data.categories) || data.categories.length > 200) throw new Error('Las categorías no son válidas.');
+    for (const c of data.categories) {
+      const text = (v) => typeof v === 'string' && v.trim() && v.length <= 80;
+      if (!c || !text(c.id) || !text(c.name) || typeof c.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c.color)) throw new Error('Cada categoría necesita nombre y color.');
+      if (ids.has(c.id) || names.has(c.name.trim().toLocaleLowerCase('es'))) throw new Error(`La categoría «${c.name}» está repetida.`);
+      ids.add(c.id); names.add(c.name.trim().toLocaleLowerCase('es'));
+    }
+  }
   if (![...data.featured, ...data.hidden].every((id) => typeof id === 'string')) throw new Error('La lista de canales no es válida.');
   if (new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
   return data;
