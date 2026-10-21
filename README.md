@@ -139,7 +139,7 @@ Pruebas aisladas con Node 24 y JDK 21: `cd firebase && npm install && npm test`.
 
 El administrador tiene secciones para Canales, Eventos, Ligas y Equipos. Permite crear, editar, buscar y eliminar ligas y equipos con su logo o escudo; no se elimina una entidad mientras esté asociada a equipos o eventos. Los eventos admiten nombre, portada completa, canal existente, liga, local, visitante, fecha y hora de Madrid, temporada, jornada/fase, lugar, descripción, estado y destacado. La portada se puede subir como foto comprimida o añadir mediante URL HTTPS. Los registros anteriores sin agenda siguen siendo válidos y aparecen después de los que tienen fecha.
 
-Cada evento tiene una dirección estable `#/evento/ID`, independiente del nombre y canal. El administrador permite abrirla o copiarla (en Android: Copiar enlace del evento). El evento resuelve las fuentes actuales del canal al abrirlo. Los eventos se ordenan de forma cronológica y muestran liga y horario. Los destacados de eventos y canales comparten un único slider que avanza cada 5 segundos. La web permite deslizar el slider y elegir cada destacado; Android detiene el temporizador al salir de la pantalla. Si no hay destacados se usa el primer canal disponible. Las tarjetas y la portada de canales no llevan la etiqueta En directo y muestran el logo ampliado; el reproductor conserva sus indicadores de directo.
+Cada evento tiene una dirección estable `#/evento/ID`, independiente del nombre y canal. El administrador permite abrirla o copiarla (en Android: Copiar enlace del evento). El evento resuelve las fuentes actuales del canal al abrirlo. Los eventos se ordenan de forma cronológica y muestran liga y horario. Los destacados de eventos y canales comparten un único slider que avanza cada 5 segundos. La web y la app permiten deslizar el slider con el dedo (en la web también con el ratón) y elegir cada destacado; los puntos de debajo indican cuál se ve. Android detiene el temporizador al salir de la pantalla. Si no hay destacados se usa el primer canal disponible. Las tarjetas y la portada de canales no llevan la etiqueta En directo y muestran el logo ampliado; el reproductor conserva sus indicadores de directo.
 
 Pruebas: `tools/sports.test.mjs`, `SportsCatalogTest`, `CatalogEventsTest` y flujo en Chrome mediante `tools/browser_events_check.mjs` (catálogo aislado, sin escrituras reales en Firebase).
 
@@ -175,3 +175,7 @@ En **Admin → Canales → Categorías**:
 - Se cambia el nombre y el color de cada categoría. Los canales guardan el identificador original de la categoría, así que renombrar «Deportes» como «Fútbol» mueve también los canales TDT de Deportes.
 - **Añadir categoría** crea una categoría nueva con su color (aparece en el desplegable de los canales). Las categorías sin canales se pueden eliminar.
 - **Guardar categorías** publica los cambios (campo `categories` del catálogo: `id`, `name`, `color`), que se aplican en la web y en la app. **Restablecer** vuelve a los valores por defecto.
+
+## Icono y favicon (2.8.1)
+
+El icono de la app (también el icono adaptable de Android 8+), el banner de Android TV y los favicons de la web salen del logo de la cabecera (`web/assets/calamar-menciano-tv.png`). Si el logo cambia, se regeneran con `python tools/make_icons.py` (requiere Pillow).

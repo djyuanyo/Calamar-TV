@@ -403,7 +403,7 @@ public class MainActivity extends Activity {
 
   /** The featured channel, large, with a row of the other featured ones to pick from. */
   void hero(List<Catalog.Channel> picks) {
-    heroItems = picks; heroHost = new FrameLayout(this); heroIndex = 0;
+    heroItems = picks; heroHost = new HeroSlider(); heroIndex = 0;
     list.addView(heroHost, heroParams()); showHero(0, false);
   }
 
@@ -414,8 +414,76 @@ public class MainActivity extends Activity {
     View next = heroView(heroItems, index); heroHost.addView(next, new FrameLayout.LayoutParams(-1, -1));
     next.setAlpha(0f); next.animate().alpha(1f).setDuration(350).start();
     if (focused || user) { View control = next.findViewWithTag("hero-watch"); if (control != null) control.requestFocus(); }
+    restartHeroTimer();
+  }
+
+  void restartHeroTimer() {
     handler.removeCallbacks(heroAdvance);
     if (resumed && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
+  }
+
+  /**
+   * The featured carousel: it moves on its own every 5 seconds and can be swiped left or right, as on
+   * the web. A horizontal drag is taken from the buttons underneath and kept from the page scroll; a
+   * vertical one still scrolls the page.
+   */
+  final class HeroSlider extends FrameLayout {
+    private final int slop = ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+    private float downX, downY;
+    private boolean dragging;
+
+    HeroSlider() { super(MainActivity.this); }
+
+    private boolean horizontal(MotionEvent e) {
+      float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
+      return dx > slop && dx > dy * 1.5f;
+    }
+
+    private void start(MotionEvent e) {
+      downX = e.getX(); downY = e.getY(); dragging = false;
+      handler.removeCallbacks(heroAdvance);
+    }
+
+    private void settle() {
+      dragging = false;
+      if (getChildCount() > 0) getChildAt(0).animate().translationX(0).setDuration(150).start();
+      restartHeroTimer();
+    }
+
+    @Override public boolean onInterceptTouchEvent(MotionEvent e) {
+      if (heroItems.size() < 2) return false;
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN: start(e); return false;
+        case MotionEvent.ACTION_MOVE:
+          if (!dragging && horizontal(e)) { dragging = true; getParent().requestDisallowInterceptTouchEvent(true); }
+          return dragging;
+        case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
+          if (!dragging) restartHeroTimer();
+          return false;
+        default: return false;
+      }
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent e) {
+      if (heroItems.size() < 2) return super.onTouchEvent(e);
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN: start(e); return true;
+        case MotionEvent.ACTION_MOVE:
+          if (!dragging && horizontal(e)) { dragging = true; getParent().requestDisallowInterceptTouchEvent(true); }
+          if (dragging && getChildCount() > 0) getChildAt(0).setTranslationX((e.getX() - downX) * 0.6f);
+          return true;
+        case MotionEvent.ACTION_UP:
+          float dx = e.getX() - downX;
+          if (dragging && Math.abs(dx) > dp(48)) {
+            dragging = false;
+            int n = heroItems.size();
+            showHero(((heroIndex + (dx < 0 ? 1 : -1)) % n + n) % n, false);
+          } else settle();
+          return true;
+        case MotionEvent.ACTION_CANCEL: settle(); return true;
+        default: return true;
+      }
+    }
   }
 
   View heroView(final List<Catalog.Channel> picks, final int index) {
@@ -498,6 +566,22 @@ public class MainActivity extends Activity {
     content.addView(actions);
     frame.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
+    if (picks.size() > 1 && !wide()) {
+      // Phones have no room for the thumbnails: dots show which highlight is on screen.
+      LinearLayout dots = new LinearLayout(this);
+      dots.setGravity(Gravity.CENTER);
+      for (int i = 0; i < picks.size(); i++) {
+        View dot = new View(this);
+        dot.setBackground(Ui.shape(this, i == index ? Ui.ACC : 0x73ffffff, 4, 0, 0));
+        LinearLayout.LayoutParams dotSize = new LinearLayout.LayoutParams(dp(i == index ? 22 : 8), dp(8));
+        dotSize.setMargins(dp(3), 0, dp(3), 0);
+        dots.addView(dot, dotSize);
+      }
+      dots.setContentDescription("Destacado " + (index + 1) + " de " + picks.size() + ". Desliza para ver otro.");
+      FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+      dl.setMargins(0, 0, 0, dp(8));
+      frame.addView(dots, dl);
+    }
     if (picks.size() > 1 && wide()) {
       LinearLayout row = row();
       for (int i = 0; i < picks.size(); i++) {
