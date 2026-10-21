@@ -468,8 +468,13 @@ function startAudience(c, visit = true) {
   const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
   beat().then(() => { if (live()) count(); });
   session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
-  // One visit per opening; refreshes of the same player are not new visits.
-  if (visit) shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))).catch(() => {});
+  // One visit per opening; refreshes of the same player are not new visits. An event also counts
+  // as a visit to the channel it plays on. The rules accept one counter per write, so each goes alone.
+  if (visit) {
+    const day = madridDay();
+    const keys = c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
+    shared().then(async (f) => { for (const key of keys) await f.recordVisit(day, key); }).catch(() => {});
+  }
 }
 function stopAudience() {
   if (!watching) return;
