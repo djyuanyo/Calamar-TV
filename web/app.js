@@ -6,7 +6,8 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { prepareHostedVideo } from './video-bridge.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
-import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, playable } from './library.js';
+import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList } from './library.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
@@ -305,6 +306,10 @@ function home() {
   const list = homeHighlights(state.channels, state.custom);
   scheduleStartRefresh(matches);
   const nodes = [];
+  // Films and episodes left half watched in this browser come first.
+  const unfinished = libraryVisible(state.custom) ? progressList(loadProgress()) : [];
+  if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
+    remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   if (list.length) nodes.push(highlightSlider(list));
   // Only events on the home page: one row per league, each in date order (soonest first).
   for (const row of eventRows(matches, state.custom)) {
@@ -680,9 +685,50 @@ function open(c, fromRoute = false) {
   // Viewers and visits are counted per channel and event; films and episodes are not.
   if (!c.vod) startAudience(c);
   playSource(c, 0);
+  // Films and episodes continue where this browser left them.
+  const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
+  if (resume > 0) video.addEventListener('loadedmetadata', () => {
+    if (current === c && (!Number.isFinite(video.duration) || video.duration > resume + 5)) video.currentTime = resume;
+  }, { once: true });
+  lastSaved = 0;
+}
+
+// ---- Continuar viendo: position of films and episodes, and the next episode when one ends ----------
+let lastSaved = 0;
+function rememberPosition(force = false) {
+  if (!current?.vod || !current.progress || video.seeking) return;
+  if (!force && Date.now() - lastSaved < 5000) return;
+  lastSaved = Date.now();
+  saveProgress(recordProgress(loadProgress(), current.progress, video.currentTime, video.duration));
+}
+video.addEventListener('timeupdate', () => rememberPosition());
+video.addEventListener('pause', () => rememberPosition(true));
+video.addEventListener('ended', () => {
+  if (!current?.vod) return;
+  saveProgress(removeProgress(loadProgress(), current.progress?.key));
+  const following = current.next?.();
+  if (!following) return;
+  // The URL follows the episode on screen without adding a step to the browser history.
+  history.replaceState(null, '', following.path);
+  open(following, true);
+  playerStatus.textContent = `Siguiente: ${following.name}`;
+});
+/** Opens a «Continuar viendo» card in the player, where it was left. */
+async function resumeEntry(entry) {
+  const section = sectionByPage(entry.page);
+  try {
+    const library = await fetchLibrary();
+    const item = (library.sections[section?.key] || []).find((i) => i.id === entry.item);
+    const episode = entry.episode ? item?.episodes?.find((e) => e.id === entry.episode) : null;
+    if (!item || (entry.episode && !episode)) throw new Error('Este título ya no está en el catálogo.');
+    open(playable(section, item, episode));
+  } catch (error) {
+    view.prepend(el('p', { class: 'error', role: 'alert' }, error.message));
+  }
 }
 
 function hidePlayer() {
+  rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
   stop();
   stopAudience();
@@ -738,8 +784,14 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   if (!itemId) { view.replaceChildren(...libraryPage(el, section, library)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...libraryPage(el, section, library)); return; }
-  const play = (target, episode) => open(playable(section, target, episode));
-  view.replaceChildren(...libraryDetail(el, section, library, item, play));
+  const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
+  const progress = loadProgress();
+  const saved = (id) => progress[id] || null;
+  if (sub === 'capitulo') {
+    const episode = item.episodes?.find((e) => e.id === episodeId);
+    if (episode) { view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved)); return; }
+  }
+  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null));
   if (sub === 'ver') {
     const episode = episodeId ? item.episodes?.find((e) => e.id === episodeId) : null;
     const c = playable(section, item, episode);

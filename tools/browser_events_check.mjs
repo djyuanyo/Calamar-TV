@@ -344,7 +344,7 @@ try {
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
-  await page.getByRole('button', { name: '▶ Ver', exact: true }).click();
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
@@ -355,10 +355,37 @@ try {
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
   await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
-  await page.locator('.episode', { hasText: '10x01 · Vuelta a empezar' }).click();
+  // An episode opens its own page (Capítulo 1, its name and synopsis) with the play button.
+  await page.locator('.episode', { hasText: 'Capítulo 1' }).click();
+  await page.getByRole('heading', { name: 'Capítulo 1', exact: true }).waitFor();
+  assert.ok(page.url().endsWith('#/series/spaco/capitulo/e1001'));
+  assert.equal(await page.locator('.episode-name').textContent(), 'Vuelta a empezar');
+  assert.equal(await page.locator('#player').isHidden(), true);
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · 10x01 · Vuelta a empezar');
+  assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Capítulo 1');
+  // When it ends the next episode starts by itself.
+  await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
+  await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
+  assert.ok(page.url().endsWith('#/series/spaco/ver/e1002'));
+  await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/SERIES/cap1002.mp4');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  // «Continuar viendo» heads the home page and opens the film where it was left.
+  await page.evaluate(() => localStorage.setItem('calamar-progress-v1', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',
+    name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
+  await page.goto(base + '/#/inicio');
+  await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
+  assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
+  assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
+  await page.locator('.continue-card a').click();
+  await page.locator('#player:not([hidden])').waitFor();
+  assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.goto(base + '/#/peliculas/mavatar');
+  await page.getByRole('button', { name: '▶ Continuar · 30:00', exact: true }).waitFor();
+  await page.goto(base + '/#/inicio');
+  await page.getByRole('button', { name: 'Quitar Avatar de Continuar viendo' }).click();
+  await page.waitForFunction(() => !document.querySelector('.continue-card'));
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

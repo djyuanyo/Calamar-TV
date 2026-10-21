@@ -37,7 +37,7 @@ jobs:
       - name: Probar el lector de TDTChannels
         run: python -m unittest discover -s tools -p 'test_*.py'
       - name: Probar los enlaces de los canales
-        run: node --test tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/video_bridge.test.mjs tools/github_images.test.mjs
+        run: node --test tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/video_bridge.test.mjs tools/github_images.test.mjs tools/library.test.mjs
       - name: Actualizar canales TDT
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
         run: |
