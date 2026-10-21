@@ -59,15 +59,6 @@ if (isset($_GET['stream'])) {
     }
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
-    // A small shared-hosting pilot: no more than four concurrent upstream requests.
-    $slot = null;
-    for ($i = 0; $i < 4; $i++) {
-        $candidate = @fopen(sys_get_temp_dir() . '/calamar-relay-' . sha1(__FILE__) . '-' . $i . '.lock', 'c');
-        if ($candidate && flock($candidate, LOCK_EX | LOCK_NB)) { $slot = $candidate; break; }
-        if ($candidate) fclose($candidate);
-    }
-    if (!$slot) failure('Puente ocupado. Reintenta en unos segundos.', 503);
-    register_shutdown_function(function () use ($slot) { flock($slot, LOCK_UN); fclose($slot); });
     $deadline = microtime(true) + 120; $started = false; $total = 0; $lastHttp = 0;
     for ($hop = 0; $hop < 4; $hop++) {
         $target = publicTarget($source);

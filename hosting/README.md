@@ -9,8 +9,8 @@ y a sus rutas `/usuario/clave/id` o `/usuario/clave/id.ts`. Los saltos de redire
 se validan y fijan a IP públicas, manteniendo la comprobación TLS en HTTPS.
 No es un proxy de destino libre. No se incluye ningún enlace de canal con credenciales.
 
-La prueba inicial se limita a cuatro conexiones simultáneas, 120 segundos y 64 MiB
-por conexión. El cliente renueva las conexiones que terminan. No ejecuta FFmpeg,
+El puente no impone un cupo de usuarios ni de conexiones simultáneas. Cada conexión
+se renueva al alcanzar 120 segundos o 64 MiB. El cliente renueva las conexiones que terminan. No ejecuta FFmpeg,
 no convierte HEVC y no guarda los enlaces. La compatibilidad HEVC depende del navegador.
 Si el alojamiento impone límites más cortos, el cliente puede necesitar reintentar.
 
