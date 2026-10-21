@@ -1,4 +1,4 @@
-import { eventOrder, eventMeta, eventPath, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
+import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor } from './catalog.js';
 import { ADMIN_EMAIL, validCover, validateCatalog } from './shared-catalog.js';
@@ -461,7 +461,7 @@ function eventList(rerender) {
       el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || 'Canal no disponible')),
       el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath(event) }, 'Abrir evento'),
         el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
-          try { const button = e.currentTarget; await navigator.clipboard.writeText(`${location.origin}${location.pathname}${eventPath(event)}`); button.textContent = 'Copiado'; }
+          try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink(event)); button.textContent = 'Copiado'; }
           catch { notice = 'No se pudo copiar. Usa Abrir evento y copia la dirección.'; rerender(); }
         } }, 'Copiar enlace'),
         el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),

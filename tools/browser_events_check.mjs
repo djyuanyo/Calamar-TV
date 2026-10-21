@@ -133,6 +133,10 @@ try {
   assert.ok(page.url().endsWith(published.events[0].id));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
   assert.ok(requests.includes('https://example.com/one.mp4'));
+  // Sharing an event uses its preview page (cover and name in WhatsApp).
+  await page.evaluate(() => { navigator.share = async data => { window.__shared = data; }; });
+  await page.getByRole('button', { name: 'Compartir', exact: true }).click();
+  assert.deepEqual(await page.evaluate(() => window.__shared), { title: 'Local vs visitante', url: `https://calamarmenciano.com/calamar-evento.php?id=${published.events[0].id}` });
   await page.locator('#player-viewers:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-viewers b').textContent(), '3');
   assert.equal(await page.locator('#player-viewers .sr').textContent(), '3 personas viendo');

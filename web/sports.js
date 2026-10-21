@@ -1,5 +1,8 @@
 export const EVENT_STATES = { scheduled: 'Programado', live: 'En juego', finished: 'Finalizado' };
 export const eventPath = (event) => `#/evento/${encodeURIComponent(event.eventId || event.id)}`;
+/** Link to share: hosting/calamar-evento.php shows the cover and name in WhatsApp and opens the event. */
+export const EVENT_SHARE_PAGE = 'https://calamarmenciano.com/calamar-evento.php';
+export const eventShareLink = (event) => `${EVENT_SHARE_PAGE}?id=${encodeURIComponent(event.eventId || event.id)}`;
 export const eventOrder = (a, b) => (Date.parse(a.startAt) || Infinity) - (Date.parse(b.startAt) || Infinity) || String(a.id).localeCompare(String(b.id));
 export function eventMeta(event, data) {
   const league = (data?.leagues || []).find((l) => l.id === event.leagueId)?.name || '';

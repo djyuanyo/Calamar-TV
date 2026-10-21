@@ -1,5 +1,5 @@
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, EVENT_STATES } from './sports.js';
+import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -505,6 +505,7 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
+  shareButton.hidden = !c.event;
   playerTitle.textContent = c.name;
   playerLogo.hidden = !c.logo;
   if (c.logo) playerLogo.src = c.logo;
@@ -544,6 +545,18 @@ document.getElementById('player-refresh').addEventListener('click', () => {
   if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl)));
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
+// Events are shared through their preview page, so WhatsApp and others show the cover and the name.
+const shareButton = document.getElementById('player-share');
+shareButton.addEventListener('click', async () => {
+  if (!current?.event) return;
+  const url = eventShareLink(current);
+  try {
+    if (navigator.share) await navigator.share({ title: current.name, url });
+    else { await navigator.clipboard.writeText(url); shareButton.textContent = 'Enlace copiado'; setTimeout(() => { shareButton.textContent = 'Compartir'; }, 2500); }
+  } catch (error) {
+    if (error?.name !== 'AbortError') playerStatus.textContent = `Copia este enlace para compartir: ${url}`;
+  }
+});
 
 // ---- Routing ---------------------------------------------------------------------------------
 
