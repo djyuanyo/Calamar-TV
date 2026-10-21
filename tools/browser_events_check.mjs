@@ -106,11 +106,12 @@ try {
   await page.locator('.admin-link').click();
   await page.locator('.admin-stats a').filter({ hasText: 'Eventos' }).click();
   await page.locator('.item').filter({ hasText: 'Local vs visitante' }).getByRole('link', { name: 'Editar', exact: true }).click();
+  await page.getByRole('heading', { name: 'Editar evento', exact: true }).waitFor();
   await page.getByLabel('Nombre del evento', { exact: true }).fill('Final');
   await page.getByPlaceholder('Buscar entre tus canales creados').fill('Two');
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
-  console.log('Editar evento', await page.locator('form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent })));
+  console.log('Editar evento', await page.locator('form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent, name: form.querySelector('input[aria-label="Nombre del evento"]')?.value, published: window.__published.events.map(e => ({id:e.id,name:e.name})) })));
   await page.waitForFunction(() => window.__published.events[0].name === 'Final');
   assert.equal((await page.evaluate(() => window.__published)).events[0].channelId, 'sport-two');
   const eventId = published.events[0].id;
