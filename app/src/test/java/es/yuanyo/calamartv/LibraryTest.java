@@ -82,5 +82,11 @@ public class LibraryTest {
     assertFalse(Library.Media.allowed("https://www.googleapis.com/youtube/v3/videos"));
     assertFalse(Library.Media.allowed("http://www.googleapis.com/drive/v3/files/1AbC"));
     assertFalse(Library.Media.allowed("https://example.com/drive/v3/files/1AbC"));
+    assertTrue(Library.Media.allowed("https://lulustream.com/abcd1234efgh"));
+    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
+    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
+    assertNull(Library.Media.embed("https://lulustream.com/fld/h9vd4z179z"));
+    assertNull(Library.Media.embed("http://lulustream.com/abcd1234efgh"));
+    assertNull(Library.Media.embed("https://lulustream.com.evil.com/abcd1234efgh"));
   }
 }

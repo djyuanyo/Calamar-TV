@@ -371,7 +371,7 @@ try {
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
       tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
-      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://calamarmenciano.com/PELIS/Torrente.mp4', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
@@ -385,24 +385,51 @@ try {
   assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
   await page.goto(base + '/#/admin/biblioteca');
   await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
-  await page.locator('.library-item').filter({ hasText: 'Avatar.mp4' }).waitFor();
-  // Scanning runs in the browser: Google Drive lists the folders, TMDB recognises the titles, Firestore gets the parts.
-  await page.route('https://www.googleapis.com/drive/v3/files?**', route => {
-    const folder = new URL(route.request().url()).searchParams.get('q').match(/^'([^']+)'/)[1];
-    return route.fulfill({ json: { files: folder === 'PELISPELISPELISPELIS12345' ? [{ id: 'fAvatarDrive', name: 'Avatar (2009).mp4', mimeType: 'video/mp4' }] : [] } });
-  });
+  await page.locator('.library-item').filter({ hasText: 'Avatar (2009)' }).waitFor();
+  // The administrator searches TMDB, chooses a title and pastes its LuluStream link; series season by season.
   await page.route('https://api.themoviedb.org/3/**', route => {
     const path = new URL(route.request().url()).pathname;
-    return route.fulfill({ json: path.endsWith('/search/movie') ? { results: [{ id: 19995, title: 'Avatar', release_date: '2009-12-15' }] }
-      : { title: 'Avatar', release_date: '2009-12-15', overview: 'Pandora', genres: [{ name: 'Ciencia ficción' }], vote_average: 7.6, credits: { cast: [] } } });
+    const body = path.endsWith('/search/movie') ? { results: [{ id: 76600, title: 'Avatar: El sentido del agua', release_date: '2022-12-14' }] }
+      : path.endsWith('/search/tv') ? { results: [{ id: 4500, name: 'Los hombres de Paco', first_air_date: '2005-10-09' }] }
+      : path.endsWith('/movie/76600') ? { title: 'Avatar: El sentido del agua', release_date: '2022-12-14', overview: 'Pandora otra vez', genres: [{ name: 'Ciencia ficción' }], credits: { cast: [] } }
+      : path.endsWith('/tv/4500') ? { name: 'Los hombres de Paco', first_air_date: '2005-10-09', overview: 'Comisaría', seasons: [{ season_number: 1, name: 'Temporada 1', episode_count: 2 }, { season_number: 2, name: 'Temporada 2', episode_count: 1 }], credits: { cast: [] } }
+      : path.endsWith('/tv/4500/season/1') ? { episodes: [{ episode_number: 1, name: 'Piloto' }, { episode_number: 2, name: 'Segundo' }] }
+      : path.endsWith('/tv/4500/season/2') ? { episodes: [{ episode_number: 1, name: 'Vuelta' }] } : {};
+    return route.fulfill({ json: body });
   });
-  await page.getByRole('button', { name: 'Escanear carpetas de Drive y buscar en TMDB', exact: true }).click();
-  await page.getByText(/^Biblioteca publicada/).waitFor();
-  const parts = await page.evaluate(() => window.__libraryParts);
-  assert.deepEqual(parts.index.sections, { movies: 1, series: 1, documentaries: 1 });
-  const [drivenAvatar] = parts.parts['movies-0'].items;
-  assert.deepEqual([drivenAvatar.title, drivenAvatar.status, drivenAvatar.tmdb.overview], ['Avatar', 'matched', 'Pandora']);
-  assert.match(drivenAvatar.url, /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/fAvatarDrive\?alt=media&key=AIza/);
+  await page.getByLabel('Sección', { exact: true }).first().selectOption('movies');
+  await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
+  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
+  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByText(/^Enlace no válido/).waitFor(); // a folder link is refused
+  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/abc123def456');
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByText('Guardado y publicado.', { exact: true }).waitFor();
+  let parts = await page.evaluate(() => window.__libraryParts);
+  const added = parts.parts['movies-0'].items.find((m) => m.id === 'm76600');
+  assert.deepEqual([added.url, added.tmdb.overview], ['https://lulustream.com/abc123def456', 'Pandora otra vez']);
+  // A series: the season picker, one link per episode; episodes without a link are left out.
+  await page.getByLabel('Sección', { exact: true }).first().selectOption('series');
+  await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Paco');
+  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-result', { hasText: 'Los hombres de Paco' }).click();
+  await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco1x01aaaa');
+  await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
+  await page.getByText(/^Temporada 1 guardada y publicada: 1 capítulo con enlace/).waitFor();
+  await page.getByLabel('Temporada', { exact: true }).selectOption('2');
+  await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco2x01bbbb');
+  await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
+  await page.getByText(/^Temporada 2 guardada y publicada/).waitFor();
+  parts = await page.evaluate(() => window.__libraryParts);
+  const paco = parts.parts['series-0'].items.find((m) => m.id === 's4500');
+  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto', 'https://lulustream.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://lulustream.com/paco2x01bbbb']]);
+  // Editing later shows the saved links.
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
+  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://lulustream.com/abc123def456');
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
@@ -413,6 +440,16 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
+  // A LuluStream video plays in LuluStream's own player, embedded under our title bar.
+  await page.locator('.poster-card', { hasText: 'Torrente' }).click();
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
+  await page.locator('#player iframe.player-embed').waitFor();
+  assert.equal(await page.locator('#player iframe.player-embed').getAttribute('src'), 'https://lulustream.com/e/torrente1998');
+  assert.equal(await page.locator('#player-close').isVisible(), true);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('#player iframe'));
+  await page.locator('.nav a', { hasText: 'Películas' }).click();
+  await page.locator('.poster-card').first().waitFor();
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);

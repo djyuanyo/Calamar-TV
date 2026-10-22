@@ -1480,6 +1480,14 @@ public class MainActivity extends Activity {
   void playEntry(JSONObject entry, boolean restart) {
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
+    String embed = Library.Media.embed(url);
+    if (embed != null) { // LuluStream: its own player page, without saved position
+      Intent page = new Intent(this, NativePlayerActivity.class);
+      page.putExtra("page_url", embed);
+      page.putExtra("title", entry.optString("title"));
+      startActivityForResult(page, PLAY_LIBRARY);
+      return;
+    }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
     intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));

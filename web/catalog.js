@@ -198,6 +198,16 @@ export function streamFailureReport({ details = '', code = 0, url = '', expiry =
 }
 
 /** How the browser can play a URL: 'hls', 'video', or a reason it needs the app. */
+// LuluStream links (the video page, /d/ or /e/) play in LuluStream's own player, embedded in ours.
+const LULU_HOSTS = ['lulustream.com', 'www.lulustream.com', 'luluvdo.com', 'www.luluvdo.com'];
+export function lulustreamEmbed(url) {
+  try {
+    const u = new URL(String(url).trim());
+    const code = u.pathname.match(/^\/(?:e\/|d\/|v\/)?([A-Za-z0-9]{8,20})(?:\.html)?\/?$/)?.[1];
+    return u.protocol === 'https:' && LULU_HOSTS.includes(u.hostname) && code && code !== 'api' ? `https://lulustream.com/e/${code}` : null;
+  } catch { return null; }
+}
+
 export function webPlayback(url) {
   let u;
   try {
@@ -206,6 +216,8 @@ export function webPlayback(url) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const embed = lulustreamEmbed(url);
+  if (embed) return { ok: true, kind: 'embed', embed };
   // Films and series from Google Drive play straight from the Drive API (it allows browser video).
   if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };

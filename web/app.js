@@ -442,8 +442,11 @@ initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
+let embedFrame = null;
 function stop() {
   playbackGeneration++;
+  if (embedFrame) { embedFrame.remove(); embedFrame = null; }
+  player.classList.remove('is-embed');
   video.onerror = null;
   video.onplaying = null;
   if (stopTs) { stopTs(); stopTs = null; }
@@ -528,6 +531,15 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
+  if (source.how.kind === 'embed') {
+    // LuluStream plays in its own player; ours keeps the title bar and the Back button above it.
+    player.classList.add('is-embed');
+    playerStatus.textContent = '';
+    embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
+      allowfullscreen: true, referrerpolicy: 'origin' });
+    player.querySelector('.player-stage').append(embedFrame);
+    return;
+  }
   if (source.how.kind === 'ts') {
     video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
     video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
