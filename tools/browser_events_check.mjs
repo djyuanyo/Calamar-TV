@@ -325,6 +325,14 @@ try {
   assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
   await page.getByRole('tab', { name: 'General' }).click();
   assert.equal(await page.locator('#player [data-match-id]').count(),0);
+  // Scrolling or tapping the match data does not bring back the player controls over the video.
+  await page.evaluate(() => document.querySelector('#player').classList.add('idle'));
+  const board = await page.locator('#match-center').boundingBox();
+  await page.mouse.move(board.x + 20, board.y + 20);
+  await page.mouse.move(board.x + 40, board.y + 60);
+  await page.getByRole('tab', { name: 'Estadísticas' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
+  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('idle')), true, 'the match panel woke the controls');
   // No «En directo» label: the controls take its place, beside the title on wide screens.
   assert.equal(await page.locator('#player .live-pill').count(), 0);
   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){

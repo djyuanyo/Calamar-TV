@@ -292,14 +292,18 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   // was opened from a shared link and nobody has touched the keyboard.
   let keyboardUser = false;
   let wasIdleAtPress = false;
-  root.addEventListener('pointermove', wake);
-  root.addEventListener('pointerdown', () => {
+  // Only the video wakes the controls: scrolling or tapping the match data under it does not.
+  const outside = (e) => !!e.target.closest?.('.match-center');
+  root.addEventListener('pointermove', (e) => { if (!outside(e)) wake(); });
+  root.addEventListener('pointerdown', (e) => {
+    if (outside(e)) return;
     // Remembered because wake() below clears it before the click arrives.
     wasIdleAtPress = root.classList.contains('idle');
     keyboardUser = false;
     wake();
   });
   root.addEventListener('keydown', (e) => {
+    if (outside(e)) return;
     if (e.key !== 'Escape') keyboardUser = true;
     wake();
   });
