@@ -65,3 +65,59 @@ test('the library is split in Firestore parts below the size limit', () => {
   assert.equal(index.sections.series, 1);
   for (const part of Object.values(parts)) assert.ok(new TextEncoder().encode(JSON.stringify(part)).length <= 850000);
 });
+
+test('skip intro and next episode: times per series or season, and when each button shows', async () => {
+  const { skipMarks, skipButton, parseClock, formatClock } = await import('../web/library.js');
+  const item = { skip: { intro: [30, 105], credits: 45, seasons: { 2: { intro: [10, 70] } } } };
+  assert.deepEqual(skipMarks(item, { season: 1 }), { intro: [30, 105], credits: 45, creditsAt: null, manualIntro: true, manualCredits: true });
+  assert.deepEqual(skipMarks(item, { season: 2 }), { intro: [10, 70], credits: 45, creditsAt: null, manualIntro: true, manualCredits: true });
+  assert.deepEqual(skipMarks({}, { season: 1 }), { intro: null, credits: 30, creditsAt: null, manualIntro: false, manualCredits: false });
+  const marks = skipMarks(item, { season: 1 });
+  assert.equal(skipButton(marks, 29, 2400, true), null);
+  assert.equal(skipButton(marks, 30, 2400, true), 'intro');
+  assert.equal(skipButton(marks, 104.5, 2400, true), null, 'not in the last second of the intro');
+  assert.equal(skipButton(marks, 2356, 2400, true), 'next');
+  assert.equal(skipButton(marks, 2356, 2400, false), null, 'no next episode after the last one');
+  assert.equal(skipButton(marks, 2356, NaN, true), null);
+  assert.equal(skipButton(null, 50, 2400, true), null);
+  assert.deepEqual(['1:45', '1:02:03', '90', '', '1:75', 'abc'].map(parseClock), [105, 3723, 90, null, NaN, NaN]);
+  assert.deepEqual([105, 3723, 0, 59.6].map(formatClock), ['1:45', '1:02:03', '0:00', '1:00']);
+});
+
+test('saving a season keeps the series folder and its intro times', () => {
+  const before = { id: 's4500', folder: 'Los Hombres de Paco', skip: { intro: [30, 90] }, episodes: [] };
+  const after = seriesWithSeason(before, { id: 4500, title: 'Los hombres de Paco', year: 2005 }, 1, [{ episode: 1, name: 'Piloto' }], { 1: 'https://lulustream.com/paco1x01aaaa' });
+  assert.deepEqual([after.folder, after.skip, after.episodes.length], ['Los Hombres de Paco', { intro: [30, 90] }, 1]);
+});
+
+test('TheIntroDB gives each episode its intro and credits, unless times were typed', async () => {
+  const { skipMarks, skipButton, introDbMarks, withIntroDb } = await import('../web/library.js');
+  // Breaking Bad 1x01, as TheIntroDB answers it.
+  const answer = { tvdb_id: 81189, type: 'tv', season: 1, episode: 1, intro: [{ start_ms: 228664, end_ms: 246143 }], credits: [{ start_ms: 3431000, end_ms: null }] };
+  assert.deepEqual(introDbMarks(answer), { intro: [228.664, 246.143], creditsAt: 3431 });
+  assert.deepEqual(introDbMarks({ intro: [], credits: [] }), { intro: null, creditsAt: null });
+  const asked = [];
+  const ok = async (url) => { asked.push(url); return { ok: true, json: async () => answer }; };
+  const source = { tmdb: 1396, season: 1, episode: 1 };
+  const auto = await withIntroDb(skipMarks({}, { season: 1 }), source, ok);
+  assert.deepEqual(asked, ['https://api.theintrodb.org/v4/media?tmdb_id=1396&season=1&episode=1']);
+  assert.deepEqual([auto.intro, auto.creditsAt], [[228.664, 246.143], 3431]);
+  assert.equal(skipButton(auto, 230, 3480, true), 'intro');
+  assert.equal(skipButton(auto, 3430, 3480, true), null);
+  assert.equal(skipButton(auto, 3431, 3480, true), 'next');
+  // Typed times win: TheIntroDB only fills what is missing (here the credits).
+  const typed = await withIntroDb(skipMarks({ skip: { intro: [20, 80] } }, { season: 1 }), source, ok);
+  assert.deepEqual([typed.intro, typed.creditsAt], [[20, 80], 3431]);
+  const allTyped = skipMarks({ skip: { intro: [20, 80], credits: 60 } }, { season: 1 });
+  asked.length = 0;
+  assert.equal(await withIntroDb(allTyped, source, ok), allTyped);
+  assert.deepEqual(asked, [], 'nothing to ask when everything was typed');
+  // When the browser may not ask TheIntroDB, the hosting does; with no answer the marks stay as they were.
+  const relayed = [];
+  const blocked = async (url) => { relayed.push(url); if (url.startsWith('https://api.theintrodb.org')) throw new TypeError('CORS'); return { ok: true, json: async () => answer }; };
+  assert.equal((await withIntroDb(skipMarks({}, { season: 1 }), source, blocked)).creditsAt, 3431);
+  assert.equal(relayed[1], 'https://calamarmenciano.com/calamar-lulu.php?introdb=1&tmdb_id=1396&season=1&episode=1');
+  const none = skipMarks({}, { season: 1 });
+  assert.equal(await withIntroDb(none, source, async () => ({ ok: false, status: 404 })), none);
+  assert.equal(await withIntroDb(none, null, ok), none);
+});

@@ -108,6 +108,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private org.json.JSONObject progressEntry;
   private long resumeMs;
   private boolean ended;
+  // «Saltar intro» during the intro set for the series; «Siguiente capítulo» with a 10-second count during
+  // the credits (✕ keeps watching them; the next episode still starts when this one ends).
+  private static final int NEXT_COUNT = 10;
+  private int[] skipMarks;
+  private boolean hasNext, nextDismissed;
+  private long nextCountAt = -1;
+  private Button skipIntroButton, nextButton, nextDismissButton;
+  private final Runnable skipTick = new Runnable() { public void run() {
+    paintSkip();
+    handler.postDelayed(this, 400);
+  }};
   private final Runnable progressTick = new Runnable() { public void run() {
     rememberPosition();
     handler.postDelayed(this, 10000);
@@ -263,6 +274,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           if (fullscreen) panel.setVisibility(visibility == View.VISIBLE ? View.VISIBLE : View.GONE);
         });
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
+    if (progressEntry != null && progressEntry.has("intro_start")) addSkipButtons();
     // On a phone or tablet an event with a Google match link opens in the page, with the match's
     // information, statistics and line-ups under the video; Android TV keeps the full-screen player.
     String matchId = getIntent().getStringExtra("match_id"), info = getIntent().getStringExtra("event_info");
@@ -641,11 +653,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               status.setText("Cargando vídeo…");
               armBufferingTimeout(instance, source);
             } else if (state == Player.STATE_ENDED && progressEntry != null) {
-              // Watched to the end: out of «Continuar viendo», and the series plays the next episode.
-              ended = true;
-              Library.Progress.save(NativePlayerActivity.this, Library.Progress.remove(Library.Progress.load(NativePlayerActivity.this), progressEntry.optString("key")));
-              setResult(RESULT_OK, new Intent().putExtra("ended", progressEntry.optString("key")));
-              finish();
+              endEpisode();
             } else cancelBufferingTimeout();
           }
 
@@ -1083,8 +1091,105 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onDestroy() {
+    handler.removeCallbacks(skipTick);
     if (castControls != null) castControls.destroy();
     worker.shutdownNow();
     super.onDestroy();
+  }
+
+  /** Watched to the end (or «Siguiente capítulo»): out of «Continuar viendo», and the series plays the next one. */
+  private void endEpisode() {
+    if (ended || progressEntry == null) return;
+    ended = true;
+    handler.removeCallbacks(skipTick);
+    Library.Progress.save(this, Library.Progress.remove(Library.Progress.load(this), progressEntry.optString("key")));
+    setResult(RESULT_OK, new Intent().putExtra("ended", progressEntry.optString("key")));
+    finish();
+  }
+
+  private void addSkipButtons() {
+    skipMarks = new int[] {progressEntry.optInt("intro_start", -1), progressEntry.optInt("intro_end", -1), progressEntry.optInt("credits", Library.CREDITS_DEFAULT), -1, 0};
+    hasNext = progressEntry.optBoolean("has_next");
+    askIntroDb();
+    LinearLayout row = new LinearLayout(this);
+    row.setGravity(Gravity.CENTER_VERTICAL);
+    skipIntroButton = Ui.pill(this, "Saltar intro", Ui.Kind.SURFACE, false);
+    skipIntroButton.setOnClickListener(v -> {
+      if (player != null && skipMarks[0] >= 0) player.seekTo(skipMarks[1] * 1000L);
+      paintSkip();
+    });
+    nextButton = Ui.pill(this, "Siguiente capítulo", Ui.Kind.ACCENT, false);
+    nextButton.setOnClickListener(v -> endEpisode());
+    nextDismissButton = Ui.pill(this, "✕", Ui.Kind.SURFACE, true);
+    nextDismissButton.setContentDescription("Seguir viendo los créditos");
+    nextDismissButton.setOnClickListener(v -> { nextDismissed = true; paintSkip(); });
+    LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
+    gap.setMargins(Ui.dp(this, 8), 0, 0, 0);
+    row.addView(skipIntroButton, new LinearLayout.LayoutParams(-2, -2));
+    row.addView(nextButton, new LinearLayout.LayoutParams(-2, -2));
+    row.addView(nextDismissButton, gap);
+    FrameLayout.LayoutParams place = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+    place.setMargins(0, 0, Ui.dp(this, 24), Ui.dp(this, 96));
+    stage.addView(row, place);
+    paintSkip();
+    handler.post(skipTick);
+  }
+
+  private void paintSkip() {
+    if (skipIntroButton == null) return;
+    long t = player == null ? -1 : player.getCurrentPosition(), duration = player == null ? -1 : player.getDuration();
+    if (duration == androidx.media3.common.C.TIME_UNSET) duration = -1;
+    int shown = player == null || webMode ? 0 : Library.skipButton(skipMarks, t, duration, hasNext);
+    show(skipIntroButton, shown == 1);
+    boolean next = shown == 2 && !nextDismissed;
+    show(nextButton, next);
+    show(nextDismissButton, next);
+    if (!next || !player.isPlaying()) { nextCountAt = -1; if (next) nextButton.setText("Siguiente capítulo"); return; }
+    long now = android.os.SystemClock.elapsedRealtime();
+    if (nextCountAt < 0) nextCountAt = now;
+    long left = Math.max(0, NEXT_COUNT - (now - nextCountAt) / 1000);
+    nextButton.setText("Siguiente capítulo · " + left);
+    if (left == 0) endEpisode();
+  }
+
+  /** This episode's intro and credits from TheIntroDB, where none were typed in the admin page. */
+  private void askIntroDb() {
+    final boolean manualIntro = progressEntry.optBoolean("manual_intro"), manualCredits = progressEntry.optBoolean("manual_credits");
+    final int tmdb = progressEntry.optInt("tmdb", 0);
+    if (tmdb <= 0 || (manualIntro && manualCredits)) return;
+    final String address = Library.INTRODB_API + "?tmdb_id=" + tmdb + "&season=" + progressEntry.optInt("season", 1)
+        + "&episode=" + progressEntry.optInt("episode_number", 0);
+    worker.execute(() -> {
+      try {
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(address).openConnection();
+        c.setConnectTimeout(6000);
+        c.setReadTimeout(8000);
+        c.setRequestProperty("User-Agent", "CalamarTV/" + BuildConfig.VERSION_NAME + " (Android)");
+        if (c.getResponseCode() != 200) return;
+        String body;
+        try (java.io.InputStream in = c.getInputStream()) {
+          java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+          byte[] buffer = new byte[4096];
+          for (int n; (n = in.read(buffer)) != -1 && out.size() < 65536; ) out.write(buffer, 0, n);
+          body = out.toString("UTF-8");
+        }
+        final int[] found = Library.introDbMarks(new org.json.JSONObject(body));
+        handler.post(() -> {
+          if (skipMarks == null || isFinishing()) return;
+          if (!manualIntro && found[0] >= 0) { skipMarks[0] = found[0]; skipMarks[1] = found[1]; }
+          if (!manualCredits) skipMarks[3] = found[2];
+          paintSkip();
+        });
+      } catch (Exception ignored) {
+        // Without TheIntroDB the typed times (or the last 30 seconds) are used.
+      }
+    });
+  }
+
+  /** Shows or hides a skip button; on a TV the button that appears takes the focus, so OK presses it. */
+  private void show(Button button, boolean visible) {
+    boolean was = button.getVisibility() == View.VISIBLE;
+    button.setVisibility(visible ? View.VISIBLE : View.GONE);
+    if (visible && !was && isTelevision() && button != nextDismissButton) button.requestFocus();
   }
 }

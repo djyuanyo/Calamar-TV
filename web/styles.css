@@ -294,6 +294,19 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .link-field { width: min(480px, 80vw); padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 
 .player-center { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+/* «Saltar intro» and «Siguiente capítulo» stay over the video even while the controls are hidden. */
+.skip-actions { position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: 96px; display: flex; align-items: center; gap: 8px; z-index: 4; pointer-events: none; }
+.skip-actions button { pointer-events: auto; }
+.skip-actions [hidden] { display: none; }
+.skip-btn { padding: 12px 20px; border: 1px solid rgba(255,255,255,.7); border-radius: 8px; background: rgba(10,13,18,.78); color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.skip-btn:hover, .skip-btn:focus-visible { background: #fff; color: #0b0d10; }
+#player-next { background: #fff; color: #0b0d10; }
+.skip-dismiss { width: 40px; height: 40px; border: 1px solid rgba(255,255,255,.5); border-radius: 999px; background: rgba(10,13,18,.78); color: #fff; font-size: 15px; cursor: pointer; }
+.library-skip { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--border, #30353d); border-radius: 12px; }
+.library-skip summary { cursor: pointer; font-weight: 700; }
+.library-skip-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.library-clock { width: 7.5em; }
+@media (max-width: 720px) { .skip-actions { bottom: 84px; } .skip-btn { padding: 10px 14px; font-size: 14px; } }
 .center-play {
   display: none; place-items: center; width: clamp(64px, 9vw, 92px); height: clamp(64px, 9vw, 92px); border-radius: 50%; border: 0; cursor: pointer;
   background: rgba(214, 255, 0, 0.95); color: var(--on-accent); pointer-events: auto; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);

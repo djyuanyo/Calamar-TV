@@ -163,6 +163,25 @@ function luluMain() {
     }
     if ($method !== 'GET') answer(array('error' => 'Método no permitido.'), 405);
 
+    // TheIntroDB (intro and credits times of an episode) for browsers it does not answer directly.
+    if (isset($_GET['introdb'])) {
+        $q = array();
+        foreach (array('tmdb_id', 'season', 'episode') as $k) {
+            $v = $_GET[$k] ?? '';
+            if (!is_string($v) || !preg_match('/^\d{1,9}$/', $v)) answer(array('error' => 'Consulta no válida.'), 400);
+            $q[$k] = $v;
+        }
+        $ch = curl_init('https://api.theintrodb.org/v4/media?' . http_build_query($q));
+        curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 8,
+            CURLOPT_USERAGENT => 'CalamarTV/2.18 (+https://djyuanyo.github.io/Calamar-TV/)'));
+        $body = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        $data = is_string($body) && strlen($body) < 65536 ? json_decode($body, true) : null;
+        if ($status !== 200 || !is_array($data)) answer(array('error' => 'Sin tiempos en TheIntroDB.'), 404);
+        answer($data);
+    }
+
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {
         $url = base64_decode(strtr((string)$_GET['seg'], '-_', '+/'), true);

@@ -382,7 +382,7 @@ try {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
       tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
       { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
-    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
+    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
   // The library comes from Firestore (index + parts), published by the admin page; no hosting involved.
@@ -432,9 +432,25 @@ try {
   await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco2x01bbbb');
   await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
   await page.getByText(/^Temporada 2 guardada y publicada/).waitFor();
+  // The intro and credits times of the series, for «Saltar intro» and «Siguiente capítulo».
+  await page.locator('summary', { hasText: 'Saltar intro y siguiente capítulo' }).click();
+  await page.getByLabel('Intro desde', { exact: true }).fill('0:30');
+  await page.getByLabel('hasta', { exact: true }).fill('1:45');
+  await page.getByLabel('Créditos (duración)', { exact: true }).fill('50');
+  await page.getByRole('button', { name: 'Guardar tiempos', exact: true }).click();
+  await page.getByText(/^Guardado para toda la serie: intro de 0:30 a 1:45, «Siguiente capítulo» en los últimos 0:50\./).waitFor();
+  await page.getByLabel('Tiempos para', { exact: true }).selectOption('season');
+  await page.getByLabel('Intro desde', { exact: true }).fill('0:10');
+  await page.getByLabel('hasta', { exact: true }).fill('0:05');
+  await page.getByRole('button', { name: 'Guardar tiempos', exact: true }).click();
+  await page.getByText('La intro tiene que acabar después de empezar.').waitFor();
+  await page.getByLabel('hasta', { exact: true }).fill('1:00');
+  await page.getByRole('button', { name: 'Guardar tiempos', exact: true }).click();
+  await page.getByText(/^Guardado para la temporada 2: intro de 0:10 a 1:00/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   const paco = parts.parts['series-0'].items.find((m) => m.id === 's4500');
   assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto', 'https://lulustream.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://lulustream.com/paco2x01bbbb']]);
+  assert.deepEqual(paco.skip, { intro: [30, 105], credits: 50, seasons: { 2: { intro: [10, 60], credits: 50 } } });
   // Editing later shows the saved links.
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
@@ -528,6 +544,19 @@ try {
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Vuelta a empezar');
+  // «Saltar intro» during the series' intro; «Siguiente capítulo» with its count during the credits.
+  await page.evaluate(() => { const v = document.getElementById('video'); let t = 40;
+    Object.defineProperty(v, 'currentTime', { configurable: true, get: () => t, set: (x) => { t = x; } });
+    Object.defineProperty(v, 'duration', { configurable: true, get: () => 2400 });
+    v.dispatchEvent(new Event('timeupdate')); });
+  await page.getByRole('button', { name: 'Saltar intro', exact: true }).click();
+  assert.equal(await page.evaluate(() => document.getElementById('video').currentTime), 90);
+  assert.equal(await page.locator('#player-skip-intro').isHidden(), true);
+  await page.evaluate(() => { const v = document.getElementById('video'); v.currentTime = 2370; v.dispatchEvent(new Event('timeupdate')); });
+  assert.equal(await page.locator('#player-next').textContent(), 'Siguiente capítulo · 10');
+  await page.getByRole('button', { name: 'Seguir viendo los créditos' }).click();
+  assert.equal(await page.locator('#player-next').isHidden(), true);
+  await page.evaluate(() => { const v = document.getElementById('video'); delete v.currentTime; delete v.duration; });
   // When it ends the next episode starts by itself.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
   await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
