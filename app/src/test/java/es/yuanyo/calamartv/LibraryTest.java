@@ -93,9 +93,9 @@ public class LibraryTest {
 
   @Test public void skipIntroAndNextEpisode() throws Exception {
     JSONObject skip = new JSONObject("{\"intro\":[30,105],\"credits\":45,\"seasons\":{\"2\":{\"intro\":[10,70]}}}");
-    assertArrayEquals(new int[] {30, 105, 45}, Library.skipMarks(skip, 1));
-    assertArrayEquals(new int[] {10, 70, 45}, Library.skipMarks(skip, 2));
-    assertArrayEquals(new int[] {-1, -1, 30}, Library.skipMarks(new JSONObject(), 1));
+    assertArrayEquals(new int[] {30, 105, 45, -1, 45}, Library.skipMarks(skip, 1));
+    assertArrayEquals(new int[] {10, 70, 45, -1, 45}, Library.skipMarks(skip, 2));
+    assertArrayEquals(new int[] {-1, -1, 30, -1, 0}, Library.skipMarks(new JSONObject(), 1));
     int[] marks = Library.skipMarks(skip, 1);
     assertEquals(0, Library.skipButton(marks, 29000, 2400000, true));
     assertEquals(1, Library.skipButton(marks, 30000, 2400000, true));
@@ -111,5 +111,15 @@ public class LibraryTest {
     assertEquals(30, first.getInt("credits"));
     assertTrue(first.getBoolean("has_next"));
     assertFalse(last.getBoolean("has_next"));
+    assertTrue(first.getBoolean("manual_intro"));
+    assertFalse(first.getBoolean("manual_credits"));
+    // TheIntroDB (Breaking Bad 1x01): intro 3:48–4:06, credits from 57:11; «Siguiente capítulo» from there.
+    int[] found = Library.introDbMarks(new JSONObject("{\"tvdb_id\":81189,\"type\":\"tv\",\"season\":1,\"episode\":1,"
+        + "\"intro\":[{\"start_ms\":228664,\"end_ms\":246143}],\"credits\":[{\"start_ms\":3431000,\"end_ms\":null}]}"));
+    assertArrayEquals(new int[] {228, 246, 3431}, found);
+    assertArrayEquals(new int[] {-1, -1, -1}, Library.introDbMarks(new JSONObject("{\"intro\":[],\"credits\":[]}")));
+    int[] auto = {228, 246, 30, 3431, 0};
+    assertEquals(0, Library.skipButton(auto, 3430000, 3480000, true));
+    assertEquals(2, Library.skipButton(auto, 3431000, 3480000, true));
   }
 }

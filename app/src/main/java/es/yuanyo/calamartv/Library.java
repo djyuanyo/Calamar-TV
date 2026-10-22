@@ -80,6 +80,8 @@ final class Library {
     final List<Episode> episodes = new ArrayList<>();
     /** «Saltar intro» and «Siguiente capítulo» times set in the admin page (or empty). */
     final JSONObject skip;
+    /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
+    final int tmdbId;
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
@@ -88,6 +90,7 @@ final class Library {
       series = "tv".equals(o.optString("kind"));
       JSONObject s = o.optJSONObject("skip");
       skip = s == null ? new JSONObject() : s;
+      tmdbId = "unmatched".equals(o.optString("status")) || o.optJSONObject("tmdb") == null ? 0 : o.optJSONObject("tmdb").optInt("id", 0);
       title = t.optString("title", "").isEmpty() ? o.optString("title") : t.optString("title");
       year = t.optInt("year", o.optInt("year", 0));
       url = o.optString("url");
@@ -176,7 +179,9 @@ final class Library {
             .put("image", e != null && !e.still.isEmpty() ? e.still : !backdrop.isEmpty() ? backdrop : poster);
         if (e != null) {
           int[] marks = skipMarks(skip, e.season);
-          o.put("intro_start", marks[0]).put("intro_end", marks[1]).put("credits", marks[2]).put("has_next", next(e) != null);
+          o.put("intro_start", marks[0]).put("intro_end", marks[1]).put("credits", marks[2]).put("has_next", next(e) != null)
+              .put("manual_intro", marks[0] >= 0).put("manual_credits", marks[4] > 0)
+              .put("tmdb", tmdbId).put("season", e.season).put("episode_number", e.episode);
         }
       } catch (JSONException impossible) {
         throw new IllegalStateException(impossible);
@@ -293,8 +298,9 @@ final class Library {
   static final int CREDITS_DEFAULT = 30;
 
   /**
-   * {intro start, intro end, credits length} in seconds for an episode of that season: the season's own
-   * times, else the series' (start -1 when there is no intro). As skipMarks() in web/library.js.
+   * {intro start, intro end, credits length, credits start, credits typed} in seconds for an episode of that
+   * season: the season's own times, else the series' (start -1 without an intro, credits start -1 until
+   * TheIntroDB gives it, credits typed 0 when the default is used). As skipMarks() in web/library.js.
    */
   static int[] skipMarks(JSONObject skip, int season) {
     JSONObject seasons = skip.optJSONObject("seasons");
@@ -306,7 +312,27 @@ final class Library {
       start = (int) intro.optDouble(0);
       end = (int) intro.optDouble(1);
     }
-    return new int[] {start, end, credits > 0 ? (int) credits : CREDITS_DEFAULT};
+    return new int[] {start, end, credits > 0 ? (int) credits : CREDITS_DEFAULT, -1, credits > 0 ? (int) credits : 0};
+  }
+
+  static final String INTRODB_API = "https://api.theintrodb.org/v4/media";
+
+  /** TheIntroDB's answer as {intro start, intro end, credits start} in seconds (-1 for what it lacks). */
+  static int[] introDbMarks(JSONObject data) {
+    JSONObject intro = firstSegment(data.optJSONArray("intro")), credits = firstSegment(data.optJSONArray("credits"));
+    long start = intro == null ? -1 : intro.optLong("start_ms", -1), end = intro == null || intro.isNull("end_ms") ? -1 : intro.optLong("end_ms", -1);
+    long creditsAt = credits == null ? -1 : credits.optLong("start_ms", -1);
+    boolean hasIntro = start >= 0 && end > start;
+    return new int[] {hasIntro ? (int) (start / 1000) : -1, hasIntro ? (int) (end / 1000) : -1, creditsAt > 0 ? (int) (creditsAt / 1000) : -1};
+  }
+
+  private static JSONObject firstSegment(JSONArray list) {
+    if (list == null) return null;
+    for (int i = 0; i < list.length(); i++) {
+      JSONObject s = list.optJSONObject(i);
+      if (s != null && s.has("start_ms") && !s.isNull("start_ms")) return s;
+    }
+    return null;
   }
 
   /** Which button shows at position t (ms): 1 «Saltar intro», 2 «Siguiente capítulo», 0 none. As skipButton(). */
@@ -314,8 +340,10 @@ final class Library {
     if (marks == null || t < 0) return 0;
     if (marks[0] >= 0 && t >= marks[0] * 1000L && t < marks[1] * 1000L - 1000) return 1;
     long left = duration - t;
-    if (hasNext && duration > 0 && duration > marks[2] * 2000L && left <= marks[2] * 1000L && left > 500) return 2;
-    return 0;
+    if (!hasNext || duration <= 0 || left <= 500) return 0;
+    // Where TheIntroDB says the credits start; otherwise the last seconds set for the series (30 by default).
+    if (marks.length > 3 && marks[3] > 0 && marks[3] * 1000L < duration - 5000) return t >= marks[3] * 1000L ? 2 : 0;
+    return duration > marks[2] * 2000L && left <= marks[2] * 1000L ? 2 : 0;
   }
 
   /** Only https LuluStream videos, Drive files or Calamar hosting files are played; the list cannot point the player elsewhere. */

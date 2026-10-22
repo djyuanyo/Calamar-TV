@@ -1108,8 +1108,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void addSkipButtons() {
-    skipMarks = new int[] {progressEntry.optInt("intro_start", -1), progressEntry.optInt("intro_end", -1), progressEntry.optInt("credits", Library.CREDITS_DEFAULT)};
+    skipMarks = new int[] {progressEntry.optInt("intro_start", -1), progressEntry.optInt("intro_end", -1), progressEntry.optInt("credits", Library.CREDITS_DEFAULT), -1, 0};
     hasNext = progressEntry.optBoolean("has_next");
+    askIntroDb();
     LinearLayout row = new LinearLayout(this);
     row.setGravity(Gravity.CENTER_VERTICAL);
     skipIntroButton = Ui.pill(this, "Saltar intro", Ui.Kind.SURFACE, false);
@@ -1149,6 +1150,40 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     long left = Math.max(0, NEXT_COUNT - (now - nextCountAt) / 1000);
     nextButton.setText("Siguiente capítulo · " + left);
     if (left == 0) endEpisode();
+  }
+
+  /** This episode's intro and credits from TheIntroDB, where none were typed in the admin page. */
+  private void askIntroDb() {
+    final boolean manualIntro = progressEntry.optBoolean("manual_intro"), manualCredits = progressEntry.optBoolean("manual_credits");
+    final int tmdb = progressEntry.optInt("tmdb", 0);
+    if (tmdb <= 0 || (manualIntro && manualCredits)) return;
+    final String address = Library.INTRODB_API + "?tmdb_id=" + tmdb + "&season=" + progressEntry.optInt("season", 1)
+        + "&episode=" + progressEntry.optInt("episode_number", 0);
+    worker.execute(() -> {
+      try {
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(address).openConnection();
+        c.setConnectTimeout(6000);
+        c.setReadTimeout(8000);
+        c.setRequestProperty("User-Agent", "CalamarTV/" + BuildConfig.VERSION_NAME + " (Android)");
+        if (c.getResponseCode() != 200) return;
+        String body;
+        try (java.io.InputStream in = c.getInputStream()) {
+          java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+          byte[] buffer = new byte[4096];
+          for (int n; (n = in.read(buffer)) != -1 && out.size() < 65536; ) out.write(buffer, 0, n);
+          body = out.toString("UTF-8");
+        }
+        final int[] found = Library.introDbMarks(new org.json.JSONObject(body));
+        handler.post(() -> {
+          if (skipMarks == null || isFinishing()) return;
+          if (!manualIntro && found[0] >= 0) { skipMarks[0] = found[0]; skipMarks[1] = found[1]; }
+          if (!manualCredits) skipMarks[3] = found[2];
+          paintSkip();
+        });
+      } catch (Exception ignored) {
+        // Without TheIntroDB the typed times (or the last 30 seconds) are used.
+      }
+    });
   }
 
   /** Shows or hides a skip button; on a TV the button that appears takes the focus, so OK presses it. */

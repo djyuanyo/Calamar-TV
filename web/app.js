@@ -7,7 +7,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
@@ -662,6 +662,8 @@ function open(c, fromRoute = false) {
   if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
   // Viewers and visits are counted per channel and event; films and episodes are not.
   if (!c.vod) startAudience(c);
+  // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
+  if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
   playSource(c, 0);
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;

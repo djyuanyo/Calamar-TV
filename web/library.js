@@ -5,7 +5,7 @@
 import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
-import { lulustreamEmbed, webPlayback } from './catalog.js';
+import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -60,18 +60,46 @@ export function nextEpisode(item, episode) {
 // { intro: [start, end], credits: seconds, seasons: { "2": { intro, credits } } }, all in seconds.
 export const CREDITS_DEFAULT = 30;
 /** The intro [start, end] (or null) and the credits' length of an episode: its season's, else the series'. */
+// Times typed in the admin page win; without them the player asks TheIntroDB (community timestamps per
+// episode, by TMDB id): { manualIntro, manualCredits } say which ones were typed.
 export function skipMarks(item, episode) {
   const skip = item?.skip || {}, season = skip.seasons?.[episode?.season] || {};
   const intro = season.intro || skip.intro;
   const credits = Number(season.credits ?? skip.credits);
-  return { intro: Array.isArray(intro) && intro[1] > intro[0] && intro[0] >= 0 ? intro : null, credits: credits > 0 ? credits : CREDITS_DEFAULT };
+  const validIntro = Array.isArray(intro) && intro[1] > intro[0] && intro[0] >= 0;
+  return { intro: validIntro ? intro : null, credits: credits > 0 ? credits : CREDITS_DEFAULT, creditsAt: null,
+    manualIntro: validIntro, manualCredits: credits > 0 };
 }
 /** Which button the player shows at second t: «Saltar intro», «Siguiente capítulo» or none. */
 export function skipButton(marks, t, duration, hasNext) {
   if (!marks || !Number.isFinite(t)) return null;
   if (marks.intro && t >= marks.intro[0] && t < marks.intro[1] - 1) return 'intro';
-  if (hasNext && Number.isFinite(duration) && duration > marks.credits * 2 && duration - t <= marks.credits && duration - t > 0.5) return 'next';
-  return null;
+  if (!hasNext || !Number.isFinite(duration) || duration - t <= 0.5) return null;
+  // Where TheIntroDB says the credits start; otherwise the last seconds set for the series (30 by default).
+  if (marks.creditsAt != null && marks.creditsAt < duration - 5) return t >= marks.creditsAt ? 'next' : null;
+  return duration > marks.credits * 2 && duration - t <= marks.credits ? 'next' : null;
+}
+
+export const INTRODB_API = 'https://api.theintrodb.org/v4/media';
+/** TheIntroDB's answer as { intro: [start, end] | null, creditsAt: seconds | null }. */
+export function introDbMarks(data) {
+  const first = (list) => (Array.isArray(list) ? list : []).find((s) => Number.isFinite(s?.start_ms));
+  const intro = first(data?.intro), credits = first(data?.credits);
+  return { intro: intro && Number.isFinite(intro.end_ms) && intro.end_ms > intro.start_ms ? [intro.start_ms / 1000, intro.end_ms / 1000] : null,
+    creditsAt: credits && credits.start_ms > 0 ? credits.start_ms / 1000 : null };
+}
+/** The episode's marks with TheIntroDB's where none were typed; the same marks when it has nothing. */
+export async function withIntroDb(marks, source, fetcher = globalThis.fetch) {
+  if (!marks || !source?.tmdb || (marks.manualIntro && marks.manualCredits)) return marks;
+  try {
+    const query = new URLSearchParams({ tmdb_id: String(source.tmdb), season: String(source.season), episode: String(source.episode) });
+    const ask = (url) => fetcher(url, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(8000) });
+    // Straight from the browser, or through the hosting when TheIntroDB does not allow it (a few hundred bytes).
+    const response = await ask(`${INTRODB_API}?${query}`).catch(() => ask(`${LULU_ENDPOINT}?introdb=1&${query}`));
+    if (!response.ok) return marks;
+    const found = introDbMarks(await response.json());
+    return { ...marks, intro: marks.manualIntro ? marks.intro : found.intro || marks.intro, creditsAt: marks.manualCredits ? null : found.creditsAt };
+  } catch { return marks; }
 }
 /** «1:45» → 105, «1:02:03» → 3723, «90» → 90, empty → null; anything else → NaN. */
 export function parseClock(text) {
@@ -98,6 +126,7 @@ export function playable(section, item, episode = null) {
       name: itemTitle(item), sub: episode ? `${seasonLabel(episode)} · ${episodeTitle(episode)}` : String(itemYear(item) || section.label),
       image: episode?.still || info.backdrop || info.poster || '' },
     skip: episode ? skipMarks(item, episode) : null, hasNext: !!(episode && nextEpisode(item, episode)),
+    skipSource: episode && item.tmdb?.id && item.status !== 'unmatched' ? { tmdb: item.tmdb.id, season: episode.season, episode: episode.episode } : null,
     next: episode ? () => { const n = nextEpisode(item, episode); return n ? playable(section, item, n) : null; } : null };
 }
 
