@@ -467,21 +467,25 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
-  // A LuluStream video: the hosting gives our player the video address; when it cannot be played
-  // LuluStream's own player is shown, embedded under our title bar.
-  const luluCodes = [];
-  await page.route('https://calamarmenciano.com/calamar-lulu.php?**', (route) => {
-    luluCodes.push(new URL(route.request().url()).searchParams.get('code'));
-    route.fulfill({ json: { url: 'https://cdn.lulu.test/hls/torrente.mp4' }, headers: { 'Access-Control-Allow-Origin': '*' } });
+  // A LuluStream video always plays in our player, through the hosting (LuluStream only serves who opened
+  // its page). hls.js (from its CDN, blocked here) is replaced by a stand-in whose list fails, to see that a
+  // failure shows our message with «Refrescar» and never LuluStream's player.
+  await page.evaluate(() => {
+    window.Hls = class {
+      static isSupported() { return true; }
+      static Events = { ERROR: 'hlsError' };
+      on(name, handler) { if (name === 'hlsError') this.failed = handler; }
+      loadSource(url) { window.__hlsSource = url; setTimeout(() => this.failed?.('hlsError', { fatal: true, type: 'networkError', details: 'manifestLoadError', response: { code: 502 }, url }), 50); }
+      attachMedia() {} destroy() {} stopLoad() {} startLoad() {}
+      get levels() { return []; }
+    };
   });
   await page.locator('.poster-card', { hasText: 'Torrente' }).click();
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
-  await page.locator('#player iframe.player-embed').waitFor();
-  assert.equal(await page.locator('#player iframe.player-embed').getAttribute('src'), 'https://lulustream.com/e/torrente1998');
-  assert.deepEqual(luluCodes, ['torrente1998']);
-  assert.equal(await page.locator('#player-close').isVisible(), true);
+  await page.locator('#player-status').getByRole('button', { name: '↻ Refrescar' }).waitFor();
+  assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');
+  assert.equal(await page.locator('#player iframe').count(), 0);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
-  await page.waitForFunction(() => !document.querySelector('#player iframe'));
   await page.locator('.nav a', { hasText: 'Películas' }).click();
   await page.locator('.poster-card').first().waitFor();
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();

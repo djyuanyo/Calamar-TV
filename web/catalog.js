@@ -211,18 +211,6 @@ export function lulustreamEmbed(url) {
 
 export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
 
-/** The HLS address of a LuluStream video, read by the hosting from its player page; null if it cannot. */
-export async function lulustreamSource(embed, fetcher = globalThis.fetch) {
-  const code = String(embed).match(/\/e\/([A-Za-z0-9]{8,20})$/)?.[1];
-  if (!code) return null;
-  try {
-    const response = await fetcher(`${LULU_ENDPOINT}?code=${code}`, { signal: AbortSignal.timeout(15000), referrerPolicy: 'no-referrer' });
-    const data = await response.json();
-    const u = new URL(data?.url);
-    return response.ok && u.protocol === 'https:' && /\.(m3u8|mp4)$/i.test(u.pathname) ? u.href : null;
-  } catch { return null; }
-}
-
 export function webPlayback(url) {
   let u;
   try {
@@ -232,7 +220,9 @@ export function webPlayback(url) {
   }
   const path = u.pathname.toLowerCase();
   const embed = lulustreamEmbed(url);
-  if (embed) return { ok: true, kind: 'embed', embed };
+  // LuluStream only serves the video to whoever opened its player page, so the hosting reads the page and
+  // passes the HLS list and its pieces on (calamar-lulu.php); the video plays in our own player.
+  if (embed) return { ok: true, kind: 'hls', address: `${LULU_ENDPOINT}?code=${embed.split('/').pop()}&hls=1` };
   // Films and series from Google Drive play straight from the Drive API (it allows browser video).
   if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };
