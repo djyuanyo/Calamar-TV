@@ -14,15 +14,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Films, series and documentaries published by hosting/calamar-library.php from the hosting's
- * folders, with TMDB details. Shown only while the administrator has it switched on.
+ * Films, series and documentaries published by the admin web page from Google Drive folders, with
+ * TMDB details. Shown only while the administrator has it switched on.
  */
 final class Library {
   private Library() {}
 
-  static final String ENDPOINT = "https://calamarmenciano.com/calamar-library.php?action=library";
-  /** The hosting also publishes the library to GitHub, which is read first so it works while the hosting is down. */
-  static final String GITHUB = "https://raw.githubusercontent.com/djyuanyo/Calamar-TV/main/library/calamar-library.json";
+  /**
+   * Published by the admin web page to Firestore: «index» names the parts of each section («movies-0»…).
+   * Read with the public Firebase key, without signing in; the videos play from Google Drive.
+   */
+  static final String DOCS = "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/";
+  static final String KEY = "AIzaSyB5lJLnPd79iEupekufK5x11SXSqYL4dsk";
   /** Section keys in the published JSON and their names in the menu, in menu order. */
   static final String[][] SECTIONS = {
     {"movies", "Películas"}, {"series", "Series"}, {"documentaries", "Documentales"}
@@ -304,15 +307,30 @@ final class Library {
   }
 
   static Data download() throws IOException, JSONException {
-    IOException failure = null;
-    for (String address : new String[] {GITHUB + "?t=" + System.currentTimeMillis() / 120000, ENDPOINT}) {
-      try {
-        return new Data(new JSONObject(get(address)));
-      } catch (IOException | JSONException error) {
-        failure = error instanceof IOException ? (IOException) error : new IOException(error.getMessage());
+    JSONObject index = part("index");
+    JSONObject library = new JSONObject(), sections = new JSONObject();
+    JSONObject counts = index == null ? null : index.optJSONObject("sections");
+    if (counts != null) for (java.util.Iterator<String> keys = counts.keys(); keys.hasNext(); ) {
+      String section = keys.next();
+      JSONArray items = new JSONArray();
+      for (int n = 0; n < Math.min(counts.optInt(section), 200); n++) {
+        JSONObject p = part(section + "-" + n);
+        JSONArray list = p == null ? null : p.optJSONArray("items");
+        if (list != null) for (int i = 0; i < list.length(); i++) items.put(list.get(i));
       }
+      sections.put(section, items);
     }
-    throw failure;
+    library.put("sections", sections).put("attribution", index == null ? "" : index.optString("attribution"));
+    return new Data(library);
+  }
+
+  /** One published part, or null when it does not exist (nothing published yet). */
+  static JSONObject part(String name) throws IOException, JSONException {
+    String body;
+    try { body = get(DOCS + name + "?key=" + KEY); }
+    catch (java.io.FileNotFoundException missing) { return null; }
+    catch (IOException error) { if ("HTTP 404".equals(error.getMessage())) return null; throw error; }
+    return new JSONObject(new JSONObject(body).getJSONObject("fields").getJSONObject("json").getString("stringValue"));
   }
 
   static String get(String address) throws IOException {

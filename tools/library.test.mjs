@@ -51,12 +51,19 @@ test('Google Drive videos play in the browser; other Google API links do not', a
   assert.equal(webPlayback('https://www.googleapis.com/youtube/v3/videos?alt=media').ok, false);
 });
 
-test('the library is read from GitHub first and from the hosting when GitHub fails', async () => {
-  const { fetchLibrary, LIBRARY_GITHUB } = await import('../web/library.js');
+test('the library is read from Firestore: the index names the parts of each section', async () => {
+  const { fetchLibrary, LIBRARY_DOCS } = await import('../web/library.js');
+  const docs = { index: { sections: { movies: 2, series: 0 }, attribution: 'TMDB' }, 'movies-0': { items: [{ id: 'm1' }] }, 'movies-1': { items: [{ id: 'm2' }] } };
   const asked = [];
-  const ok = (body) => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => body });
-  const library = await fetchLibrary({ fresh: false, fetcher: async (url) => { asked.push(url); if (url.startsWith(LIBRARY_GITHUB)) throw Error('offline'); return ok({ sections: { movies: [] } }); } });
-  assert.ok(asked[0].startsWith(LIBRARY_GITHUB));
-  assert.match(asked[1], /calamar-library\.php\?action=library/);
-  assert.deepEqual(library.sections, { movies: [] });
+  const library = await fetchLibrary({ fresh: true, fetcher: async (url) => {
+    asked.push(url);
+    const name = url.slice(LIBRARY_DOCS.length).split('?')[0];
+    return docs[name] ? { ok: true, status: 200, json: async () => ({ fields: { json: { stringValue: JSON.stringify(docs[name]) } } }) } : { ok: false, status: 404 };
+  } });
+  assert.deepEqual(library.sections.movies.map((m) => m.id), ['m1', 'm2']);
+  assert.deepEqual(library.sections.series, []);
+  assert.equal(library.attribution, 'TMDB');
+  assert.match(asked[0], /databases\/\(default\)\/documents\/calamarLibrary\/index\?key=AIza/);
+  const empty = await fetchLibrary({ fresh: true, fetcher: async () => ({ ok: false, status: 404 }) });
+  assert.deepEqual(empty.sections, {});
 });

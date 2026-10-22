@@ -82,3 +82,22 @@ test('visits add one to one key of today and only the admin reads them', async (
   const stats = await assertSucceeds(getDoc(doc(admin(), 'calamarVisits', today())));
   assert.deepEqual(stats.data(), { last: 'e_evento-1', 'c_la-1': 2, 'e_evento-1': 1 });
 });
+
+test('library parts: public read, admin writes valid parts only; settings are private to the admin', async () => {
+  const anyone = env.unauthenticatedContext().firestore();
+  const part = (overrides = {}) => ({ json: '{"items":[]}', updatedAt: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(admin(), 'calamarLibrary/index'), part()));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarLibrary/series-0'), part()));
+  await assertSucceeds(getDoc(doc(anyone, 'calamarLibrary/series-0')));
+  await assertFails(getDocs(collection(anyone, 'calamarLibrary')));
+  await assertFails(setDoc(doc(anyone, 'calamarLibrary/index'), part()));
+  await assertFails(setDoc(doc(env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore(), 'calamarLibrary/index'), part()));
+  for (const [name, invalid] of [['index', { json: 'x'.repeat(900001) }], ['index', { extra: 1 }], ['index', { updatedAt: new Date(0) }], ['catalog', {}], ['Series-0', {}]]) {
+    await assertFails(setDoc(doc(admin(), `calamarLibrary/${name}`), part(invalid)));
+  }
+  await assertSucceeds(deleteDoc(doc(admin(), 'calamarLibrary/series-0')));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarPrivate/library'), { tmdb: 'k', folders: {} }));
+  await assertSucceeds(getDoc(doc(admin(), 'calamarPrivate/library')));
+  await assertFails(getDoc(doc(anyone, 'calamarPrivate/library')));
+  await assertFails(setDoc(doc(anyone, 'calamarPrivate/library'), { tmdb: 'x' }));
+});

@@ -1,10 +1,11 @@
-// Films, series and documentaries from the hosting folders (hosting/calamar-library.php), Plex style,
-// with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the
-// whole catalog (catalog field `libraryVisible`); while hidden the menu does not offer it.
-export const LIBRARY_ENDPOINT = 'https://calamarmenciano.com/calamar-library.php';
-// The hosting also publishes the library to GitHub, so it keeps showing (and its Google Drive videos keep
-// playing) while the hosting is down. GitHub serves it first; the hosting is the fallback.
-export const LIBRARY_GITHUB = 'https://raw.githubusercontent.com/djyuanyo/Calamar-TV/main/library/calamar-library.json';
+// Films, series and documentaries from Google Drive folders, Plex style, with synopsis, genres, cast,
+// rating and posters from TMDB. The administrator shows or hides the whole catalog (catalog field
+// `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
+// signing in; the videos play from Google Drive. Nothing depends on the hosting.
+import { firebaseConfig } from './firebase-config.js';
+import { driveFolderId, driveVideos, sectionItems, mergeScan, searchTmdb, tmdbDetails, confident, applyMatch, seasonsOf, libraryParts, checkTmdbKey } from './library-drive.js';
+
+export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
   { key: 'movies', page: 'peliculas', label: 'Películas', one: 'película' },
   { key: 'series', page: 'series', label: 'Series', one: 'serie' },
@@ -17,38 +18,23 @@ let cached = null, cachedAt = 0;
 /** The published library; kept for two minutes so moving between pages does not download it again. */
 export async function fetchLibrary({ fresh = false, fetcher = globalThis.fetch } = {}) {
   if (!fresh && cached && Date.now() - cachedAt < 120000) return cached;
-  // The administrator (fresh) reads the hosting, which is current at once; viewers read GitHub first.
-  const hosting = async () => {
-    const response = await fetcher(`${LIBRARY_ENDPOINT}?action=library${fresh ? `&t=${Date.now()}` : ''}`, { cache: fresh ? 'no-store' : 'default', referrerPolicy: 'no-referrer' });
-    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Falta subir calamar-library.php al hosting.');
-    return response.json();
+  const part = async (name) => {
+    let response;
+    try { response = await fetcher(`${LIBRARY_DOCS}${name}?key=${firebaseConfig.apiKey}`, { cache: fresh ? 'no-store' : 'default', referrerPolicy: 'no-referrer' }); }
+    catch { throw new Error('No se pudieron cargar las películas y series. Comprueba la conexión y vuelve a intentarlo.'); }
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('No se pudieron cargar las películas y series. Vuelve a intentarlo en unos minutos.');
+    return JSON.parse((await response.json()).fields.json.stringValue);
   };
-  const github = async () => {
-    const response = await fetcher(`${LIBRARY_GITHUB}?t=${Math.floor(Date.now() / 120000)}`, { cache: 'no-store', referrerPolicy: 'no-referrer' });
-    if (!response.ok) throw new Error(`GitHub ${response.status}`);
-    return response.json();
-  };
-  let data;
-  for (const source of fresh ? [hosting, github] : [github, hosting]) {
-    try { data = await source(); break; } catch {}
-  }
-  if (!data) throw new Error('No se pudieron cargar las películas y series. Comprueba la conexión y vuelve a intentarlo.');
-  cached = { sections: data.sections || {}, attribution: data.attribution || '', updatedAt: data.updatedAt || '' };
+  const index = await part('index');
+  const sections = {};
+  if (index) await Promise.all(Object.entries(index.sections || {}).map(async ([section, count]) => {
+    const parts = await Promise.all(Array.from({ length: count }, (_, n) => part(`${section}-${n}`)));
+    sections[section] = parts.flatMap((p) => p?.items || []);
+  }));
+  cached = { sections, attribution: index?.attribution || '', updatedAt: index?.updatedAt || '' };
   cachedAt = Date.now();
   return cached;
-}
-
-/** Administrator actions; `token` is the Firebase ID token of the signed-in administrator. */
-export async function libraryRequest(body, token, fetcher = globalThis.fetch) {
-  let response;
-  try {
-    response = await fetcher(LIBRARY_ENDPOINT, { method: 'POST', cache: 'no-store', referrerPolicy: 'no-referrer',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
-  } catch { throw new Error('No se pudo conectar con el hosting. Sube calamar-library.php y vuelve a intentarlo.'); }
-  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Falta subir calamar-library.php al hosting.');
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'El hosting no pudo completar la operación.');
-  return data;
 }
 
 export const itemTitle = (item) => item.tmdb?.title || item.title;
@@ -224,10 +210,11 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
 // ---- Administration ---------------------------------------------------------------------------
 
 /**
- * The «Pelis y series» admin section. `visible`/`setVisible` read and save the catalog switch;
- * `token()` gives the administrator's Firebase ID token for the hosting.
+ * The «Pelis y series» admin section. Everything runs in this browser: the Drive folders are read with the
+ * Drive API, titles are looked up in TMDB and the library is published to Firestore. `readSettings` and
+ * `saveSettings` keep the TMDB key and the folders private; `publish` writes the library parts.
  */
-export function libraryAdmin(el, { visible, setVisible, token, field }) {
+export function libraryAdmin(el, { visible, setVisible, field, readSettings, saveSettings, publish, driveKey: defaultDriveKey }) {
   const status = el('p', { class: 'note', role: 'status' });
   const say = (text, error = false) => { status.textContent = text; status.className = error ? 'error' : 'note'; };
   const toggle = el('input', { type: 'checkbox', checked: visible });
@@ -238,25 +225,25 @@ export function libraryAdmin(el, { visible, setVisible, token, field }) {
     finally { toggle.disabled = false; }
   });
   const key = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de TMDB (v3) o token de lectura (v4)' });
-  const driveKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Opcional: clave de Google propia (AIza…)' });
+  const googleKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Opcional: clave de Google propia (AIza…)' });
   const folders = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, el('input', { placeholder: `https://drive.google.com/drive/folders/… (${s.label.toLowerCase()})` })]));
-  const publishGithub = async () => {
-    const { github } = await libraryRequest({ action: 'publish' }, await token());
-    return github ? ' Publicada también en GitHub: se verá aunque el hosting se caiga.' : ' Aviso: falta la credencial de GitHub (Imágenes), así que solo está en el hosting.';
-  };
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
   const save = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar configuración');
-  const scan = el('button', { class: 'btn', type: 'button' }, 'Escanear carpetas y buscar en TMDB');
+  const scan = el('button', { class: 'btn', type: 'button' }, 'Escanear carpetas de Drive y buscar en TMDB');
   const busy = (on) => { save.disabled = scan.disabled = on; };
+  let settings = {}, current = { sections: {} };
+  const tmdbKey = () => { if (!settings.tmdb) throw new Error('Añade la clave de TMDB en la configuración.'); return settings.tmdb; };
+  const store = async (sections) => {
+    current = { ...current, sections };
+    await publish(libraryParts(sections));
+  };
+  const replaceItem = (id, change) => Object.fromEntries(Object.entries(current.sections).map(([section, items]) => [section, items.map((item) => item.id === id ? change(item) : item)]));
 
-  const drawList = async (fresh = false) => {
-    try {
-      const library = await fetchLibrary({ fresh });
-      list.replaceChildren(...LIBRARY_SECTIONS.flatMap((section) => {
-        const items = library.sections[section.key] || [];
-        return [el('h3', {}, `${section.label} · ${items.length}`), ...items.map((item) => adminRow(section, item))];
-      }));
-    } catch (error) { list.replaceChildren(el('p', { class: 'error' }, error.message)); }
+  const drawList = () => {
+    list.replaceChildren(...LIBRARY_SECTIONS.flatMap((section) => {
+      const items = current.sections[section.key] || [];
+      return [el('h3', {}, `${section.label} · ${items.length}`), ...items.map((item) => adminRow(section, item))];
+    }));
   };
   const adminRow = (section, item) => {
     const found = el('div', { class: 'library-results' });
@@ -264,13 +251,16 @@ export function libraryAdmin(el, { visible, setVisible, token, field }) {
     const search = el('button', { class: 'btn small secondary', type: 'button' }, 'Buscar');
     const pick = async (id, kind) => {
       busy(true); say('Guardando…');
-      try { await libraryRequest({ action: 'match', item: item.id, id, kind }, await token()); say(`Guardado.${await publishGithub()}`); await drawList(true); }
-      catch (error) { say(error.message, true); } finally { busy(false); }
+      try {
+        const match = id ? await tmdbDetails(id, kind, tmdbKey(), seasonsOf(item)) : null;
+        await store(replaceItem(item.id, (old) => applyMatch(old, match)));
+        say('Guardado y publicado.'); drawList();
+      } catch (error) { say(error.message, true); } finally { busy(false); }
     };
     search.addEventListener('click', async () => {
       search.disabled = true; found.replaceChildren(el('p', { class: 'note' }, 'Buscando…'));
       try {
-        const { results } = await libraryRequest({ action: 'search', query: query.value, kind: section.key === 'series' ? 'tv' : 'movie' }, await token());
+        const results = await searchTmdb(query.value.trim(), null, section.key === 'series' ? 'tv' : 'movie', tmdbKey());
         found.replaceChildren(...results.map((r) => el('button', { class: 'library-result', type: 'button', onclick: () => pick(r.id, r.kind) },
           r.poster ? el('img', { src: r.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
           el('span', {}, el('b', {}, `${r.title}${r.year ? ` (${r.year})` : ''}`), el('small', {}, r.kind === 'tv' ? 'Serie' : 'Película'), r.overview ? el('small', {}, r.overview) : null))),
@@ -288,47 +278,74 @@ export function libraryAdmin(el, { visible, setVisible, token, field }) {
 
   (async () => {
     try {
-      const config = await libraryRequest({ action: 'status' }, await token());
-      key.placeholder = config.configured ? 'Clave guardada (escribe otra para cambiarla)' : key.placeholder;
-      for (const s of LIBRARY_SECTIONS) folders[s.key].value = config.folders?.[s.key] || '';
-      if (config.ownDriveKey) driveKey.placeholder = 'Clave de Google propia guardada (escribe otra para cambiarla)';
-    } catch (error) { say(error.message, true); }
+      settings = await readSettings();
+      if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      if (settings.driveKey) googleKey.placeholder = 'Clave de Google propia guardada (escribe otra para cambiarla)';
+      for (const s of LIBRARY_SECTIONS) folders[s.key].value = settings.folders?.[s.key] || '';
+      current = await fetchLibrary({ fresh: true });
+      drawList();
+    } catch (error) { say(error.message, true); list.replaceChildren(); }
   })();
   save.addEventListener('click', async () => {
     busy(true); say('Guardando…');
     try {
-      const body = { action: 'configure', tmdb: key.value.trim(), folders: Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, folders[s.key].value.trim()])) };
-      if (driveKey.value.trim()) body.driveKey = driveKey.value.trim();
-      const config = await libraryRequest(body, await token());
-      key.value = ''; key.placeholder = config.configured ? 'Clave guardada (escribe otra para cambiarla)' : key.placeholder;
-      driveKey.value = ''; if (config.ownDriveKey) driveKey.placeholder = 'Clave de Google propia guardada (escribe otra para cambiarla)';
-      say('Configuración guardada en el hosting.');
+      const next = { ...settings, folders: {} };
+      for (const s of LIBRARY_SECTIONS) {
+        const value = folders[s.key].value.trim();
+        if (value && !driveFolderId(value)) throw new Error(`El enlace de ${s.label.toLowerCase()} no es de una carpeta de Google Drive.`);
+        next.folders[s.key] = value;
+      }
+      if (key.value.trim()) { await checkTmdbKey(key.value.trim()); next.tmdb = key.value.trim(); }
+      if (googleKey.value.trim()) {
+        if (!/^AIza[A-Za-z0-9_-]{35}$/.test(googleKey.value.trim())) throw new Error('La clave de Google empieza por AIza y tiene 39 caracteres.');
+        next.driveKey = googleKey.value.trim();
+      }
+      await saveSettings(next);
+      settings = next; key.value = ''; googleKey.value = '';
+      if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      say('Configuración guardada (privada, solo para el administrador).');
     } catch (error) { say(error.message, true); } finally { busy(false); }
   });
   scan.addEventListener('click', async () => {
     busy(true);
     try {
-      say('Escaneando carpetas…');
-      const { counts } = await libraryRequest({ action: 'scan' }, await token());
-      say(`Encontrados: ${LIBRARY_SECTIONS.map((s) => `${counts[s.key] || 0} ${s.label.toLowerCase()}`).join(', ')}. Buscando en TMDB…`);
-      // TMDB is asked a few titles at a time so the hosting never hits its time limit.
-      for (let round = 0; round < 500; round++) {
-        const { pending } = await libraryRequest({ action: 'match-next' }, await token());
-        if (!pending) break;
-        say(`Buscando en TMDB… quedan ${pending}.`);
+      tmdbKey();
+      const drive = settings.driveKey || defaultDriveKey;
+      const scanned = {};
+      for (const s of LIBRARY_SECTIONS) {
+        const folder = driveFolderId(settings.folders?.[s.key]);
+        if (!folder) { scanned[s.key] = []; continue; }
+        say(`Leyendo la carpeta de ${s.label.toLowerCase()} en Google Drive…`);
+        scanned[s.key] = await sectionItems(s.key, folder, await driveVideos(folder, drive));
       }
-      say(`Biblioteca actualizada.${await publishGithub()} Revisa abajo los títulos «Sin reconocer» y búscalos a mano.`);
-      await drawList(true);
+      let sections = mergeScan(scanned, current);
+      await store(sections);
+      const todo = Object.values(sections).flat().filter((item) => item.status === 'pending' || item.status === 'refresh');
+      say(`Encontrados: ${LIBRARY_SECTIONS.map((s) => `${sections[s.key].length} ${s.label.toLowerCase()}`).join(', ')}. Buscando ${todo.length} en TMDB…`);
+      for (const [n, item] of todo.entries()) {
+        let match = null;
+        if (item.status === 'refresh' && item.tmdb?.id) match = await tmdbDetails(item.tmdb.id, 'tv', tmdbKey(), seasonsOf(item));
+        else {
+          const kind = item.kind === 'tv' ? 'tv' : 'movie';
+          const best = (await searchTmdb(item.title, item.year, kind, tmdbKey()))[0];
+          if (best && confident(item.title, best.title)) match = await tmdbDetails(best.id, best.kind, tmdbKey(), seasonsOf(item));
+        }
+        current = { ...current, sections: replaceItem(item.id, (old) => applyMatch(old, match)) };
+        say(`Buscando en TMDB… ${n + 1} de ${todo.length}.`);
+        if ((n + 1) % 25 === 0) await store(current.sections); // Progress is kept if the page is closed.
+      }
+      await store(current.sections);
+      say('Biblioteca publicada. Revisa abajo los títulos «Sin reconocer» y búscalos a mano.');
+      drawList();
     } catch (error) { say(error.message, true); } finally { busy(false); }
   });
-  drawList(true);
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB y carpetas'),
-      el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda solo en el hosting, fuera de public_html.'),
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB y carpetas de Google Drive'),
+      el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
       field('Clave de TMDB', key),
-      el('p', { class: 'note' }, 'Carpetas de Google Drive: en Drive, botón derecho sobre cada carpeta → Compartir → «Cualquier persona con el enlace» (lector) → Copiar enlace, y pégalo aquí. Dentro se usa el mismo sistema: en Series una subcarpeta por serie (y si quieres «Temporada N» dentro). También vale una ruta del hosting.'),
+      el('p', { class: 'note' }, 'Carpetas de Google Drive: en Drive, botón derecho sobre cada carpeta → Compartir → Acceso general «Cualquier persona con el enlace» (Lector) → Copiar enlace, y pégalo aquí. Dentro, el mismo sistema: en Series una subcarpeta por serie (y si quieres «Temporada N» dentro).'),
       ...LIBRARY_SECTIONS.map((s) => field(`Carpeta de ${s.label.toLowerCase()}`, folders[s.key])),
-      field('Clave de Google para Drive (opcional)', driveKey, 'Si se deja vacía se usa la del proyecto de Firebase; en ese proyecto hay que activar «Google Drive API» en Google Cloud.'), save),
+      field('Clave de Google para Drive (opcional)', googleKey, 'Vacía: se usa la del proyecto de Firebase, que necesita «Google Drive API» activada en Google Cloud.'), el('div', { class: 'actions' }, save)),
     el('div', { class: 'actions' }, scan), status, list];
 }

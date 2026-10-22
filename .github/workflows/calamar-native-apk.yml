@@ -27,7 +27,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq php-cli ffmpeg
           php -l hosting/calamar-match.php
-          php -l hosting/calamar-library.php
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
           php -l hosting/calamar-video.php
@@ -36,7 +35,6 @@ jobs:
           python -m unittest discover -s tools -p 'test_match_resolver.py' -v
           python -m unittest discover -s tools -p 'test_cast_bridge.py' -v
           python -m unittest discover -s tools -p 'test_video_bridge.py' -v
-          python -m unittest discover -s tools -p 'test_library.py' -v
       - name: Compilar release y debug con validación
         run: |
           gradle --no-daemon :app:assembleRelease :app:assembleDebug :app:lintDebug :app:testDebugUnitTest || {
@@ -122,7 +120,6 @@ jobs:
           (cd dist && zip "Calamar-TV-$version-compilada.zip" *.apk)
           (cd hosting && zip ../dist/Calamar-Chromecast-hosting.zip calamar-cast.php calamar-cast-install.php calamar-http-source.php calamar-tv-relay.php calamar-video.php README-Chromecast.txt)
           (cd hosting && zip ../dist/Calamar-Marcadores-hosting.zip calamar-match.php calamar-http-source.php README-Marcadores.txt)
-          (cd hosting && zip ../dist/Calamar-Peliculas-Series-hosting.zip calamar-library.php calamar-images.php README-Peliculas-Series.txt)
           gh release upload "v$version" dist/*.apk dist/*.zip --clobber
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'

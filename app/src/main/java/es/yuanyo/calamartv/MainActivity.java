@@ -1093,7 +1093,7 @@ public class MainActivity extends Activity {
     }
   }
 
-  // ---- Films, series and documentaries (calamar-library.php on the hosting) -------------------
+  // ---- Films, series and documentaries (Google Drive videos, published to Firestore) ----------
 
   Library.Data library;
   String genre = "", genreSection = "";

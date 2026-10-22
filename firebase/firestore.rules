@@ -57,6 +57,28 @@ service cloud.firestore {
       allow update: if oneVisit(day, resource.data);
       allow delete: if false;
     }
+    // Films, series and documentaries (Google Drive videos with TMDB data), published by the admin web
+    // page in parts of up to 900 KB: «index» names the parts of each section («movies-0», «series-1»…).
+    function validLibraryPart(part) {
+      let p = request.resource.data;
+      return part.matches('^(index|[a-z]{3,20}-[0-9]{1,3})$')
+        && p.keys().hasAll(['json', 'updatedAt'])
+        && p.keys().hasOnly(['json', 'updatedAt'])
+        && p.json is string
+        && p.json.size() <= 900000
+        && p.updatedAt == request.time;
+    }
+    match /calamarLibrary/{part} {
+      allow get: if true;
+      allow create, update: if administrator() && validLibraryPart(part);
+      allow delete: if administrator();
+      allow list: if false;
+    }
+    // The administrator's library settings: TMDB key and Google Drive folders. Never public.
+    match /calamarPrivate/library {
+      allow get, create, update: if administrator();
+      allow delete, list: if false;
+    }
     match /{document=**} {
       allow read, write: if false;
     }

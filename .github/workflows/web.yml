@@ -27,7 +27,6 @@ jobs:
       - name: Comprobar instalador de Chromecast
         run: |
           php -l hosting/calamar-images.php
-          php -l hosting/calamar-library.php
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
@@ -37,7 +36,7 @@ jobs:
       - name: Probar el lector de TDTChannels
         run: python -m unittest discover -s tools -p 'test_*.py'
       - name: Probar los enlaces de los canales
-        run: node --test tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/video_bridge.test.mjs tools/github_images.test.mjs tools/library.test.mjs tools/match_center.test.mjs
+        run: node --test tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/video_bridge.test.mjs tools/github_images.test.mjs tools/library.test.mjs tools/match_center.test.mjs tools/library_drive.test.mjs
       - name: Actualizar canales TDT
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
         run: |
@@ -56,7 +55,6 @@ jobs:
           cp -r data _site/data
           mkdir -p _site/downloads
           (cd hosting && zip ../_site/downloads/Calamar-Imagenes-GitHub.zip calamar-images.php README-Imagenes-GitHub.txt)
-          (cd hosting && zip ../_site/downloads/Calamar-Peliculas-Series.zip calamar-library.php calamar-images.php README-Peliculas-Series.txt)
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event with its cover and name, so shared links show them in WhatsApp.
