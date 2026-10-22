@@ -7,7 +7,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton } from './library.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
@@ -681,7 +681,7 @@ function rememberPosition(force = false) {
 }
 video.addEventListener('timeupdate', () => rememberPosition());
 video.addEventListener('pause', () => rememberPosition(true));
-video.addEventListener('ended', () => {
+function playNext() {
   if (!current?.vod) return;
   saveProgress(removeProgress(loadProgress(), current.progress?.key));
   const following = current.next?.();
@@ -690,7 +690,32 @@ video.addEventListener('ended', () => {
   history.replaceState(null, '', following.path);
   open(following, true);
   playerStatus.textContent = `Siguiente: ${following.name}`;
-});
+}
+video.addEventListener('ended', playNext);
+
+// «Saltar intro» while the intro set for the series plays; «Siguiente capítulo» with a 10-second count
+// during the credits (✕ keeps watching them; the next one still starts when the episode ends).
+const skipIntro = document.getElementById('player-skip-intro'), nextButton = document.getElementById('player-next'),
+  nextDismiss = document.getElementById('player-next-dismiss');
+const NEXT_COUNT = 10;
+let nextCount = null, nextDismissed = null;
+function paintSkip() {
+  const shown = current?.vod ? skipButton(current.skip, video.currentTime, video.duration, current.hasNext) : null;
+  skipIntro.hidden = shown !== 'intro';
+  const next = shown === 'next' && nextDismissed !== current;
+  nextButton.hidden = nextDismiss.hidden = !next;
+  if (!next) { nextCount = null; return; }
+  if (nextCount === null) nextCount = { left: NEXT_COUNT, at: Date.now() };
+  const left = Math.max(0, NEXT_COUNT - Math.floor((Date.now() - nextCount.at) / 1000));
+  nextButton.textContent = `Siguiente capítulo · ${left}`;
+  if (left === 0 && !video.paused) { nextCount = null; playNext(); }
+}
+video.addEventListener('timeupdate', paintSkip);
+video.addEventListener('emptied', paintSkip);
+video.addEventListener('pause', () => { nextCount = null; }); // The count starts again when it plays on.
+skipIntro.addEventListener('click', () => { if (current?.skip?.intro) video.currentTime = current.skip.intro[1]; paintSkip(); });
+nextButton.addEventListener('click', () => { nextCount = null; playNext(); });
+nextDismiss.addEventListener('click', () => { nextDismissed = current; paintSkip(); });
 /** Opens a «Continuar viendo» card in the player, where it was left. */
 async function resumeEntry(entry) {
   const section = sectionByPage(entry.page);

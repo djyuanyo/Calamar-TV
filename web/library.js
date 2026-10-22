@@ -55,6 +55,38 @@ export function nextEpisode(item, episode) {
   return i >= 0 ? list[i + 1] || null : null;
 }
 
+// ---- Saltar intro y siguiente capítulo --------------------------------------------------------------
+// Set once per series in the admin page (and per season when one differs): item.skip =
+// { intro: [start, end], credits: seconds, seasons: { "2": { intro, credits } } }, all in seconds.
+export const CREDITS_DEFAULT = 30;
+/** The intro [start, end] (or null) and the credits' length of an episode: its season's, else the series'. */
+export function skipMarks(item, episode) {
+  const skip = item?.skip || {}, season = skip.seasons?.[episode?.season] || {};
+  const intro = season.intro || skip.intro;
+  const credits = Number(season.credits ?? skip.credits);
+  return { intro: Array.isArray(intro) && intro[1] > intro[0] && intro[0] >= 0 ? intro : null, credits: credits > 0 ? credits : CREDITS_DEFAULT };
+}
+/** Which button the player shows at second t: «Saltar intro», «Siguiente capítulo» or none. */
+export function skipButton(marks, t, duration, hasNext) {
+  if (!marks || !Number.isFinite(t)) return null;
+  if (marks.intro && t >= marks.intro[0] && t < marks.intro[1] - 1) return 'intro';
+  if (hasNext && Number.isFinite(duration) && duration > marks.credits * 2 && duration - t <= marks.credits && duration - t > 0.5) return 'next';
+  return null;
+}
+/** «1:45» → 105, «1:02:03» → 3723, «90» → 90, empty → null; anything else → NaN. */
+export function parseClock(text) {
+  const s = String(text ?? '').trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return Number(s);
+  const m = s.match(/^(?:(\d+):)?(\d{1,2}):([0-5]\d)$/);
+  return m ? Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN;
+}
+/** 105 → «1:45», 3723 → «1:02:03». */
+export function formatClock(seconds) {
+  const s = Math.max(0, Math.round(seconds)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, r = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
+}
+
 /** What the player needs to play a film or an episode (the same player as the channels). */
 export function playable(section, item, episode = null) {
   const target = episode || item, info = item.tmdb || {};
@@ -65,6 +97,7 @@ export function playable(section, item, episode = null) {
     progress: { key: target.id, page: section.page, item: item.id, episode: episode?.id || '',
       name: itemTitle(item), sub: episode ? `${seasonLabel(episode)} · ${episodeTitle(episode)}` : String(itemYear(item) || section.label),
       image: episode?.still || info.backdrop || info.poster || '' },
+    skip: episode ? skipMarks(item, episode) : null, hasNext: !!(episode && nextEpisode(item, episode)),
     next: episode ? () => { const n = nextEpisode(item, episode); return n ? playable(section, item, n) : null; } : null };
 }
 
@@ -351,8 +384,54 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
           [...seasonPick.options].find((o) => Number(o.value) === season).textContent = `${seasons.find((s) => s.season === season)?.name || `Temporada ${season}`} · ${count} con enlace ✓`;
         } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
       } }, 'Guardar temporada');
+      // «Saltar intro» and «Siguiente capítulo»: times for the whole series, or for one season that differs.
+      const introFrom = el('input', { type: 'text', inputmode: 'numeric', placeholder: '0:30', 'aria-label': 'La intro empieza en', class: 'library-clock' });
+      const introTo = el('input', { type: 'text', inputmode: 'numeric', placeholder: '1:45', 'aria-label': 'La intro acaba en', class: 'library-clock' });
+      const credits = el('input', { type: 'text', inputmode: 'numeric', placeholder: `0:${String(CREDITS_DEFAULT).padStart(2, '0')}`, 'aria-label': 'Duración de los créditos', class: 'library-clock' });
+      const scope = el('select', { 'aria-label': 'Tiempos para' });
+      const skipNote = el('p', { class: 'note', role: 'status' });
+      const savedSkip = () => Object.values(current.sections).flat().find((item) => item.id === id)?.skip || {};
+      const fillSkip = () => {
+        const season = Number(seasonPick.value), own = savedSkip().seasons?.[season];
+        scope.replaceChildren(el('option', { value: 'all' }, 'Toda la serie'), el('option', { value: 'season', selected: !!own }, `Solo la temporada ${season}`));
+        const times = own || savedSkip();
+        introFrom.value = times.intro ? formatClock(times.intro[0]) : '';
+        introTo.value = times.intro ? formatClock(times.intro[1]) : '';
+        credits.value = times.credits ? formatClock(times.credits) : '';
+      };
+      seasonPick.addEventListener('change', fillSkip);
+      const saveSkip = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+        try {
+          const before = Object.values(current.sections).flat().find((item) => item.id === id);
+          if (!before) throw new Error('Guarda primero los enlaces de una temporada.');
+          const [from, to, end] = [introFrom, introTo, credits].map((input) => parseClock(input.value));
+          if ([from, to, end].some(Number.isNaN)) throw new Error('Escribe los tiempos como 1:45 (minutos:segundos) o 1:02:03.');
+          if ((from === null) !== (to === null)) throw new Error('Pon dónde empieza y dónde acaba la intro, o deja los dos vacíos.');
+          if (from !== null && to <= from) throw new Error('La intro tiene que acabar después de empezar.');
+          const times = { ...(from !== null ? { intro: [from, to] } : {}), ...(end ? { credits: end } : {}) };
+          const skip = { ...(before.skip || {}) };
+          if (scope.value === 'season') {
+            const seasons = { ...(skip.seasons || {}) };
+            if (Object.keys(times).length) seasons[seasonPick.value] = times; else delete seasons[seasonPick.value];
+            skip.seasons = seasons;
+            if (!Object.keys(seasons).length) delete skip.seasons;
+          } else {
+            delete skip.intro; delete skip.credits;
+            Object.assign(skip, times);
+          }
+          saveSkip.disabled = true; skipNote.textContent = 'Guardando…';
+          await upsert(sectionOf(id) || where.value, { ...before, skip });
+          skipNote.textContent = `Guardado para ${scope.value === 'season' ? `la temporada ${seasonPick.value}` : 'toda la serie'}: ${times.intro ? `intro de ${formatClock(times.intro[0])} a ${formatClock(times.intro[1])}` : 'sin intro'}, «Siguiente capítulo» en los últimos ${formatClock(times.credits || CREDITS_DEFAULT)}.`;
+        } catch (error) { skipNote.textContent = error.message; } finally { saveSkip.disabled = false; }
+      } }, 'Guardar tiempos');
+      const skipBox = el('details', { class: 'library-skip', open: !!(existing?.skip) },
+        el('summary', {}, 'Saltar intro y siguiente capítulo'),
+        el('p', { class: 'note' }, `Mientras el capítulo esté entre esos dos tiempos sale «Saltar intro». «Siguiente capítulo» sale durante los créditos (por defecto los últimos ${CREDITS_DEFAULT} segundos). Si una temporada es distinta, elige «Solo la temporada».`),
+        el('div', { class: 'library-skip-row' }, field('Intro desde', introFrom), field('hasta', introTo), field('Créditos (duración)', credits)),
+        el('div', { class: 'actions' }, scope, saveSkip), skipNote);
+      fillSkip();
       editor.replaceChildren(head, field('Temporada', seasonPick, 'Elige la temporada que quieres subir y pega el enlace de cada capítulo. Los capítulos sin enlace no se muestran.'),
-        rows, el('div', { class: 'actions' }, save, del, close), note);
+        rows, el('div', { class: 'actions' }, save, del, close), note, skipBox);
       await loadSeason();
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
   }

@@ -63,7 +63,8 @@ export function seriesWithSeason(existing, info, season, episodes, links) {
   const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => ({
     id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, file: '', url: String(links[e.episode]).trim() }));
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
-  return { id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: info.title, status: 'matched', tmdb: info, episodes: all };
+  // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
+  return { ...(existing || {}), id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };
 }
 
 /** The library in Firestore parts of up to ~850 KB: { index, parts: { 'movies-0': {...} } }. */

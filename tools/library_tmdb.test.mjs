@@ -65,3 +65,27 @@ test('the library is split in Firestore parts below the size limit', () => {
   assert.equal(index.sections.series, 1);
   for (const part of Object.values(parts)) assert.ok(new TextEncoder().encode(JSON.stringify(part)).length <= 850000);
 });
+
+test('skip intro and next episode: times per series or season, and when each button shows', async () => {
+  const { skipMarks, skipButton, parseClock, formatClock } = await import('../web/library.js');
+  const item = { skip: { intro: [30, 105], credits: 45, seasons: { 2: { intro: [10, 70] } } } };
+  assert.deepEqual(skipMarks(item, { season: 1 }), { intro: [30, 105], credits: 45 });
+  assert.deepEqual(skipMarks(item, { season: 2 }), { intro: [10, 70], credits: 45 });
+  assert.deepEqual(skipMarks({}, { season: 1 }), { intro: null, credits: 30 });
+  const marks = skipMarks(item, { season: 1 });
+  assert.equal(skipButton(marks, 29, 2400, true), null);
+  assert.equal(skipButton(marks, 30, 2400, true), 'intro');
+  assert.equal(skipButton(marks, 104.5, 2400, true), null, 'not in the last second of the intro');
+  assert.equal(skipButton(marks, 2356, 2400, true), 'next');
+  assert.equal(skipButton(marks, 2356, 2400, false), null, 'no next episode after the last one');
+  assert.equal(skipButton(marks, 2356, NaN, true), null);
+  assert.equal(skipButton(null, 50, 2400, true), null);
+  assert.deepEqual(['1:45', '1:02:03', '90', '', '1:75', 'abc'].map(parseClock), [105, 3723, 90, null, NaN, NaN]);
+  assert.deepEqual([105, 3723, 0, 59.6].map(formatClock), ['1:45', '1:02:03', '0:00', '1:00']);
+});
+
+test('saving a season keeps the series folder and its intro times', () => {
+  const before = { id: 's4500', folder: 'Los Hombres de Paco', skip: { intro: [30, 90] }, episodes: [] };
+  const after = seriesWithSeason(before, { id: 4500, title: 'Los hombres de Paco', year: 2005 }, 1, [{ episode: 1, name: 'Piloto' }], { 1: 'https://lulustream.com/paco1x01aaaa' });
+  assert.deepEqual([after.folder, after.skip, after.episodes.length], ['Los Hombres de Paco', { intro: [30, 90] }, 1]);
+});
