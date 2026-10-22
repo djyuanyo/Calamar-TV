@@ -96,15 +96,19 @@ export function parseMatchCenter(data) {
   // Now ESPN sends the last meetings, in any competition, as seasonseries (also before the match starts).
   for (const series of data.seasonseries || []) {
     for (const g of series.events || []) {
-      if (meetings.has(g.id) || g.statusType?.completed === false || g.status === 'pre') continue;
+      // This very match is not one of its own meetings; the ones still to play come first, as «Próximo».
+      if (meetings.has(g.id) || String(g.id) === String(result.id)) continue;
       const side = (where) => (g.competitors || []).find((c) => c.homeAway === where) || {};
       const h = side('home'), a = side('away');
       if (!h.team || !a.team) continue;
-      meetings.set(g.id, { date: g.date || '', competition: [g.competitionName, g.roundName].filter(Boolean).join(' · '),
-        home: h.team.displayName || '', away: a.team.displayName || '', score: h.score != null && a.score != null && h.score !== '' ? `${h.score} – ${a.score}` : '' });
+      const upcoming = g.status === 'pre' || g.statusType?.state === 'pre';
+      meetings.set(g.id, { date: g.date || '', competition: [g.competitionName, g.roundName].filter(Boolean).join(' · '), upcoming, dateKnown: g.timeValid !== false,
+        home: h.team.displayName || '', away: a.team.displayName || '', score: !upcoming && h.score != null && a.score != null && h.score !== '' ? `${h.score} – ${a.score}` : '' });
     }
   }
-  const h2h = [...meetings.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 10);
+  const played = [...meetings.values()].filter((g) => !g.upcoming).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+  const next = [...meetings.values()].filter((g) => g.upcoming).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  const h2h = [...next, ...played].slice(0, 10);
   const info = data.gameInfo || {};
   const venue = info.venue || competition.venue || {};
   const referee = (info.officials || []).find((o) => /referee|árbitro/i.test(o.position?.displayName || o.position?.name || '')) || info.officials?.[0];
@@ -173,7 +177,8 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty(m.state === 'scheduled' ? 'Las alineaciones se publican poco antes del partido.' : 'No hay alineaciones de este partido.')];
   } else if (tab === 'h2h') {
     body = m.h2h.length ? el('ol', { class: 'mc-h2h' }, m.h2h.map((g) => el('li', {},
-      el('span', { class: 'mc-h2h-date' }, g.date ? madrid(g.date, { day: 'numeric', month: 'short', year: 'numeric' }) : '', g.competition ? el('small', {}, g.competition) : null),
+      el('span', { class: 'mc-h2h-date' }, g.upcoming ? el('b', { class: 'mc-next' }, 'Próximo') : null,
+        g.upcoming && (!g.dateKnown || !g.date) ? 'Fecha por definir' : g.date ? madrid(g.date, { day: 'numeric', month: 'short', year: 'numeric' }) : '', g.competition ? el('small', {}, g.competition) : null),
       el('span', { class: 'mc-h2h-game' }, el('span', {}, g.home), el('b', {}, g.score || 'vs'), el('span', {}, g.away)))))
       : [noLink, empty('No hay enfrentamientos anteriores registrados.')];
   } else {

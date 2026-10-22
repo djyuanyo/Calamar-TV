@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMatchCenter } from '../web/match-center.js';
+import { parseMatchCenter, renderMatchCenter } from '../web/match-center.js';
 
 const summary = {
   header: { id: '1', league: { name: 'UEFA Champions League' }, competitions: [{ id: '1', date: '2026-10-21T19:00Z',
@@ -70,12 +70,20 @@ test('before kick-off: last meetings (seasonseries) and last results (lastFiveGa
       meeting('748484', '2026-05-10T19:00:00Z', bar, '2', rma, '0', '2025-26 LALIGA'),
       meeting('900001', '2026-01-11T19:00:00Z', bar, '3', rma, '2', '2026 Supercopa de España', { roundName: 'Final' }),
       meeting('700500', '2025-10-26T15:15:00Z', rma, '2', bar, '1', '2025-26 LALIGA'),
-      { id: '999', date: '2027-05-09T19:00:00Z', status: 'pre', statusType: { completed: false }, competitors: [{ homeAway: 'home', team: rma }, { homeAway: 'away', team: bar }] }] }],
+      { id: '999', date: '2027-05-09T19:00:00Z', status: 'pre', timeValid: false, statusType: { completed: false, state: 'pre' }, competitionName: '2026-27 LALIGA', competitors: [{ homeAway: 'home', team: rma }, { homeAway: 'away', team: bar }] },
+      { id: '401882832', date: '2026-10-25T20:00:00Z', status: 'pre', statusType: { completed: false, state: 'pre' }, competitors: [{ homeAway: 'home', team: bar }, { homeAway: 'away', team: rma }] }] }],
   });
   assert.equal(m.state, 'scheduled');
   assert.deepEqual(m.h2h.map((g) => [g.home, g.score, g.away, g.competition]), [
+    ['Real Madrid', '', 'Barcelona', '2026-27 LALIGA'],
     ['Barcelona', '2 – 0', 'Real Madrid', '2025-26 LALIGA'],
     ['Barcelona', '3 – 2', 'Real Madrid', '2026 Supercopa de España · Final'],
     ['Real Madrid', '2 – 1', 'Barcelona', '2025-26 LALIGA']]);
   assert.deepEqual([m.form.home.map((f) => f.result), m.form.away.map((f) => f.result)], [['W', 'L'], ['L']]);
+  assert.deepEqual([m.h2h[0].upcoming, m.h2h[0].dateKnown, m.h2h[1].upcoming], [true, false, false]);
+  // Drawn: «Próximo · Fecha por definir» first, then the results.
+  const el = (tag, attrs, ...kids) => ({ tag, attrs, kids: kids.flat(Infinity).filter((k) => k != null && k !== false) });
+  const text = (node) => typeof node === 'string' ? node : (node.kids || []).map(text).join(' ');
+  const parts = renderMatchCenter(el, m, 'h2h', () => {});
+  assert.match(text(parts[2]), /^Próximo Fecha por definir 2026-27 LALIGA Real Madrid vs Barcelona .*2025-26 LALIGA Barcelona 2 – 0 Real Madrid/);
 });

@@ -39,7 +39,7 @@ final class MatchCenter {
   static final class Event { String minute = "", kind = "", side = "", player = "", other = ""; }
   static final class Stat { String key = "", label = "", home = "", away = ""; double share = 0.5; }
   static final class Form { String result = "", score = "", opponent = ""; }
-  static final class Meeting { String date = "", competition = "", home = "", away = "", score = ""; }
+  static final class Meeting { String date = "", competition = "", home = "", away = "", score = ""; boolean upcoming, dateKnown = true; }
   static final class Player { String number = "", name = "", position = ""; boolean in, out; }
   static final class Lineup { String side = "", formation = ""; Team team; final List<Player> starters = new ArrayList<>(), subs = new ArrayList<>(); }
   static final class Model {
@@ -223,9 +223,10 @@ final class MatchCenter {
       JSONArray games = block == null ? null : block.optJSONArray("events");
       if (games != null) for (int j = 0; j < games.length(); j++) {
         JSONObject g = games.optJSONObject(j);
-        if (g == null || !seen.add(g.optString("id")) || "pre".equals(g.optString("status"))) continue;
+        // This very match is not one of its own meetings; the ones still to play come first, as «Próximo».
+        if (g == null || !seen.add(g.optString("id")) || g.optString("id").equals(header.optString("id"))) continue;
         JSONObject type = g.optJSONObject("statusType");
-        if (type != null && type.has("completed") && !type.optBoolean("completed")) continue;
+        boolean upcoming = "pre".equals(g.optString("status")) || (type != null && "pre".equals(type.optString("state")));
         JSONObject home = null, away = null;
         JSONArray sides = g.optJSONArray("competitors");
         if (sides != null) for (int k = 0; k < sides.length(); k++) {
@@ -240,11 +241,16 @@ final class MatchCenter {
         mt.competition = g.optString("competitionName") + (round.isEmpty() ? "" : " · " + round);
         mt.home = home.optJSONObject("team").optString("displayName");
         mt.away = away.optJSONObject("team").optString("displayName");
-        mt.score = home.optString("score").isEmpty() || away.optString("score").isEmpty() ? "" : home.optString("score") + " – " + away.optString("score");
+        mt.upcoming = upcoming;
+        mt.dateKnown = g.optBoolean("timeValid", true);
+        mt.score = upcoming || home.optString("score").isEmpty() || away.optString("score").isEmpty() ? "" : home.optString("score") + " – " + away.optString("score");
         m.h2h.add(mt);
       }
     }
-    Collections.sort(m.h2h, (a, b) -> Long.compare(SportsCatalog.instant(MatchScores.iso(b.date)), SportsCatalog.instant(MatchScores.iso(a.date))));
+    // Still to play first (soonest first), then the results (latest first).
+    Collections.sort(m.h2h, (a, b) -> a.upcoming != b.upcoming ? (a.upcoming ? -1 : 1)
+        : a.upcoming ? Long.compare(SportsCatalog.instant(MatchScores.iso(a.date)), SportsCatalog.instant(MatchScores.iso(b.date)))
+        : Long.compare(SportsCatalog.instant(MatchScores.iso(b.date)), SportsCatalog.instant(MatchScores.iso(a.date))));
     while (m.h2h.size() > 10) m.h2h.remove(m.h2h.size() - 1);
     JSONObject league = header.optJSONObject("league");
     m.league = league == null ? "" : league.optString("name", league.optString("abbreviation"));
@@ -863,7 +869,11 @@ final class MatchCenter {
     for (Meeting g : m.h2h) {
       LinearLayout box = card();
       LinearLayout top = new LinearLayout(context);
-      top.addView(text(when(g.date, "d MMM yyyy"), 12, Ui.MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
+      if (g.upcoming) {
+        TextView next = text("Próximo  ", 12, Ui.ACC, true);
+        top.addView(next);
+      }
+      top.addView(text(g.upcoming && (!g.dateKnown || g.date.isEmpty()) ? "Fecha por definir" : when(g.date, "d MMM yyyy"), 12, Ui.MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
       top.addView(text(g.competition, 12, Ui.MUTED, false));
       box.addView(top);
       LinearLayout game = new LinearLayout(context);
