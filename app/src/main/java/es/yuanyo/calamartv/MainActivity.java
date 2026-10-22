@@ -249,9 +249,9 @@ public class MainActivity extends Activity {
     });
 
     LinearLayout nav = row();
-    if (Library.section(mode) != null && !Library.visible(custom)) mode = "Inicio";
+    if (Library.section(mode) != null && !libraryShown(custom)) mode = "Inicio";
     List<String> menu = new ArrayList<>(Arrays.asList("Inicio", "Canales"));
-    if (Library.visible(custom)) for (String[] section : Library.SECTIONS) menu.add(section[1]);
+    if (libraryShown(custom)) for (String[] section : Library.SECTIONS) menu.add(section[1]);
     menu.add("Favoritos");
     for (final String m : menu) {
       nav.addView(
@@ -401,7 +401,7 @@ public class MainActivity extends Activity {
       List<Catalog.Channel> events = Catalog.events(channels, custom);
       if (!featured.isEmpty()) hero(featured);
       // Films and episodes left half watched come right under the featured slider.
-      if (Library.visible(custom)) continueRow();
+      if (libraryShown(custom)) continueRow();
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
@@ -936,6 +936,9 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
+    // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
+    boolean admin = libraryAdmin();
+    if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }
     resumed = true; handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
@@ -952,7 +955,7 @@ public class MainActivity extends Activity {
                   try {
                     JSONObject next = SharedCatalog.decode(snapshot);
                     if (sharedAvailable && next.toString().equals(custom.toString())) return;
-                    boolean menuChanged = Library.visible(next) != Library.visible(custom);
+                    boolean menuChanged = libraryShown(next) != libraryShown(custom);
                     custom = next;
                     sharedAvailable = true;
                     SharedCatalog.cache(this, custom);
@@ -1610,5 +1613,20 @@ public class MainActivity extends Activity {
       }
       return true;
     });
+  }
+
+  private boolean libraryAdminShown;
+
+  /** Films, series and documentaries: for everyone while switched on; always for the administrator. */
+  private boolean libraryShown(JSONObject catalog) {
+    return Library.visible(catalog) || libraryAdmin();
+  }
+
+  private boolean libraryAdmin() {
+    try {
+      return SharedCatalog.administrator(SharedCatalog.auth(this).getCurrentUser());
+    } catch (RuntimeException unavailable) {
+      return false;
+    }
   }
 }

@@ -292,7 +292,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const toggle = el('input', { type: 'checkbox', checked: visible });
   toggle.addEventListener('change', async () => {
     toggle.disabled = true;
-    try { await setVisible(toggle.checked); say(toggle.checked ? 'Publicado: Películas, Series y Documentales aparecen en el menú.' : 'Oculto: el menú ya no los muestra.'); }
+    try { await setVisible(toggle.checked); say(toggle.checked ? 'Publicado: Películas, Series y Documentales aparecen en el menú para todos.' : 'Oculto para los usuarios: solo tú, como administrador, los sigues viendo.'); }
     catch (error) { toggle.checked = !toggle.checked; say(error.message, true); }
     finally { toggle.disabled = false; }
   });
