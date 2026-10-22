@@ -61,7 +61,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private MatchCenter matchCenter;
   /** The event's own data, shown until (or instead of) ESPN's. */
   private MatchCenter.Model eventModel;
-  private TextView status, livePill, viewersBadge;
+  private TextView status, viewersBadge;
   private AudienceSession audience;
   private final Runnable audiencePlayback=new Runnable(){public void run(){
     if(!matchActive||audience==null)return;
@@ -169,9 +169,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
     heading.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 10), 0);
     top.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-    livePill = Ui.livePill(this, "EN DIRECTO", 11);
-    livePill.setVisibility(View.GONE);
-    top.addView(livePill);
     FrameLayout header = new FrameLayout(this);
     header.addView(top, new FrameLayout.LayoutParams(-1, -2));
     panel.addView(header);
@@ -222,17 +219,33 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
-    scroll.setFillViewport(true);
     scroll.addView(controls);
-    FrameLayout.LayoutParams actions = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP | Gravity.RIGHT);
-    actions.topMargin = Ui.dp(this, 30);
+    FrameLayout.LayoutParams actions = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.RIGHT);
     actions.leftMargin = Ui.dp(this, 54);
     header.addView(scroll, actions);
+    // The buttons sit on the right of the title when there is room for both, otherwise under it.
+    header.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+      int buttons = controls.getWidth(), gap = Ui.dp(this, 10);
+      boolean beside = header.getWidth() - buttons - Ui.dp(this, 54) >= Ui.dp(this, 160);
+      int topMargin = beside ? 0 : Ui.dp(this, 46), right = beside ? buttons + gap : gap;
+      if (actions.topMargin == topMargin && heading.getPaddingRight() == right) return;
+      header.post(() -> {
+        actions.topMargin = topMargin;
+        scroll.setLayoutParams(actions);
+        heading.setPadding(heading.getPaddingLeft(), heading.getPaddingTop(), right, heading.getPaddingBottom());
+      });
+    });
     status = new TextView(this);
     status.setTextColor(Ui.ACC);
     status.setTextSize(13);
     status.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 16), Ui.dp(this, 10));
-    panel.addView(status);
+    // Only messages are shown (loading, problems); while the video plays the line is hidden.
+    status.setVisibility(View.GONE);
+    status.addTextChangedListener(new android.text.TextWatcher() {
+      @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+      @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+      @Override public void afterTextChanged(android.text.Editable s) { status.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); }
+    });    panel.addView(status);
     root.addView(panel);
 
     stage = new FrameLayout(this);
@@ -253,7 +266,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     // information, statistics and line-ups under the video; Android TV keeps the full-screen player.
     String matchId = getIntent().getStringExtra("match_id"), info = getIntent().getStringExtra("event_info");
     boolean linked = matchId != null && !matchId.isEmpty();
-    if ((linked || info != null) && !isTelevision()) {
+    // An event without a match link opens in full screen, with no match data.
+    if (linked && !isTelevision()) {
       matchCenter = new MatchCenter(this);
       try { eventModel = MatchCenter.fromEvent(new org.json.JSONObject(info == null ? "{}" : info)); }
       catch (org.json.JSONException broken) { eventModel = MatchCenter.fromEvent(new org.json.JSONObject()); }
@@ -465,10 +479,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playSource(source);
   }
 
-  private String engineName() {
-    return transport.name();
-  }
-
   private void resolveFresh() {
     if (!active || resolving) return;
     if (directUrl != null) {
@@ -618,8 +628,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (instance != player || !active) return;
             if (state == Player.STATE_READY) {
               cancelBufferingTimeout();
-              status.setText("Reproductor nativo · " + source.label + " · " + engineName());
-              livePill.setVisibility(instance.isCurrentMediaItemLive() && progressEntry == null ? View.VISIBLE : View.GONE);
+              status.setText("");
             } else if (state == Player.STATE_BUFFERING) {
               status.setText("Cargando vídeo…");
               armBufferingTimeout(instance, source);
@@ -1036,7 +1045,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private void releasePlayer() {
     rememberPosition();
     cancelBufferingTimeout();
-    if (livePill != null) livePill.setVisibility(View.GONE);
     if (player != null) {
       playerView.setPlayer(null);
       player.release();

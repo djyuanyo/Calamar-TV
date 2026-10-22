@@ -56,7 +56,6 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     seek: $('ctl-seek'),
     time: $('ctl-time'),
     live: $('ctl-live'),
-    pill: $('player-pill'),
     quality: $('ctl-quality'),
     menu: $('ctl-menu'),
     pip: $('ctl-pip'),
@@ -134,7 +133,6 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     const live = isLive();
     root.classList.toggle('is-live', live);
     els.live.hidden = !live || onDemand();
-    els.pill.hidden = !live || onDemand();
     els.seek.hidden = live;
     els.time.hidden = live;
     if (!live) {

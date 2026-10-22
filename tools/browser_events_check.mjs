@@ -140,10 +140,9 @@ try {
   // Event links use the slug of the event name, like channels.
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
-  // Events open in the page with the match under the video; without a match link, the event's own data.
-  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), undefined);
-  await page.locator('#match-center .mc-board').waitFor();
-  assert.match(await page.locator('#match-center .mc-note').textContent(), /no tiene enlace del partido/);
+  // An event without a match link opens in full screen, with no match data.
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  assert.equal(await page.locator('#match-center').isHidden(), true);
   assert.ok(requests.includes('https://example.com/one.mp4'));
   // Sharing an event uses its preview page (cover and name in WhatsApp).
   await page.evaluate(() => { navigator.share = async data => { window.__shared = data; }; });
@@ -326,11 +325,14 @@ try {
   assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
   await page.getByRole('tab', { name: 'General' }).click();
   assert.equal(await page.locator('#player [data-match-id]').count(),0);
-  await page.evaluate(() => {document.querySelector('#player-pill').hidden=false;});
+  // No «En directo» label: the controls take its place, beside the title on wide screens.
+  assert.equal(await page.locator('#player .live-pill').count(), 0);
   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){
     await page.setViewportSize(viewport);
-    const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),pill=root.querySelector('#player-pill');return {bar:bar.getBoundingClientRect().toJSON(),pill:pill.getBoundingClientRect().toJSON(),right:root.querySelector('.player-screen').getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
-    assert.equal(pos.first,'player-viewers');assert.ok(pos.bar.top>=pos.pill.bottom);assert.ok(pos.bar.top<=40,`Controls too low: ${pos.bar.top}`);assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
+    const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),title=root.querySelector('#player-title');return {bar:bar.getBoundingClientRect().toJSON(),title:title.getBoundingClientRect().toJSON(),right:root.querySelector('.player-screen').getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
+    assert.equal(pos.first,'player-viewers');assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
+    if (viewport.width > 720) assert.ok(pos.bar.top < pos.title.bottom && pos.bar.left >= pos.title.right, `Controls not beside the title: ${JSON.stringify(pos)}`);
+    else assert.ok(pos.bar.top >= pos.title.bottom - 1 && pos.bar.top <= 70, `Controls too low: ${pos.bar.top}`);
   }
   await page.setViewportSize({width:390,height:844});
   scoreFinished = true;
@@ -366,7 +368,7 @@ try {
   await page.goto(base + '/?regression=2#/inicio');
   await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
-  assert.equal(await page.locator('#match-center').isVisible(), true);
+  assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
@@ -468,7 +470,7 @@ try {
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
   // Films are not live: no «En directo» pill or live button, whatever the stream says.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));
-  assert.equal(await page.locator('#player-pill').isHidden(), true);
+  assert.equal(await page.locator('#player .live-pill').count(), 0);
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
