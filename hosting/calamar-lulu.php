@@ -84,6 +84,9 @@ if ($debug) {
 if (!preg_match_all('/\bfile\s*:\s*(["\'])(https:\/\/[^"\']+)\1/', $scripts, $files, PREG_SET_ORDER)) answer(array('error' => 'No se encontró el vídeo en LuluStream.'), 404);
 foreach ($files as $f) {
     $path = strtolower(parse_url($f[2], PHP_URL_PATH) ?: '');
-    if (preg_match('/\.(m3u8|mp4)$/', $path)) answer(array('url' => $f[2]));
+    if (!preg_match('/\.(m3u8|mp4)$/', $path)) continue;
+    // ?code=…&probar=1 opens the video address itself, to check from a phone whether it plays there.
+    if (isset($_GET['probar'])) { header('Location: ' . $f[2], true, 302); exit; }
+    answer(array('url' => $f[2]));
 }
 answer(array('error' => 'No se encontró el vídeo en LuluStream.'), 404);
