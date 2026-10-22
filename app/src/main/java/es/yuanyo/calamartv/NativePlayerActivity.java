@@ -249,6 +249,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     root.addView(panel);
 
     stage = new FrameLayout(this);
+    stage.setBackgroundColor(Color.BLACK);
     playerView = new PlayerView(this);
     playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
     playerView.setKeepScreenOn(true);
@@ -329,6 +330,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     placePanel(on);
     root.setFitsSystemWindows(!on);
+    // The bars' padding stays on the view after it stops fitting them: clear it so the video fills the
+    // screen (leaving full screen fits the bars again and puts it back).
+    if (on) root.setPadding(0, 0, 0, 0);
     applySystemBars(on);
     if (!isTelevision()) {
       setRequestedOrientation(
@@ -374,10 +378,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     Window window = getWindow();
     if (Build.VERSION.SDK_INT >= 28) {
       WindowManager.LayoutParams attributes = window.getAttributes();
+      // In full screen the video also uses the camera notch side, as a browser does in full screen.
       attributes.layoutInDisplayCutoutMode =
-          immersive
-              ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-              : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+          !immersive
+              ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+              : Build.VERSION.SDK_INT >= 30
+                  ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                  : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
       window.setAttributes(attributes);
     }
     if (Build.VERSION.SDK_INT >= 30) {
@@ -568,7 +575,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     releasePlayer();
     DataSource.Factory http =
         (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
-            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url);
+            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
+                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null);
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");

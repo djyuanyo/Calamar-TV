@@ -1,6 +1,7 @@
 <resources>
     <style name="CalamarCastTheme" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="colorAccent">#d6ff00</item>
     </style>
 </resources>

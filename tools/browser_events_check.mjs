@@ -440,6 +440,23 @@ try {
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
   assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://lulustream.com/abc123def456');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  // Or the LuluStream folders are read: Peliculas/ and Series/<Nombre>/Temporada N/, matched in TMDB.
+  const luluFolders = { 0: { folders: [{ fld_id: 10, name: 'Películas' }, { fld_id: 20, name: 'Series' }] },
+    10: { folders: [], files: [{ file_code: 'avatarlulu12', title: 'Avatar.El.sentido.del.agua.2022.1080p.mkv' }, { file_code: 'nadanada1234', title: 'Zzzz desconocida.mp4' }] },
+    20: { folders: [{ fld_id: 21, name: 'Los hombres de Paco' }] }, 21: { folders: [{ fld_id: 22, name: 'Temporada 1' }] },
+    22: { folders: [], files: [{ file_code: 'paco1x02cccc', title: 'Los hombres de Paco 1x02.mp4' }] } };
+  await page.route('https://api.lulustream.com/api/**', route => route.fulfill({ json: { status: 200, msg: 'OK', result: luluFolders[new URL(route.request().url()).searchParams.get('fld_id')] || {} }, headers: { 'Access-Control-Allow-Origin': '*' } }));
+  await page.locator('summary', { hasText: 'Configuración' }).click();
+  await page.getByLabel('Clave de LuluStream', { exact: true }).fill('clave1234567890');
+  await page.getByRole('button', { name: 'Guardar clave de LuluStream', exact: true }).click();
+  await page.getByText(/Clave de LuluStream guardada \(privada\)\. Carpetas: Películas, Series/).waitFor();
+  await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
+  await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados/).waitFor();
+  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: no se encontró en TMDB/);
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://lulustream.com/avatarlulu12');
+  assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),
+    [[1, 1, 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'https://lulustream.com/paco1x02cccc'], [2, 1, 'https://lulustream.com/paco2x01bbbb']]);
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');

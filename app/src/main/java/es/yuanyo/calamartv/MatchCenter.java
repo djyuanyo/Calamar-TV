@@ -396,12 +396,6 @@ final class MatchCenter {
     LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
     cp.setMargins(0, dp(12), 0, 0);
     page.addView(content, cp);
-    if (m.source.equals("espn")) {
-      TextView credit = text("Datos: ESPN. Se actualizan cada 30 segundos.", 11, Ui.FAINT, false);
-      credit.setGravity(Gravity.CENTER);
-      credit.setPadding(0, dp(8), 0, 0);
-      page.addView(credit, new LinearLayout.LayoutParams(-1, -2));
-    }
     if (tabFocused) { View again = tabs.findViewWithTag(tab); if (again != null) again.requestFocus(); }
   }
 

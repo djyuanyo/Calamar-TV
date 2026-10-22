@@ -216,6 +216,5 @@ export function renderMatchCenter(el, m, tab, choose) {
     if (m.description) parts.push(el('p', { class: 'mc-description' }, m.description));
     body = parts;
   }
-  return [board, bar, el('div', { class: 'mc-panel', id: 'mc-panel', role: 'tabpanel', 'aria-labelledby': `mc-tab-${tab}` }, body),
-    m.source === 'espn' ? el('p', { class: 'mc-credit' }, 'Datos: ESPN. Se actualizan cada 30 segundos.') : null];
+  return [board, bar, el('div', { class: 'mc-panel', id: 'mc-panel', role: 'tabpanel', 'aria-labelledby': `mc-tab-${tab}` }, body)];
 }
