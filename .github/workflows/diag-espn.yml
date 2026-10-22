@@ -1,0 +1,25 @@
+name: diag espn h2h
+on:
+  push:
+    branches: [claude/diag-espn-h2h]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for id in 401882832 401915555; do
+            curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=$id" -o s.json
+            python3 - "$id" <<'PY'
+          import json,sys
+          d=json.load(open('s.json'))
+          print('EVENT',sys.argv[1],'keys',sorted(d.keys()))
+          h=d.get('headToHeadGames')
+          print('h2h blocks',None if h is None else [len(b.get('events',[])) for b in h])
+          if h and h[0].get('events'): print('first',json.dumps(h[0]['events'][0])[:600])
+          lg=d.get('header',{}).get('league',{}); print('league',lg.get('slug'),lg.get('name'))
+          comp=d.get('header',{}).get('competitions',[{}])[0]
+          print('teams',[(c.get('team',{}).get('id'),c.get('team',{}).get('displayName')) for c in comp.get('competitors',[])])
+          print('form',[len(f.get('events',[])) for f in d.get('boxscore',{}).get('form',[])])
+          PY
+          done
+          curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/83/schedule?season=2024" | python3 -c "import json,sys;d=json.load(sys.stdin);ev=d.get('events',[]);print('schedule 2024',len(ev));print(json.dumps(ev[0])[:500] if ev else '')"
