@@ -451,12 +451,25 @@ try {
   await page.getByRole('button', { name: 'Guardar clave de LuluStream', exact: true }).click();
   await page.getByText(/Clave de LuluStream guardada \(privada\)\. Carpetas: Películas, Series/).waitFor();
   await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
-  await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados/).waitFor();
-  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: no se encontró en TMDB/);
+  await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
+  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://lulustream.com/avatarlulu12');
   assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),
     [[1, 1, 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'https://lulustream.com/paco1x02cccc'], [2, 1, 'https://lulustream.com/paco2x01bbbb']]);
+  // The film TMDB did not find is in the list anyway; its record is chosen by hand and takes its video.
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'unadanada1234').status, 'unmatched');
+  const pendingRow = page.locator('.library-item', { hasText: 'Zzzz desconocida' });
+  assert.match(await pendingRow.textContent(), /Sin ficha de TMDB/);
+  await pendingRow.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  assert.equal(await page.getByLabel('Buscar su ficha en TMDB', { exact: true }).inputValue(), 'Zzzz desconocida');
+  await page.locator('.library-editor .library-result', { hasText: 'Avatar: El sentido del agua' }).click();
+  await page.getByText(/«Zzzz desconocida» es ahora «Avatar: El sentido del agua», con su vídeo/).waitFor();
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://lulustream.com/nadanada1234');
+  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://lulustream.com/nadanada1234');
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan } from '../web/library-lulu.js';
+import { cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan, matchUnmatched } from '../web/library-lulu.js';
 
 const json = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
 
@@ -87,8 +87,52 @@ test('the scan is matched in TMDB and merged with the titles added by hand', asy
   assert.deepEqual(result.sections.series[0].episodes.map((e) => [e.season, e.episode, e.name, e.url]), [
     [1, 1, 'Piloto', 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'Segundo', 'https://lulustream.com/paco1x02aaaa'], [1, 3, '', 'https://lulustream.com/manual1x03xx'],
     [2, 1, '', 'https://lulustream.com/paco2x01bbbb'], [3, 1, undefined, 'https://lulustream.com/paco3x01cccc']]);
-  assert.deepEqual(result.added, { films: 2, shows: 1, episodes: 3 });
-  assert.deepEqual(result.sections.documentaries, []);
-  assert.ok(result.unknown.some((line) => /Nuestro planeta/.test(line)));
+  assert.deepEqual(result.added, { films: 2, shows: 1, episodes: 3, pending: 1 });
+  // Not in TMDB: added anyway with the file's name, to be matched in the admin page.
+  assert.deepEqual(result.sections.documentaries, [{ id: 'uplaneta12345', kind: 'movie', title: 'Nuestro planeta', year: null, file: 'Nuestro planeta.mp4', url: 'https://lulustream.com/planeta12345', status: 'unmatched' }]);
+  assert.ok(result.unknown.some((line) => /Nuestro planeta.*sin ficha de TMDB/.test(line)));
   assert.deepEqual(progress, ['1/4', '2/4', '3/4', '4/4']);
+});
+
+test('titles TMDB does not find are added, matched by hand, and recognised by the next scan', async () => {
+  const rare = {
+    0: { folders: [{ fld_id: 1, name: 'Peliculas' }, { fld_id: 2, name: 'Series' }] },
+    1: { folders: [], files: [{ file_code: 'rara12345678', title: 'Rarisima.2020.mp4' }] },
+    2: { folders: [{ fld_id: 3, name: 'Serie rara' }] }, 3: { folders: [{ fld_id: 4, name: 'Temporada 1' }] },
+    4: { folders: [], files: [{ file_code: 'serie1x01aaa', title: '1x01.mp4' }, { file_code: 'serie1x02aaa', title: '1x02.mp4' }] },
+  };
+  const fetchLulu = async (url) => json({ status: 200, result: rare[new URL(url).searchParams.get('fld_id')] });
+  const asked = [];
+  const tmdb = async (url) => {
+    const path = new URL(url).pathname.replace('/3', '');
+    asked.push(path);
+    if (path.startsWith('/search/')) return json({ results: [] });
+    if (path === '/movie/77') return json({ id: 77, title: 'La rarísima', release_date: '2020-01-01' });
+    if (path === '/tv/88') return json({ id: 88, name: 'La serie rara', seasons: [{ season_number: 1 }] });
+    if (path === '/tv/88/season/1') return json({ episodes: [{ episode_number: 1, name: 'Uno' }, { episode_number: 2, name: 'Dos' }] });
+    return json({}, 404);
+  };
+  const key = 'abcdef0123456789abcdef0123456789';
+  const first = await libraryFromScan(await scanLulu('clave123456', { fetcher: fetchLulu }), { movies: [], series: [], documentaries: [] }, key, { fetcher: tmdb });
+  assert.deepEqual(first.added, { films: 0, shows: 0, episodes: 0, pending: 2 });
+  const [film] = first.sections.movies, [show] = first.sections.series;
+  assert.deepEqual([film.id, film.status, film.title, film.url], ['urara12345678', 'unmatched', 'Rarisima', 'https://lulustream.com/rara12345678']);
+  assert.deepEqual([show.id, show.status, show.folder, show.episodes.map((e) => [e.season, e.episode, e.url])],
+    ['userie-rara', 'unmatched', 'Serie rara', [[1, 1, 'https://lulustream.com/serie1x01aaa'], [1, 2, 'https://lulustream.com/serie1x02aaa']]]);
+
+  // In the admin page the right TMDB record is chosen: the links go with it.
+  const movie = await matchUnmatched(film, 77, null, key, tmdb);
+  assert.deepEqual([movie.id, movie.tmdb.title, movie.url], ['m77', 'La rarísima', 'https://lulustream.com/rara12345678']);
+  const series = await matchUnmatched(show, 88, null, key, tmdb);
+  assert.deepEqual([series.id, series.folder, series.episodes.map((e) => [e.episode, e.name, e.url])],
+    ['s88', 'Serie rara', [[1, 'Uno', 'https://lulustream.com/serie1x01aaa'], [2, 'Dos', 'https://lulustream.com/serie1x02aaa']]]);
+
+  // Reading the folders again keeps those records (by link and by folder) instead of adding them again.
+  rare[4].files.push({ file_code: 'serie1x03aaa', title: '1x03.mp4' });
+  asked.length = 0;
+  const again = await libraryFromScan(await scanLulu('clave123456', { fetcher: fetchLulu }), { movies: [movie], series: [series], documentaries: [] }, key, { fetcher: tmdb });
+  assert.deepEqual(again.added, { films: 1, shows: 1, episodes: 3, pending: 0 });
+  assert.deepEqual(again.sections.movies.map((m) => m.id), ['m77']);
+  assert.deepEqual(again.sections.series.map((s) => [s.id, s.episodes.map((e) => e.episode)]), [['s88', [1, 2, 3]]]);
+  assert.ok(!asked.some((path) => path.startsWith('/search/')), 'no new search for titles already matched');
 });
