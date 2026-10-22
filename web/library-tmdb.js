@@ -21,9 +21,10 @@ const image = (path, size) => path ? `${TMDB_IMAGE}${size}${path}` : '';
 const yearOf = (date) => date ? Number(String(date).slice(0, 4)) || null : null;
 
 /** Films ('movie'), series ('tv') or both ('any', for documentaries): [{ id, kind, title, year, poster, overview }]. */
-export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch) {
+export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, year = null) {
   const path = kind === 'tv' ? '/search/tv' : kind === 'movie' ? '/search/movie' : '/search/multi';
-  const data = await tmdb(path, { query, include_adult: 'false' }, key, fetcher);
+  const dated = year && kind !== 'any' ? { [kind === 'tv' ? 'first_air_date_year' : 'year']: String(year) } : {};
+  const data = await tmdb(path, { query, include_adult: 'false', ...dated }, key, fetcher);
   return (data.results || [])
     .map((r) => ({ ...r, media_type: r.media_type || kind }))
     .filter((r) => r.media_type === 'movie' || r.media_type === 'tv')

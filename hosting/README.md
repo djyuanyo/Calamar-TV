@@ -39,3 +39,5 @@ Subir `calamar-lulu.php` al `public_html`. Cuando alguien reproduce una películ
 LuluStream en la web, este archivo lee la página del reproductor de LuluStream (unos 100 KB) y devuelve
 el enlace del vídeo; el vídeo va directamente de LuluStream al navegador, sin pasar por el hosting, y no
 se guarda nada en el servidor. Si no está subido o falla, la web muestra el reproductor de LuluStream.
+También relaya la lista de carpetas de LuluStream para «Leer carpetas de LuluStream» de la administración
+cuando el navegador no puede llamar a la API directamente (solo JSON, unos pocos KB; la clave no se guarda).

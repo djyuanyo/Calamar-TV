@@ -15,6 +15,23 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $allowed = array('https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com');
 if ($origin !== '' && !in_array($origin, $allowed, true)) answer(array('error' => 'Origen no permitido.'), 403);
 if ($origin !== '') { header('Access-Control-Allow-Origin: ' . $origin); header('Vary: Origin'); }
+// The admin page lists its folders through here when the browser may not call the API itself: only the
+// folder listing is relayed, with the key the administrator sends (it is not stored on the hosting).
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $api = $_POST['api'] ?? '';
+    $key = $_POST['key'] ?? '';
+    $folder = $_POST['fld_id'] ?? '0';
+    if ($api !== 'folder/list' || !is_string($key) || !preg_match('/^[A-Za-z0-9]{10,64}$/', $key) || !is_string($folder) || !preg_match('/^\d{1,12}$/', $folder))
+        answer(array('error' => 'Consulta de LuluStream no válida.'), 400);
+    if (!function_exists('curl_init')) answer(array('error' => 'cURL no disponible.'), 502);
+    $ch = curl_init('https://api.lulustream.com/api/folder/list?' . http_build_query(array('key' => $key, 'fld_id' => $folder, 'files' => '1')));
+    curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 15, CURLOPT_ENCODING => ''));
+    $body = curl_exec($ch);
+    curl_close($ch);
+    $data = is_string($body) && strlen($body) < 4194304 ? json_decode($body, true) : null;
+    if (!is_array($data)) answer(array('error' => 'LuluStream no ha respondido.'), 502);
+    answer($data);
+}
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') answer(array('error' => 'Método no permitido.'), 405);
 $code = $_GET['code'] ?? '';
 if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,20}$/', $code)) answer(array('error' => 'Código de vídeo no válido.'), 400);

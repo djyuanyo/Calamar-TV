@@ -4,6 +4,7 @@
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey } from './library-tmdb.js';
+import { luluFolder, scanLulu, libraryFromScan } from './library-lulu.js';
 import { lulustreamEmbed, webPlayback } from './catalog.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
@@ -237,6 +238,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const key = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de TMDB (v3) o token de lectura (v4)' });
   const saveKey = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave');
   const tmdbKey = () => { if (!settings.tmdb) throw new Error('Primero añade la clave de TMDB en «Configuración».'); return settings.tmdb; };
+  const luluKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de LuluStream' });
+  const saveLulu = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave de LuluStream');
   const store = async (sections) => {
     const next = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]));
     await publish(libraryParts(next));
@@ -354,6 +357,28 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
   }
 
+  // ---- LuluStream folders: Peliculas/, Series/<Nombre>/Temporada N/, Documentales/ ----
+  const scanNote = el('p', { class: 'note', role: 'status' });
+  const scanReport = el('div', { class: 'library-scan-report' });
+  const scanButton = el('button', { class: 'btn', type: 'button', onclick: async () => {
+    scanButton.disabled = true; scanReport.replaceChildren();
+    try {
+      if (!settings.lulu) throw new Error('Primero añade la clave de la API de LuluStream en «Configuración».');
+      const key = tmdbKey();
+      scanNote.textContent = 'Leyendo las carpetas de LuluStream…';
+      const scan = await scanLulu(settings.lulu, { onFolder: (name) => { scanNote.textContent = `Leyendo «${name}» en LuluStream…`; } });
+      const found = scan.films.length + scan.series.length;
+      if (!found) throw new Error('No hay vídeos en las carpetas Peliculas, Series o Documentales.');
+      const result = await libraryFromScan(scan, current.sections, key, { onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
+      scanNote.textContent = 'Publicando…';
+      await store(result.sections);
+      const { films, shows, episodes } = result.added;
+      scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados. Revisa la lista de abajo; puedes editar o quitar cualquiera.`;
+      if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Sin añadir (${result.unknown.length}). Búscalos arriba en TMDB y pega su enlace, o cambia el nombre del archivo en LuluStream y vuelve a leer:`),
+        el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
+    } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; }
+  } }, 'Leer carpetas de LuluStream');
+
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
   function drawList() {
@@ -372,6 +397,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     try {
       settings = await readSettings();
       if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       current = await fetchLibrary({ fresh: true });
       drawList();
     } catch (error) { say(error.message, true); list.replaceChildren(); }
@@ -387,10 +413,26 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       say('Clave de TMDB guardada (privada, solo para el administrador).');
     } catch (error) { say(error.message, true); } finally { saveKey.disabled = false; }
   });
+  saveLulu.addEventListener('click', async () => {
+    saveLulu.disabled = true; say('Comprobando la clave en LuluStream…');
+    try {
+      if (!luluKey.value.trim()) throw new Error('Pega la clave de la API de LuluStream.');
+      const root = await luluFolder(0, luluKey.value.trim());
+      const next = { ...settings, lulu: luluKey.value.trim() };
+      await saveSettings(next);
+      settings = next; luluKey.value = ''; luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      say(`Clave de LuluStream guardada (privada). Carpetas: ${root.folders.map((f) => f.name).join(', ') || 'ninguna'}.`);
+    } catch (error) { say(error.message, true); } finally { saveLulu.disabled = false; }
+  });
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: clave de TMDB'),
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: claves de TMDB y LuluStream'),
       el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
-      field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey)),
+      field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey),
+      el('p', { class: 'note' }, 'La clave de la API de LuluStream (LuluStream → API) sirve para leer tus carpetas. También es privada.'),
+      field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu)),
+    el('h3', {}, 'Leer las carpetas de LuluStream'),
+    el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
+    el('div', { class: 'actions' }, scanButton), scanNote, scanReport,
     el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
 }
