@@ -5,7 +5,6 @@ import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
-import { prepareHostedVideo } from './video-bridge.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList } from './library.js';
@@ -566,32 +565,6 @@ function playSource(c, index) {
       onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la emisión…'; },
       onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
     });
-    return;
-  }
-  if (source.how.kind === 'file') {
-    // A video file of the hosting: FFmpeg there turns its audio into AAC so the browser can play it.
-    playerStatus.textContent = 'Preparando el vídeo…';
-    controls.attach(null);
-    prepareHostedVideo(source.url, {
-      isCurrent: () => generation === playbackGeneration,
-      onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
-    }).then((ready) => {
-      if (!ready || generation !== playbackGeneration) return;
-      video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
-      video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
-      if (window.Hls?.isSupported()) {
-        // The playlist grows while the file is converted: start at the beginning, not at its end.
-        hls = new window.Hls({ startPosition: 0 });
-        hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) next(data); });
-        hls.loadSource(ready.url);
-        hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = ready.url;
-      else { next({ details: 'codecUnsupported' }); return; }
-      controls.attach(hls);
-      video.play().catch(() => {
-        if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
-      });
-    }).catch((error) => { if (generation === playbackGeneration) next({ userMessage: error.message }); });
     return;
   }
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {

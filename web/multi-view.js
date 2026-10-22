@@ -3,7 +3,6 @@
 // viewer picks by tapping it. The app applies the same layout (MultiScreen.java).
 import { sourceOptions } from './player-sources.js';
 import { mountTs } from './ts-player.js';
-import { prepareHostedVideo } from './video-bridge.js';
 
 export const MULTI_MAX = 6;
 
@@ -47,16 +46,9 @@ export function playTile(video, channel, onStatus) {
         onFailure: () => { if (current()) tryNext(); }, onRecovering: () => {}, onPlaying: () => { if (current()) onStatus(''); } });
       return;
     }
-    let url = source.url, file = false;
-    if (source.how.kind === 'file') {
-      try {
-        const ready = await prepareHostedVideo(source.url, { isCurrent: current, onStatus: (m) => { if (current()) onStatus(m); } });
-        if (!ready || !current()) return;
-        url = ready.url; file = true;
-      } catch (error) { if (current()) { onStatus(error.message); tryNext(); } return; }
-    }
-    if ((source.how.kind === 'hls' || file) && window.Hls?.isSupported()) {
-      hls = new window.Hls(file ? { startPosition: 0 } : { lowLatencyMode: false });
+    const url = source.url;
+    if (source.how.kind === 'hls' && window.Hls?.isSupported()) {
+      hls = new window.Hls({ lowLatencyMode: false });
       hls.on(window.Hls.Events.ERROR, (_event, data) => { if (data.fatal && current()) tryNext(); });
       hls.loadSource(url);
       hls.attachMedia(video);
