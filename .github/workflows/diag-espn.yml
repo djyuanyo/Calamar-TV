@@ -7,10 +7,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          U=$(curl -s "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][4]['streams'][0])")
-          echo "::add-mask::$U"
-          echo "IPTV directo (VLC):"; curl -s -m 20 -A "VLC/3.0.20 LibVLC/3.0.20" -o /tmp/a -w "HTTP %{http_code} tipo=%{content_type} redir=%{num_redirects} %{time_total}s\n" --max-time 12 -L "$U" || true; echo "bytes $(wc -c < /tmp/a 2>/dev/null)"
-          echo "IPTV directo (navegador):"; curl -s -m 20 -A "Mozilla/5.0" -o /tmp/b -w "HTTP %{http_code} tipo=%{content_type} %{time_total}s\n" --max-time 12 -L "$U" || true; echo "bytes $(wc -c < /tmp/b 2>/dev/null)"
-          echo "Hosting:"; curl -s -m 20 -o /tmp/c -w "HTTP %{http_code} %{time_total}s\n" https://calamarmenciano.com/calamar-tv-relay.php || true; head -c 200 /tmp/c; echo
-          B=$(printf %s "$U" | base64 -w0)
-          echo "Relay del hosting:"; curl -s -m 20 --max-time 12 -H "Origin: https://djyuanyo.github.io" -H "X-Calamar-Source: $B" -o /tmp/d -w "HTTP %{http_code} tipo=%{content_type} %{time_total}s\n" "https://calamarmenciano.com/calamar-tv-relay.php?stream=1" || true; echo "bytes $(wc -c < /tmp/d)"; head -c 200 /tmp/d | tr -cd '[:print:]\n'; echo
+          sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+          C=$(curl -s "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom")
+          for i in 0 4 5 20; do
+            U=$(echo "$C" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][$i]['streams'][0])")
+            N=$(echo "$C" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][$i]['name'])")
+            echo "::add-mask::$U"
+            echo "== $N"
+            curl -s -A "VLC/3.0.20 LibVLC/3.0.20" -o /dev/null -D - --max-time 4 "$U" | grep -iE "^HTTP|^location|^content-type" | sed -E 's#(https?://[^/]+).*#\1/…#' || true
+            curl -s -L -A "VLC/3.0.20 LibVLC/3.0.20" --max-time 6 "$U" -o /tmp/s.ts || true
+            ffprobe -v error -show_entries stream=codec_type,codec_name,profile,width,height,r_frame_rate -of compact /tmp/s.ts 2>&1 | head -6
+          done
