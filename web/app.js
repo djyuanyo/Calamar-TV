@@ -756,7 +756,8 @@ function paintMatch() {
 }
 /** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  const key = c?.event ? String(c.eventId || c.id) : '';
+  // Only events with a match link show the match under the video; the rest open in full screen.
+  const key = c?.event && c.matchUrl ? String(c.eventId || c.id) : '';
   if (key && key === matchShown) return true;
   clearInterval(matchTimer);
   matchShown = key; matchModel = null; matchTab = 'general';

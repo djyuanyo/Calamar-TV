@@ -308,7 +308,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
-        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo: https://lulustream.com/xxxxxxxx (o /e/xxxxxxxx).'),
+        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (lulustream.com, luluvido.com, luluvdo.com…).'),
           el('div', { class: 'actions' }, save, del, close), note);
         link.focus();
         return;

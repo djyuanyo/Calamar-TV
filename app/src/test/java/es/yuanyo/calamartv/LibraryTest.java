@@ -86,6 +86,7 @@ public class LibraryTest {
     assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
     assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
     assertNull(Library.Media.embed("https://lulustream.com/fld/h9vd4z179z"));
+    assertEquals("https://lulustream.com/e/duj5ak4x5waa", Library.Media.embed("https://luluvido.com/d/duj5ak4x5waa"));
     assertNull(Library.Media.embed("http://lulustream.com/abcd1234efgh"));
     assertNull(Library.Media.embed("https://lulustream.com.evil.com/abcd1234efgh"));
   }

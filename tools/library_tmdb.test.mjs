@@ -44,6 +44,9 @@ test('a series gives its seasons and the episodes of the chosen season', async (
 
 test('LuluStream links play in its own embedded player; direct videos in ours', () => {
   assert.equal(lulustreamEmbed('https://lulustream.com/abc123def456'), 'https://lulustream.com/e/abc123def456');
+  assert.equal(lulustreamEmbed('https://luluvido.com/d/duj5ak4x5waa'), 'https://lulustream.com/e/duj5ak4x5waa');
+  assert.equal(lulustreamEmbed('https://lulu.st/e/duj5ak4x5waa'), 'https://lulustream.com/e/duj5ak4x5waa');
+  assert.equal(lulustreamEmbed('https://luluvido.com.evil.net/d/duj5ak4x5waa'), null);
   assert.equal(lulustreamEmbed('https://www.lulustream.com/d/abc123def456.html'), 'https://lulustream.com/e/abc123def456');
   assert.equal(lulustreamEmbed('https://lulustream.com/fld/h9vd4z179z'), null, 'a folder is not a video');
   assert.equal(lulustreamEmbed('https://evil.example/abc123def456'), null);
