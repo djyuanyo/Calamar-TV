@@ -284,6 +284,12 @@ try {
   await page.getByLabel('Enlace del partido en Google', { exact: false }).fill('https://share.google/RSJmsOE0s8wgQUT3n');
   await page.getByRole('button', { name: 'Comprobar partido', exact: true }).click();
   await page.getByText(/^Partido: Levante – Athletic Club · 30 nov.* · 2 – 1 · En juego · 74′ · Resultados: ESPN$/).waitFor();
+  // A link that is not recognised can be replaced by choosing the match from ESPN's list for that date.
+  await page.getByRole('button', { name: 'Elegir el partido de la lista', exact: true }).click();
+  await page.getByLabel('Buscar en ESPN', { exact: false }).fill('athletic');
+  await page.locator('.match-option', { hasText: 'Levante – Athletic Club' }).click();
+  await page.getByText(/^Partido elegido: Levante – Athletic Club · 30 nov/).waitFor();
+  assert.equal(await page.getByLabel('Enlace del partido en Google', { exact: false }).inputValue(), 'https://share.google/RSJmsOE0s8wgQUT3n');
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
   await page.locator('.nav a').filter({hasText:'Inicio'}).click();
