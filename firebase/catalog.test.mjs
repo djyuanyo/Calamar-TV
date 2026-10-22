@@ -101,3 +101,22 @@ test('library parts: public read, admin writes valid parts only; settings are pr
   await assertFails(getDoc(doc(anyone, 'calamarPrivate/library')));
   await assertFails(setDoc(doc(anyone, 'calamarPrivate/library'), { tmdb: 'x' }));
 });
+
+test('phone sign-in for the app: only the admin hands it over; read with key and code; deleted once used', async () => {
+  const anyone = env.unauthenticatedContext().firestore();
+  const login = (overrides = {}) => ({ idToken: 'google-id-token', createdAt: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(admin(), 'calamarDeviceLogins/K7Q2AB3D'), login()));
+  await assertSucceeds(getDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3D')));
+  await assertFails(getDocs(collection(anyone, 'calamarDeviceLogins')));
+  await assertFails(setDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3E'), login()));
+  await assertFails(setDoc(doc(env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore(), 'calamarDeviceLogins/K7Q2AB3F'), login()));
+  for (const [id, invalid] of [['K7Q2AB3G', { extra: 1 }], ['K7Q2AB3H', { createdAt: new Date(0) }], ['K7Q2AB3J', { idToken: 'x'.repeat(4096) }], ['K7Q2AB', {}], ['K7Q2AB0O', {}], ['k7q2ab3d', {}]]) {
+    await assertFails(setDoc(doc(admin(), `calamarDeviceLogins/${id}`), login(invalid)));
+  }
+  await assertFails(setDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3D'), { idToken: 'other', createdAt: serverTimestamp() }));
+  await assertSucceeds(deleteDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3D')));
+  await assertFails(getDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3D')));
+  // An old one (written past the rules) cannot be read any more.
+  await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'calamarDeviceLogins/K7Q2OLD2'), { idToken: 't', createdAt: new Date(Date.now() - 6 * 60000) }));
+  await assertFails(getDoc(doc(anyone, 'calamarDeviceLogins/K7Q2OLD2')));
+});

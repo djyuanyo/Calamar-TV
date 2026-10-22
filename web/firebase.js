@@ -2,6 +2,7 @@ import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, minuteOf } from './audience.js';
+import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
@@ -14,6 +15,22 @@ export const ready = auth.authStateReady();
 export const administrator = (user = auth.currentUser) => !!user && user.email === ADMIN_EMAIL && user.emailVerified && user.providerData.some((p) => p.providerId === 'google.com');
 export const watchAuth = (changed) => onAuthStateChanged(auth, changed);
 export const logout = () => signOut(auth);
+/**
+ * Signs in with Google again to hand the session to an app: the Google ID token goes to
+ * calamarDeviceLogins/<key><code>, which the app reads once the code is typed there.
+ */
+export async function publishDeviceLogin(id) {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
+  const result = await signInWithPopup(auth, provider);
+  const idToken = GoogleAuthProvider.credentialFromResult(result)?.idToken;
+  if (!administrator(result.user)) throw new Error(`Solo la cuenta de administración (${ADMIN_EMAIL}) puede iniciar sesión en la app.`);
+  if (!idToken) throw new Error('Google no ha devuelto la sesión. Vuelve a intentarlo.');
+  await setDoc(doc(db, DEVICE_LOGIN_PATH, id), { idToken, createdAt: serverTimestamp() });
+}
+/** Calls back with false once the app has used (deleted) the sign-in. */
+export const watchDeviceLogin = (id, changed) => onSnapshot(doc(db, DEVICE_LOGIN_PATH, id), (s) => changed(s.exists()), () => changed(null));
+export const cancelDeviceLogin = (id) => deleteDoc(doc(db, DEVICE_LOGIN_PATH, id)).catch(() => {});
 export function login() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });

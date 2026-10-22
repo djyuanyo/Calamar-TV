@@ -35,6 +35,8 @@ export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3,
 export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
 export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
 export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; };
+export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
+export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
 `;
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
@@ -582,6 +584,24 @@ try {
   await page.goto(base + '/#/inicio');
   await page.getByRole('button', { name: 'Quitar Avatar de Continuar viendo' }).click();
   await page.waitForFunction(() => !document.querySelector('.continue-card'));
+  // Signing in the app from a phone: the QR opens the page with the app's key and code; the short link only the key.
+  await page.goto(base + '/#/tv/K7Q2/AB3D');
+  await page.getByRole('heading', { name: 'Iniciar sesión en la app', exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Código que muestra la app').inputValue(), 'AB3D');
+  await page.getByRole('button', { name: 'Confirmar e iniciar sesión con Google', exact: true }).click();
+  await page.getByText('Esperando a la app…').waitFor();
+  assert.equal(await page.evaluate(() => window.__deviceLogin), 'K7Q2AB3D');
+  await page.evaluate(() => window.__deviceUsed());
+  await page.getByText('✓ Listo: la app ya tiene la sesión iniciada.').waitFor();
+  await page.goto(base + '/#/tv/k7q2');
+  await page.getByLabel('Código que muestra la app').fill('ab-3');
+  await page.getByRole('button', { name: 'Confirmar e iniciar sesión con Google', exact: true }).click();
+  await page.getByText('Escribe los 4 caracteres que muestra la app (letras y números).').waitFor();
+  await page.getByLabel('Código que muestra la app').fill('xy9z');
+  await page.getByRole('button', { name: 'Confirmar e iniciar sesión con Google', exact: true }).click();
+  await page.waitForFunction(() => window.__deviceLogin === 'K7Q2XY9Z');
+  await page.goto(base + '/#/tv/zz');
+  await page.getByText(/Este enlace no es válido/).waitFor();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

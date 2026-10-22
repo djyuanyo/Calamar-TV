@@ -53,12 +53,14 @@ public class AdminActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    stopPhoneLogin();
     if (authListener != null) SharedCatalog.auth(this).removeAuthStateListener(authListener);
     super.onDestroy();
   }
 
   private void draw() {
     if (isFinishing()) return;
+    stopPhoneLogin();
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(BG);
     body = new LinearLayout(this);
@@ -75,6 +77,7 @@ public class AdminActivity extends Activity {
     status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);
     body.addView(status);
     if (!SharedCatalog.administrator(SharedCatalog.auth(this).getCurrentUser())) {
+      addButton("Iniciar sesión con el móvil", this::phoneLogin);
       addButton("Continuar con Google", this::signIn);
       if (SharedCatalog.auth(this).getCurrentUser() != null) {
         status.setText("La cuenta seleccionada no es administradora.");
@@ -654,6 +657,102 @@ public class AdminActivity extends Activity {
       startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(SharedCatalog.WEB_ADMIN)));
     } catch (android.content.ActivityNotFoundException error) {
       status.setText("Abre la web de Calamar TV en tu móvil y entra en Administración.");
+    }
+  }
+
+  // ---- Signing in from a phone, as on Netflix: QR + short link + code; the phone confirms ----
+  private final android.os.Handler phoneHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+  private DeviceLogin phone;
+  private long phoneEnds;
+  private TextView phoneStatus;
+
+  private void phoneLogin() {
+    stopPhoneLogin();
+    phone = DeviceLogin.create(new java.security.SecureRandom());
+    phoneEnds = android.os.SystemClock.elapsedRealtime() + DeviceLogin.MINUTES * 60000L;
+    ScrollView scroll = new ScrollView(this);
+    scroll.setBackgroundColor(BG);
+    body = new LinearLayout(this);
+    body.setOrientation(LinearLayout.VERTICAL);
+    body.setPadding(dp(24), dp(16), dp(24), dp(24));
+    body.setFitsSystemWindows(true);
+    scroll.addView(body);
+    setContentView(scroll);
+    addButton("‹ Volver", () -> { stopPhoneLogin(); draw(); });
+    TextView title = label("Iniciar sesión con el móvil", 24);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+    body.addView(title);
+    // Side by side on a TV or a phone held sideways; one under the other on a phone held upright.
+    boolean wide = getResources().getConfiguration().screenWidthDp >= 600;
+    LinearLayout steps = new LinearLayout(this);
+    steps.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+    LinearLayout first = new LinearLayout(this), second = new LinearLayout(this);
+    for (LinearLayout step : new LinearLayout[] {first, second}) {
+      step.setOrientation(LinearLayout.VERTICAL);
+      step.setPadding(dp(12), dp(8), dp(12), dp(8));
+      steps.addView(step, wide ? new LinearLayout.LayoutParams(0, -2, 1) : new LinearLayout.LayoutParams(-1, -2));
+    }
+    first.addView(label("1  Usa la cámara de tu móvil y enfoca este código, o ve a " + phone.shortLink(), 17));
+    ImageView qr = new ImageView(this);
+    qr.setImageBitmap(qrBitmap(phone.qrLink(), dp(220)));
+    qr.setContentDescription("Código QR para iniciar sesión desde el móvil");
+    first.addView(qr, new LinearLayout.LayoutParams(dp(220), dp(220)));
+    second.addView(label("2  Inicia sesión con Google en el móvil y confirma este código", 17));
+    TextView code = label(phone.code, 56);
+    code.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+    code.setTextColor(ACC);
+    code.setLetterSpacing(0.15f);
+    code.setContentDescription("Código " + String.join(" ", phone.code.split("")));
+    second.addView(code);
+    phoneStatus = label("", 15);
+    phoneStatus.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);
+    second.addView(phoneStatus);
+    body.addView(steps);
+    phoneHandler.post(phonePoll);
+  }
+
+  /** Asks every 3 seconds whether the phone has confirmed the code; a new code after 5 minutes. */
+  private final Runnable phonePoll = new Runnable() {
+    @Override
+    public void run() {
+      if (phone == null || isFinishing()) return;
+      long left = (phoneEnds - android.os.SystemClock.elapsedRealtime()) / 1000;
+      if (left <= 0) { phoneLogin(); return; }
+      phoneStatus.setText("Esperando la confirmación del móvil… El código cambia en " + left / 60 + ":" + String.format(java.util.Locale.ROOT, "%02d", left % 60) + ".");
+      final DeviceLogin asked = phone;
+      com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(AdminActivity.this))
+          .document(asked.document())
+          .get(Source.SERVER)
+          .addOnSuccessListener(snapshot -> {
+            String idToken = snapshot.exists() ? snapshot.getString("idToken") : null;
+            if (idToken == null || asked != phone) return;
+            stopPhoneLogin();
+            status.setText("Iniciando sesión…");
+            snapshot.getReference().delete(); // Used: the phone shows «Listo» and nobody can read it again.
+            SharedCatalog.auth(AdminActivity.this)
+                .signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
+                .addOnFailureListener(error -> { phoneLogin(); phoneStatus.setText("No se pudo iniciar sesión: " + error.getMessage() + ". Prueba con el código nuevo."); });
+          });
+      // Until the phone confirms, the document does not exist and reading it is refused: keep asking.
+      phoneHandler.postDelayed(this, 3000);
+    }
+  };
+
+  private void stopPhoneLogin() {
+    phone = null;
+    phoneHandler.removeCallbacks(phonePoll);
+  }
+
+  private static android.graphics.Bitmap qrBitmap(String text, int size) {
+    try {
+      com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+          .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size, java.util.Collections.singletonMap(com.google.zxing.EncodeHintType.MARGIN, 2));
+      int[] pixels = new int[size * size];
+      for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) pixels[y * size + x] = m.get(x, y) ? Color.BLACK : Color.WHITE;
+      return android.graphics.Bitmap.createBitmap(pixels, size, size, android.graphics.Bitmap.Config.ARGB_8888);
+    } catch (com.google.zxing.WriterException impossible) {
+      throw new IllegalStateException(impossible);
     }
   }
 

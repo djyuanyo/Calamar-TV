@@ -864,6 +864,13 @@ async function route() {
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
+  if (page === 'tv') {
+    // An app signing in from this phone: its QR / short link (…/tv/K7Q2) opens here.
+    const login = await import('./tv-login.js');
+    const nodes = await login.render(el, arg, hash.split('/')[2]);
+    if (version === routeVersion) view.replaceChildren(...nodes);
+    return;
+  }
   if (page === 'admin') {
     try {
       const admin = await import('./admin.js');
