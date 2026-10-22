@@ -70,7 +70,7 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
   public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource) {
     OkHttpDataSource.Factory factory =
         new OkHttpDataSource.Factory(SecureDnsClients.forMedia(client, http1))
-            .setUserAgent(PlayerDocument.USER_AGENT);
+            .setUserAgent(CastSource.needsBridge(rootSource) ? PlayerDocument.IPTV_USER_AGENT : PlayerDocument.USER_AGENT);
     if (referer != null && !referer.isEmpty())
       factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
     // Only complete live IPTV streams use the renewable transport. HLS TS fragments

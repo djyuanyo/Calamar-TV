@@ -10,6 +10,8 @@ import java.net.URL;
 /** Fresh HTTPS document fetch, using the system network stack rather than WebView. */
 public final class PlayerDocument {
   public static final String USER_AGENT = "CalamarTV/2.2.2 (Android; Media3)";
+  /** HTTP IPTV servers often reject unknown players; they accept VLC, which is how they are usually tested. */
+  public static final String IPTV_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20";
 
   public interface ConnectionFactory {
     HttpURLConnection open(URL url) throws IOException;

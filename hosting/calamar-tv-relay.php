@@ -40,7 +40,8 @@ if (isset($_GET['stream'])) {
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip']),
-            CURLOPT_USERAGENT => 'CalamarTV-Hosting-Test/3.0',
+            // Many IPTV servers only answer known players; VLC's name is the one they accept.
+            CURLOPT_USERAGENT => 'VLC/3.0.20 LibVLC/3.0.20',
             CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$location, &$status) {
                 if (preg_match('~^HTTP/[^ ]+ ([0-9]{3})~', $line, $m)) $status = (int)$m[1];
                 if (stripos($line, 'Location:') === 0) $location = trim(substr($line, 9));
