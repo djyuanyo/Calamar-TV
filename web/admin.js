@@ -1,9 +1,9 @@
-import { resolveMatch, googleMatchUrl } from './match-scores.js';
+import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService } from './firebase.js';
+import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin } from './library.js';
 
@@ -141,7 +141,7 @@ function channelForm(existing, rerender, state) {
     field('Categoría', groupSelect, 'Elige una de la lista o «Nueva categoría» para escribirla.'),
     groupNewField,
     field('Logo (opcional)', logo),
-    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos MKV/AVI guardados en calamarmenciano.com (el hosting adapta su sonido). La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI solo se ven en la app. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
@@ -391,8 +391,7 @@ export async function render(state) {
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
-        token: () => auth.currentUser.getIdToken(),
-        field,
+        field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
@@ -445,7 +444,38 @@ function eventForm(existing, rerender) {
       return resolved;
     } finally { checking = false; }
   };
-  const matchCheck = el('button', { type: 'button', class: 'btn secondary', onclick: async () => { try { await checkMatch(); } catch (e) { matchPreview.textContent = e.message; } } }, 'Comprobar partido');
+  const matchCheck = el('button', { type: 'button', class: 'btn secondary', onclick: async () => { try { await checkMatch(); } catch (e) { matchPreview.textContent = `${e.message} Si no lo reconoce, pulsa «Elegir el partido de la lista».`; } } }, 'Comprobar partido');
+  // When a link is not recognised (or there is none), the match can be chosen from ESPN's list for that date.
+  const pickList = el('div', { class: 'match-picker', hidden: true });
+  const norm = (text) => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const choose = (m) => {
+    const url = matchLink.value.trim() || googleSearchFor(m.home, m.away);
+    matchLink.value = url;
+    checkedMatch = { matchUrl: url, matchId: m.id, matchDate: m.date, start: start.value, result: matchResult(m.event), bothTeams: true };
+    const when = new Date(m.date).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    matchPreview.textContent = `Partido elegido: ${m.home} – ${m.away} · ${when}. Pulsa «Guardar y publicar».`;
+    pickList.hidden = true;
+  };
+  const openPicker = async () => {
+    pickList.hidden = false;
+    pickList.replaceChildren(el('p', { class: 'note' }, 'Cargando los partidos de ESPN de esa fecha…'));
+    let all;
+    try { all = await listMatches(madridInstant(start.value)); }
+    catch (e) { pickList.replaceChildren(el('p', { class: 'error' }, e.message)); return; }
+    const search = el('input', { type: 'search', placeholder: 'Buscar equipo, por ejemplo «Celtic»' });
+    const rows = el('div', { class: 'match-options' });
+    const draw = () => {
+      const words = norm(search.value).split(/\s+/).filter(Boolean);
+      const found = all.filter((m) => words.every((w) => norm(`${m.home} ${m.away} ${m.league}`).includes(w))).slice(0, 40);
+      rows.replaceChildren(...found.map((m) => el('button', { type: 'button', class: 'btn secondary match-option', onclick: () => choose(m) },
+        `${new Date(m.date).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${m.home} – ${m.away}${m.league ? ` · ${m.league}` : ''}`)));
+      if (!found.length) rows.append(el('p', { class: 'note' }, all.length ? 'Ningún partido con ese nombre en ESPN para esa fecha.' : 'ESPN no tiene partidos para esa fecha.'));
+    };
+    search.addEventListener('input', draw);
+    pickList.replaceChildren(field('Buscar en ESPN (del día anterior al siguiente)', search), rows);
+    draw(); search.focus();
+  };
+  const matchPick = el('button', { type: 'button', class: 'btn secondary', onclick: openPicker }, 'Elegir el partido de la lista');
   const start = el('input', { type: 'datetime-local', required: true, value: localDateTime(existing?.startAt), step: '60' });
   const star = el('input', { type: 'checkbox', checked: !!existing?.featured });
   const state = selectField(Object.entries(EVENT_STATES).map(([id,name]) => ({id,name})), existing?.status || 'scheduled');
@@ -495,7 +525,7 @@ function eventForm(existing, rerender) {
       data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), matchCheck, matchPreview, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 

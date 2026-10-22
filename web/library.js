@@ -1,7 +1,12 @@
-// Films, series and documentaries from the hosting folders (hosting/calamar-library.php), Plex style,
-// with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the
-// whole catalog (catalog field `libraryVisible`); while hidden the menu does not offer it.
-export const LIBRARY_ENDPOINT = 'https://calamarmenciano.com/calamar-library.php';
+// Films, series and documentaries chosen in TMDB by the administrator, each with its video link
+// (LuluStream or a direct video), with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the whole catalog (catalog field
+// `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
+// signing in; the videos play from Google Drive. Nothing depends on the hosting.
+import { firebaseConfig } from './firebase-config.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey } from './library-tmdb.js';
+import { lulustreamEmbed, webPlayback } from './catalog.js';
+
+export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
   { key: 'movies', page: 'peliculas', label: 'Películas', one: 'película' },
   { key: 'series', page: 'series', label: 'Series', one: 'serie' },
@@ -14,27 +19,23 @@ let cached = null, cachedAt = 0;
 /** The published library; kept for two minutes so moving between pages does not download it again. */
 export async function fetchLibrary({ fresh = false, fetcher = globalThis.fetch } = {}) {
   if (!fresh && cached && Date.now() - cachedAt < 120000) return cached;
-  let response;
-  try { response = await fetcher(`${LIBRARY_ENDPOINT}?action=library${fresh ? `&t=${Date.now()}` : ''}`, { cache: fresh ? 'no-store' : 'default', referrerPolicy: 'no-referrer' }); }
-  catch { throw new Error('No se pudo conectar con el hosting de las películas y series.'); }
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Falta subir calamar-library.php al hosting.');
-  const data = await response.json();
-  cached = { sections: data.sections || {}, attribution: data.attribution || '', updatedAt: data.updatedAt || '' };
+  const part = async (name) => {
+    let response;
+    try { response = await fetcher(`${LIBRARY_DOCS}${name}?key=${firebaseConfig.apiKey}`, { cache: fresh ? 'no-store' : 'default', referrerPolicy: 'no-referrer' }); }
+    catch { throw new Error('No se pudieron cargar las películas y series. Comprueba la conexión y vuelve a intentarlo.'); }
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('No se pudieron cargar las películas y series. Vuelve a intentarlo en unos minutos.');
+    return JSON.parse((await response.json()).fields.json.stringValue);
+  };
+  const index = await part('index');
+  const sections = {};
+  if (index) await Promise.all(Object.entries(index.sections || {}).map(async ([section, count]) => {
+    const parts = await Promise.all(Array.from({ length: count }, (_, n) => part(`${section}-${n}`)));
+    sections[section] = parts.flatMap((p) => p?.items || []);
+  }));
+  cached = { sections, attribution: index?.attribution || '', updatedAt: index?.updatedAt || '' };
   cachedAt = Date.now();
   return cached;
-}
-
-/** Administrator actions; `token` is the Firebase ID token of the signed-in administrator. */
-export async function libraryRequest(body, token, fetcher = globalThis.fetch) {
-  let response;
-  try {
-    response = await fetcher(LIBRARY_ENDPOINT, { method: 'POST', cache: 'no-store', referrerPolicy: 'no-referrer',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
-  } catch { throw new Error('No se pudo conectar con el hosting. Sube calamar-library.php y vuelve a intentarlo.'); }
-  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Falta subir calamar-library.php al hosting.');
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'El hosting no pudo completar la operación.');
-  return data;
 }
 
 export const itemTitle = (item) => item.tmdb?.title || item.title;
@@ -158,7 +159,8 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       facts ? el('p', { class: 'library-facts' }, facts) : null,
       info.genres?.length ? el('div', { class: 'library-genres' }, info.genres.map((g) => el('span', { class: 'chip' }, g))) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
-      item.kind === 'movie' ? playButtons(el, saved(item.id), (restart) => play(item, null, restart)) : null));
+      item.kind === 'movie' ? playButtons(el, saved(item.id), (restart) => play(item, null, restart)) : null,
+      item.kind === 'movie' ? soundNote(el, item.file) : null));
   const nodes = [head];
   if (item.kind === 'tv') {
     const seasons = [...new Set(item.episodes.map((e) => e.season))];
@@ -183,6 +185,10 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   return nodes;
 }
 
+/** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
+const soundNote = (el, file) => /\.(mkv|avi|mov|wmv|flv|mpg|mpeg|m2ts|vob)$/i.test(file || '')
+  ? el('p', { class: 'note library-sound' }, 'Este vídeo es MKV: si en el navegador no se oye, ábrelo en la app Calamar TV, donde se oye bien.') : null;
+
 /** «▶ Ver», or «▶ Continuar · 12:34» and «Desde el principio» when it was left half watched. */
 function playButtons(el, saved, play) {
   if (!saved) return el('div', { class: 'library-actions' }, el('button', { class: 'btn lg', type: 'button', onclick: () => play(false) }, '▶ Reproducir'));
@@ -202,18 +208,22 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)),
+      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), soundNote(el, episode.file),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
     attribution(el, library)];
 }
 
 // ---- Administration ---------------------------------------------------------------------------
 
+/** A link the web or the app can play: LuluStream, or a direct HTTPS video (MP4, HLS…). */
+export const validVideoLink = (url) => !!lulustreamEmbed(url) || (/^https:\/\//.test(String(url).trim()) && webPlayback(String(url).trim()).ok);
+
 /**
- * The «Pelis y series» admin section. `visible`/`setVisible` read and save the catalog switch;
- * `token()` gives the administrator's Firebase ID token for the hosting.
+ * The «Pelis y series» admin section: search a title in TMDB, choose it and paste its video link (for a
+ * series, the link of every episode of the chosen season). Everything is saved to Firestore and can be
+ * edited later. `readSettings`/`saveSettings` keep the TMDB key private; `publish` writes the library.
  */
-export function libraryAdmin(el, { visible, setVisible, token, field }) {
+export function libraryAdmin(el, { visible, setVisible, field, readSettings, saveSettings, publish }) {
   const status = el('p', { class: 'note', role: 'status' });
   const say = (text, error = false) => { status.textContent = text; status.className = error ? 'error' : 'note'; };
   const toggle = el('input', { type: 'checkbox', checked: visible });
@@ -223,86 +233,164 @@ export function libraryAdmin(el, { visible, setVisible, token, field }) {
     catch (error) { toggle.checked = !toggle.checked; say(error.message, true); }
     finally { toggle.disabled = false; }
   });
+  let settings = {}, current = { sections: {} };
   const key = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de TMDB (v3) o token de lectura (v4)' });
-  const folders = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, el('input', { placeholder: `Carpeta de ${s.label.toLowerCase()}` })]));
-  const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
-  const save = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar configuración');
-  const scan = el('button', { class: 'btn', type: 'button' }, 'Escanear carpetas y buscar en TMDB');
-  const busy = (on) => { save.disabled = scan.disabled = on; };
+  const saveKey = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave');
+  const tmdbKey = () => { if (!settings.tmdb) throw new Error('Primero añade la clave de TMDB en «Configuración».'); return settings.tmdb; };
+  const store = async (sections) => {
+    const next = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]));
+    await publish(libraryParts(next));
+    current = { ...current, sections: next };
+    drawList();
+  };
+  const sectionOf = (id) => LIBRARY_SECTIONS.find((s) => (current.sections[s.key] || []).some((item) => item.id === id))?.key || null;
+  const upsert = async (section, item) => {
+    const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
+    sections[section] = [...sections[section], item].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
+    await store(sections);
+  };
+  const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
+  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://lulustream.com/…', 'aria-label': label, class: 'library-link' });
+  const checkLinks = (inputs) => {
+    const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://lulustream.com/…) o un vídeo MP4/HLS por HTTPS.`); }
+  };
 
-  const drawList = async (fresh = false) => {
+  // ---- Search ----
+  const sectionPick = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key }, s.label)));
+  const query = el('input', { type: 'search', placeholder: 'Título de la película, serie o documental', 'aria-label': 'Buscar en TMDB' });
+  const searchButton = el('button', { class: 'btn', type: 'submit' }, 'Buscar en TMDB');
+  const results = el('div', { class: 'library-results' });
+  const editor = el('div', { class: 'library-editor', hidden: true });
+  const searchForm = el('form', { class: 'library-search-form', onsubmit: async (event) => {
+    event.preventDefault();
+    if (!query.value.trim()) return;
+    searchButton.disabled = true; results.replaceChildren(el('p', { class: 'note' }, 'Buscando…'));
     try {
-      const library = await fetchLibrary({ fresh });
-      list.replaceChildren(...LIBRARY_SECTIONS.flatMap((section) => {
-        const items = library.sections[section.key] || [];
-        return [el('h3', {}, `${section.label} · ${items.length}`), ...items.map((item) => adminRow(section, item))];
-      }));
-    } catch (error) { list.replaceChildren(el('p', { class: 'error' }, error.message)); }
-  };
-  const adminRow = (section, item) => {
-    const found = el('div', { class: 'library-results' });
-    const query = el('input', { type: 'search', value: item.title, 'aria-label': `Buscar ${item.title} en TMDB` });
-    const search = el('button', { class: 'btn small secondary', type: 'button' }, 'Buscar');
-    const pick = async (id, kind) => {
-      busy(true); say('Guardando…');
-      try { await libraryRequest({ action: 'match', item: item.id, id, kind }, await token()); say('Guardado.'); await drawList(true); }
-      catch (error) { say(error.message, true); } finally { busy(false); }
-    };
-    search.addEventListener('click', async () => {
-      search.disabled = true; found.replaceChildren(el('p', { class: 'note' }, 'Buscando…'));
-      try {
-        const { results } = await libraryRequest({ action: 'search', query: query.value, kind: section.key === 'series' ? 'tv' : 'movie' }, await token());
-        found.replaceChildren(...results.map((r) => el('button', { class: 'library-result', type: 'button', onclick: () => pick(r.id, r.kind) },
-          r.poster ? el('img', { src: r.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
-          el('span', {}, el('b', {}, `${r.title}${r.year ? ` (${r.year})` : ''}`), el('small', {}, r.kind === 'tv' ? 'Serie' : 'Película'), r.overview ? el('small', {}, r.overview) : null))),
-          el('button', { class: 'ghost', type: 'button', onclick: () => pick(null) }, 'No es ninguno'));
-        if (!results.length) found.prepend(el('p', { class: 'note' }, 'Sin resultados. Prueba con otro título.'));
-      } catch (error) { found.replaceChildren(el('p', { class: 'error' }, error.message)); }
-      finally { search.disabled = false; }
-    });
-    const state = item.status === 'matched' ? `✓ ${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}` : item.status === 'none' ? 'Sin reconocer' : 'Pendiente';
-    return el('details', { class: 'library-item' },
-      el('summary', {}, item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
-        el('span', { class: 'meta' }, el('b', {}, item.kind === 'tv' ? item.folder : item.file), el('span', { class: item.status === 'matched' ? 'ok' : 'note' }, state))),
-      el('div', { class: 'library-search-row' }, query, search), found);
-  };
+      const kind = sectionPick.value === 'movies' ? 'movie' : sectionPick.value === 'series' ? 'tv' : 'any';
+      const found = await searchTmdb(query.value.trim(), kind, tmdbKey());
+      results.replaceChildren(...found.map((r) => el('button', { class: 'library-result', type: 'button', onclick: () => { results.replaceChildren(); openEditor(sectionPick.value, r.id, r.kind); } },
+        r.poster ? el('img', { src: r.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
+        el('span', {}, el('b', {}, `${r.title}${r.year ? ` (${r.year})` : ''}`), el('small', {}, r.kind === 'tv' ? 'Serie' : 'Película'), r.overview ? el('small', {}, r.overview) : null))));
+      if (!found.length) results.append(el('p', { class: 'note' }, 'Sin resultados. Prueba con otro título.'));
+    } catch (error) { results.replaceChildren(el('p', { class: 'error' }, error.message)); }
+    finally { searchButton.disabled = false; }
+  } }, el('div', { class: 'library-search-row' }, sectionPick, query, searchButton));
+
+  // ---- Editor: a film's link, or a series' episode links season by season ----
+  async function openEditor(section, tmdbId, kind) {
+    editor.hidden = false;
+    editor.replaceChildren(el('p', { class: 'note' }, 'Cargando la ficha de TMDB…'));
+    editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    try {
+      const { info, seasons } = await tmdbDetails(tmdbId, kind, tmdbKey());
+      const id = `${kind === 'tv' ? 's' : 'm'}${info.id}`;
+      const existing = Object.values(current.sections).flat().find((item) => item.id === id);
+      const inSection = existing ? sectionOf(id) : section;
+      const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
+      const del = existing ? el('button', { class: 'ghost danger', type: 'button', onclick: async () => {
+        if (!confirm(`¿Quitar «${info.title}» de la biblioteca?`)) return;
+        try { await remove(id); say(`«${info.title}» quitada.`); editor.hidden = true; editor.replaceChildren(); } catch (error) { say(error.message, true); }
+      } }, kind === 'tv' ? 'Quitar la serie' : 'Quitar') : null;
+      const where = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key, selected: s.key === inSection }, s.label)));
+      const head = el('div', { class: 'library-editor-head' },
+        info.poster ? el('img', { src: info.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
+        el('div', {}, el('h3', {}, `${info.title}${info.year ? ` (${info.year})` : ''}`), el('p', { class: 'note' }, info.overview.slice(0, 260) || 'Sin sinopsis.'), field('Sección', where)));
+      const note = el('p', { class: 'note', role: 'status' });
+      if (kind !== 'tv') {
+        const link = linkInput(existing?.url, 'Enlace del vídeo');
+        const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
+          try {
+            if (!link.value.trim()) throw new Error('Pega el enlace del vídeo.');
+            checkLinks([link]);
+            save.disabled = true; note.textContent = 'Guardando…';
+            await upsert(where.value, movieItem(info, link.value.trim()));
+            note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
+          } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+        } }, existing ? 'Guardar cambios' : 'Guardar');
+        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo: https://lulustream.com/xxxxxxxx (o /e/xxxxxxxx).'),
+          el('div', { class: 'actions' }, save, del, close), note);
+        link.focus();
+        return;
+      }
+      // Series: choose the season, then paste the link of each episode.
+      const seasonPick = el('select', { 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: s.season },
+        `${s.name}${s.episodes ? ` · ${s.episodes} capítulos` : ''}${(existing?.episodes || []).some((e) => e.season === s.season) ? ' ✓' : ''}`)));
+      const firstWithLinks = seasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
+      seasonPick.value = String((firstWithLinks || seasons.find((s) => s.season > 0) || seasons[0])?.season ?? 1);
+      const rows = el('div', { class: 'library-episodes' });
+      let episodes = [], inputs = {};
+      const loadSeason = async () => {
+        rows.replaceChildren(el('p', { class: 'note' }, 'Cargando capítulos…'));
+        const season = Number(seasonPick.value);
+        try {
+          episodes = await seasonEpisodes(info.id, season, tmdbKey());
+          const saved = new Map((current.sections[sectionOf(id)] || []).find((item) => item.id === id)?.episodes?.filter((e) => e.season === season).map((e) => [e.episode, e.url]) || []);
+          inputs = Object.fromEntries(episodes.map((e) => [e.episode, linkInput(saved.get(e.episode), `Enlace del capítulo ${e.episode}`)]));
+          rows.replaceChildren(...episodes.map((e) => el('label', { class: 'library-episode-row' },
+            el('span', {}, el('b', {}, `${e.episode}.`), ` ${e.name || `Capítulo ${e.episode}`}`), inputs[e.episode])));
+          if (!episodes.length) rows.append(el('p', { class: 'note' }, 'TMDB no tiene capítulos para esta temporada.'));
+        } catch (error) { rows.replaceChildren(el('p', { class: 'error' }, error.message)); }
+      };
+      seasonPick.addEventListener('change', loadSeason);
+      const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
+        try {
+          checkLinks(Object.values(inputs));
+          const links = Object.fromEntries(Object.entries(inputs).map(([n, input]) => [n, input.value]));
+          const season = Number(seasonPick.value);
+          const before = Object.values(current.sections).flat().find((item) => item.id === id);
+          const item = seriesWithSeason(before, info, season, episodes, links);
+          if (!item.episodes.length) throw new Error('Pega el enlace de al menos un capítulo.');
+          save.disabled = true; note.textContent = 'Guardando…';
+          await upsert(where.value, item);
+          const count = item.episodes.filter((e) => e.season === season).length;
+          note.textContent = `Temporada ${season} guardada y publicada: ${count} ${count === 1 ? 'capítulo' : 'capítulos'} con enlace.`;
+          [...seasonPick.options].find((o) => Number(o.value) === season).textContent = `${seasons.find((s) => s.season === season)?.name || `Temporada ${season}`} · ${count} con enlace ✓`;
+        } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+      } }, 'Guardar temporada');
+      editor.replaceChildren(head, field('Temporada', seasonPick, 'Elige la temporada que quieres subir y pega el enlace de cada capítulo. Los capítulos sin enlace no se muestran.'),
+        rows, el('div', { class: 'actions' }, save, del, close), note);
+      await loadSeason();
+    } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
+  }
+
+  // ---- What is in the library ----
+  const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
+  function drawList() {
+    list.replaceChildren(...LIBRARY_SECTIONS.flatMap((section) => {
+      const items = current.sections[section.key] || [];
+      return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item' },
+        el('div', { class: 'library-item-row' },
+          item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
+          el('span', { class: 'meta' }, el('b', {}, `${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}`),
+            el('span', { class: 'note' }, item.kind === 'tv' ? `${new Set(item.episodes.map((e) => e.season)).size} temporadas · ${item.episodes.length} capítulos con enlace` : 'Con enlace')),
+          el('button', { class: 'btn small secondary', type: 'button', onclick: () => openEditor(section.key, item.tmdb?.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar')))) : [el('p', { class: 'note' }, 'Todavía no hay ninguno.')])];
+    }));
+  }
 
   (async () => {
     try {
-      const config = await libraryRequest({ action: 'status' }, await token());
-      key.placeholder = config.configured ? 'Clave guardada (escribe otra para cambiarla)' : key.placeholder;
-      for (const s of LIBRARY_SECTIONS) folders[s.key].value = config.folders?.[s.key] || '';
-    } catch (error) { say(error.message, true); }
+      settings = await readSettings();
+      if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      current = await fetchLibrary({ fresh: true });
+      drawList();
+    } catch (error) { say(error.message, true); list.replaceChildren(); }
   })();
-  save.addEventListener('click', async () => {
-    busy(true); say('Guardando…');
+  saveKey.addEventListener('click', async () => {
+    saveKey.disabled = true; say('Comprobando la clave en TMDB…');
     try {
-      const config = await libraryRequest({ action: 'configure', tmdb: key.value.trim(), folders: Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, folders[s.key].value.trim()])) }, await token());
-      key.value = ''; key.placeholder = config.configured ? 'Clave guardada (escribe otra para cambiarla)' : key.placeholder;
-      say('Configuración guardada en el hosting.');
-    } catch (error) { say(error.message, true); } finally { busy(false); }
+      if (!key.value.trim()) throw new Error('Pega la clave de TMDB.');
+      await checkTmdbKey(key.value.trim());
+      const next = { ...settings, tmdb: key.value.trim() };
+      await saveSettings(next);
+      settings = next; key.value = ''; key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      say('Clave de TMDB guardada (privada, solo para el administrador).');
+    } catch (error) { say(error.message, true); } finally { saveKey.disabled = false; }
   });
-  scan.addEventListener('click', async () => {
-    busy(true);
-    try {
-      say('Escaneando carpetas…');
-      const { counts } = await libraryRequest({ action: 'scan' }, await token());
-      say(`Encontrados: ${LIBRARY_SECTIONS.map((s) => `${counts[s.key] || 0} ${s.label.toLowerCase()}`).join(', ')}. Buscando en TMDB…`);
-      // TMDB is asked a few titles at a time so the hosting never hits its time limit.
-      for (let round = 0; round < 500; round++) {
-        const { pending } = await libraryRequest({ action: 'match-next' }, await token());
-        if (!pending) break;
-        say(`Buscando en TMDB… quedan ${pending}.`);
-      }
-      say('Biblioteca actualizada. Revisa abajo los títulos «Sin reconocer» y búscalos a mano.');
-      await drawList(true);
-    } catch (error) { say(error.message, true); } finally { busy(false); }
-  });
-  drawList(true);
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB y carpetas'),
-      el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda solo en el hosting, fuera de public_html. Las carpetas son rutas dentro de public_html.'),
-      field('Clave de TMDB', key), ...LIBRARY_SECTIONS.map((s) => field(`Carpeta de ${s.label.toLowerCase()}`, folders[s.key])), save),
-    el('div', { class: 'actions' }, scan), status, list];
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: clave de TMDB'),
+      el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
+      field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey)),
+    el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
 }

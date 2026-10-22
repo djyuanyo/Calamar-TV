@@ -1,11 +1,10 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
-import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, lulustreamSource } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
-import { prepareHostedVideo } from './video-bridge.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList } from './library.js';
@@ -443,8 +442,11 @@ initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
+let embedFrame = null;
 function stop() {
   playbackGeneration++;
+  if (embedFrame) { embedFrame.remove(); embedFrame = null; }
+  player.classList.remove('is-embed');
   video.onerror = null;
   video.onplaying = null;
   if (stopTs) { stopTs(); stopTs = null; }
@@ -529,6 +531,40 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
+  if (source.how.kind === 'embed') {
+    // LuluStream: the hosting reads its player page and our player plays the video straight from LuluStream.
+    // If that fails, LuluStream's own player is shown, with our title bar and Back button above it.
+    const showEmbed = () => {
+      if (generation !== playbackGeneration) return;
+      if (hls) { hls.destroy(); hls = null; }
+      video.onerror = null; video.onplaying = null;
+      video.removeAttribute('src'); video.load();
+      player.classList.add('is-embed');
+      playerStatus.textContent = '';
+      embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
+        allowfullscreen: true, referrerpolicy: 'origin' });
+      player.querySelector('.player-stage').append(embedFrame);
+    };
+    lulustreamSource(source.how.embed).then((url) => {
+      if (generation !== playbackGeneration) return;
+      if (!url) { showEmbed(); return; }
+      let started = false;
+      const failed = (data) => { if (started) next(data); else showEmbed(); };
+      if (window.Hls?.isSupported() && /\.m3u8($|\?)/i.test(url)) {
+        hls = new window.Hls({ lowLatencyMode: false });
+        hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) failed(data); });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+      } else video.src = url;
+      controls.attach(hls);
+      video.onplaying = () => { started = true; if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+      video.onerror = () => { const failure = videoFailure(video.error); if (failure) failed(failure); };
+      video.play().catch(() => {
+        if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+      });
+    });
+    return;
+  }
   if (source.how.kind === 'ts') {
     video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
     video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
@@ -566,32 +602,6 @@ function playSource(c, index) {
       onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la emisión…'; },
       onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
     });
-    return;
-  }
-  if (source.how.kind === 'file') {
-    // A video file of the hosting: FFmpeg there turns its audio into AAC so the browser can play it.
-    playerStatus.textContent = 'Preparando el vídeo…';
-    controls.attach(null);
-    prepareHostedVideo(source.url, {
-      isCurrent: () => generation === playbackGeneration,
-      onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
-    }).then((ready) => {
-      if (!ready || generation !== playbackGeneration) return;
-      video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
-      video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
-      if (window.Hls?.isSupported()) {
-        // The playlist grows while the file is converted: start at the beginning, not at its end.
-        hls = new window.Hls({ startPosition: 0 });
-        hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) next(data); });
-        hls.loadSource(ready.url);
-        hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = ready.url;
-      else { next({ details: 'codecUnsupported' }); return; }
-      controls.attach(hls);
-      video.play().catch(() => {
-        if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
-      });
-    }).catch((error) => { if (generation === playbackGeneration) next({ userMessage: error.message }); });
     return;
   }
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {

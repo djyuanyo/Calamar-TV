@@ -72,4 +72,20 @@ public class VideoResolverTest {
                 "<iframe src='https://example.com/embed/6'></iframe>", "https://example.com")
             .isEmpty());
   }
+
+  @Test
+  public void readsJwPlayerSourcesInsidePackedJavaScript() throws Exception {
+    String html = "<html><script>eval(function(p,a,c,k,e,d){while(c--)if(k[c])p=p.replace(new RegExp('\\\\b'+c.toString(a)+'\\\\b','g'),k[c]);return p}('0(\"1\").2({3:[{4:\"5://6.7.8/9/a/b/c.d?e=f&g=h\"}],i:\"5://j.7.8/b.k\"});',36,21,'jwplayer|vplayer|setup|sources|file|https|cdn|example|net|hls2|01|abc|master|m3u8|t|xyz|e|10800|image|img|jpg'.split('|')))</script></html>";
+    List<VideoResolver.Source> sources = VideoResolver.parse(html, "https://lulustream.com/e/abcd1234efgh");
+    assertEquals(1, sources.size());
+    assertEquals("https://cdn.example.net/hls2/01/abc/master.m3u8?t=xyz&e=10800", sources.get(0).url);
+  }
+
+  @Test
+  public void readsPlainJwPlayerSources() throws Exception {
+    List<VideoResolver.Source> sources =
+        VideoResolver.parse("<script>p.setup({sources:[{file:'https:\\/\\/cdn.example.net\\/v.m3u8'}],image:'https://x/y.jpg'})</script>", "https://lulustream.com/e/abcd1234efgh");
+    assertEquals(1, sources.size());
+    assertEquals("https://cdn.example.net/v.m3u8", sources.get(0).url);
+  }
 }

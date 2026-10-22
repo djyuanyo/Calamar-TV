@@ -101,3 +101,12 @@ test('when the event day does not show both teams the three days around it are s
  });
  assert.equal(result.matchId,e.id);assert.equal(calls.length,2);assert.match(calls[1],/dates=20261018-20261024/);
 });
+
+test('the matches of ESPN around the event date can be listed to choose one by hand',async()=>{
+ const {listMatches,googleSearchFor}=await import('../web/match-scores.js');
+ const near=fixture(),far={...fixture(),id:'2',date:'2026-10-22T20:00Z'};let asked='';
+ const list=await listMatches('2026-10-21T18:30:00Z',async url=>{asked=url;return {ok:true,json:async()=>({events:[far,near]})};});
+ assert.match(asked,/dates=20261020-20261022/);
+ assert.deepEqual(list.map(m=>[m.id,m.home,m.away]),[['401882870','Levante','Athletic Club'],['2','Levante','Athletic Club']]);
+ assert.equal(googleSearchFor('Celtic','Celta Vigo'),'https://www.google.com/search?q=Celtic%20vs%20Celta%20Vigo');
+});

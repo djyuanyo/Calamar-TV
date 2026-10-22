@@ -10,6 +10,10 @@ import java.net.URL;
 /** Fresh HTTPS document fetch, using the system network stack rather than WebView. */
 public final class PlayerDocument {
   public static final String USER_AGENT = "CalamarTV/2.2.2 (Android; Media3)";
+  static final String BROWSER_USER_AGENT =
+      "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+  /** HTTP IPTV servers often reject unknown players; they accept VLC, which is how they are usually tested. */
+  public static final String IPTV_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20";
 
   public interface ConnectionFactory {
     HttpURLConnection open(URL url) throws IOException;
@@ -53,7 +57,8 @@ public final class PlayerDocument {
         c.setReadTimeout(15000);
         c.setInstanceFollowRedirects(false);
         c.setUseCaches(false);
-        c.setRequestProperty("User-Agent", USER_AGENT);
+        // LuluStream only gives its player to browsers.
+        c.setRequestProperty("User-Agent", Library.Media.embed(current) != null ? BROWSER_USER_AGENT : USER_AGENT);
         c.setRequestProperty("Accept", "text/html,application/xhtml+xml");
         c.setRequestProperty("Cache-Control", "no-cache");
         int code = c.getResponseCode();

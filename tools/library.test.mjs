@@ -43,3 +43,27 @@ test('the 20 most recent are kept, newest first', () => {
   assert.equal(clock(3725), '1:02:05');
   assert.equal(clock(75), '1:15');
 });
+
+test('Google Drive videos play in the browser; other Google API links do not', async () => {
+  const { webPlayback } = await import('../web/catalog.js');
+  assert.deepEqual(webPlayback('https://www.googleapis.com/drive/v3/files/1AbC_d-9?alt=media&key=AIzaX'), { ok: true, kind: 'video' });
+  assert.equal(webPlayback('https://www.googleapis.com/drive/v3/files/1AbC').ok, false);
+  assert.equal(webPlayback('https://www.googleapis.com/youtube/v3/videos?alt=media').ok, false);
+});
+
+test('the library is read from Firestore: the index names the parts of each section', async () => {
+  const { fetchLibrary, LIBRARY_DOCS } = await import('../web/library.js');
+  const docs = { index: { sections: { movies: 2, series: 0 }, attribution: 'TMDB' }, 'movies-0': { items: [{ id: 'm1' }] }, 'movies-1': { items: [{ id: 'm2' }] } };
+  const asked = [];
+  const library = await fetchLibrary({ fresh: true, fetcher: async (url) => {
+    asked.push(url);
+    const name = url.slice(LIBRARY_DOCS.length).split('?')[0];
+    return docs[name] ? { ok: true, status: 200, json: async () => ({ fields: { json: { stringValue: JSON.stringify(docs[name]) } } }) } : { ok: false, status: 404 };
+  } });
+  assert.deepEqual(library.sections.movies.map((m) => m.id), ['m1', 'm2']);
+  assert.deepEqual(library.sections.series, []);
+  assert.equal(library.attribution, 'TMDB');
+  assert.match(asked[0], /databases\/\(default\)\/documents\/calamarLibrary\/index\?key=AIza/);
+  const empty = await fetchLibrary({ fresh: true, fetcher: async () => ({ ok: false, status: 404 }) });
+  assert.deepEqual(empty.sections, {});
+});

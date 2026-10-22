@@ -896,3 +896,30 @@ label[hidden] { display: none; }
   .mc-donut { width: 40px; height: 40px; }
   .mc-tab { font-size: 13px; }
 }
+.match-picker { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.match-picker[hidden] { display: none; }
+.match-options { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.match-option { text-align: left; justify-content: flex-start; white-space: normal; }
+/* LuluStream videos: their own player under our title bar (always visible, so Back is always there). */
+.player.is-embed .player-screen { display: flex; flex-direction: column; }
+.player.is-embed .player-top { position: relative; order: -1; background: #000; opacity: 1; pointer-events: auto; }
+.player.is-embed .player-stage { position: relative; inset: auto; flex: 1; }
+.player.is-embed video, .player.is-embed .player-shade, .player.is-embed .player-center, .player.is-embed .player-bottom { display: none; }
+.player-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+/* Admin: adding films, series and documentaries from TMDB with their video links. */
+.library-search-form .library-search-row { flex-wrap: wrap; }
+.library-search-form select { flex: 0 0 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.library-search-form input { flex: 1 1 220px; }
+.library-editor { display: grid; gap: 12px; margin: 14px 0; padding: 16px; border: 1px solid var(--accent); border-radius: 14px; background: var(--surface); }
+.library-editor[hidden] { display: none; }
+.library-editor-head { display: flex; gap: 14px; align-items: flex-start; }
+.library-editor-head img, .library-editor-head .thumb { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; flex: none; background: var(--surface-2); }
+.library-editor-head h3 { margin: 0 0 6px; }
+.library-editor select { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.library-link { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.library-episodes { display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.library-episode-row { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: var(--bg); }
+.library-item-row { display: flex; align-items: center; gap: 12px; }
+.library-item-row img, .library-item-row .thumb { width: 40px; height: 60px; object-fit: cover; border-radius: 6px; flex: none; }
+.library-item-row .meta { display: grid; flex: 1; min-width: 0; }
+.ghost.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }

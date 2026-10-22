@@ -1093,7 +1093,7 @@ public class MainActivity extends Activity {
     }
   }
 
-  // ---- Films, series and documentaries (calamar-library.php on the hosting) -------------------
+  // ---- Films, series and documentaries (Google Drive videos, published to Firestore) ----------
 
   Library.Data library;
   String genre = "", genreSection = "";
@@ -1482,7 +1482,11 @@ public class MainActivity extends Activity {
     if (!Library.Media.allowed(url)) return;
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
-    intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
+    String embed = Library.Media.embed(url);
+    if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
+      intent.putExtra("page_url", embed);
+      intent.putExtra("football_fallback", true);
+    } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
     intent.putExtra("title", entry.optString("title"));
     intent.putExtra("progress_entry", entry.toString());
     intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));

@@ -63,6 +63,30 @@ export async function publishCatalog(data, expectedRevision) {
   return expectedRevision + 1;
 }
 
+// ---- Films, series and documentaries ----------------------------------------------------------------
+// Settings (TMDB key, Drive folders) are private to the administrator; the library is public, in parts.
+const librarySettings = doc(db, 'calamarPrivate', 'library');
+export async function readLibrarySettings() {
+  if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
+  const snapshot = await getDocFromServer(librarySettings);
+  return snapshot.exists() ? snapshot.data() : {};
+}
+export async function saveLibrarySettings(settings) {
+  if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
+  await setDoc(librarySettings, settings);
+}
+/** Writes the parts and then the index that names them; parts of an older, longer library are removed. */
+export async function publishLibraryParts({ index, parts }) {
+  if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
+  const indexRef = doc(db, 'calamarLibrary', 'index');
+  const before = await getDocFromServer(indexRef).then((s) => s.exists() ? JSON.parse(s.data().json) : null).catch(() => null);
+  for (const [name, part] of Object.entries(parts)) await setDoc(doc(db, 'calamarLibrary', name), { json: JSON.stringify(part), updatedAt: serverTimestamp() });
+  await setDoc(indexRef, { json: JSON.stringify(index), updatedAt: serverTimestamp() });
+  for (const [section, count] of Object.entries(before?.sections || {})) {
+    for (let n = index.sections[section] ?? 0; n < count; n++) await deleteDoc(doc(db, 'calamarLibrary', `${section}-${n}`)).catch(() => {});
+  }
+}
+
 // ---- Audience ---------------------------------------------------------------------------------
 export const beat = (session, target) => setDoc(doc(db, AUDIENCE_PATH, session), { ...presence(target), updatedAt: serverTimestamp() });
 export const leave = (session) => deleteDoc(doc(db, AUDIENCE_PATH, session));

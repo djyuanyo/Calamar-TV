@@ -1,7 +1,8 @@
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { httpTsSource } from './http-stream.js';
-import { hostedVideo, VIDEO_FILE } from './video-bridge.js';
+// Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
+const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
 export const GROUP_ORDER = [OWN_GROUP, 'Generalistas', 'Deportes', 'Informativos', 'Infantiles', 'Música', 'Autonómicos'];
@@ -197,6 +198,30 @@ export function streamFailureReport({ details = '', code = 0, url = '', expiry =
 }
 
 /** How the browser can play a URL: 'hls', 'video', or a reason it needs the app. */
+// LuluStream links (the video page, /d/ or /e/) play in LuluStream's own player, embedded in ours.
+const LULU_HOSTS = ['lulustream.com', 'www.lulustream.com', 'luluvdo.com', 'www.luluvdo.com'];
+export function lulustreamEmbed(url) {
+  try {
+    const u = new URL(String(url).trim());
+    const code = u.pathname.match(/^\/(?:e\/|d\/|v\/)?([A-Za-z0-9]{8,20})(?:\.html)?\/?$/)?.[1];
+    return u.protocol === 'https:' && LULU_HOSTS.includes(u.hostname) && code && code !== 'api' ? `https://lulustream.com/e/${code}` : null;
+  } catch { return null; }
+}
+
+export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
+
+/** The HLS address of a LuluStream video, read by the hosting from its player page; null if it cannot. */
+export async function lulustreamSource(embed, fetcher = globalThis.fetch) {
+  const code = String(embed).match(/\/e\/([A-Za-z0-9]{8,20})$/)?.[1];
+  if (!code) return null;
+  try {
+    const response = await fetcher(`${LULU_ENDPOINT}?code=${code}`, { signal: AbortSignal.timeout(15000), referrerPolicy: 'no-referrer' });
+    const data = await response.json();
+    const u = new URL(data?.url);
+    return response.ok && u.protocol === 'https:' && /\.(m3u8|mp4)$/i.test(u.pathname) ? u.href : null;
+  } catch { return null; }
+}
+
 export function webPlayback(url) {
   let u;
   try {
@@ -205,8 +230,11 @@ export function webPlayback(url) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
-  if (hostedVideo(url)) return { ok: true, kind: 'file', bridge: true };
-  if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares solo se reproducen en el navegador si están en el hosting de Calamar' };
+  const embed = lulustreamEmbed(url);
+  if (embed) return { ok: true, kind: 'embed', embed };
+  // Films and series from Google Drive play straight from the Drive API (it allows browser video).
+  if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
+  if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };
   if (httpTsSource(url)) return { ok: true, kind: 'ts', relay: true };
   if (u.protocol === 'http:') return { ok: false, reason: 'Este enlace HTTP no es un flujo TS/IPTV compatible con el puente' };
   if (u.protocol !== 'https:') return { ok: false, reason: 'Este enlace usa http:// y el navegador lo bloquea en una web segura' };

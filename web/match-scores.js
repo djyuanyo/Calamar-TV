@@ -104,6 +104,21 @@ export async function resolveMatch(value, startAt, fetcher = globalThis.fetch) {
   }
   return { matchUrl, matchId: String(event.id), matchDate: new Date(event.date).toISOString(), result: matchResult(event), bothTeams: event.bothTeams };
 }
+/** ESPN's football matches around a date (the day before to the day after), to pick one by hand. */
+export async function listMatches(startAt, fetcher = globalThis.fetch) {
+  const date = Number.isFinite(Date.parse(startAt)) ? Date.parse(startAt) : Date.now();
+  const day = ms => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
+  const board = await json(`${API}scoreboard?dates=${day(date - 86400000)}-${day(date + 86400000)}&limit=1000`, fetcher);
+  return (board.events || []).map(e => {
+    const c = e.competitions?.[0], teams = c?.competitors || [];
+    const home = teams.find(t => t.homeAway === 'home')?.team, away = teams.find(t => t.homeAway === 'away')?.team;
+    if (!home || !away) return null;
+    return { id: String(e.id), date: new Date(e.date).toISOString(), home: home.displayName || home.name || '', away: away.displayName || away.name || '',
+      league: e.league?.name || c?.league?.name || e.season?.slug || '', distance: Math.abs(Date.parse(e.date) - date), event: e };
+  }).filter(Boolean).sort((a, b) => a.distance - b.distance);
+}
+/** A Google search link for a match chosen by hand without a share link (the catalog keeps a Google link). */
+export const googleSearchFor = (home, away) => `https://www.google.com/search?q=${encodeURIComponent(`${home} vs ${away}`)}`;
 export const EVENT_GRACE_MS = 5 * 60000;
 const storageKey = 'calamar-match-finished-v1';
 const finished = new Map();

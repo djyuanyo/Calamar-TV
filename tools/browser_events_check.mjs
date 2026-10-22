@@ -32,6 +32,9 @@ export const audience = async () => [...present.values()].map(target => ({ targe
 export const purgeAudience = async () => {};
 export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
 export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
+export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
+export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
+export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; };
 `;
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
@@ -284,6 +287,12 @@ try {
   await page.getByLabel('Enlace del partido en Google', { exact: false }).fill('https://share.google/RSJmsOE0s8wgQUT3n');
   await page.getByRole('button', { name: 'Comprobar partido', exact: true }).click();
   await page.getByText(/^Partido: Levante – Athletic Club · 30 nov.* · 2 – 1 · En juego · 74′ · Resultados: ESPN$/).waitFor();
+  // A link that is not recognised can be replaced by choosing the match from ESPN's list for that date.
+  await page.getByRole('button', { name: 'Elegir el partido de la lista', exact: true }).click();
+  await page.getByLabel('Buscar en ESPN', { exact: false }).fill('athletic');
+  await page.locator('.match-option', { hasText: 'Levante – Athletic Club' }).click();
+  await page.getByText(/^Partido elegido: Levante – Athletic Club · 30 nov/).waitFor();
+  assert.equal(await page.getByLabel('Enlace del partido en Google', { exact: false }).inputValue(), 'https://share.google/RSJmsOE0s8wgQUT3n');
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
   await page.locator('.nav a').filter({hasText:'Inicio'}).click();
@@ -362,16 +371,65 @@ try {
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
       tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
-      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://calamarmenciano.com/PELIS/Torrente.mp4', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] },
-      episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://calamarmenciano.com/SERIES/cap1001.mp4' }, { id: 'e1002', season: 10, episode: 2, url: 'https://calamarmenciano.com/SERIES/cap1002.mp4' }] }],
+      episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
-  await page.route('https://calamarmenciano.com/calamar-library.php**', route => route.fulfill({ contentType: 'application/json',
-    body: JSON.stringify(route.request().method() === 'GET' ? library : { configured: true, folders: { movies: 'PELIS', series: 'SERIES', documentaries: 'DOCS' } }) }));
+  // The library comes from Firestore (index + parts), published by the admin page; no hosting involved.
+  const libraryDocs = { index: { sections: { movies: 1, series: 1, documentaries: 1 }, attribution: library.attribution },
+    'movies-0': { items: library.sections.movies }, 'series-0': { items: library.sections.series }, 'documentaries-0': { items: [] } };
+  await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    return libraryDocs[name] ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(libraryDocs[name]) } } } }) : route.fulfill({ status: 404, json: {} });
+  });
   assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
   await page.goto(base + '/#/admin/biblioteca');
   await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
-  await page.locator('.library-item').filter({ hasText: 'Avatar.mp4' }).waitFor();
+  await page.locator('.library-item').filter({ hasText: 'Avatar (2009)' }).waitFor();
+  // The administrator searches TMDB, chooses a title and pastes its LuluStream link; series season by season.
+  await page.route('https://api.themoviedb.org/3/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path.endsWith('/search/movie') ? { results: [{ id: 76600, title: 'Avatar: El sentido del agua', release_date: '2022-12-14' }] }
+      : path.endsWith('/search/tv') ? { results: [{ id: 4500, name: 'Los hombres de Paco', first_air_date: '2005-10-09' }] }
+      : path.endsWith('/movie/76600') ? { title: 'Avatar: El sentido del agua', release_date: '2022-12-14', overview: 'Pandora otra vez', genres: [{ name: 'Ciencia ficción' }], credits: { cast: [] } }
+      : path.endsWith('/tv/4500') ? { name: 'Los hombres de Paco', first_air_date: '2005-10-09', overview: 'Comisaría', seasons: [{ season_number: 1, name: 'Temporada 1', episode_count: 2 }, { season_number: 2, name: 'Temporada 2', episode_count: 1 }], credits: { cast: [] } }
+      : path.endsWith('/tv/4500/season/1') ? { episodes: [{ episode_number: 1, name: 'Piloto' }, { episode_number: 2, name: 'Segundo' }] }
+      : path.endsWith('/tv/4500/season/2') ? { episodes: [{ episode_number: 1, name: 'Vuelta' }] } : {};
+    return route.fulfill({ json: body });
+  });
+  await page.getByLabel('Sección', { exact: true }).first().selectOption('movies');
+  await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
+  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
+  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByText(/^Enlace no válido/).waitFor(); // a folder link is refused
+  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/abc123def456');
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByText('Guardado y publicado.', { exact: true }).waitFor();
+  let parts = await page.evaluate(() => window.__libraryParts);
+  const added = parts.parts['movies-0'].items.find((m) => m.id === 'm76600');
+  assert.deepEqual([added.url, added.tmdb.overview], ['https://lulustream.com/abc123def456', 'Pandora otra vez']);
+  // A series: the season picker, one link per episode; episodes without a link are left out.
+  await page.getByLabel('Sección', { exact: true }).first().selectOption('series');
+  await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Paco');
+  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-result', { hasText: 'Los hombres de Paco' }).click();
+  await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco1x01aaaa');
+  await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
+  await page.getByText(/^Temporada 1 guardada y publicada: 1 capítulo con enlace/).waitFor();
+  await page.getByLabel('Temporada', { exact: true }).selectOption('2');
+  await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco2x01bbbb');
+  await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
+  await page.getByText(/^Temporada 2 guardada y publicada/).waitFor();
+  parts = await page.evaluate(() => window.__libraryParts);
+  const paco = parts.parts['series-0'].items.find((m) => m.id === 's4500');
+  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto', 'https://lulustream.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://lulustream.com/paco2x01bbbb']]);
+  // Editing later shows the saved links.
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
+  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://lulustream.com/abc123def456');
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
@@ -382,6 +440,23 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
+  // A LuluStream video: the hosting gives our player the video address; when it cannot be played
+  // LuluStream's own player is shown, embedded under our title bar.
+  const luluCodes = [];
+  await page.route('https://calamarmenciano.com/calamar-lulu.php?**', (route) => {
+    luluCodes.push(new URL(route.request().url()).searchParams.get('code'));
+    route.fulfill({ json: { url: 'https://cdn.lulu.test/hls/torrente.mp4' }, headers: { 'Access-Control-Allow-Origin': '*' } });
+  });
+  await page.locator('.poster-card', { hasText: 'Torrente' }).click();
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
+  await page.locator('#player iframe.player-embed').waitFor();
+  assert.equal(await page.locator('#player iframe.player-embed').getAttribute('src'), 'https://lulustream.com/e/torrente1998');
+  assert.deepEqual(luluCodes, ['torrente1998']);
+  assert.equal(await page.locator('#player-close').isVisible(), true);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('#player iframe'));
+  await page.locator('.nav a', { hasText: 'Películas' }).click();
+  await page.locator('.poster-card').first().waitFor();
   await page.locator('.poster-card', { hasText: 'Avatar' }).click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
@@ -413,7 +488,7 @@ try {
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('ended')));
   await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
   assert.ok(page.url().endsWith('#/series/spaco/ver/e1002'));
-  await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/SERIES/cap1002.mp4');
+  await page.waitForFunction(() => document.getElementById('video').src === 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // «Continuar viendo» heads the home page and opens the film where it was left.
   await page.evaluate(() => localStorage.setItem('calamar-progress-v1', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',

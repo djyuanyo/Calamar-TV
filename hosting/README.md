@@ -26,23 +26,16 @@ Después de verificar la integración, eliminar los PHP y JavaScript de diagnós
 `calamar-prueba-7f3c9b.php`, `calamar-video-test-9a62.php`, `calamar-video-test-9a62.js`
 y los ZIP subidos al servidor. Conservar el puente, calamar-http-source.php y los archivos de Chromecast que se estén usando.
 
-# Vídeos MKV/AVI del hosting en la web (sonido AC3/DTS)
+# Vídeos MKV/AVI (retirado del hosting)
 
-Subir `calamar-video.php` al `public_html` de `calamarmenciano.com`, junto a `calamar-cast.php` y
-`calamar-http-source.php` (usa el FFmpeg que instala `calamar-cast-install.php`). Comprobar en
-`https://calamarmenciano.com/calamar-video.php` que dice «Preparado».
+La conversión de vídeos en el hosting (`calamar-video.php`) se ha retirado: sobrecargaba el servidor. Si
+sigue subida, bórrala junto con la carpeta `public_html/calamar-video-cache`. Las películas y series están
+ahora en Google Drive: la app reproduce los MKV con sonido; para la web conviene subir MP4 (H.264 + AAC).
+`herramientas/convertir-mkv-a-mp4.bat` los convierte en el ordenador con FFmpeg.
 
-Un canal cuyo enlace es un vídeo guardado en este hosting (`.mkv`, `.avi`, `.mov`…) se reproduce en la
-web a través de esta página: el vídeo H.264 se copia tal cual (sin recomprimir, poco uso de CPU) y el
-audio, a menudo AC3 o DTS que Chrome y Firefox no reproducen, pasa a AAC estéreo. Se entrega en HLS que
-crece mientras se convierte: empieza a verse en unos segundos y, al terminar, se puede avanzar a
-cualquier punto. Si el vídeo no es H.264 (por ejemplo HEVC), también se convierte la imagen, lo que
-cuesta mucha más CPU.
+## Vídeos de LuluStream en la web
 
-Solo se aceptan archivos dentro de `public_html` de este sitio; nunca enlaces de otros servidores. Cada
-vídeo se convierte una sola vez y se guarda para siempre en `public_html/calamar-video-cache` (cerrada al
-acceso directo con `.htaccess`; solo la sirve `calamar-video.php`), compartido por todos los espectadores.
-Ocupa aproximadamente lo mismo que el original, así que el espacio del hosting se duplica para los vídeos
-que se vean. Solo se borra si el archivo original se elimina o se sustituye (entonces se vuelve a convertir
-al abrirlo). Para liberar espacio se puede borrar esa carpeta entera: los vídeos se convertirán de nuevo
-cuando alguien los abra. Como máximo se convierten 2 vídeos a la vez. La app Android reproduce estos archivos directamente con el decodificador del dispositivo.
+Subir `calamar-lulu.php` al `public_html`. Cuando alguien reproduce una película o capítulo de
+LuluStream en la web, este archivo lee la página del reproductor de LuluStream (unos 100 KB) y devuelve
+el enlace del vídeo; el vídeo va directamente de LuluStream al navegador, sin pasar por el hosting, y no
+se guarda nada en el servidor. Si no está subido o falla, la web muestra el reproductor de LuluStream.

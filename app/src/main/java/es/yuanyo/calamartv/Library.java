@@ -14,13 +14,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Films, series and documentaries published by hosting/calamar-library.php from the hosting's
- * folders, with TMDB details. Shown only while the administrator has it switched on.
+ * Films, series and documentaries published by the admin web page from Google Drive folders, with
+ * TMDB details. Shown only while the administrator has it switched on.
  */
 final class Library {
   private Library() {}
 
-  static final String ENDPOINT = "https://calamarmenciano.com/calamar-library.php?action=library";
+  /**
+   * Published by the admin web page to Firestore: «index» names the parts of each section («movies-0»…).
+   * Read with the public Firebase key, without signing in; the videos play from Google Drive.
+   */
+  static final String DOCS = "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/";
+  static final String KEY = "AIzaSyB5lJLnPd79iEupekufK5x11SXSqYL4dsk";
   /** Section keys in the published JSON and their names in the menu, in menu order. */
   static final String[][] SECTIONS = {
     {"movies", "Películas"}, {"series", "Series"}, {"documentaries", "Documentales"}
@@ -277,17 +282,33 @@ final class Library {
     }
   }
 
-  /** Only https files of the Calamar hosting are played; the list cannot point the player elsewhere. */
+  /** Only https LuluStream videos, Drive files or Calamar hosting files are played; the list cannot point the player elsewhere. */
   static final class Media {
     private Media() {}
 
+    /** The LuluStream player page (https://lulustream.com/e/CODE) of a LuluStream link, or null. */
+    static String embed(String address) {
+      try {
+        java.net.URI u = java.net.URI.create(address.trim());
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
+        if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null
+            || !(host.equals("lulustream.com") || host.equals("www.lulustream.com") || host.equals("luluvdo.com") || host.equals("www.luluvdo.com"))) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^/(?:e/|d/|v/)?([A-Za-z0-9]{8,20})(?:\\.html)?/?$").matcher(u.getPath() == null ? "" : u.getPath());
+        return m.matches() && !m.group(1).equals("api") ? "https://lulustream.com/e/" + m.group(1) : null;
+      } catch (Exception e) {
+        return null;
+      }
+    }
+
     static boolean allowed(String address) {
+      if (embed(address) != null) return true;
       try {
         java.net.URI u = java.net.URI.create(address);
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
         return "https".equalsIgnoreCase(u.getScheme())
             && u.getUserInfo() == null
-            && (host.equals("calamarmenciano.com") || host.equals("www.calamarmenciano.com"));
+            && (host.equals("calamarmenciano.com") || host.equals("www.calamarmenciano.com")
+                || (host.equals("www.googleapis.com") && u.getPath() != null && u.getPath().matches("/drive/v3/files/[A-Za-z0-9_-]+")));
       } catch (Exception e) {
         return false;
       }
@@ -301,7 +322,34 @@ final class Library {
   }
 
   static Data download() throws IOException, JSONException {
-    HttpURLConnection c = (HttpURLConnection) new URL(ENDPOINT).openConnection();
+    JSONObject index = part("index");
+    JSONObject library = new JSONObject(), sections = new JSONObject();
+    JSONObject counts = index == null ? null : index.optJSONObject("sections");
+    if (counts != null) for (java.util.Iterator<String> keys = counts.keys(); keys.hasNext(); ) {
+      String section = keys.next();
+      JSONArray items = new JSONArray();
+      for (int n = 0; n < Math.min(counts.optInt(section), 200); n++) {
+        JSONObject p = part(section + "-" + n);
+        JSONArray list = p == null ? null : p.optJSONArray("items");
+        if (list != null) for (int i = 0; i < list.length(); i++) items.put(list.get(i));
+      }
+      sections.put(section, items);
+    }
+    library.put("sections", sections).put("attribution", index == null ? "" : index.optString("attribution"));
+    return new Data(library);
+  }
+
+  /** One published part, or null when it does not exist (nothing published yet). */
+  static JSONObject part(String name) throws IOException, JSONException {
+    String body;
+    try { body = get(DOCS + name + "?key=" + KEY); }
+    catch (java.io.FileNotFoundException missing) { return null; }
+    catch (IOException error) { if ("HTTP 404".equals(error.getMessage())) return null; throw error; }
+    return new JSONObject(new JSONObject(body).getJSONObject("fields").getJSONObject("json").getString("stringValue"));
+  }
+
+  static String get(String address) throws IOException {
+    HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
     c.setConnectTimeout(10000);
     c.setReadTimeout(20000);
     c.setRequestProperty("Accept", "application/json");
@@ -309,9 +357,10 @@ final class Library {
     try {
       int status = c.getResponseCode();
       if (status != 200) throw new IOException("HTTP " + status);
-      return new Data(new JSONObject(Io.read(c.getInputStream())));
+      return Io.read(c.getInputStream());
     } finally {
       c.disconnect();
     }
   }
+
 }
