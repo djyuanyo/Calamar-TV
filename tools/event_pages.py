@@ -102,7 +102,29 @@ def read_catalog():
         return json.loads((ROOT / 'data/custom.json').read_text(encoding='utf-8'))
 
 
-def publish(site, base, catalog):
+IMAGE_TYPES = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}
+OWN_IMAGES = ('https://raw.githubusercontent.com/djyuanyo/Calamar-TV/', 'https://djyuanyo.github.io/Calamar-TV/')
+
+
+def download_cover(url):
+    """(bytes, extension) of a cover on another site, or None. Many image sites refuse WhatsApp's robot or
+    links from elsewhere, so the preview page carries its own copy, made here from GitHub."""
+    try:
+        request = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+                                                       'Accept': 'image/jpeg,image/png,image/webp,image/*;q=0.8'})
+        with urllib.request.urlopen(request, timeout=15) as answer:
+            kind = (answer.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+            data = answer.read(5 * 1024 * 1024 + 1)
+    except Exception as error:
+        print(f'::warning::No se pudo copiar la portada {url[:80]} ({error}); la vista previa usa el enlace')
+        return None
+    if kind not in IMAGE_TYPES or not data or len(data) > 5 * 1024 * 1024:
+        print(f'::warning::La portada {url[:80]} no es una imagen JPEG/PNG/WebP de hasta 5 MB ({kind or "sin tipo"})')
+        return None
+    return data, IMAGE_TYPES[kind]
+
+
+def publish(site, base, catalog, download=download_cover):
     site, base = pathlib.Path(site), base if base.endswith('/') else base + '/'
     slugs = event_slugs(catalog)
     for event in catalog.get('events') or []:
@@ -110,7 +132,12 @@ def publish(site, base, catalog):
         folder = site / 'evento' / slug
         folder.mkdir(parents=True, exist_ok=True)
         cover, image = str(event.get('cover') or ''), ''
-        if cover.startswith('https://'):
+        copy = download(cover) if cover.startswith('https://') and not cover.startswith(OWN_IMAGES) else None
+        if copy:
+            data, extension = copy
+            (folder / f'portada.{extension}').write_bytes(data)
+            image = f'{base}evento/{slug}/portada.{extension}'
+        elif cover.startswith('https://'):
             image = cover
         elif COVER.match(cover):
             kind, data = COVER.match(cover).groups()
