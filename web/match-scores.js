@@ -9,21 +9,55 @@ export function googleMatchUrl(value) {
   return u.href;
 }
 const normal = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-function mentioned(team, query) {
-  return ['displayName', 'shortDisplayName', 'name'].some(key => {
-    const alias = normal(team?.[key]);
-    return alias.length >= 4 && (` ${query.replace(/\bclub brujas\b/g, 'club brugge')} `).includes(` ${alias} `);
-  });
+// Google writes many names in Spanish; ESPN uses the international ones. Both forms are kept.
+const SPANISH = [['club brujas', 'club brugge'], ['brujas', 'brugge'], ['napoles', 'napoli'], ['oporto', 'porto'], ['lisboa', 'lisbon'],
+  ['sporting de portugal', 'sporting cp'], ['estrella roja', 'crvena zvezda red star'], ['turin', 'torino'], ['inter de milan', 'inter milan internazionale'],
+  ['bayern de munich', 'bayern munich'], ['marsella', 'marseille'], ['olympique de lyon', 'lyon'], ['copenhague', 'copenhagen'], ['salzburgo', 'salzburg'],
+  ['praga', 'prague'], ['amberes', 'antwerp'], ['estambul', 'istanbul'], ['psg', 'paris saint germain'], ['man city', 'manchester city'],
+  ['man united', 'manchester united'], ['spurs', 'tottenham'], ['inglaterra', 'england'], ['alemania', 'germany'], ['francia', 'france'],
+  ['italia', 'italy'], ['paises bajos', 'netherlands'], ['holanda', 'netherlands'], ['belgica', 'belgium'], ['suiza', 'switzerland'], ['suecia', 'sweden'],
+  ['noruega', 'norway'], ['dinamarca', 'denmark'], ['croacia', 'croatia'], ['polonia', 'poland'], ['turquia', 'turkey turkiye'], ['grecia', 'greece'],
+  ['gales', 'wales'], ['escocia', 'scotland'], ['irlanda', 'ireland'], ['rumania', 'romania'], ['hungria', 'hungary'], ['republica checa', 'czechia czech republic'],
+  ['eslovaquia', 'slovakia'], ['eslovenia', 'slovenia'], ['ucrania', 'ukraine'], ['islandia', 'iceland'], ['finlandia', 'finland'], ['marruecos', 'morocco'],
+  ['estados unidos', 'united states usa'], ['brasil', 'brazil'], ['japon', 'japan'], ['corea del sur', 'south korea'], ['arabia saudi', 'saudi arabia'],
+  ['egipto', 'egypt'], ['camerun', 'cameroon'], ['sudafrica', 'south africa'], ['nueva zelanda', 'new zealand'], ['argelia', 'algeria'], ['tunez', 'tunisia']];
+// Words shared by many clubs: on their own they do not identify a team.
+const GENERIC = new Set(['fc', 'cf', 'sc', 'ac', 'cd', 'ud', 'sd', 'rc', 'afc', 'club', 'de', 'del', 'la', 'el', 'los', 'las', 'real', 'city', 'united',
+  'sporting', 'athletic', 'atletico', 'deportivo', 'racing', 'union', 'olympique', 'borussia', 'inter', 'fk', 'sk', 'ss', 'as', 'us', 'ssc', 'sv', 'vfb',
+  'vfl', 'tsg', 'rb', 'cp', 'sa', 'the', 'and', 'saint', 'st', 'san', 'santa', 'town', 'rovers', 'wanderers', 'county', 'albion', 'vs', 'contra', 'v']);
+export function expandQuery(query) {
+  let text = ` ${normal(query)} `;
+  for (const [es, en] of SPANISH) if (text.includes(` ${es} `)) text += `${en} `;
+  return text.trim();
 }
+/** How well a team appears in the link's text: 1 its full name, a fraction for its distinctive words, 0 not at all. */
+export function teamScore(team, query) {
+  const text = ` ${query} `, words = new Set(query.split(' '));
+  const aliases = ['displayName', 'shortDisplayName', 'name', 'location', 'nickname'].map(key => normal(team?.[key])).filter(Boolean);
+  if (aliases.some(alias => alias.length >= 4 && text.includes(` ${alias} `))) return 1;
+  const abbreviation = normal(team?.abbreviation);
+  if (abbreviation.length >= 3 && words.has(abbreviation)) return 1;
+  const distinctive = [...new Set(aliases.flatMap(alias => alias.split(' ')))].filter(w => w.length >= 3 && !GENERIC.has(w));
+  const found = distinctive.filter(w => words.has(w)).length;
+  return distinctive.length ? found / distinctive.length : 0;
+}
+/**
+ * The match of the link: both teams named beats one, a fuller name beats a partial one, and among equals
+ * the closest to the event's date wins. The event's own teams and name are not used, so a link works
+ * even when the event was named differently.
+ */
 export function identifyMatch(data, query, startAt) {
-  const date = Date.parse(startAt);
-  if (!Number.isFinite(date)) throw Error('Indica primero la fecha y hora del evento.');
-  const matches = (data.events || []).filter(e => {
-    const c = e.competitions?.[0];
-    return Math.abs(Date.parse(e.date) - date) <= 18 * 3600000 && c?.competitors?.length === 2 && c.competitors.every(t => mentioned(t.team, normal(query)));
-  });
-  if (matches.length !== 1) throw Error(matches.length ? 'Hay varios partidos: comprueba el enlace y la fecha.' : 'No se encontró este partido en los resultados. Comprueba el enlace, la fecha y los equipos.');
-  return matches[0];
+  const center = Number.isFinite(Date.parse(startAt)) ? Date.parse(startAt) : Date.now();
+  const text = expandQuery(query);
+  const ranked = (data.events || []).map(e => {
+    const teams = e.competitions?.[0]?.competitors || [];
+    if (teams.length !== 2) return null;
+    const scores = teams.map(t => teamScore(t.team, text));
+    return { e, both: scores.every(x => x > 0), total: scores[0] + scores[1], distance: Math.abs(Date.parse(e.date) - center) };
+  }).filter(x => x && x.total > 0)
+    .sort((a, b) => (b.both - a.both) || (b.total - a.total) || (a.distance - b.distance));
+  if (!ranked.length) throw Error('No se encontró este partido en los resultados de ESPN. Comprueba que el enlace sea de un partido de fútbol.');
+  return Object.assign(ranked[0].e, { bothTeams: ranked[0].both });
 }
 export function matchResult(data) {
   const e = data.header || data, c = e.competitions?.[0];
@@ -57,12 +91,18 @@ export async function resolveMatch(value, startAt, fetcher = globalThis.fetch) {
     googleUrl = googleMatchUrl(data.url);
     if (new URL(googleUrl).hostname === 'share.google') throw Error('Google no ha devuelto el partido. Abre el enlace y copia la dirección completa.');
   }
-  const date = Date.parse(startAt);
-  if (!Number.isFinite(date)) throw Error('Indica primero la fecha y hora del evento.');
+  const date = Number.isFinite(Date.parse(startAt)) ? Date.parse(startAt) : Date.now();
   const day = ms => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
-  const board = await json(`${API}scoreboard?dates=${day(date)}&limit=1000`, fetcher);
-  const event = identifyMatch(board, new URL(googleUrl).searchParams.get('q'), startAt);
-  return { matchUrl, matchId: String(event.id), matchDate: new Date(event.date).toISOString(), result: matchResult(event) };
+  const query = new URL(googleUrl).searchParams.get('q');
+  // First the event's day; when that does not show both teams, the three days around it too, in case
+  // the event's date and the match's do not agree.
+  let event = null;
+  try { event = identifyMatch(await json(`${API}scoreboard?dates=${day(date)}&limit=1000`, fetcher), query, startAt); } catch {}
+  if (!event?.bothTeams) {
+    try { event = identifyMatch(await json(`${API}scoreboard?dates=${day(date - 3 * 86400000)}-${day(date + 3 * 86400000)}&limit=1000`, fetcher), query, startAt); }
+    catch (error) { if (!event) throw error; }
+  }
+  return { matchUrl, matchId: String(event.id), matchDate: new Date(event.date).toISOString(), result: matchResult(event), bothTeams: event.bothTeams };
 }
 export const EVENT_GRACE_MS = 5 * 60000;
 const storageKey = 'calamar-match-finished-v1';
@@ -85,11 +125,15 @@ export const matchExpired = (id, now = Date.now()) => matchDeadline(id) > 0 && n
 // Retained admin history must not download years of old matches every 30 seconds.
 export const shouldPollMatch = (id, now = Date.now()) => !matchExpired(id, now) || now - matchDeadline(id) < 86400000;
 const cache = new Map();
-export async function fetchMatch(id, fetcher = globalThis.fetch) {
+/** ESPN's whole match summary (score, events, statistics, line-ups), shared by the badge and the match page. */
+export async function fetchSummary(id, fetcher = globalThis.fetch) {
   if (!/^\d{1,20}$/.test(String(id))) throw Error('Identificador de partido no válido.');
   const old = cache.get(id);
   if (old && Date.now() - old.at < (matchExpired(id) ? 600000 : 30000)) return old.promise;
-  const promise = json(`${API}summary?event=${id}`, fetcher).then(matchResult).then(result => rememberMatch(String(id), result));
+  const promise = json(`${API}summary?event=${id}`, fetcher);
   cache.set(id, { at: Date.now(), promise });
   try { return await promise; } catch (e) { cache.delete(id); throw e; }
+}
+export async function fetchMatch(id, fetcher = globalThis.fetch) {
+  return rememberMatch(String(id), matchResult(await fetchSummary(id, fetcher)));
 }

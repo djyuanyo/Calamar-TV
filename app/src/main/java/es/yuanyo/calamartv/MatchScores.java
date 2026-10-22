@@ -23,16 +23,52 @@ public final class MatchScores {
     for(String part:(u.getRawQuery()==null?"":u.getRawQuery()).split("&")){String[] p=part.split("=",2);if("q".equals(p[0])&&p.length==2)return URLDecoder.decode(p[1],"UTF-8");}return "";
   }
   static String normal(String s){return Normalizer.normalize(s,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();}
-  static boolean mentioned(JSONObject team,String query){for(String key:new String[]{"displayName","shortDisplayName","name"}){String alias=normal(team.optString(key));if(alias.length()>=4&&(" "+query.replaceAll("\\bclub brujas\\b","club brugge")+" ").contains(" "+alias+" "))return true;}return false;}
   static String iso(String value){return value.replaceAll("T(\\d{2}:\\d{2})Z$","T$1:00Z");}
+  // Google writes many names in Spanish; ESPN uses the international ones. Both forms are kept (as on the web).
+  static final String[][] SPANISH={{"club brujas","club brugge"},{"brujas","brugge"},{"napoles","napoli"},{"oporto","porto"},{"lisboa","lisbon"},
+    {"sporting de portugal","sporting cp"},{"estrella roja","crvena zvezda red star"},{"turin","torino"},{"inter de milan","inter milan internazionale"},
+    {"bayern de munich","bayern munich"},{"marsella","marseille"},{"olympique de lyon","lyon"},{"copenhague","copenhagen"},{"salzburgo","salzburg"},
+    {"praga","prague"},{"amberes","antwerp"},{"estambul","istanbul"},{"psg","paris saint germain"},{"man city","manchester city"},
+    {"man united","manchester united"},{"spurs","tottenham"},{"inglaterra","england"},{"alemania","germany"},{"francia","france"},
+    {"italia","italy"},{"paises bajos","netherlands"},{"holanda","netherlands"},{"belgica","belgium"},{"suiza","switzerland"},{"suecia","sweden"},
+    {"noruega","norway"},{"dinamarca","denmark"},{"croacia","croatia"},{"polonia","poland"},{"turquia","turkey turkiye"},{"grecia","greece"},
+    {"gales","wales"},{"escocia","scotland"},{"irlanda","ireland"},{"rumania","romania"},{"hungria","hungary"},{"republica checa","czechia czech republic"},
+    {"eslovaquia","slovakia"},{"eslovenia","slovenia"},{"ucrania","ukraine"},{"islandia","iceland"},{"finlandia","finland"},{"marruecos","morocco"},
+    {"estados unidos","united states usa"},{"brasil","brazil"},{"japon","japan"},{"corea del sur","south korea"},{"arabia saudi","saudi arabia"},
+    {"egipto","egypt"},{"camerun","cameroon"},{"sudafrica","south africa"},{"nueva zelanda","new zealand"},{"argelia","algeria"},{"tunez","tunisia"}};
+  // Words shared by many clubs: on their own they do not identify a team.
+  static final Set<String> GENERIC=new HashSet<>(Arrays.asList("fc","cf","sc","ac","cd","ud","sd","rc","afc","club","de","del","la","el","los","las","real","city","united",
+    "sporting","athletic","atletico","deportivo","racing","union","olympique","borussia","inter","fk","sk","ss","as","us","ssc","sv","vfb",
+    "vfl","tsg","rb","cp","sa","the","and","saint","st","san","santa","town","rovers","wanderers","county","albion","vs","contra","v"));
+  static String expand(String query){String text=" "+normal(query)+" ";StringBuilder out=new StringBuilder(text);for(String[] pair:SPANISH)if(text.contains(" "+pair[0]+" "))out.append(pair[1]).append(' ');return out.toString().trim();}
+  /** How well a team appears in the link's text: 1 its full name, a fraction for its distinctive words, 0 not at all. */
+  static double teamScore(JSONObject team,String query){
+    String text=" "+query+" ";Set<String> words=new HashSet<>(Arrays.asList(query.split(" ")));
+    List<String> aliases=new ArrayList<>();for(String key:new String[]{"displayName","shortDisplayName","name","location","nickname"}){String a=normal(team.optString(key));if(!a.isEmpty())aliases.add(a);}
+    for(String a:aliases)if(a.length()>=4&&text.contains(" "+a+" "))return 1;
+    String abbreviation=normal(team.optString("abbreviation"));if(abbreviation.length()>=3&&words.contains(abbreviation))return 1;
+    Set<String> distinctive=new LinkedHashSet<>();for(String a:aliases)for(String w:a.split(" "))if(w.length()>=3&&!GENERIC.contains(w))distinctive.add(w);
+    int found=0;for(String w:distinctive)if(words.contains(w))found++;
+    return distinctive.isEmpty()?0:found/(double)distinctive.size();
+  }
+  /**
+   * The match of the link: both teams named beats one, a fuller name beats a partial one, and among equals the
+   * closest to the event's date wins. The event's own teams and name are not used.
+   */
   static JSONObject identify(JSONObject data,String query,String startAt)throws Exception{
-    long date=SportsCatalog.instant(startAt); if(date==Long.MAX_VALUE)throw new IOException("Indica la fecha y hora del partido");
-    JSONArray found=new JSONArray(),events=data.optJSONArray("events");
+    long parsed=SportsCatalog.instant(startAt),center=parsed==Long.MAX_VALUE?System.currentTimeMillis():parsed;String text=expand(query);
+    JSONObject best=null;boolean bestBoth=false;double bestTotal=0;long bestDistance=Long.MAX_VALUE;
+    JSONArray events=data.optJSONArray("events");
     if(events!=null)for(int i=0;i<events.length();i++){
-      JSONObject e=events.getJSONObject(i);JSONArray cs=e.getJSONArray("competitions").getJSONObject(0).getJSONArray("competitors");
-      if(Math.abs(SportsCatalog.instant(iso(e.optString("date")))-date)<=18*3600000L && cs.length()==2 && mentioned(cs.getJSONObject(0).getJSONObject("team"),normal(query)) && mentioned(cs.getJSONObject(1).getJSONObject("team"),normal(query)))found.put(e);
+      JSONObject e=events.getJSONObject(i);JSONArray cs=e.getJSONArray("competitions").getJSONObject(0).optJSONArray("competitors");
+      if(cs==null||cs.length()!=2)continue;
+      double a=teamScore(cs.getJSONObject(0).optJSONObject("team")==null?new JSONObject():cs.getJSONObject(0).getJSONObject("team"),text),b=teamScore(cs.getJSONObject(1).optJSONObject("team")==null?new JSONObject():cs.getJSONObject(1).getJSONObject("team"),text);
+      if(a+b<=0)continue;
+      boolean both=a>0&&b>0;long when=SportsCatalog.instant(iso(e.optString("date"))),distance=when==Long.MAX_VALUE?Long.MAX_VALUE:Math.abs(when-center);
+      if(best==null||(both&&!bestBoth)||(both==bestBoth&&(a+b>bestTotal||(a+b==bestTotal&&distance<bestDistance)))){best=e;bestBoth=both;bestTotal=a+b;bestDistance=distance;}
     }
-    if(found.length()!=1)throw new IOException(found.length()==0?"No se encontró este partido en los resultados. Comprueba el enlace y la fecha":"Hay varios partidos. Comprueba el enlace y la fecha");return found.getJSONObject(0);
+    if(best==null)throw new IOException("No se encontró este partido en los resultados de ESPN. Comprueba que el enlace sea de un partido de fútbol");
+    return best.put("bothTeams",bestBoth);
   }
   static final long EVENT_GRACE_MS=5*60000L;
   static final Map<String,Long> finished=new HashMap<>();
@@ -83,14 +119,27 @@ public final class MatchScores {
       catch(Exception e){throw new IOException("No se pudo abrir el enlace corto. Sube calamar-match.php al hosting o usa el enlace completo de Google");}
     }
     if("share.google".equals(u.getHost()))throw new IOException("Google no ha devuelto el partido");
-    long date=SportsCatalog.instant(startAt);if(date==Long.MAX_VALUE)throw new IOException("Indica primero fecha y hora");
+    long parsed=SportsCatalog.instant(startAt),date=parsed==Long.MAX_VALUE?System.currentTimeMillis():parsed;
     SimpleDateFormat day=new SimpleDateFormat("yyyyMMdd",Locale.ROOT);day.setTimeZone(TimeZone.getTimeZone("UTC"));
-    JSONObject e=identify(json(API+"scoreboard?dates="+day.format(new Date(date))+"&limit=1000"),query(u),startAt);
+    // First the event's day; when that does not show both teams, the three days around it too.
+    JSONObject e=null;
+    try{e=identify(json(API+"scoreboard?dates="+day.format(new Date(date))+"&limit=1000"),query(u),startAt);}catch(Exception ignored){}
+    if(e==null||!e.optBoolean("bothTeams")){
+      try{e=identify(json(API+"scoreboard?dates="+day.format(new Date(date-3*86400000L))+"-"+day.format(new Date(date+3*86400000L))+"&limit=1000"),query(u),startAt);}
+      catch(Exception error){if(e==null)throw error;}
+    }
     return new JSONObject().put("matchUrl",value.trim()).put("matchId",e.getString("id")).put("matchDate",iso(e.getString("date")));
+  }
+  static final Map<String,Object[]> summaries=new HashMap<>();
+  /** ESPN's whole match summary (score, events, statistics, line-ups), shared by the score and the match page. */
+  public static JSONObject summary(String id)throws Exception{
+    if(!id.matches("\\d{1,20}"))throw new IOException("Identificador de partido no válido");
+    synchronized(summaries){Object[] c=summaries.get(id);if(c!=null&&System.currentTimeMillis()-(Long)c[0]<(expired(id,System.currentTimeMillis())?600000:30000))return (JSONObject)c[1];}
+    JSONObject data=json(API+"summary?event="+id);synchronized(summaries){summaries.put(id,new Object[]{System.currentTimeMillis(),data});}return data;
   }
   public static Result fetch(String id)throws Exception{
     if(!id.matches("\\d{1,20}"))throw new IOException("Identificador de partido no válido");
     synchronized(cache){Cached c=cache.get(id);if(c!=null&&System.currentTimeMillis()-c.at<(expired(id,System.currentTimeMillis())?600000:30000))return c.value;}
-    Result result=parse(json(API+"summary?event="+id));remember(id,result,System.currentTimeMillis());synchronized(cache){cache.put(id,new Cached(result));}return result;
+    Result result=parse(summary(id));remember(id,result,System.currentTimeMillis());synchronized(cache){cache.put(id,new Cached(result));}return result;
   }
 }

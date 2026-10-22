@@ -260,7 +260,17 @@ try {
   let scoreFinished = false, scoreOffline = false;
   const matchFixture = () => ({ id: '401882870', date: '2026-11-30T12:00Z', competitions: [{ id: '401882870', status: { displayClock: "74'", type: { state: scoreFinished ? 'post' : 'in', name: scoreFinished ? 'STATUS_FULL_TIME' : 'STATUS_SECOND_HALF', completed: scoreFinished } }, competitors: [{ homeAway: 'home', score: '2', team: { displayName: 'Levante' } }, { homeAway: 'away', score: '1', team: { displayName: 'Athletic Club' } }] }] });
   await page.route('https://calamarmenciano.com/calamar-match.php?**', route => route.fulfill({ json: { url: 'https://www.google.com/search?q=levante+ud+contra+athletic+club' } }));
-  await page.route('https://site.api.espn.com/**', route => scoreOffline ? route.abort() : route.fulfill({ json: route.request().url().includes('scoreboard') ? { events: [matchFixture()] } : { header: matchFixture() } }));
+  // ESPN's summary as the match page reads it: key events, team statistics, line-ups and game information.
+  const matchSummary = () => ({ header: { ...matchFixture(), league: { name: 'LaLiga' } },
+    keyEvents: [{ type: { type: 'goal', text: 'Goal' }, scoringPlay: true, clock: { displayValue: "12'" }, team: { displayName: 'Levante' }, participants: [{ athlete: { displayName: 'Carlos Álvarez' } }] },
+      { type: { type: 'yellow-card', text: 'Yellow Card' }, clock: { displayValue: "30'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Oihan Sancet' } }] },
+      { type: { type: 'substitution', text: 'Substitution' }, clock: { displayValue: "60'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Nico Williams' } }, { athlete: { displayName: 'Iñaki Williams' } }] }],
+    boxscore: { teams: [{ team: { displayName: 'Levante' }, statistics: [{ name: 'possessionPct', displayValue: '58' }, { name: 'totalShots', displayValue: '14' }, { name: 'shotsOnTarget', displayValue: '6' }] },
+      { team: { displayName: 'Athletic Club' }, statistics: [{ name: 'possessionPct', displayValue: '42' }, { name: 'totalShots', displayValue: '9' }, { name: 'shotsOnTarget', displayValue: '3' }] }] },
+    rosters: [{ homeAway: 'home', formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
+      { homeAway: 'away', formation: '4-2-3-1', roster: [{ starter: true, jersey: '13', athlete: { displayName: 'Julen Agirrezabala' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: true, jersey: '11', athlete: { displayName: 'Iñaki Williams' }, position: { abbreviation: 'F' }, subbedOut: true, formationPlace: '9' }] }],
+    gameInfo: { venue: { fullName: 'Estadio Ciutat de València', address: { city: 'Valencia', country: 'España' } }, attendance: 21000, officials: [{ displayName: 'Mateu Lahoz', position: { displayName: 'Referee' } }] } });
+  await page.route('https://site.api.espn.com/**', route => scoreOffline ? route.abort() : route.fulfill({ json: route.request().url().includes('scoreboard') ? { events: [matchFixture()] } : matchSummary() }));
   await page.goto(base + '/#/admin/evento');
   await page.getByRole('heading', { name: 'Crear evento', exact: true }).waitFor();
   await page.getByLabel('Nombre del evento', { exact: true }).fill('Levante vs Athletic');
@@ -269,7 +279,7 @@ try {
   await page.getByRole('button', { name: 'Sports One', exact: true }).click();
   await page.getByLabel('Enlace del partido en Google', { exact: false }).fill('https://share.google/RSJmsOE0s8wgQUT3n');
   await page.getByRole('button', { name: 'Comprobar partido', exact: true }).click();
-  await page.getByText('Levante – Athletic Club · 2 – 1 · En juego · 74′ · Resultados: ESPN', { exact: true }).waitFor();
+  await page.getByText(/^Partido: Levante – Athletic Club · 30 nov.* · 2 – 1 · En juego · 74′ · Resultados: ESPN$/).waitFor();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
   await page.locator('.nav a').filter({hasText:'Inicio'}).click();
@@ -279,13 +289,26 @@ try {
   assert.ok(Math.abs(cardPosition.right-8)<1.5);assert.ok(Math.abs(cardPosition.top-8)<1.5);
   await page.locator('.event-card').click();
   await page.locator('#player:not([hidden])').waitFor();
-  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  // An event with a match link stays in the page: the match's information, statistics and line-ups under the video.
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), undefined);
   assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
+  await page.locator('#match-center .mc-board').waitFor();
+  assert.match(await page.locator('.mc-board').textContent(), /Levante.*2 – 1.*En juego · 74′.*Athletic Club/);
+  assert.match(await page.locator('.mc-events').textContent(), /12'.*Carlos Álvarez.*Gol.*30'.*Oihan Sancet.*Tarjeta amarilla.*60'.*Nico Williams.*Sale Iñaki Williams/);
+  assert.match(await page.locator('.mc-facts').textContent(), /LaLiga.*Estadio Ciutat de València.*Valencia, España.*21\.000.*Mateu Lahoz/);
+  const screen = await page.evaluate(() => { const v = document.querySelector('.player-screen').getBoundingClientRect(), m = document.querySelector('#match-center').getBoundingClientRect(); return { below: m.top >= v.bottom - 1, ratio: v.width / v.height }; });
+  assert.ok(screen.below, 'the match is under the video'); assert.ok(Math.abs(screen.ratio - 16 / 9) < 0.05);
+  await page.getByRole('tab', { name: 'Estadísticas' }).click();
+  assert.match(await page.locator('.mc-stats').textContent(), /58%.*Posesión.*42%.*14.*Tiros.*9.*6.*Tiros a puerta.*3/);
+  await page.getByRole('tab', { name: 'Estadísticas' }).press('ArrowRight');
+  assert.equal(await page.getByRole('tab', { name: 'Alineaciones' }).getAttribute('aria-selected'), 'true');
+  assert.match(await page.locator('.mc-lineups').textContent(), /Levante4-4-2.*1Andrés Fernández.*Suplentes.*20Roger Brugué.*Athletic Club4-2-3-1.*Iñaki Williams ↓/);
+  await page.getByRole('tab', { name: 'Información' }).click();
   assert.equal(await page.locator('#player [data-match-id]').count(),0);
   await page.evaluate(() => {document.querySelector('#player-pill').hidden=false;});
   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){
     await page.setViewportSize(viewport);
-    const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),pill=root.querySelector('#player-pill');return {bar:bar.getBoundingClientRect().toJSON(),pill:pill.getBoundingClientRect().toJSON(),right:root.getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
+    const pos=await page.evaluate(() => {const root=document.querySelector('#player'),bar=root.querySelector('.player-toolbar'),pill=root.querySelector('#player-pill');return {bar:bar.getBoundingClientRect().toJSON(),pill:pill.getBoundingClientRect().toJSON(),right:root.querySelector('.player-screen').getBoundingClientRect().right,padding:parseFloat(getComputedStyle(root.querySelector('.player-top')).paddingRight),first:bar.firstElementChild.id};});
     assert.equal(pos.first,'player-viewers');assert.ok(pos.bar.top>=pos.pill.bottom);assert.ok(pos.bar.top<=40,`Controls too low: ${pos.bar.top}`);assert.ok(Math.abs(pos.bar.right-(pos.right-pos.padding))<2);
   }
   await page.setViewportSize({width:390,height:844});

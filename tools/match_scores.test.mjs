@@ -6,12 +6,27 @@ test('accepts share.google and complete Google match links, rejects unrelated ho
  assert.equal(googleMatchUrl('https://share.google/RSJmsOE0s8wgQUT3n'),'https://share.google/RSJmsOE0s8wgQUT3n');
  for(const u of ['http://share.google/a','https://share.google.evil/a','https://evil/search?q=x','https://user@www.google.com/search?q=x','https://www.google.com/search','https://share.google/a/b'])assert.throws(()=>googleMatchUrl(u));
 });
-test('identifies both teams on the correct date; never silently picks an ambiguous match',()=>{
+test('the link decides the match: both teams beat one, the closest date breaks ties, the event\'s own data is not needed',()=>{
  const e=fixture(),q='levante ud contra athletic club';
  assert.equal(identifyMatch({events:[e]},q,e.date).id,e.id);
- assert.throws(()=>identifyMatch({events:[e]},'levante contra real madrid',e.date));
- assert.throws(()=>identifyMatch({events:[e,e]},q,e.date));
- assert.throws(()=>identifyMatch({events:[e]},q,'2027-01-01T18:00Z'));
+ assert.equal(identifyMatch({events:[e]},q,'2027-01-01T18:00Z').id,e.id,'a different event date still finds it');
+ assert.equal(identifyMatch({events:[e]},q,'').id,e.id,'no date needed');
+ const later={...fixture(),id:'401882999',date:'2026-10-28T18:00Z'};
+ assert.equal(identifyMatch({events:[later,e]},q,'2026-10-21T20:00Z').id,e.id,'the closest one to the event date');
+ const madrid={...fixture(),id:'401880001',competitions:[{...fixture().competitions[0],competitors:[{homeAway:'home',team:{displayName:'Real Madrid'}},{homeAway:'away',team:{displayName:'Juventus'}}]}]};
+ assert.equal(identifyMatch({events:[e,madrid]},'real madrid contra juventus',e.date).id,'401880001');
+ assert.equal(identifyMatch({events:[e]},'levante contra real madrid',e.date).id,e.id,'one team named is enough when nothing better exists');
+ assert.equal(identifyMatch({events:[e]},'levante contra real madrid',e.date).bothTeams,false);
+ assert.throws(()=>identifyMatch({events:[e]},'real madrid contra juventus',e.date),/No se encontró/);
+});
+test('Spanish names and partial names: Bayern de Múnich, Atlético de Madrid, Inter de Milán; a shared word alone is not enough',()=>{
+ const game=(id,a,b)=>({...fixture(),id,competitions:[{...fixture().competitions[0],competitors:[{homeAway:'home',team:a},{homeAway:'away',team:b}]}]});
+ const bayern=game('1',{displayName:'Bayern Munich',abbreviation:'BAY'},{displayName:'Club Brugge'});
+ const atleti=game('2',{displayName:'Atlético Madrid',shortDisplayName:'Atlético'},{displayName:'Internazionale',shortDisplayName:'Inter Milan'});
+ const betis=game('3',{displayName:'Real Betis'},{displayName:'Sevilla'});
+ assert.equal(identifyMatch({events:[betis,bayern,atleti]},'Bayern de Múnich - Brujas','').id,'1');
+ assert.equal(identifyMatch({events:[betis,bayern,atleti]},'Atlético de Madrid vs Inter de Milán','').id,'2');
+ assert.throws(()=>identifyMatch({events:[betis]},'real madrid','')); // «real» is shared by many clubs
 });
 test('uses real clock and status, including halftime, final and postponement',()=>{
  assert.equal(matchResult(fixture()).text,'2 – 1 · En juego · 74′');
@@ -76,5 +91,13 @@ test('Google Club Brujas and Racing Club de Lens identify the ESPN Club Brugge�
  e.competitions[0].competitors[0].team={displayName:'Club Brugge',name:'Club Brugge',shortDisplayName:'Club Brugge'};
  e.competitions[0].competitors[1].team={displayName:'Lens',name:'Lens',shortDisplayName:'Lens'};
  assert.equal(identifyMatch({events:[e]},'club brujas contra racing club de lens',e.date).id,'401915388');
- assert.throws(()=>identifyMatch({events:[e]},'club brujas contra real madrid',e.date));
+ assert.equal(identifyMatch({events:[e]},'club brujas contra real madrid',e.date).bothTeams,false);
+});
+
+test('when the event day does not show both teams the three days around it are searched',async()=>{
+ const e={...fixture(),date:'2026-10-23T18:00Z'},calls=[];
+ const result=await resolveMatch('https://www.google.com/search?q=levante+contra+athletic+club','2026-10-21T18:00:00Z',async url=>{
+   calls.push(url);return {ok:true,json:async()=>url.includes('-')&&url.includes('dates=20261018-20261024')?{events:[e]}:{events:[]}};
+ });
+ assert.equal(result.matchId,e.id);assert.equal(calls.length,2);assert.match(calls[1],/dates=20261018-20261024/);
 });
