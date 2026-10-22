@@ -1,5 +1,5 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
-import { parseMatchCenter, renderMatchCenter } from './match-center.js';
+import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -731,35 +731,43 @@ async function resumeEntry(entry) {
 }
 
 // ---- The match under the video --------------------------------------------------------------------
+// Events open in the page (not in full screen) with the match under the video: from ESPN when the
+// event has a Google match link, otherwise from the event's own teams, league, date and description.
 const matchPanel = document.getElementById('match-center');
-let matchTab = 'info', matchShown = '', matchModel = null, matchTimer = null;
+let matchTab = 'general', matchShown = '', matchModel = null, matchTimer = null;
 function paintMatch() {
   if (!matchModel) return;
   const focused = matchPanel.contains(document.activeElement) ? document.activeElement.id : '';
   matchPanel.replaceChildren(...renderMatchCenter(el, matchModel, matchTab, (tab, focus) => {
     matchTab = tab; paintMatch();
     if (focus) document.getElementById(`mc-tab-${tab}`)?.focus();
-  }));
+  }).filter(Boolean));
   if (focused) document.getElementById(focused)?.focus();
 }
-/** Shows the match of an event with a Google match link under the video; true when it did. */
+/** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  const id = c?.event && c.matchUrl && c.matchId ? String(c.matchId) : '';
-  if (id === matchShown && id) return true;
+  const key = c?.event ? String(c.eventId || c.id) : '';
+  if (key && key === matchShown) return true;
   clearInterval(matchTimer);
-  matchShown = id; matchModel = null; matchTab = 'info';
-  player.classList.toggle('with-match', !!id);
-  matchPanel.hidden = !id;
+  matchShown = key; matchModel = null; matchTab = 'general';
+  player.classList.toggle('with-match', !!key);
+  matchPanel.hidden = !key;
   player.scrollTop = 0;
-  if (!id) { matchPanel.replaceChildren(); return false; }
-  matchPanel.replaceChildren(el('p', { class: 'mc-empty' }, 'Cargando datos del partido…'));
+  if (!key) { matchPanel.replaceChildren(); return false; }
+  const base = eventMatchModel(c, state.custom, eventLabel(c, Date.now(), EVENT_STATES).text);
+  const id = c.matchUrl && c.matchId ? String(c.matchId) : '';
+  matchModel = id ? { ...base, note: 'Cargando los datos del partido…' } : base;
+  paintMatch();
+  if (!id) return true;
   const load = async () => {
     try {
-      const model = parseMatchCenter(await fetchSummary(id));
-      if (matchShown !== id) return;
-      matchModel = model; paintMatch();
+      const espn = parseMatchCenter(await fetchSummary(id));
+      if (matchShown !== key) return;
+      matchModel = { ...espn, league: espn.league || base.league, round: espn.round || base.round, venue: espn.venue || base.venue, description: base.description,
+        home: { ...espn.home, logo: espn.home.logo || base.home.logo }, away: { ...espn.away, logo: espn.away.logo || base.away.logo } };
+      paintMatch();
     } catch {
-      if (matchShown === id && !matchModel) matchPanel.replaceChildren(el('p', { class: 'mc-empty' }, 'No se pudieron cargar los datos del partido. Se volverá a intentar en unos segundos.'));
+      if (matchShown === key && matchModel?.source !== 'espn') { matchModel = { ...base, note: 'No se pudieron cargar los datos del partido. Se volverá a intentar en unos segundos.' }; paintMatch(); }
     }
   };
   load();

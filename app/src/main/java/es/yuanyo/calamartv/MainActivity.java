@@ -896,9 +896,32 @@ public class MainActivity extends Activity {
     intent.putExtra("title", c.name);
     intent.putExtra("audience_target",AudienceModel.target(c.event,c.id));intent.putExtra("audience_channel",c.event?c.channelId:c.id);
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
+    // Events open with the match under the video on phones; without a match link, with the event's own data.
+    if(c.event)intent.putExtra("event_info",eventInfo(c).toString());
     // Events can be shared from the player with their preview link (cover and name in WhatsApp).
     if (c.event) intent.putExtra("share_url", SportsCatalog.link(SportsCatalog.slugs(custom).get(c.id)));
     startActivity(intent);
+  }
+
+  /** The event's teams, league, date, place and description, for the match page under the video. */
+  JSONObject eventInfo(Catalog.Channel c) {
+    JSONObject info = new JSONObject();
+    JSONArray events = custom.optJSONArray("events");
+    JSONObject e = SportsCatalog.find(events, c.id);
+    if (e == null) e = new JSONObject();
+    try {
+      JSONObject home = SportsCatalog.find(custom.optJSONArray("teams"), e.optString("homeTeamId")),
+          away = SportsCatalog.find(custom.optJSONArray("teams"), e.optString("awayTeamId")),
+          league = SportsCatalog.find(custom.optJSONArray("leagues"), e.optString("leagueId"));
+      String[] names = c.name.split("\\s+(?i:vs\\.?|v|contra|-|–)\\s+", 2);
+      info.put("home", home != null ? home.optString("name") : names[0]).put("homeLogo", home != null ? home.optString("logo") : "")
+          .put("away", away != null ? away.optString("name") : names.length > 1 ? names[1] : "").put("awayLogo", away != null ? away.optString("logo") : "")
+          .put("league", league != null ? league.optString("name") : "").put("startAt", e.optString("startAt"))
+          .put("round", e.optString("round")).put("venue", e.optString("venue")).put("description", e.optString("description"))
+          .put("status", SportsCatalog.label(c.status, c.startAt, System.currentTimeMillis()));
+    } catch (JSONException ignored) {
+    }
+    return info;
   }
 
   protected void onPause() {

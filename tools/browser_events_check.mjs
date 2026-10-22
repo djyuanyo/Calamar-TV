@@ -137,8 +137,10 @@ try {
   // Event links use the slug of the event name, like channels.
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
-  // Pressing «Ver» opens it in full screen, as in the app.
-  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  // Events open in the page with the match under the video; without a match link, the event's own data.
+  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), undefined);
+  await page.locator('#match-center .mc-board').waitFor();
+  assert.match(await page.locator('#match-center .mc-note').textContent(), /no tiene enlace del partido/);
   assert.ok(requests.includes('https://example.com/one.mp4'));
   // Sharing an event uses its preview page (cover and name in WhatsApp).
   await page.evaluate(() => { navigator.share = async data => { window.__shared = data; }; });
@@ -265,8 +267,10 @@ try {
     keyEvents: [{ type: { type: 'goal', text: 'Goal' }, scoringPlay: true, clock: { displayValue: "12'" }, team: { displayName: 'Levante' }, participants: [{ athlete: { displayName: 'Carlos Álvarez' } }] },
       { type: { type: 'yellow-card', text: 'Yellow Card' }, clock: { displayValue: "30'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Oihan Sancet' } }] },
       { type: { type: 'substitution', text: 'Substitution' }, clock: { displayValue: "60'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Nico Williams' } }, { athlete: { displayName: 'Iñaki Williams' } }] }],
-    boxscore: { teams: [{ team: { displayName: 'Levante' }, statistics: [{ name: 'possessionPct', displayValue: '58' }, { name: 'totalShots', displayValue: '14' }, { name: 'shotsOnTarget', displayValue: '6' }] },
-      { team: { displayName: 'Athletic Club' }, statistics: [{ name: 'possessionPct', displayValue: '42' }, { name: 'totalShots', displayValue: '9' }, { name: 'shotsOnTarget', displayValue: '3' }] }] },
+    boxscore: { teams: [{ team: { displayName: 'Levante' }, statistics: [{ name: 'possessionPct', displayValue: '58' }, { name: 'totalShots', displayValue: '14' }, { name: 'shotsOnTarget', displayValue: '6' }, { name: 'wonCorners', displayValue: '9' }, { name: 'yellowCards', displayValue: '0' }] },
+      { team: { displayName: 'Athletic Club' }, statistics: [{ name: 'possessionPct', displayValue: '42' }, { name: 'totalShots', displayValue: '9' }, { name: 'shotsOnTarget', displayValue: '3' }, { name: 'wonCorners', displayValue: '1' }, { name: 'yellowCards', displayValue: '1' }] }],
+      form: [{ team: { displayName: 'Levante' }, events: [{ gameResult: 'W', score: '2-0' }, { gameResult: 'D', score: '1-1' }, { gameResult: 'L', score: '0-1' }] }] },
+    headToHeadGames: [{ team: { id: '1', displayName: 'Levante' }, events: [{ id: 'g1', gameDate: '2025-03-01T20:00Z', homeTeamId: '1', score: '1-2', leagueName: 'LaLiga', opponent: { displayName: 'Athletic Club' } }] }],
     rosters: [{ homeAway: 'home', formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
       { homeAway: 'away', formation: '4-2-3-1', roster: [{ starter: true, jersey: '13', athlete: { displayName: 'Julen Agirrezabala' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: true, jersey: '11', athlete: { displayName: 'Iñaki Williams' }, position: { abbreviation: 'F' }, subbedOut: true, formationPlace: '9' }] }],
     gameInfo: { venue: { fullName: 'Estadio Ciutat de València', address: { city: 'Valencia', country: 'España' } }, attendance: 21000, officials: [{ displayName: 'Mateu Lahoz', position: { displayName: 'Referee' } }] } });
@@ -295,6 +299,12 @@ try {
   await page.locator('#match-center .mc-board').waitFor();
   assert.match(await page.locator('.mc-board').textContent(), /Levante.*2 – 1.*En juego · 74′.*Athletic Club/);
   assert.match(await page.locator('.mc-events').textContent(), /12'.*Carlos Álvarez.*Gol.*30'.*Oihan Sancet.*Tarjeta amarilla.*60'.*Nico Williams.*Sale Iñaki Williams/);
+  // General: timeline with the goal and the card on each side, key figures as donuts and the icon row, form.
+  assert.equal(await page.locator('.mc-line-row.home .mc-mark.goal').count(), 1);
+  assert.equal(await page.locator('.mc-line-row.away .mc-mark.yellow').count(), 1);
+  assert.match(await page.locator('.mc-gauges').textContent(), /Posesión58%42%.*Tiros149.*Tiros a puerta63/);
+  assert.match(await page.locator('.mc-icons').textContent(), /9.*0.*0.*6.*14.*3.*9.*1.*0.*1/);
+  assert.match(await page.locator('.mc-forms').textContent(), /Levante.*VED/);
   assert.match(await page.locator('.mc-facts').textContent(), /LaLiga.*Estadio Ciutat de València.*Valencia, España.*21\.000.*Mateu Lahoz/);
   const screen = await page.evaluate(() => { const v = document.querySelector('.player-screen').getBoundingClientRect(), m = document.querySelector('#match-center').getBoundingClientRect(); return { below: m.top >= v.bottom - 1, ratio: v.width / v.height }; });
   assert.ok(screen.below, 'the match is under the video'); assert.ok(Math.abs(screen.ratio - 16 / 9) < 0.05);
@@ -303,7 +313,9 @@ try {
   await page.getByRole('tab', { name: 'Estadísticas' }).press('ArrowRight');
   assert.equal(await page.getByRole('tab', { name: 'Alineaciones' }).getAttribute('aria-selected'), 'true');
   assert.match(await page.locator('.mc-lineups').textContent(), /Levante4-4-2.*1Andrés Fernández.*Suplentes.*20Roger Brugué.*Athletic Club4-2-3-1.*Iñaki Williams ↓/);
-  await page.getByRole('tab', { name: 'Información' }).click();
+  await page.getByRole('tab', { name: 'H2H' }).click();
+  assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
+  await page.getByRole('tab', { name: 'General' }).click();
   assert.equal(await page.locator('#player [data-match-id]').count(),0);
   await page.evaluate(() => {document.querySelector('#player-pill').hidden=false;});
   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1280,height:900}]){
@@ -345,7 +357,7 @@ try {
   await page.goto(base + '/?regression=2#/inicio');
   await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
-  assert.equal(await page.evaluate(() => document.fullscreenElement?.id),'player');
+  assert.equal(await page.locator('#match-center').isVisible(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',

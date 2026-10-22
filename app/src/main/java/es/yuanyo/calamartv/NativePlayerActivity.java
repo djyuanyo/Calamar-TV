@@ -59,6 +59,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private FrameLayout stage;
   /** Phones and tablets: the match of an event with a Google match link, under the video. */
   private MatchCenter matchCenter;
+  /** The event's own data, shown until (or instead of) ESPN's. */
+  private MatchCenter.Model eventModel;
   private TextView status, livePill, viewersBadge;
   private AudienceSession audience;
   private final Runnable audiencePlayback=new Runnable(){public void run(){
@@ -74,9 +76,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if(id==null||id.isEmpty())return;
     if(!matchBusy){matchBusy=true;new Thread(() -> {
       MatchCenter.Model model=null;
-      try{MatchScores.fetch(id);if(matchCenter!=null)model=MatchCenter.parse(MatchScores.summary(id));}catch(Exception ignored){}
+      try{MatchScores.fetch(id);if(matchCenter!=null)model=MatchCenter.merge(MatchCenter.parse(MatchScores.summary(id)),eventModel);}catch(Exception ignored){}
       final MatchCenter.Model shown=model;
-      handler.post(() -> {matchBusy=false;if(matchCenter!=null&&!isFinishing()){if(shown!=null)matchCenter.show(shown);else matchCenter.failed();}});
+      handler.post(() -> {matchBusy=false;if(matchCenter!=null&&!isFinishing()){if(shown!=null)matchCenter.show(shown);else if(eventModel!=null)matchCenter.failed(eventModel);}});
     }).start();}
     handler.postDelayed(this,30000);
   }};
@@ -249,8 +251,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
     // On a phone or tablet an event with a Google match link opens in the page, with the match's
     // information, statistics and line-ups under the video; Android TV keeps the full-screen player.
-    String matchId = getIntent().getStringExtra("match_id");
-    if (matchId != null && !matchId.isEmpty() && !isTelevision()) matchCenter = new MatchCenter(this);
+    String matchId = getIntent().getStringExtra("match_id"), info = getIntent().getStringExtra("event_info");
+    boolean linked = matchId != null && !matchId.isEmpty();
+    if ((linked || info != null) && !isTelevision()) {
+      matchCenter = new MatchCenter(this);
+      try { eventModel = MatchCenter.fromEvent(new org.json.JSONObject(info == null ? "{}" : info)); }
+      catch (org.json.JSONException broken) { eventModel = MatchCenter.fromEvent(new org.json.JSONObject()); }
+      if (linked) eventModel.note = "Cargando los datos del partido…";
+      matchCenter.show(eventModel);
+      if (linked) eventModel.note = "";
+    }
     root.addView(stage, stageSize(false));
     if (matchCenter != null) root.addView(matchCenter.view, new LinearLayout.LayoutParams(-1, 0, 1));
     setContentView(root);
