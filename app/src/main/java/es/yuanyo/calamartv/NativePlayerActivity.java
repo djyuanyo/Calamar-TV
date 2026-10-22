@@ -575,7 +575,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     releasePlayer();
     DataSource.Factory http =
         (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
-            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url);
+            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
+                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null);
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");

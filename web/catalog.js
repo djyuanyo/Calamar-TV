@@ -200,7 +200,7 @@ export function streamFailureReport({ details = '', code = 0, url = '', expiry =
 /** How the browser can play a URL: 'hls', 'video', or a reason it needs the app. */
 // LuluStream links (the video page, /d/ or /e/) play in LuluStream's own player, embedded in ours.
 // LuluStream serves the same videos under several names (lulustream.com, luluvdo.com, luluvido.com, lulu.st…).
-const LULU_HOST = /^(?:www\.)?(?:lulustream|luluvdo|luluvido|luluvid|lulu)\.(?:com|st|to|net|org|io)$/;
+const LULU_HOST = /^(?:www\.)?(?:lulustream|luluvdoo?|luluvido|luluvid|lulu)\.(?:com|st|to|net|org|io|live|pw)$/;
 export function lulustreamEmbed(url) {
   try {
     const u = new URL(String(url).trim());

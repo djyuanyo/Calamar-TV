@@ -5,7 +5,6 @@ import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Collections;
 import java.util.EnumMap;
 import okhttp3.OkHttpClient;
 
@@ -68,11 +67,24 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
   }
 
   public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource) {
+    return mediaFactory(referer, http1, rootSource, false);
+  }
+
+  /**
+   * @param browser the video was read from a page fetched as a browser (LuluStream): its server may
+   *     only serve the same browser, coming from that page.
+   */
+  public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource, boolean browser) {
     OkHttpDataSource.Factory factory =
         new OkHttpDataSource.Factory(SecureDnsClients.forMedia(client, http1))
-            .setUserAgent(CastSource.needsBridge(rootSource) ? PlayerDocument.IPTV_USER_AGENT : PlayerDocument.USER_AGENT);
-    if (referer != null && !referer.isEmpty())
-      factory.setDefaultRequestProperties(Collections.singletonMap("Referer", referer));
+            .setUserAgent(browser ? PlayerDocument.BROWSER_USER_AGENT
+                : CastSource.needsBridge(rootSource) ? PlayerDocument.IPTV_USER_AGENT : PlayerDocument.USER_AGENT);
+    if (referer != null && !referer.isEmpty()) {
+      java.util.Map<String, String> headers = new java.util.HashMap<>();
+      headers.put("Referer", referer);
+      if (browser) headers.put("Origin", referer.replaceAll("/+$", ""));
+      factory.setDefaultRequestProperties(headers);
+    }
     // Only complete live IPTV streams use the renewable transport. HLS TS fragments
     // must end normally, even if a playlist points to HTTP segment URLs.
     return CastSource.needsBridge(rootSource) ? new HttpIptvDataSource.Factory(factory) : factory;

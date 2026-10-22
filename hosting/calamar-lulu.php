@@ -31,7 +31,9 @@ curl_setopt_array($ch, array(
 $html = curl_exec($ch);
 $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 curl_close($ch);
-if (!is_string($html) || $status !== 200 || strlen($html) > 2097152) answer(array('error' => 'LuluStream no responde (' . $status . ').'), 502);
+$debug = isset($_GET['debug']);
+if (!is_string($html) || $status !== 200 || strlen($html) > 2097152)
+    answer(array('error' => 'LuluStream no responde (' . $status . ').') + ($debug && is_string($html) ? array('inicio' => substr(strip_tags($html), 0, 400)) : array()), 502);
 
 // The player setup is usually packed with Dean Edwards' p,a,c,k,e,d: each word is an index into a list.
 function unpackScript($m) {
@@ -53,6 +55,15 @@ $scripts = $html;
 if (preg_match_all("/\}\('((?:[^'\\\\]++|\\\\.)*+)',\s*(\d+),\s*(\d+),\s*'((?:[^'\\\\]++|\\\\.)*+)'\.split\('\|'\)/", $html, $packed, PREG_SET_ORDER))
     foreach ($packed as $m) $scripts .= "\n" . unpackScript($m);
 $scripts = str_replace('\\/', '/', $scripts);
+if ($debug) {
+    // Diagnosis for the administrator: what the player page contains, without playing anything.
+    preg_match_all('/https:\/\/[^"\'\s<>]+/', $scripts, $links);
+    $at = stripos($scripts, 'sources');
+    answer(array('bytes' => strlen($html), 'packed' => isset($packed) ? count($packed) : 0,
+        'enlaces' => array_values(array_unique(array_map(function ($l) { return strtok($l, '?'); }, $links[0]))),
+        'sources' => $at === false ? null : substr($scripts, max(0, $at - 100), 700),
+        'titulo' => preg_match('/<title>(.*?)<\/title>/is', $html, $t) ? trim($t[1]) : null));
+}
 if (!preg_match_all('/\bfile\s*:\s*(["\'])(https:\/\/[^"\']+)\1/', $scripts, $files, PREG_SET_ORDER)) answer(array('error' => 'No se encontró el vídeo en LuluStream.'), 404);
 foreach ($files as $f) {
     $path = strtolower(parse_url($f[2], PHP_URL_PATH) ?: '');
