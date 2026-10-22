@@ -3,7 +3,7 @@
 //   Series/<Name>/Temporada N/<episodes>     Documentales/<Name>/Temporada N/<episodes>
 // The key lives only in the admin-only settings; when the browser cannot call the API directly
 // (CORS), the request goes through the hosting (calamar-lulu.php), which only relays the JSON.
-import { LULU_ENDPOINT } from './catalog.js';
+import { LULU_ENDPOINT, lulustreamEmbed } from './catalog.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason } from './library-tmdb.js';
 
 export const LULU_API = 'https://api.lulustream.com/api/';
@@ -127,6 +127,46 @@ async function bestMatch(title, year, kind, key, fetcher) {
   return sameYear.find((r) => confident(title, r.title)) || (found[0] && confident(title, found[0].title) ? found[0] : null);
 }
 
+const codeOf = (url) => lulustreamEmbed(String(url || ''))?.split('/').pop() || '';
+const folderId = (name) => `u${plain(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}`;
+
+/** A film TMDB did not recognise: added with the file's name, to be matched later in the admin page. */
+export const unmatchedFilm = (f) => ({ id: `u${codeOf(f.link)}`, kind: 'movie', title: f.title || f.file, year: f.year, file: f.file, url: f.link, status: 'unmatched' });
+/** A series TMDB did not recognise: its folder name and episodes, to be matched later. */
+export const unmatchedSeries = (s) => {
+  const id = folderId(s.folder);
+  return { id, kind: 'tv', title: s.title || s.folder, year: s.year, folder: s.folder, status: 'unmatched',
+    episodes: s.episodes.map((e) => ({ id: `${id}x${e.season}x${e.episode}`, season: e.season, episode: e.episode, name: '', overview: '', still: '', file: '', url: e.link }))
+      .sort((a, b) => a.season - b.season || a.episode - b.episode) };
+};
+
+/**
+ * Gives a series the episode links [{ season, episode, link }] with TMDB's names, season by season. Links
+ * already saved in those seasons stay unless a new one replaces them; episodes TMDB does not list are kept.
+ */
+export async function seriesWithLinks(item, info, links, key, fetcher) {
+  for (const season of [...new Set(links.map((e) => e.season))].sort((a, b) => a - b)) {
+    const mine = links.filter((e) => e.season === season);
+    const known = await seasonEpisodes(info.id, season, key, fetcher).catch(() => []);
+    const urls = Object.fromEntries((item?.episodes || []).filter((e) => e.season === season).map((e) => [e.episode, e.url]));
+    for (const e of mine) urls[e.episode] = e.link;
+    const list = [...known, ...Object.keys(urls).map(Number).filter((n) => !known.some((k) => k.episode === n)).map((n) => ({ episode: n, name: '', overview: '', still: '' }))];
+    item = seriesWithSeason(item, info, season, list, urls);
+  }
+  return item;
+}
+
+/** A title without a TMDB record, matched by hand to TMDB's id: its links move to that record. */
+export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
+  if (item.kind !== 'tv') {
+    const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
+    return movieItem(info, item.url);
+  }
+  const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
+  const series = await seriesWithLinks(existing, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
+  return { ...series, folder: item.folder || existing?.folder || info.title };
+}
+
 /**
  * Adds what the scan found to the library: films and series matched in TMDB replace the same title,
  * other seasons and the titles added by hand are kept. Returns { sections, added, unknown }.
@@ -138,35 +178,49 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     (sections[section] ||= []).push(item);
   };
   const find = (id) => Object.values(sections).flat().find((x) => x.id === id);
+  const drop = (id) => { for (const k of Object.keys(sections)) sections[k] = sections[k].filter((x) => x.id !== id); };
+  // Titles already matched (by the scan or by hand) are recognised by their links or their folder.
+  const matched = Object.entries(sections).flatMap(([section, items]) => items.filter((x) => x.tmdb?.id && x.status !== 'unmatched').map((x) => ({ section, item: x })));
+  const byLink = new Map(matched.flatMap(({ section, item }) => [item.url, ...(item.episodes || []).map((e) => e.url)].filter(Boolean).map((url) => [codeOf(url), { section, item }])));
+  const byFolder = new Map(matched.filter(({ item }) => item.kind === 'tv' && item.folder).map((m) => [plain(m.item.folder), m]));
   const unknown = [...scan.unknown];
-  let films = 0, shows = 0, episodes = 0, done = 0;
+  let films = 0, shows = 0, episodes = 0, pending = 0, done = 0;
   const total = scan.films.length + scan.series.length;
   for (const f of scan.films) {
     onProgress(++done, total, f.title);
+    const known = byLink.get(codeOf(f.link));
+    if (known && known.item.kind !== 'tv') { put(known.section, { ...known.item, url: f.link }); films++; continue; }
     const match = await bestMatch(f.title, f.year, f.section === 'movies' ? 'movie' : 'any', key, fetcher);
-    if (!match || match.kind !== 'movie') { unknown.push(`${f.file}: no se encontró en TMDB como «${f.title}»`); continue; }
+    if (!match || match.kind !== 'movie') {
+      put(f.section, unmatchedFilm(f)); pending++;
+      unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
+      continue;
+    }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
+    drop(unmatchedFilm(f).id);
     put(f.section, movieItem(info, f.link));
     films++;
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
-    const match = await bestMatch(s.title, s.year, 'tv', key, fetcher);
-    if (!match) { unknown.push(`${s.folder}: no se encontró en TMDB como serie «${s.title}»`); continue; }
-    const { info } = await tmdbDetails(match.id, 'tv', key, fetcher);
-    let item = find(`s${info.id}`);
-    for (const season of [...new Set(s.episodes.map((e) => e.season))].sort((a, b) => a - b)) {
-      const mine = s.episodes.filter((e) => e.season === season);
-      const known = await seasonEpisodes(info.id, season, key, fetcher).catch(() => []);
-      // Links pasted by hand in this season stay; the folder adds or replaces its own episodes.
-      const links = Object.fromEntries((item?.episodes || []).filter((e) => e.season === season).map((e) => [e.episode, e.url]));
-      for (const e of mine) links[e.episode] = e.link;
-      // Episodes TMDB does not list yet are kept too, without a name.
-      const list = [...known, ...Object.keys(links).map(Number).filter((n) => !known.some((k) => k.episode === n)).map((n) => ({ episode: n, name: '', overview: '', still: '' }))];
-      item = seriesWithSeason(item, info, season, list, links);
+    const known = byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
+    let info = known?.item.tmdb;
+    if (!info) {
+      const match = await bestMatch(s.title, s.year, 'tv', key, fetcher);
+      if (!match) {
+        put(s.section, unmatchedSeries(s)); pending++;
+        unknown.push(`${s.folder}: añadida sin ficha de TMDB (${s.episodes.length} capítulos)`);
+        continue;
+      }
+      info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
     }
-    if (item?.episodes?.length) { put(s.section, item); shows++; episodes += s.episodes.length; }
+    // Links pasted by hand stay; the folder adds or replaces its own episodes.
+    const item = await seriesWithLinks(find(`s${info.id}`), info, s.episodes, key, fetcher);
+    if (item?.episodes?.length) {
+      drop(unmatchedSeries(s).id);
+      put(known?.section || s.section, { ...item, folder: s.folder }); shows++; episodes += s.episodes.length;
+    }
   }
   for (const k of Object.keys(sections)) sections[k].sort((a, b) => String(a.tmdb?.title || a.title).localeCompare(String(b.tmdb?.title || b.title), 'es', { sensitivity: 'base' }));
-  return { sections, added: { films, shows, episodes }, unknown };
+  return { sections, added: { films, shows, episodes, pending }, unknown };
 }
