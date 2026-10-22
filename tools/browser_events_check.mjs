@@ -467,18 +467,14 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
-  // A LuluStream video: the hosting gives our player the video address; when it cannot be played
-  // LuluStream's own player is shown, embedded under our title bar.
+  // A LuluStream video plays in LuluStream's own player, embedded under our title bar, without asking the hosting.
   const luluCodes = [];
-  await page.route('https://calamarmenciano.com/calamar-lulu.php?**', (route) => {
-    luluCodes.push(new URL(route.request().url()).searchParams.get('code'));
-    route.fulfill({ json: { url: 'https://cdn.lulu.test/hls/torrente.mp4' }, headers: { 'Access-Control-Allow-Origin': '*' } });
-  });
+  await page.route('https://calamarmenciano.com/calamar-lulu.php?**', (route) => { luluCodes.push(route.request().url()); route.abort(); });
   await page.locator('.poster-card', { hasText: 'Torrente' }).click();
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player iframe.player-embed').waitFor();
   assert.equal(await page.locator('#player iframe.player-embed').getAttribute('src'), 'https://lulustream.com/e/torrente1998');
-  assert.deepEqual(luluCodes, ['torrente1998']);
+  assert.deepEqual(luluCodes, []);
   assert.equal(await page.locator('#player-close').isVisible(), true);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('#player iframe'));

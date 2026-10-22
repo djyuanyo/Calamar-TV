@@ -33,11 +33,13 @@ sigue subida, bórrala junto con la carpeta `public_html/calamar-video-cache`. L
 ahora en Google Drive: la app reproduce los MKV con sonido; para la web conviene subir MP4 (H.264 + AAC).
 `herramientas/convertir-mkv-a-mp4.bat` los convierte en el ordenador con FFmpeg.
 
-## Vídeos de LuluStream en la web
+## LuluStream
 
-Subir `calamar-lulu.php` al `public_html`. Cuando alguien reproduce una película o capítulo de
-LuluStream en la web, este archivo lee la página del reproductor de LuluStream (unos 100 KB) y devuelve
-el enlace del vídeo; el vídeo va directamente de LuluStream al navegador, sin pasar por el hosting, y no
-se guarda nada en el servidor. Si no está subido o falla, la web muestra el reproductor de LuluStream.
-También relaya la lista de carpetas de LuluStream para «Leer carpetas de LuluStream» de la administración
-cuando el navegador no puede llamar a la API directamente (solo JSON, unos pocos KB; la clave no se guarda).
+Subir `calamar-lulu.php` al `public_html`. Relaya la lista de carpetas de LuluStream para «Leer carpetas de
+LuluStream» de la administración cuando el navegador no puede llamar a la API directamente (solo JSON, unos
+pocos KB; la clave no se guarda en el hosting).
+
+La web reproduce los vídeos de LuluStream con su propio reproductor: LuluStream ata cada dirección de vídeo a
+la IP que abrió su página (403 para cualquier otra), así que el hosting no puede dársela al navegador. La app
+Android lee la página desde el propio dispositivo y los reproduce con el reproductor de Calamar TV.
+`calamar-lulu.php?code=CÓDIGO&debug=1` muestra qué contiene la página del reproductor, para diagnosticar.
