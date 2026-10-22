@@ -61,3 +61,13 @@ test('the library is split in Firestore parts below the size limit', () => {
   assert.equal(index.sections.series, 1);
   for (const part of Object.values(parts)) assert.ok(new TextEncoder().encode(JSON.stringify(part)).length <= 850000);
 });
+
+test('the hosting gives the LuluStream video address, or nothing', async () => {
+  const { lulustreamSource } = await import('../web/catalog.js');
+  const answer = (status, json) => async (url) => { answer.url = url; return { ok: status === 200, status, json: async () => json }; };
+  assert.equal(await lulustreamSource('https://lulustream.com/e/abc123def456', answer(200, { url: 'https://cdn.x.com/hls/master.m3u8?t=1' })), 'https://cdn.x.com/hls/master.m3u8?t=1');
+  assert.match(answer.url, /calamar-lulu\.php\?code=abc123def456$/);
+  assert.equal(await lulustreamSource('https://lulustream.com/e/abc123def456', answer(404, { error: 'No' })), null);
+  assert.equal(await lulustreamSource('https://lulustream.com/e/abc123def456', answer(200, { url: 'javascript:alert(1)' })), null);
+  assert.equal(await lulustreamSource('https://lulustream.com/e/abc123def456', async () => { throw new Error('red'); }), null);
+});

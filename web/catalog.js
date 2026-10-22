@@ -208,6 +208,20 @@ export function lulustreamEmbed(url) {
   } catch { return null; }
 }
 
+export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
+
+/** The HLS address of a LuluStream video, read by the hosting from its player page; null if it cannot. */
+export async function lulustreamSource(embed, fetcher = globalThis.fetch) {
+  const code = String(embed).match(/\/e\/([A-Za-z0-9]{8,20})$/)?.[1];
+  if (!code) return null;
+  try {
+    const response = await fetcher(`${LULU_ENDPOINT}?code=${code}`, { signal: AbortSignal.timeout(15000), referrerPolicy: 'no-referrer' });
+    const data = await response.json();
+    const u = new URL(data?.url);
+    return response.ok && u.protocol === 'https:' && /\.(m3u8|mp4)$/i.test(u.pathname) ? u.href : null;
+  } catch { return null; }
+}
+
 export function webPlayback(url) {
   let u;
   try {

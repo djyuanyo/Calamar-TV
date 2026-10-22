@@ -1,6 +1,6 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
-import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, lulustreamSource } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -532,12 +532,37 @@ function playSource(c, index) {
   };
   playerStatus.textContent = 'Conectando…';
   if (source.how.kind === 'embed') {
-    // LuluStream plays in its own player; ours keeps the title bar and the Back button above it.
-    player.classList.add('is-embed');
-    playerStatus.textContent = '';
-    embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
-      allowfullscreen: true, referrerpolicy: 'origin' });
-    player.querySelector('.player-stage').append(embedFrame);
+    // LuluStream: the hosting reads its player page and our player plays the video straight from LuluStream.
+    // If that fails, LuluStream's own player is shown, with our title bar and Back button above it.
+    const showEmbed = () => {
+      if (generation !== playbackGeneration) return;
+      if (hls) { hls.destroy(); hls = null; }
+      video.onerror = null; video.onplaying = null;
+      video.removeAttribute('src'); video.load();
+      player.classList.add('is-embed');
+      playerStatus.textContent = '';
+      embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
+        allowfullscreen: true, referrerpolicy: 'origin' });
+      player.querySelector('.player-stage').append(embedFrame);
+    };
+    lulustreamSource(source.how.embed).then((url) => {
+      if (generation !== playbackGeneration) return;
+      if (!url) { showEmbed(); return; }
+      let started = false;
+      const failed = (data) => { if (started) next(data); else showEmbed(); };
+      if (window.Hls?.isSupported() && /\.m3u8($|\?)/i.test(url)) {
+        hls = new window.Hls({ lowLatencyMode: false });
+        hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) failed(data); });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+      } else video.src = url;
+      controls.attach(hls);
+      video.onplaying = () => { started = true; if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+      video.onerror = () => { const failure = videoFailure(video.error); if (failure) failed(failure); };
+      video.play().catch(() => {
+        if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+      });
+    });
     return;
   }
   if (source.how.kind === 'ts') {

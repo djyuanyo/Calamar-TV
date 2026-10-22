@@ -30,6 +30,7 @@ jobs:
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
+          php -l hosting/calamar-lulu.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
       - name: Probar el lector de TDTChannels

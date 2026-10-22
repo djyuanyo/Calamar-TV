@@ -32,3 +32,10 @@ La conversión de vídeos en el hosting (`calamar-video.php`) se ha retirado: so
 sigue subida, bórrala junto con la carpeta `public_html/calamar-video-cache`. Las películas y series están
 ahora en Google Drive: la app reproduce los MKV con sonido; para la web conviene subir MP4 (H.264 + AAC).
 `herramientas/convertir-mkv-a-mp4.bat` los convierte en el ordenador con FFmpeg.
+
+## Vídeos de LuluStream en la web
+
+Subir `calamar-lulu.php` al `public_html`. Cuando alguien reproduce una película o capítulo de
+LuluStream en la web, este archivo lee la página del reproductor de LuluStream (unos 100 KB) y devuelve
+el enlace del vídeo; el vídeo va directamente de LuluStream al navegador, sin pasar por el hosting, y no
+se guarda nada en el servidor. Si no está subido o falla, la web muestra el reproductor de LuluStream.
