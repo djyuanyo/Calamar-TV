@@ -45,4 +45,20 @@ public class MatchCenterTest {
     assertEquals("A", m.home.name); assertEquals("B", m.away.name); assertEquals("", m.home.score);
     assertEquals("scheduled", m.state); assertTrue(m.events.isEmpty()); assertTrue(m.stats.isEmpty()); assertTrue(m.lineups.isEmpty());
   }
+
+  @Test public void formMeetingsAndTheEventsOwnData() throws Exception {
+    JSONObject data = summary();
+    data.getJSONObject("boxscore").put("form", new JSONArray("[{\"team\":{\"id\":\"86\"},\"events\":[{\"gameResult\":\"W\",\"score\":\"3-0\"},{\"gameResult\":\"L\"}]}]"));
+    data.put("headToHeadGames", new JSONArray("[{\"team\":{\"id\":\"86\",\"displayName\":\"Real Madrid\"},\"events\":[{\"id\":\"a\",\"gameDate\":\"2024-02-01T20:00Z\",\"homeTeamId\":\"86\",\"score\":\"2-1\",\"opponent\":{\"displayName\":\"Juventus\"}},"
+      + "{\"id\":\"b\",\"gameDate\":\"2025-02-01T20:00Z\",\"homeTeamId\":\"111\",\"atVs\":\"@\",\"score\":\"0-0\",\"opponent\":{\"displayName\":\"Juventus\"}}]}]"));
+    MatchCenter.Model m = MatchCenter.parse(data);
+    assertEquals(2, m.homeForm.size()); assertEquals("W", m.homeForm.get(0).result);
+    assertEquals("Juventus", m.h2h.get(0).home); assertEquals("0 – 0", m.h2h.get(0).score);
+    assertEquals("Real Madrid", m.h2h.get(1).home); assertEquals("2 – 1", m.h2h.get(1).score);
+    assertEquals("67'", m.clock); assertEquals(47, MatchCenter.minute("45'+2'"));
+    MatchCenter.Model e = MatchCenter.fromEvent(new JSONObject().put("home", "Celtic").put("away", "Celta de Vigo").put("league", "Europa League").put("description", "Fase de liga").put("homeLogo", "http://no"));
+    assertEquals("event", e.source); assertEquals("Celtic", e.home.name); assertEquals("", e.home.logo); assertEquals("Europa League", e.league);
+    MatchCenter.Model merged = MatchCenter.merge(MatchCenter.parse(summary()), e);
+    assertEquals("Fase de liga", merged.description); assertEquals("UEFA Champions League", merged.league); assertEquals("espn", merged.source);
+  }
 }

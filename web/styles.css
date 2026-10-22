@@ -826,3 +826,73 @@ label[hidden] { display: none; }
 .mc-out { color: var(--live); font-weight: 800; }
 .mc-in { color: #5ee08a; font-weight: 800; }
 .mc-pos { color: var(--muted); font-size: 12px; }
+/* Match page, in the style of sports apps: blue for the home side, yellow for the away side. */
+.match-center { --home: #3d9bff; --away: #ffb52e; }
+.mc-tabs { grid-template-columns: repeat(4, 1fr); }
+.mc-tab { font-size: 12px; padding-inline: 2px; }
+.mc-tab[aria-selected="true"] { color: var(--accent); }
+.mc-note { margin: 0 0 14px; padding: 12px 14px; border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 14px; border-left: 3px solid var(--accent); }
+.mc-names { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-weight: 700; font-size: 14px; }
+.mc-names span { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.mc-names .home::before, .mc-names .away::after { content: ""; flex: none; width: 4px; height: 16px; border-radius: 2px; background: var(--home); }
+.mc-names .away { text-align: right; justify-content: flex-end; }
+.mc-names .away::after { background: var(--away); }
+.mc-bars .home::after { background: var(--home); }
+.mc-bars .away::after { background: var(--away); }
+
+.mc-timeline { padding: 14px; margin-bottom: 14px; border-radius: 12px; background: var(--surface); }
+.mc-axis { position: relative; height: 18px; margin: 6px 12px 0; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mc-axis span { position: absolute; transform: translateX(-50%); }
+.mc-line-row { position: relative; height: 26px; margin: 0 12px; }
+.mc-mark { position: absolute; top: 3px; transform: translateX(-50%); display: grid; place-items: center; min-width: 20px; height: 20px; font-size: 14px; line-height: 1; }
+.mc-mark.yellow::before, .mc-mark.red::before { content: ""; width: 10px; height: 14px; border-radius: 2px; background: #ffd400; }
+.mc-mark.red::before { background: var(--live); }
+.mc-track { position: relative; height: 10px; margin: 0 12px; border-radius: 5px; background: linear-gradient(180deg, color-mix(in srgb, var(--home) 35%, transparent) 50%, color-mix(in srgb, var(--away) 35%, transparent) 50%); overflow: hidden; }
+.mc-track i { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.18); }
+.mc-progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, var(--home) 50%, var(--away) 50%); border-right: 2px solid #fff; }
+
+.mc-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mc-gauge { display: grid; justify-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; background: var(--surface); }
+.mc-gauge-label { color: var(--muted); font-size: 13px; }
+.mc-gauge-row { display: flex; align-items: center; gap: 12px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.mc-donut { width: 52px; height: 52px; border-radius: 50%; background: conic-gradient(var(--home) 0 var(--p), var(--away) var(--p) 100%);
+  -webkit-mask: radial-gradient(circle, transparent 55%, #000 57%); mask: radial-gradient(circle, transparent 55%, #000 57%); }
+
+.mc-icons { display: grid; grid-template-columns: repeat(3, 1fr) auto auto repeat(3, 1fr); align-items: center; gap: 4px; padding: 14px 8px 4px; border-radius: 12px 12px 0 0; background: var(--surface); }
+.mc-icons-label { margin: 0 0 14px; padding: 0 8px 12px; border-radius: 0 0 12px 12px; background: var(--surface); color: var(--muted); font-size: 12px; text-align: center; }
+.mc-cell { display: grid; justify-items: center; gap: 6px; font-size: 16px; }
+.mc-card { width: 13px; height: 17px; border-radius: 2px; background: #ffd400; }
+.mc-card.red { background: var(--live); }
+.mc-flag { color: #5ee08a; font-size: 18px; line-height: 17px; }
+.mc-shots { display: grid; justify-items: center; align-content: center; width: 58px; height: 58px; border-radius: 50%; color: #fff; line-height: 1.05; }
+.mc-shots.home { background: var(--home); }
+.mc-shots.away { background: var(--away); color: #1a1200; }
+.mc-shots b { font-size: 18px; }
+.mc-shots small { font-size: 12px; opacity: .85; }
+
+.mc-forms { padding: 14px; margin: 14px 0; border-radius: 12px; background: var(--surface); }
+.mc-forms h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+.mc-form-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; }
+.mc-form-row > span:first-child { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.mc-form { display: flex; gap: 4px; flex: none; }
+.mc-result { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 800; background: var(--surface-2); color: var(--muted); }
+.mc-result.win { background: #1f9d55; color: #fff; }
+.mc-result.draw { background: #6b7280; color: #fff; }
+.mc-result.loss { background: #d64545; color: #fff; }
+.mc-description { margin: 14px 0 0; color: #d6dbe2; line-height: 1.5; }
+.mc-h2h { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mc-h2h li { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); }
+.mc-h2h-date { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.mc-h2h-game { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.mc-h2h-game span:last-child { text-align: right; }
+.mc-h2h-game b { font-size: 16px; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .mc-shots { width: 50px; height: 50px; } .mc-icons { gap: 2px; padding-inline: 4px; } }
+.mc-tab { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 700; }
+.mc-gauges { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) {
+  .mc-gauge { padding: 12px 4px; }
+  .mc-gauge-label { font-size: 12px; text-align: center; }
+  .mc-gauge-row { gap: 6px; font-size: 14px; }
+  .mc-donut { width: 40px; height: 40px; }
+  .mc-tab { font-size: 13px; }
+}
