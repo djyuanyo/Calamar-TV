@@ -7,19 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          for id in 401882832 401915555 401915840; do
-          curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=$id" -o s.json
-          python3 - <<'PY'
-          import json
-          d=json.load(open('s.json'))
-          s=d.get('seasonseries') or []
-          for b in s:
-            ev=b.get('events',[])
-            print('SERIES',b.get('type'),b.get('title'),len(ev))
-            if ev:
-              e=dict(ev[0]); e.pop('links',None)
-              for c in e.get('competitors',[]): c['team']={k:c['team'].get(k) for k in ('id','displayName','logo')}
-              print(' keys',sorted(e.keys())); print(' ev0',json.dumps(e)[:900])
-          for t in d.get('lastFiveGames') or []: print('LAST',t['team']['displayName'],len(t.get('events',[])),[ (x.get('gameResult'),x.get('score'),x.get('competitionName')) for x in t.get('events',[])][:5])
-          PY
-          done
+          U=$(curl -s "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][4]['streams'][0])")
+          echo "::add-mask::$U"
+          echo "IPTV directo (VLC):"; curl -s -m 20 -A "VLC/3.0.20 LibVLC/3.0.20" -o /tmp/a -w "HTTP %{http_code} tipo=%{content_type} redir=%{num_redirects} %{time_total}s\n" --max-time 12 -L "$U" || true; echo "bytes $(wc -c < /tmp/a 2>/dev/null)"
+          echo "IPTV directo (navegador):"; curl -s -m 20 -A "Mozilla/5.0" -o /tmp/b -w "HTTP %{http_code} tipo=%{content_type} %{time_total}s\n" --max-time 12 -L "$U" || true; echo "bytes $(wc -c < /tmp/b 2>/dev/null)"
+          echo "Hosting:"; curl -s -m 20 -o /tmp/c -w "HTTP %{http_code} %{time_total}s\n" https://calamarmenciano.com/calamar-tv-relay.php || true; head -c 200 /tmp/c; echo
+          B=$(printf %s "$U" | base64 -w0)
+          echo "Relay del hosting:"; curl -s -m 20 --max-time 12 -H "Origin: https://djyuanyo.github.io" -H "X-Calamar-Source: $B" -o /tmp/d -w "HTTP %{http_code} tipo=%{content_type} %{time_total}s\n" "https://calamarmenciano.com/calamar-tv-relay.php?stream=1" || true; echo "bytes $(wc -c < /tmp/d)"; head -c 200 /tmp/d | tr -cd '[:print:]\n'; echo
