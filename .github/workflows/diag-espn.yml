@@ -6,14 +6,26 @@ jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
       - run: |
-          C=$(curl -s "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom")
-          U=$(echo "$C" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][4]['streams'][0])")
-          V=$(echo "$C" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][5]['streams'][0])")
-          echo "::add-mask::$U"; echo "::add-mask::$V"
-          echo "Una sola conexión:"; curl -s -L -A "VLC/3.0.20 LibVLC/3.0.20" --max-time 8 "$U" -o /tmp/one -w "HTTP %{http_code}\n" || true; echo "bytes $(wc -c </tmp/one)"
-          echo "Dos a la vez (dos canales):"
-          ( curl -s -L -A "VLC/3.0.20 LibVLC/3.0.20" --max-time 10 "$U" -o /tmp/a -w "A HTTP %{http_code}\n" || true ) &
-          sleep 2
-          ( curl -s -L -A "VLC/3.0.20 LibVLC/3.0.20" --max-time 8 "$V" -o /tmp/b -w "B HTTP %{http_code}\n" || true ) &
-          wait; echo "A bytes $(wc -c </tmp/a)  B bytes $(wc -c </tmp/b)"; head -c 300 /tmp/b | tr -cd '[:print:]\n'; echo
+          npm i -s playwright@1.48.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+          cat > t.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const res = await fetch('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom');
+          const c = JSON.parse((await res.json()).fields.json.stringValue);
+          const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+          for (const ch of [c.channels[4], c.channels[0]]) {
+            const page = await browser.newPage();
+            const relay = [];
+            page.on('response', (r) => { if (r.url().includes('calamar-tv-relay')) relay.push(r.status()); });
+            page.on('console', (m) => { if (m.type() === 'error') console.log('  consola:', m.text().slice(0, 160)); });
+            await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canal/' + encodeURIComponent(ch.id));
+            await page.waitForTimeout(25000);
+            const s = await page.evaluate(() => { const v = document.getElementById('video'); return { t: v.currentTime, ready: v.readyState, paused: v.paused, status: document.getElementById('player-status')?.textContent.slice(0, 200) }; });
+            console.log('==', ch.name, JSON.stringify(s), 'relay', relay.slice(0, 5));
+            await page.close();
+          }
+          await browser.close();
+          JS
+          node t.mjs
