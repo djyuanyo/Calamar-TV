@@ -1480,17 +1480,13 @@ public class MainActivity extends Activity {
   void playEntry(JSONObject entry, boolean restart) {
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
-    String embed = Library.Media.embed(url);
-    if (embed != null) { // LuluStream: its own player page, without saved position
-      Intent page = new Intent(this, NativePlayerActivity.class);
-      page.putExtra("page_url", embed);
-      page.putExtra("title", entry.optString("title"));
-      startActivityForResult(page, PLAY_LIBRARY);
-      return;
-    }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
-    intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
+    String embed = Library.Media.embed(url);
+    if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
+      intent.putExtra("page_url", embed);
+      intent.putExtra("football_fallback", true);
+    } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
     intent.putExtra("title", entry.optString("title"));
     intent.putExtra("progress_entry", entry.toString());
     intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));

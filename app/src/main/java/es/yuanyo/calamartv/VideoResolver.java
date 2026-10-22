@@ -68,7 +68,44 @@ public final class VideoResolver {
             .matcher(html);
     while (tags.find())
       add(sources, "Vídeo " + (sources.size() + 1), tags.group(2).replace("&amp;", "&"), pageUrl);
+    if (!sources.isEmpty()) return sources;
+    // JW Player pages (LuluStream and similar): sources: [{file:"…m3u8"}], often inside packed JavaScript.
+    StringBuilder scripts = new StringBuilder(html);
+    Matcher packed = PACKED.matcher(html);
+    while (packed.find()) scripts.append('\n').append(unpack(packed));
+    Matcher files =
+        Pattern.compile("\\bfile\\s*:\\s*([\"'])(https://[^\"']+)\\1").matcher(scripts.toString().replace("\\/", "/"));
+    while (files.find()) add(sources, "Vídeo " + (sources.size() + 1), files.group(2), pageUrl);
     return sources;
+  }
+
+  private static final Pattern PACKED =
+      Pattern.compile(
+          "\\}\\('((?:[^'\\\\]++|\\\\.)*+)',\\s*(\\d+),\\s*(\\d+),\\s*'((?:[^'\\\\]++|\\\\.)*+)'\\.split\\('\\|'\\)");
+  private static final String DIGITS =
+      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  /** Expands Dean Edwards' p,a,c,k,e,d packing: each word token is an index into the word list. */
+  static String unpack(Matcher packed) {
+    String payload = packed.group(1).replace("\\'", "'").replace("\\\\", "\\");
+    int base = Integer.parseInt(packed.group(2));
+    String[] words = packed.group(4).split("\\|", -1);
+    if (base < 2 || base > DIGITS.length()) return "";
+    Matcher token = Pattern.compile("\\b\\w+\\b").matcher(payload);
+    StringBuffer out = new StringBuffer();
+    while (token.find()) {
+      long index = 0;
+      boolean valid = true;
+      for (char c : token.group().toCharArray()) {
+        int digit = DIGITS.indexOf(c);
+        if (digit < 0 || digit >= base || index > Integer.MAX_VALUE) { valid = false; break; }
+        index = index * base + digit;
+      }
+      String word = valid && index < words.length && !words[(int) index].isEmpty() ? words[(int) index] : token.group();
+      token.appendReplacement(out, Matcher.quoteReplacement(word));
+    }
+    token.appendTail(out);
+    return out.toString();
   }
 
   private static void add(List<Source> sources, String label, String value, String page) {
