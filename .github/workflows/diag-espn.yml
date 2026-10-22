@@ -7,22 +7,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401882832" -o s.json
+          for id in 401882832 401915555 401915840; do
+          curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=$id" -o s.json
           python3 - <<'PY'
           import json
           d=json.load(open('s.json'))
-          l=d.get('lastFiveGames')
-          print('LAST type',type(l).__name__, len(l))
-          print('LAST0',json.dumps(l[0])[:1500])
-          s=d.get('seasonseries')
-          print('SERIES',json.dumps(s)[:2500])
+          s=d.get('seasonseries') or []
+          for b in s:
+            ev=b.get('events',[])
+            print('SERIES',b.get('type'),b.get('title'),len(ev))
+            if ev:
+              e=dict(ev[0]); e.pop('links',None)
+              for c in e.get('competitors',[]): c['team']={k:c['team'].get(k) for k in ('id','displayName','logo')}
+              print(' keys',sorted(e.keys())); print(' ev0',json.dumps(e)[:900])
+          for t in d.get('lastFiveGames') or []: print('LAST',t['team']['displayName'],len(t.get('events',[])),[ (x.get('gameResult'),x.get('score'),x.get('competitionName')) for x in t.get('events',[])][:5])
           PY
-          for season in 2025 2024 2023; do
-            curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/83/schedule?season=$season" | python3 -c "
-          import json,sys
-          d=json.load(sys.stdin); ev=d.get('events',[])
-          print('ALL season',$season,len(ev),sorted({e.get('seasonType',{}).get('name','') for e in ev})[:8])
-          vs=[e for e in ev if any(c.get('team',{}).get('id')=='86' for c in e['competitions'][0]['competitors'])]
-          print(' vs RM',len(vs),[ (e['date'],e['name'],[ (c['team']['id'],c.get('score',{}).get('displayValue') if isinstance(c.get('score'),dict) else c.get('score')) for c in e['competitions'][0]['competitors']]) for e in vs][:4])
-          "
           done
