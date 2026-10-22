@@ -15,10 +15,10 @@ const firebase = `
 import { validateCatalog } from './shared-catalog.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
 export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com', getIdToken: async () => 'token' } };
-export const administrator = () => true;
+export const administrator = (user) => user === undefined || user?.email === 'admin@example.com';
 export const imageService = async () => ({configured: true});
 export const connectImageService = async () => ({configured: true});
-export const watchAuth = () => () => {};
+export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
 export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
@@ -395,6 +395,15 @@ try {
     return libraryDocs[name] ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(libraryDocs[name]) } } } }) : route.fulfill({ status: 404, json: {} });
   });
   assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
+  // While hidden for everyone, the administrator signed in on this browser still sees it, with a note.
+  await page.evaluate(() => window.__authWatchers.forEach((w) => w({ email: 'admin@example.com' })));
+  await page.waitForFunction(() => !document.querySelector('.nav a[href="#/peliculas"]').hidden);
+  await page.evaluate(() => { location.hash = '#/peliculas'; });
+  await page.getByText('Oculto para los usuarios: solo lo ves tú, como administrador.', { exact: false }).waitFor();
+  await page.evaluate(() => window.__authWatchers.forEach((w) => w({ email: 'otra@example.com' })));
+  await page.getByText('Películas no está disponible ahora.').waitFor();
+  assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
+  await page.evaluate(() => window.__authWatchers.forEach((w) => w(null)));
   await page.goto(base + '/#/admin/biblioteca');
   await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
   await page.locator('.library-item').filter({ hasText: 'Avatar (2009)' }).waitFor();

@@ -308,7 +308,7 @@ function home() {
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
   // Films and episodes left half watched in this browser come right under the featured slider.
-  const unfinished = libraryVisible(state.custom) ? progressList(loadProgress()) : [];
+  const unfinished = libraryShown() ? progressList(loadProgress()) : [];
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // Only events on the home page: one row per league, each in date order (soonest first).
@@ -821,19 +821,32 @@ shareButton.addEventListener('click', async () => {
 });
 
 // ---- Films, series and documentaries --------------------------------------------------------------
-// Shown in the menu only while the administrator has the catalog switched on (libraryVisible).
+// Shown in the menu while the administrator has the catalog switched on (libraryVisible); the
+// administrator, signed in on this browser, always sees it, to prepare it before showing it to everyone.
+let libraryAdmin = false;
+shared().then((f) => f.watchAuth((user) => {
+  const was = libraryAdmin;
+  libraryAdmin = f.administrator(user);
+  if (was === libraryAdmin) return;
+  syncLibraryNav();
+  if (sectionByPage(decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0])) route();
+})).catch(() => {});
+const libraryShown = () => libraryVisible(state.custom) || libraryAdmin;
 function syncLibraryNav() {
-  for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryVisible(state.custom);
+  for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryShown();
 }
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);
-  if (!libraryVisible(state.custom)) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
+  if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
   if (!itemId) view.replaceChildren(el('p', { class: 'status', role: 'status' }, `Cargando ${section.label.toLowerCase()}…`));
   let library;
   try { library = await fetchLibrary(); }
   catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
   if (version !== routeVersion) return;
-  if (!itemId) { view.replaceChildren(...libraryPage(el, section, library)); return; }
+  // Only the administrator gets here while it is hidden: say so, so it is not mistaken for public.
+  const hiddenNote = libraryVisible(state.custom) ? null
+    : el('p', { class: 'note library-hidden-note' }, 'Oculto para los usuarios: solo lo ves tú, como administrador. Actívalo en Administración → Pelis y series.');
+  if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library)].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...libraryPage(el, section, library)); return; }
   const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });

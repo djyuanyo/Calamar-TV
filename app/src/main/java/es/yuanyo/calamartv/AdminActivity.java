@@ -107,7 +107,7 @@ public class AdminActivity extends Activity {
     }
     body.addView(label("Canales · " + catalog.optJSONArray("channels").length() + "   /   Eventos · " + (catalog.optJSONArray("events") == null ? 0 : catalog.optJSONArray("events").length()), 15));
     final boolean libraryOn = Library.visible(catalog);
-    addButton("Películas, Series y Documentales: " + (libraryOn ? "visibles · Ocultar" : "ocultos · Mostrar"), () -> {
+    addButton("Películas, Series y Documentales: " + (libraryOn ? "visibles para todos · Ocultar" : "solo los ves tú · Mostrar a todos"), () -> {
       try { JSONObject next = copy(); next.put("libraryVisible", !libraryOn); SharedCatalog.validate(next); publish(next); }
       catch (Exception error) { fail(error); }
     });
