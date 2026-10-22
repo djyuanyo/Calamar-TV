@@ -57,6 +57,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private WebView browser;
   private LinearLayout root, panel;
   private FrameLayout stage;
+  /** Phones and tablets: the match of an event with a Google match link, under the video. */
+  private MatchCenter matchCenter;
   private TextView status, livePill, viewersBadge;
   private AudienceSession audience;
   private final Runnable audiencePlayback=new Runnable(){public void run(){
@@ -71,8 +73,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     String id=getIntent().getStringExtra("match_id");
     if(id==null||id.isEmpty())return;
     if(!matchBusy){matchBusy=true;new Thread(() -> {
-      try{MatchScores.fetch(id);}catch(Exception ignored){}
-      handler.post(() -> matchBusy=false);
+      MatchCenter.Model model=null;
+      try{MatchScores.fetch(id);if(matchCenter!=null)model=MatchCenter.parse(MatchScores.summary(id));}catch(Exception ignored){}
+      final MatchCenter.Model shown=model;
+      handler.post(() -> {matchBusy=false;if(matchCenter!=null&&!isFinishing()){if(shown!=null)matchCenter.show(shown);else matchCenter.failed();}});
     }).start();}
     handler.postDelayed(this,30000);
   }};
@@ -243,11 +247,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           if (fullscreen) panel.setVisibility(visibility == View.VISIBLE ? View.VISIBLE : View.GONE);
         });
     stage.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
-    root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
+    // On a phone or tablet an event with a Google match link opens in the page, with the match's
+    // information, statistics and line-ups under the video; Android TV keeps the full-screen player.
+    String matchId = getIntent().getStringExtra("match_id");
+    if (matchId != null && !matchId.isEmpty() && !isTelevision()) matchCenter = new MatchCenter(this);
+    root.addView(stage, stageSize(false));
+    if (matchCenter != null) root.addView(matchCenter.view, new LinearLayout.LayoutParams(-1, 0, 1));
     setContentView(root);
     // Channels and events open in full screen; the controller's button shows the panel again, and
     // Back closes the player straight away instead of first leaving full screen.
-    setFullscreen(true);
+    if (matchCenter == null) setFullscreen(true);
   }
 
   private Button button(LinearLayout row, String text, Runnable action) {
@@ -273,10 +282,27 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         == Configuration.UI_MODE_TYPE_TELEVISION;
   }
 
+  /** The video fills the screen, or with the match under it a 16:9 box at the top. */
+  private LinearLayout.LayoutParams stageSize(boolean full) {
+    if (matchCenter == null || full) return new LinearLayout.LayoutParams(-1, 0, 1);
+    android.util.DisplayMetrics d = getResources().getDisplayMetrics();
+    return new LinearLayout.LayoutParams(-1, Math.min(d.widthPixels * 9 / 16, d.heightPixels * 3 / 4));
+  }
+
+  @Override
+  public void onConfigurationChanged(Configuration change) {
+    super.onConfigurationChanged(change);
+    if (matchCenter != null && stage != null) stage.setLayoutParams(stageSize(fullscreen));
+  }
+
   /** Full screen: the panel and the system bars go away, and a phone turns to landscape. */
   private void setFullscreen(boolean on) {
     if (fullscreen == on) return; // The controller reports back what we set; this stops the echo.
     fullscreen = on;
+    if (matchCenter != null) {
+      matchCenter.view.setVisibility(on ? View.GONE : View.VISIBLE);
+      stage.setLayoutParams(stageSize(on));
+    }
     placePanel(on);
     root.setFitsSystemWindows(!on);
     applySystemBars(on);

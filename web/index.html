@@ -43,6 +43,7 @@
     </main>
 
     <div class="player idle" id="player" hidden role="dialog" aria-modal="true" aria-labelledby="player-title">
+      <div class="player-screen">
       <div class="player-stage">
         <video id="video" playsinline autoplay></video>
         <div class="player-shade" aria-hidden="true"></div>
@@ -94,6 +95,9 @@
           <button class="icon-btn" id="ctl-pip" type="button" aria-label="Imagen en imagen" hidden></button>
         </div>
       </div>
+      </div>
+      <!-- Events with a Google match link: information, statistics and line-ups under the video. -->
+      <section class="match-center" id="match-center" aria-label="Datos del partido" hidden></section>
     </div>
 
     <footer class="foot">

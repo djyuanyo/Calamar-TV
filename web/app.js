@@ -1,4 +1,5 @@
-import { fetchMatch, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
+import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
+import { parseMatchCenter, renderMatchCenter } from './match-center.js';
 import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -680,8 +681,10 @@ function open(c, fromRoute = false) {
   controls.wake();
   document.getElementById('player-close').focus();
   // Pressing «Ver» opens the video in full screen, as in the app. Browsers only allow it right after a
-  // tap, so a link opened directly (fromRoute) starts in the normal player.
-  if (!fromRoute && !controls.isFullscreen()) controls.enterFullscreen();
+  // tap, so a link opened directly (fromRoute) starts in the normal player. Events with a Google match
+  // link stay in the page instead, with the match's information, statistics and line-ups under the video.
+  const withMatch = showMatchCenter(c);
+  if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
   // Viewers and visits are counted per channel and event; films and episodes are not.
   if (!c.vod) startAudience(c);
   playSource(c, 0);
@@ -727,7 +730,45 @@ async function resumeEntry(entry) {
   }
 }
 
+// ---- The match under the video --------------------------------------------------------------------
+const matchPanel = document.getElementById('match-center');
+let matchTab = 'info', matchShown = '', matchModel = null, matchTimer = null;
+function paintMatch() {
+  if (!matchModel) return;
+  const focused = matchPanel.contains(document.activeElement) ? document.activeElement.id : '';
+  matchPanel.replaceChildren(...renderMatchCenter(el, matchModel, matchTab, (tab, focus) => {
+    matchTab = tab; paintMatch();
+    if (focus) document.getElementById(`mc-tab-${tab}`)?.focus();
+  }));
+  if (focused) document.getElementById(focused)?.focus();
+}
+/** Shows the match of an event with a Google match link under the video; true when it did. */
+function showMatchCenter(c) {
+  const id = c?.event && c.matchUrl && c.matchId ? String(c.matchId) : '';
+  if (id === matchShown && id) return true;
+  clearInterval(matchTimer);
+  matchShown = id; matchModel = null; matchTab = 'info';
+  player.classList.toggle('with-match', !!id);
+  matchPanel.hidden = !id;
+  player.scrollTop = 0;
+  if (!id) { matchPanel.replaceChildren(); return false; }
+  matchPanel.replaceChildren(el('p', { class: 'mc-empty' }, 'Cargando datos del partido…'));
+  const load = async () => {
+    try {
+      const model = parseMatchCenter(await fetchSummary(id));
+      if (matchShown !== id) return;
+      matchModel = model; paintMatch();
+    } catch {
+      if (matchShown === id && !matchModel) matchPanel.replaceChildren(el('p', { class: 'mc-empty' }, 'No se pudieron cargar los datos del partido. Se volverá a intentar en unos segundos.'));
+    }
+  };
+  load();
+  matchTimer = setInterval(load, 30000);
+  return true;
+}
+
 function hidePlayer() {
+  showMatchCenter(null);
   rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
   stop();

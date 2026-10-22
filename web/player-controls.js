@@ -330,6 +330,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   // ---- Keyboard ----
   function onKey(e) {
     if (root.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target.closest?.('.match-center')) return; // The match tabs use the arrows themselves.
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     const onButton = tag === 'BUTTON';

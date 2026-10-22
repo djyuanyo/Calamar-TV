@@ -24,13 +24,27 @@ public class MatchScoresTest {
     assertEquals("Aplazado",MatchScores.parse(fixture("STATUS_POSTPONED","pre",false)).text);
     assertEquals("Programado",MatchScores.parse(fixture("STATUS_SCHEDULED","pre",false)).text);
   }
-  @Test public void bothTeamsAndDateAreRequiredAndAmbiguityFails()throws Exception{
+  @Test public void theLinkDecidesTheMatchEvenWhenTheEventDataDiffers()throws Exception{
     JSONObject e=fixture("STATUS_SECOND_HALF","in",false),board=new JSONObject().put("events",new JSONArray().put(e));
     assertEquals("401882870",MatchScores.identify(board,"levante ud contra athletic club","2026-10-21T18:00:00Z").getString("id"));
-    try{MatchScores.identify(board,"levante contra real madrid","2026-10-21T18:00:00Z");fail();}catch(java.io.IOException expected){}
-    board.getJSONArray("events").put(e);
-    try{MatchScores.identify(board,"levante contra athletic club","2026-10-21T18:00:00Z");fail();}catch(java.io.IOException expected){}
+    assertEquals("401882870",MatchScores.identify(board,"levante ud contra athletic club","2027-01-01T18:00:00Z").getString("id"));
+    assertEquals("401882870",MatchScores.identify(board,"levante ud contra athletic club","").getString("id"));
+    assertFalse(MatchScores.identify(board,"levante contra real madrid","2026-10-21T18:00:00Z").getBoolean("bothTeams"));
+    JSONObject later=new JSONObject(e.toString()).put("id","401882999").put("date","2026-10-28T18:00Z");
+    assertEquals("401882870",MatchScores.identify(new JSONObject().put("events",new JSONArray().put(later).put(e)),"levante contra athletic club","2026-10-21T20:00:00Z").getString("id"));
+    try{MatchScores.identify(board,"real madrid contra juventus","2026-10-21T18:00:00Z");fail();}catch(java.io.IOException expected){}
     assertEquals("2026-10-21T18:00:00Z",MatchScores.iso("2026-10-21T18:00Z"));
+  }
+  @Test public void spanishAndPartialNamesButNotASharedWordAlone()throws Exception{
+    JSONObject e=fixture("STATUS_SECOND_HALF","in",false);
+    JSONArray teams=e.getJSONArray("competitions").getJSONObject(0).getJSONArray("competitors");
+    teams.getJSONObject(0).put("team",new JSONObject().put("displayName","Bayern Munich").put("abbreviation","BAY"));
+    teams.getJSONObject(1).put("team",new JSONObject().put("displayName","Club Brugge"));
+    JSONObject board=new JSONObject().put("events",new JSONArray().put(e));
+    assertTrue(MatchScores.identify(board,"Bayern de Múnich - Brujas","").getBoolean("bothTeams"));
+    teams.getJSONObject(0).put("team",new JSONObject().put("displayName","Real Betis"));
+    teams.getJSONObject(1).put("team",new JSONObject().put("displayName","Sevilla"));
+    try{MatchScores.identify(board,"real madrid","");fail();}catch(java.io.IOException expected){}
   }
   @Test public void endTimestampAndFiveMinuteGraceAreNotEstimatedFromKickoff()throws Exception{
     long end=SportsCatalog.instant("2026-10-21T20:10:00Z");
