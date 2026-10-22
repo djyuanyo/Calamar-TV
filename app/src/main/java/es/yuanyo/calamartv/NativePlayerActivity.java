@@ -330,6 +330,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     placePanel(on);
     root.setFitsSystemWindows(!on);
+    // The bars' padding stays on the view after it stops fitting them: clear it so the video fills the
+    // screen (leaving full screen fits the bars again and puts it back).
+    if (on) root.setPadding(0, 0, 0, 0);
     applySystemBars(on);
     if (!isTelevision()) {
       setRequestedOrientation(
