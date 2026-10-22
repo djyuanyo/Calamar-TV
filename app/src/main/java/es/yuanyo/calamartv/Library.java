@@ -292,7 +292,7 @@ final class Library {
         java.net.URI u = java.net.URI.create(address.trim());
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
         if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null
-            || !(host.equals("lulustream.com") || host.equals("www.lulustream.com") || host.equals("luluvdo.com") || host.equals("www.luluvdo.com"))) return null;
+            || !host.matches("(?:www\\.)?(?:lulustream|luluvdo|luluvido|luluvid|lulu)\\.(?:com|st|to|net|org|io)")) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("^/(?:e/|d/|v/)?([A-Za-z0-9]{8,20})(?:\\.html)?/?$").matcher(u.getPath() == null ? "" : u.getPath());
         return m.matches() && !m.group(1).equals("api") ? "https://lulustream.com/e/" + m.group(1) : null;
       } catch (Exception e) {
