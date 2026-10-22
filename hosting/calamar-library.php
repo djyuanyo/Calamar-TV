@@ -1,10 +1,17 @@
 <?php
 /**
- * Films, series and documentaries from folders of this hosting, Plex style, with data from TMDB.
+ * Films, series and documentaries from Google Drive folders (or folders of this hosting), Plex style,
+ * with data from TMDB.
  *
  * Public:  GET ?action=library  -> the published library (titles, posters, synopsis, episodes, links).
+ *          The same file is also published to GitHub (library/calamar-library.json), so the web and the
+ *          app keep showing it, and the videos keep playing from Drive, while this hosting is down.
  * Admin:   POST (Bearer Firebase ID token of the administrator, checked by Google as in calamar-images.php)
- *          configure | scan | match-next | search | match.
+ *          configure | scan | match-next | search | match | publish.
+ *
+ * Google Drive: each section is a folder shared as «Cualquier persona con el enlace». It is read with the
+ * Drive API and a Google API key (by default the public key of the Firebase project, which needs the
+ * Google Drive API enabled); videos play from https://www.googleapis.com/drive/v3/files/ID?alt=media.
  *
  * Folders: every video in Películas/Documentales is one title (named after its file, or after its own
  * folder when that folder holds only it). Every subfolder of Series is a series and every video inside
@@ -19,6 +26,8 @@ const LIBRARY_SECTIONS = ['movies' => 'MENCIA MEDIA/PELICULAS', 'series' => 'MEN
 const LIBRARY_TMDB = 'https://api.themoviedb.org/3';
 const LIBRARY_IMAGE = 'https://image.tmdb.org/t/p/';
 const LIBRARY_BATCH = 8;
+const LIBRARY_DRIVE = 'https://www.googleapis.com/drive/v3/files';
+const LIBRARY_GITHUB_PATH = 'library/calamar-library.json';
 
 function libraryPrivate($name) { return (getenv('CALAMAR_LIBRARY_DIR') ?: dirname(__DIR__)) . '/' . $name; }
 function libraryPublicRoot() { return getenv('CALAMAR_LIBRARY_ROOT') ?: ($_SERVER['DOCUMENT_ROOT'] ?? __DIR__); }
@@ -40,7 +49,63 @@ function libraryConfig() {
     $config = libraryReadJson('calamar-library-config.json', []);
     $folders = [];
     foreach (LIBRARY_SECTIONS as $section => $default) $folders[$section] = is_string($config['folders'][$section] ?? null) ? $config['folders'][$section] : $default;
-    return ['tmdb' => is_string($config['tmdb'] ?? null) ? $config['tmdb'] : '', 'folders' => $folders];
+    $drive = is_string($config['drive_key'] ?? null) && $config['drive_key'] !== '' ? $config['drive_key'] : IMAGE_FIREBASE_KEY;
+    return ['tmdb' => is_string($config['tmdb'] ?? null) ? $config['tmdb'] : '', 'folders' => $folders, 'drive_key' => $drive,
+        'own_drive_key' => is_string($config['drive_key'] ?? null) && $config['drive_key'] !== ''];
+}
+
+// ---- Google Drive ----------------------------------------------------------------------------
+
+/** The folder id of a Drive folder link (…/folders/ID…) or of a bare id; null for a hosting path. */
+function libraryDriveFolder($value) {
+    $value = trim((string)$value);
+    if (preg_match('~^https://drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?id=)([A-Za-z0-9_-]{10,})~', $value, $m)) return $m[1];
+    if (preg_match('~^[A-Za-z0-9_-]{25,}$~D', $value)) return $value;
+    return null;
+}
+function libraryDriveUrl($id, $key) { return LIBRARY_DRIVE . '/' . rawurlencode($id) . '?alt=media&key=' . rawurlencode($key); }
+
+/** One page of a Drive folder; errors explain what to change in Drive or Google Cloud. */
+function libraryDriveList($folder, $key, $request, $page = '') {
+    $params = ['q' => "'" . $folder . "' in parents and trashed = false", 'fields' => 'nextPageToken,files(id,name,mimeType)',
+        'pageSize' => 1000, 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'key' => $key];
+    if ($page !== '') $params['pageToken'] = $page;
+    [$status, $data] = $request('GET', LIBRARY_DRIVE . '?' . http_build_query($params), null, null);
+    if ($status === 403 && str_contains(json_encode($data), 'accessNotConfigured')) throw new InvalidArgumentException('Activa la «Google Drive API» en Google Cloud para el proyecto de la clave (por defecto, menciamedia) y vuelve a escanear.');
+    if ($status === 400 || $status === 403) throw new InvalidArgumentException('Google Drive no acepta la clave de la API. Revísala en Pelis y series → Configuración.');
+    if ($status === 404) throw new InvalidArgumentException('No se encuentra una carpeta de Drive: compártela como «Cualquier persona con el enlace» y copia su enlace.');
+    if ($status !== 200 || !is_array($data)) throw new RuntimeException('Google Drive no responde ahora. Vuelve a intentarlo.');
+    return $data;
+}
+
+/**
+ * Videos under a Drive folder, as the scan reads hosting folders: [path inside the folder, stable key, link].
+ * Subfolders are followed (series seasons, «Película (2009)/Película.mkv»), up to 6 levels and 3000 folders.
+ */
+function libraryDriveVideos($folder, $key, $request = 'imageHttp', $limit = 5000) {
+    $out = []; $queue = [[$folder, '', 0]]; $seen = [$folder => true]; $folders = 0;
+    while ($queue && count($out) < $limit) {
+        [$id, $prefix, $depth] = array_shift($queue);
+        if (++$folders > 3000) break;
+        $page = '';
+        do {
+            $data = libraryDriveList($id, $key, $request, $page);
+            foreach ($data['files'] ?? [] as $file) {
+                $name = str_replace('/', '-', (string)($file['name'] ?? ''));
+                if ($name === '' || str_starts_with($name, '.')) continue;
+                if (($file['mimeType'] ?? '') === 'application/vnd.google-apps.folder') {
+                    if ($depth < 6 && !isset($seen[$file['id']])) { $seen[$file['id']] = true; $queue[] = [$file['id'], $prefix . $name . '/', $depth + 1]; }
+                    continue;
+                }
+                $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                if (!in_array($extension, LIBRARY_VIDEO, true) && !str_starts_with((string)($file['mimeType'] ?? ''), 'video/')) continue;
+                $out[] = ['path' => $prefix . $name, 'key' => 'drive:' . $file['id'], 'url' => libraryDriveUrl($file['id'], $key)];
+            }
+            $page = (string)($data['nextPageToken'] ?? '');
+        } while ($page !== '' && count($out) < $limit);
+    }
+    usort($out, fn($a, $b) => strnatcasecmp($a['path'], $b['path']));
+    return $out;
 }
 
 // ---- Names -----------------------------------------------------------------------------------
@@ -88,45 +153,56 @@ function libraryVideos($root, $relative, $limit = 5000) {
     return array_values($out);
 }
 
-/** Folder contents as titles (films, documentaries) or series with episodes. */
-function libraryScan($root, $folders) {
+/** Hosting videos of a section folder, in the form the scan uses: [path inside the folder, stable key, link]. */
+function libraryHostingVideos($root, $relative) {
+    return array_map(fn($video) => ['path' => substr($video, strlen($relative) + 1), 'key' => $video, 'url' => libraryUrl($video)],
+        libraryVideos($root, $relative));
+}
+
+/**
+ * Folder contents as titles (films, documentaries) or series with episodes. A section is a Google Drive
+ * folder (link or id) or a folder of this hosting; `$drive` reads Drive folders (tests pass a fake one).
+ */
+function libraryScan($root, $folders, $drive = null) {
     $sections = [];
-    foreach ($folders as $section => $relative) {
-        $relative = trim(str_replace('\\', '/', $relative), '/');
-        $videos = libraryVideos($root, $relative);
+    foreach ($folders as $section => $place) {
+        $driveFolder = libraryDriveFolder($place);
+        $relative = trim(str_replace('\\', '/', $place), '/');
+        $videos = $driveFolder !== null ? $drive($driveFolder) : libraryHostingVideos($root, $relative);
+        $base = $driveFolder !== null ? 'drive:' . $driveFolder : $relative;
         $items = [];
         if ($section === 'series') {
             $series = [];
             foreach ($videos as $video) {
-                $inside = substr($video, strlen($relative) + 1);
-                if (!str_contains($inside, '/')) continue; // A series is a folder.
-                $name = explode('/', $inside)[0];
-                $series[$name][] = $video;
+                if (!str_contains($video['path'], '/')) continue; // A series is a folder.
+                $series[explode('/', $video['path'])[0]][] = $video;
             }
             foreach ($series as $name => $files) {
                 $clean = libraryCleanTitle($name);
                 $episodes = [];
                 foreach ($files as $index => $file) {
-                    $parts = explode('/', $file);
+                    $parts = explode('/', $file['path']);
                     $number = libraryEpisode(end($parts), $parts[count($parts) - 2] ?? '') ?? [1, $index + 1];
-                    $episodes[] = ['id' => libraryId('e', $file), 'season' => $number[0], 'episode' => $number[1],
-                        'file' => end($parts), 'url' => libraryUrl($file)];
+                    $episodes[] = ['id' => libraryId('e', $file['key']), 'season' => $number[0], 'episode' => $number[1],
+                        'file' => end($parts), 'url' => $file['url']];
                 }
                 usort($episodes, fn($a, $b) => [$a['season'], $a['episode'], $a['file']] <=> [$b['season'], $b['episode'], $b['file']]);
-                $items[] = ['id' => libraryId('s', $relative . '/' . $name), 'kind' => 'tv', 'title' => $clean['title'] ?: $name,
+                $items[] = ['id' => libraryId('s', $base . '/' . $name), 'kind' => 'tv', 'title' => $clean['title'] ?: $name,
                     'year' => $clean['year'], 'folder' => $name, 'episodes' => $episodes];
             }
         } else {
+            $byFolder = [];
+            foreach ($videos as $video) $byFolder[dirname($video['path'])] = ($byFolder[dirname($video['path'])] ?? 0) + 1;
             foreach ($videos as $video) {
-                $parts = explode('/', substr($video, strlen($relative) + 1));
+                $parts = explode('/', $video['path']);
                 $file = end($parts);
                 // Plex style "Avatar (2009)/Avatar.mkv": a folder holding just this video names it.
                 $folder = count($parts) > 1 ? $parts[count($parts) - 2] : null;
-                $alone = $folder !== null && count(array_filter($videos, fn($v) => dirname($v) === dirname($video))) === 1;
+                $alone = $folder !== null && $byFolder[dirname($video['path'])] === 1;
                 $clean = libraryCleanTitle($alone ? $folder : $file);
                 if ($clean['year'] === null) $clean['year'] = libraryCleanTitle($file)['year'];
-                $items[] = ['id' => libraryId('m', $video), 'kind' => 'movie', 'title' => $clean['title'] ?: $file,
-                    'year' => $clean['year'], 'file' => $file, 'url' => libraryUrl($video)];
+                $items[] = ['id' => libraryId('m', $video['key']), 'kind' => 'movie', 'title' => $clean['title'] ?: $file,
+                    'year' => $clean['year'], 'file' => $file, 'url' => $video['url']];
             }
         }
         usort($items, fn($a, $b) => strcasecmp($a['title'], $b['title']));
@@ -241,6 +317,25 @@ function libraryMatchNext($state, $key, $request = 'imageHttp') {
     return [$state, $pending];
 }
 
+/**
+ * Copies the published library to GitHub (library/calamar-library.json) with the GitHub credential of
+ * calamar-images.php, so it can be read while this hosting is down. Returns false without a credential.
+ */
+function libraryPublishGithub($request = 'imageHttp') {
+    $token = imageToken();
+    if ($token === '') return false;
+    $content = (string)file_get_contents(libraryPrivate('calamar-library.json'));
+    $api = 'https://api.github.com/repos/' . IMAGE_REPO . '/contents/' . LIBRARY_GITHUB_PATH;
+    [$status, $existing] = $request('GET', $api . '?ref=main', null, $token);
+    if ($status === 200 && base64_decode(preg_replace('/\s/', '', $existing['content'] ?? ''), true) === $content) return true;
+    $body = ['message' => 'Actualizar la biblioteca de películas y series', 'content' => base64_encode($content), 'branch' => 'main'];
+    if ($status === 200 && !empty($existing['sha'])) $body['sha'] = $existing['sha'];
+    elseif ($status !== 404 && $status !== 200) throw new RuntimeException('GitHub rechazó la conexión. Revisa la credencial de imágenes (Contents: lectura y escritura).');
+    [$status] = $request('PUT', $api, $body, $token);
+    if (!in_array($status, [200, 201], true)) throw new RuntimeException('GitHub no permitió guardar la biblioteca. Revisa la credencial de imágenes.');
+    return true;
+}
+
 function libraryState() { return libraryReadJson('calamar-library-state.json', ['scan' => [], 'matches' => [], 'details' => []]); }
 function librarySave($state) {
     libraryWriteJson('calamar-library-state.json', $state);
@@ -275,23 +370,33 @@ function libraryMain() {
         $data = json_decode((string)file_get_contents('php://input', false, null, 0, 20001), true, 8, JSON_THROW_ON_ERROR);
         $config = libraryConfig();
         $action = $data['action'] ?? '';
-        if ($action === 'status') { imageReply(200, ['configured' => $config['tmdb'] !== '', 'folders' => $config['folders']]); return; }
+        $summary = fn($config) => ['configured' => $config['tmdb'] !== '', 'folders' => $config['folders'], 'ownDriveKey' => $config['own_drive_key'], 'github' => imageToken() !== ''];
+        if ($action === 'status') { imageReply(200, $summary($config)); return; }
         if ($action === 'configure') {
             $key = trim((string)($data['tmdb'] ?? ''));
             if ($key !== '' && !preg_match('/^(?:[a-f0-9]{32}|[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/D', $key)) throw new InvalidArgumentException('La clave de TMDB no tiene un formato válido.');
             if ($key !== '') { libraryTmdb('/configuration', [], $key); $config['tmdb'] = $key; }
             foreach (LIBRARY_SECTIONS as $section => $default) {
-                $folder = trim(str_replace('\\', '/', (string)($data['folders'][$section] ?? $config['folders'][$section])), '/');
-                if ($folder === '' || str_contains($folder, '..') || strlen($folder) > 300) throw new InvalidArgumentException('Carpeta no válida.');
+                $value = trim((string)($data['folders'][$section] ?? $config['folders'][$section]));
+                $driveFolder = libraryDriveFolder($value);
+                $folder = $driveFolder !== null ? $value : trim(str_replace('\\', '/', $value), '/');
+                if ($folder === '' || str_contains($folder, '..') || strlen($folder) > 300) throw new InvalidArgumentException('Carpeta no válida: pega el enlace de la carpeta de Google Drive.');
                 $config['folders'][$section] = $folder;
             }
-            libraryWriteJson('calamar-library-config.json', $config);
-            imageReply(200, ['configured' => $config['tmdb'] !== '', 'folders' => $config['folders']]); return;
+            if (array_key_exists('driveKey', $data)) {
+                $driveKey = trim((string)$data['driveKey']);
+                if ($driveKey !== '' && !preg_match('/^AIza[A-Za-z0-9_-]{35}$/D', $driveKey)) throw new InvalidArgumentException('La clave de Google no tiene un formato válido (empieza por AIza).');
+                $config['drive_key'] = $driveKey;
+            }
+            $saved = $config; unset($saved['own_drive_key']);
+            if ($saved['drive_key'] === IMAGE_FIREBASE_KEY) $saved['drive_key'] = '';
+            libraryWriteJson('calamar-library-config.json', $saved);
+            imageReply(200, $summary(libraryConfig())); return;
         }
         if ($config['tmdb'] === '' && in_array($action, ['match-next', 'search', 'match'], true)) throw new InvalidArgumentException('Añade la clave de TMDB antes de buscar títulos.');
         $state = libraryState();
         if ($action === 'scan') {
-            $state['scan'] = libraryScan(libraryPublicRoot(), $config['folders']);
+            $state['scan'] = libraryScan(libraryPublicRoot(), $config['folders'], fn($folder) => libraryDriveVideos($folder, $config['drive_key']));
             $ids = []; foreach ($state['scan'] as $items) foreach ($items as $item) $ids[$item['id']] = true;
             $state['matches'] = array_intersect_key($state['matches'], $ids);
             librarySave($state);
@@ -320,6 +425,7 @@ function libraryMain() {
             librarySave($state);
             imageReply(200, ['ok' => true]); return;
         }
+        if ($action === 'publish') { imageReply(200, ['github' => libraryPublishGithub()]); return; }
         throw new InvalidArgumentException('Acción no válida.');
     } catch (InvalidArgumentException | JsonException $e) { imageReply(400, ['error' => $e->getMessage()]); }
       catch (Throwable $e) { imageReply(502, ['error' => $e instanceof RuntimeException ? $e->getMessage() : 'No se pudo completar la operación.']); }

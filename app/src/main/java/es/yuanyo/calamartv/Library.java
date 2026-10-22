@@ -21,6 +21,8 @@ final class Library {
   private Library() {}
 
   static final String ENDPOINT = "https://calamarmenciano.com/calamar-library.php?action=library";
+  /** The hosting also publishes the library to GitHub, which is read first so it works while the hosting is down. */
+  static final String GITHUB = "https://raw.githubusercontent.com/djyuanyo/Calamar-TV/main/library/calamar-library.json";
   /** Section keys in the published JSON and their names in the menu, in menu order. */
   static final String[][] SECTIONS = {
     {"movies", "Películas"}, {"series", "Series"}, {"documentaries", "Documentales"}
@@ -287,7 +289,8 @@ final class Library {
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
         return "https".equalsIgnoreCase(u.getScheme())
             && u.getUserInfo() == null
-            && (host.equals("calamarmenciano.com") || host.equals("www.calamarmenciano.com"));
+            && (host.equals("calamarmenciano.com") || host.equals("www.calamarmenciano.com")
+                || (host.equals("www.googleapis.com") && u.getPath() != null && u.getPath().matches("/drive/v3/files/[A-Za-z0-9_-]+")));
       } catch (Exception e) {
         return false;
       }
@@ -301,7 +304,19 @@ final class Library {
   }
 
   static Data download() throws IOException, JSONException {
-    HttpURLConnection c = (HttpURLConnection) new URL(ENDPOINT).openConnection();
+    IOException failure = null;
+    for (String address : new String[] {GITHUB + "?t=" + System.currentTimeMillis() / 120000, ENDPOINT}) {
+      try {
+        return new Data(new JSONObject(get(address)));
+      } catch (IOException | JSONException error) {
+        failure = error instanceof IOException ? (IOException) error : new IOException(error.getMessage());
+      }
+    }
+    throw failure;
+  }
+
+  static String get(String address) throws IOException {
+    HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
     c.setConnectTimeout(10000);
     c.setReadTimeout(20000);
     c.setRequestProperty("Accept", "application/json");
@@ -309,9 +324,10 @@ final class Library {
     try {
       int status = c.getResponseCode();
       if (status != 200) throw new IOException("HTTP " + status);
-      return new Data(new JSONObject(Io.read(c.getInputStream())));
+      return Io.read(c.getInputStream());
     } finally {
       c.disconnect();
     }
   }
+
 }

@@ -206,6 +206,8 @@ export function webPlayback(url) {
   }
   const path = u.pathname.toLowerCase();
   if (hostedVideo(url)) return { ok: true, kind: 'file', bridge: true };
+  // Films and series from Google Drive play straight from the Drive API (it allows browser video).
+  if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares solo se reproducen en el navegador si están en el hosting de Calamar' };
   if (httpTsSource(url)) return { ok: true, kind: 'ts', relay: true };
   if (u.protocol === 'http:') return { ok: false, reason: 'Este enlace HTTP no es un flujo TS/IPTV compatible con el puente' };

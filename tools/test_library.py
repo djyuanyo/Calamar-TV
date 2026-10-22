@@ -73,6 +73,55 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(result['movies'], [])
         self.assertEqual(len(result['series']), 1)
 
+    def test_google_drive_folders(self):
+        """Drive sections: folders and subfolders through the Drive API (fake), links that play from Drive."""
+        result = self.php(r'''
+            $tree = [
+              'PELIS' => [['id' => 'dAvatarFolder', 'name' => 'Avatar (2009)', 'mimeType' => 'application/vnd.google-apps.folder'],
+                          ['id' => 'fRaro', 'name' => 'Raro.Desconocido.2001.720p.mkv', 'mimeType' => 'video/x-matroska'],
+                          ['id' => 'fNota', 'name' => 'leeme.txt', 'mimeType' => 'text/plain']],
+              'dAvatarFolder' => [['id' => 'fAvatar', 'name' => 'Avatar.mp4', 'mimeType' => 'video/mp4']],
+              'SERIES' => [['id' => 'dPaco', 'name' => 'Los Hombres de Paco', 'mimeType' => 'application/vnd.google-apps.folder']],
+              'dPaco' => [['id' => 'dT10', 'name' => 'Temporada 10', 'mimeType' => 'application/vnd.google-apps.folder']],
+              'dT10' => [['id' => 'fE2', 'name' => 'Paco 10x02.mkv', 'mimeType' => 'video/x-matroska'], ['id' => 'fE1', 'name' => 'Paco 10x01.mkv', 'mimeType' => 'video/x-matroska']],
+            ];
+            $asked = [];
+            $drive = function($method, $url) use ($tree, &$asked) {
+                $q = []; parse_str(parse_url($url, PHP_URL_QUERY), $q);
+                preg_match("~^'([^']+)' in parents~", $q['q'], $m); $asked[] = $q['key'];
+                return isset($tree[$m[1]]) ? [200, ['files' => $tree[$m[1]]]] : [404, null];
+            };
+            $folders = ['movies' => 'https://drive.google.com/drive/folders/PELIS?usp=sharing', 'series' => 'SERIES'];
+            $scan = libraryScan('/nonexistent', ['movies' => 'https://drive.google.com/drive/folders/PELISPELISPELIS1234567890?usp=sharing',
+                'series' => 'SERIESSERIESSERIES1234567890'], fn($folder) => libraryDriveVideos(substr($folder, 0, 6) === 'PELISP' ? 'PELIS' : 'SERIES', 'AIzaTEST', $drive));
+            $missing = null;
+            try { libraryDriveVideos('nope', 'AIzaTEST', $drive); } catch (InvalidArgumentException $e) { $missing = $e->getMessage(); }
+            echo json_encode(['scan' => $scan, 'keys' => array_unique($asked), 'missing' => $missing,
+                'ids' => [libraryDriveFolder('https://drive.google.com/drive/u/0/folders/1AbCdEfGhIjKlMnOp'), libraryDriveFolder('MENCIA MEDIA/PELICULAS')]]);''')
+        films = {m['title']: m for m in result['scan']['movies']}
+        self.assertEqual(set(films), {'Avatar', 'Raro Desconocido'})
+        self.assertEqual(films['Avatar']['url'], 'https://www.googleapis.com/drive/v3/files/fAvatar?alt=media&key=AIzaTEST')
+        self.assertEqual(films['Avatar']['year'], 2009)
+        [paco] = result['scan']['series']
+        self.assertEqual(paco['title'], 'Los Hombres de Paco')
+        self.assertEqual([(e['season'], e['episode'], e['url'].split('/')[-1].split('?')[0]) for e in paco['episodes']], [(10, 1, 'fE1'), (10, 2, 'fE2')])
+        self.assertEqual(result['keys'], ['AIzaTEST'])
+        self.assertIn('Cualquier persona con el enlace', result['missing'])
+        self.assertEqual(result['ids'], ['1AbCdEfGhIjKlMnOp', None])
+
+    def test_publish_to_github_updates_the_file_with_its_sha(self):
+        result = self.php(r'''
+            putenv('CALAMAR_LIBRARY_DIR=' . sys_get_temp_dir()); putenv('CALAMAR_GITHUB_IMAGES_TOKEN=github_pat_TESTTOKEN1234567890');
+            libraryWriteJson('calamar-library.json', ['sections' => []]);
+            $calls = [];
+            $github = function($method, $url, $body = null, $token = null) use (&$calls) {
+                $calls[] = [$method, parse_url($url, PHP_URL_PATH), $body['sha'] ?? null, $token];
+                return $method === 'GET' ? [200, ['sha' => 'abc', 'content' => base64_encode('old')]] : [200, []];
+            };
+            echo json_encode(['ok' => libraryPublishGithub($github), 'calls' => $calls]);''')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['calls'][1], ['PUT', '/repos/djyuanyo/Calamar-TV/contents/library/calamar-library.json', 'abc', 'github_pat_TESTTOKEN1234567890'])
+
 
 if __name__ == '__main__':
     unittest.main()

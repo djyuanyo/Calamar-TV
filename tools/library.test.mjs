@@ -43,3 +43,20 @@ test('the 20 most recent are kept, newest first', () => {
   assert.equal(clock(3725), '1:02:05');
   assert.equal(clock(75), '1:15');
 });
+
+test('Google Drive videos play in the browser; other Google API links do not', async () => {
+  const { webPlayback } = await import('../web/catalog.js');
+  assert.deepEqual(webPlayback('https://www.googleapis.com/drive/v3/files/1AbC_d-9?alt=media&key=AIzaX'), { ok: true, kind: 'video' });
+  assert.equal(webPlayback('https://www.googleapis.com/drive/v3/files/1AbC').ok, false);
+  assert.equal(webPlayback('https://www.googleapis.com/youtube/v3/videos?alt=media').ok, false);
+});
+
+test('the library is read from GitHub first and from the hosting when GitHub fails', async () => {
+  const { fetchLibrary, LIBRARY_GITHUB } = await import('../web/library.js');
+  const asked = [];
+  const ok = (body) => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => body });
+  const library = await fetchLibrary({ fresh: false, fetcher: async (url) => { asked.push(url); if (url.startsWith(LIBRARY_GITHUB)) throw Error('offline'); return ok({ sections: { movies: [] } }); } });
+  assert.ok(asked[0].startsWith(LIBRARY_GITHUB));
+  assert.match(asked[1], /calamar-library\.php\?action=library/);
+  assert.deepEqual(library.sections, { movies: [] });
+});

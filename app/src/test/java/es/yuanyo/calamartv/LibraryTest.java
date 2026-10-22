@@ -75,4 +75,12 @@ public class LibraryTest {
     try { SharedCatalog.validate(catalog); fail("Text accepted"); } catch (JSONException expected) {}
     assertEquals("series", Library.section("Series")); assertNull(Library.section("Canales"));
   }
+
+  @Test public void googleDriveVideosArePlayableButNotOtherSites() {
+    assertTrue(Library.Media.allowed("https://www.googleapis.com/drive/v3/files/1AbC_d-9?alt=media&key=AIzaX"));
+    assertTrue(Library.Media.allowed("https://calamarmenciano.com/MENCIA%20MEDIA/a.mkv"));
+    assertFalse(Library.Media.allowed("https://www.googleapis.com/youtube/v3/videos"));
+    assertFalse(Library.Media.allowed("http://www.googleapis.com/drive/v3/files/1AbC"));
+    assertFalse(Library.Media.allowed("https://example.com/drive/v3/files/1AbC"));
+  }
 }
