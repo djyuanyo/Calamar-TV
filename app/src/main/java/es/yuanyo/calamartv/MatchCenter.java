@@ -173,6 +173,8 @@ final class MatchCenter {
     if (m.live && status != null) m.clock = status.optString("displayClock");
     // Last results of each team and earlier meetings between them.
     JSONArray forms = box == null ? null : box.optJSONArray("form");
+    // ESPN moved the teams' last results from boxscore.form to lastFiveGames (same shape).
+    if (forms == null || forms.length() == 0) forms = data.optJSONArray("lastFiveGames");
     if (forms != null) for (int i = 0; i < forms.length(); i++) {
       JSONObject f = forms.getJSONObject(i);
       String s = side(m, f.optJSONObject("team"));
@@ -211,6 +213,34 @@ final class MatchCenter {
         mt.away = ownHome ? other : own.optString("displayName");
         String[] goals = g.optString("score").replaceAll("[^0-9]+", " ").trim().split(" ");
         mt.score = goals.length == 2 ? (ownHome ? goals[0] + " – " + goals[1] : goals[1] + " – " + goals[0]) : g.optString("score");
+        m.h2h.add(mt);
+      }
+    }
+    // Now ESPN sends the last meetings, in any competition, as seasonseries (also before the match starts).
+    JSONArray series = data.optJSONArray("seasonseries");
+    if (series != null) for (int i = 0; i < series.length(); i++) {
+      JSONObject block = series.optJSONObject(i);
+      JSONArray games = block == null ? null : block.optJSONArray("events");
+      if (games != null) for (int j = 0; j < games.length(); j++) {
+        JSONObject g = games.optJSONObject(j);
+        if (g == null || !seen.add(g.optString("id")) || "pre".equals(g.optString("status"))) continue;
+        JSONObject type = g.optJSONObject("statusType");
+        if (type != null && type.has("completed") && !type.optBoolean("completed")) continue;
+        JSONObject home = null, away = null;
+        JSONArray sides = g.optJSONArray("competitors");
+        if (sides != null) for (int k = 0; k < sides.length(); k++) {
+          JSONObject c = sides.optJSONObject(k);
+          if (c == null) continue;
+          if ("home".equals(c.optString("homeAway"))) home = c; else if ("away".equals(c.optString("homeAway"))) away = c;
+        }
+        if (home == null || away == null || home.optJSONObject("team") == null || away.optJSONObject("team") == null) continue;
+        Meeting mt = new Meeting();
+        mt.date = g.optString("date");
+        String round = g.optString("roundName");
+        mt.competition = g.optString("competitionName") + (round.isEmpty() ? "" : " · " + round);
+        mt.home = home.optJSONObject("team").optString("displayName");
+        mt.away = away.optJSONObject("team").optString("displayName");
+        mt.score = home.optString("score").isEmpty() || away.optString("score").isEmpty() ? "" : home.optString("score") + " – " + away.optString("score");
         m.h2h.add(mt);
       }
     }

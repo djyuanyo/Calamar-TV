@@ -61,4 +61,19 @@ public class MatchCenterTest {
     MatchCenter.Model merged = MatchCenter.merge(MatchCenter.parse(summary()), e);
     assertEquals("Fase de liga", merged.description); assertEquals("UEFA Champions League", merged.league); assertEquals("espn", merged.source);
   }
+
+  @Test public void beforeKickOffMeetingsAndFormComeFromSeasonSeriesAndLastFiveGames() throws Exception {
+    MatchCenter.Model m = MatchCenter.parse(new JSONObject("{\"header\":{\"competitions\":[{\"status\":{\"type\":{\"state\":\"pre\",\"name\":\"STATUS_SCHEDULED\"}},"
+      + "\"competitors\":[{\"homeAway\":\"home\",\"team\":{\"id\":\"83\",\"displayName\":\"Barcelona\"}},{\"homeAway\":\"away\",\"team\":{\"id\":\"86\",\"displayName\":\"Real Madrid\"}}]}]},"
+      + "\"lastFiveGames\":[{\"team\":{\"id\":\"83\"},\"events\":[{\"gameResult\":\"W\",\"score\":\"3-1\"},{\"gameResult\":\"L\",\"score\":\"4-2\"}]},{\"team\":{\"id\":\"86\"},\"events\":[{\"gameResult\":\"L\"}]}],"
+      + "\"seasonseries\":[{\"type\":\"head-to-head\",\"events\":["
+      + "{\"id\":\"1\",\"date\":\"2026-05-10T19:00:00Z\",\"status\":\"post\",\"statusType\":{\"completed\":true},\"competitionName\":\"2025-26 LALIGA\",\"competitors\":[{\"homeAway\":\"home\",\"team\":{\"displayName\":\"Barcelona\"},\"score\":\"2\"},{\"homeAway\":\"away\",\"team\":{\"displayName\":\"Real Madrid\"},\"score\":\"0\"}]},"
+      + "{\"id\":\"2\",\"date\":\"2026-01-11T19:00:00Z\",\"status\":\"post\",\"competitionName\":\"2026 Supercopa de España\",\"roundName\":\"Final\",\"competitors\":[{\"homeAway\":\"home\",\"team\":{\"displayName\":\"Barcelona\"},\"score\":\"3\"},{\"homeAway\":\"away\",\"team\":{\"displayName\":\"Real Madrid\"},\"score\":\"2\"}]},"
+      + "{\"id\":\"3\",\"date\":\"2027-05-09T19:00:00Z\",\"status\":\"pre\",\"statusType\":{\"completed\":false},\"competitors\":[{\"homeAway\":\"home\",\"team\":{\"displayName\":\"Real Madrid\"}},{\"homeAway\":\"away\",\"team\":{\"displayName\":\"Barcelona\"}}]}]}]}"));
+    assertEquals("scheduled", m.state);
+    assertEquals(2, m.h2h.size());
+    assertEquals("Barcelona", m.h2h.get(0).home); assertEquals("2 – 0", m.h2h.get(0).score); assertEquals("2025-26 LALIGA", m.h2h.get(0).competition);
+    assertEquals("2026 Supercopa de España · Final", m.h2h.get(1).competition); assertEquals("3 – 2", m.h2h.get(1).score);
+    assertEquals(2, m.homeForm.size()); assertEquals("W", m.homeForm.get(0).result); assertEquals(1, m.awayForm.size());
+  }
 }

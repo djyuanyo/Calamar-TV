@@ -73,7 +73,8 @@ export function parseMatchCenter(data) {
   }).filter(Boolean);
   // Last results of each team (W, D, L) and earlier meetings between them.
   const form = { home: [], away: [] };
-  for (const f of data.boxscore?.form || []) {
+  // ESPN moved the teams' last results from boxscore.form to lastFiveGames (same shape).
+  for (const f of (data.boxscore?.form?.length ? data.boxscore.form : data.lastFiveGames) || []) {
     const side = sideOf(f.team);
     if (side) form[side] = (f.events || []).slice(0, 5).map((e) => ({ result: String(e.gameResult || '').toUpperCase().slice(0, 1), score: e.score || '',
       opponent: e.opponent?.displayName || '', date: e.gameDate || '' })).filter((e) => /[WDLEVGP]/.test(e.result));
@@ -90,6 +91,17 @@ export function parseMatchCenter(data) {
       const scores = String(g.score || '').match(/\d+/g) || [];
       const hScore = g.homeTeamScore ?? scores[ownHome ? 0 : 1] ?? '', aScore = g.awayTeamScore ?? scores[ownHome ? 1 : 0] ?? '';
       meetings.set(key, { date: g.gameDate || '', competition: g.leagueName || g.leagueAbbreviation || '', home: hName, away: aName, score: hScore !== '' && aScore !== '' ? `${hScore} – ${aScore}` : g.score || '' });
+    }
+  }
+  // Now ESPN sends the last meetings, in any competition, as seasonseries (also before the match starts).
+  for (const series of data.seasonseries || []) {
+    for (const g of series.events || []) {
+      if (meetings.has(g.id) || g.statusType?.completed === false || g.status === 'pre') continue;
+      const side = (where) => (g.competitors || []).find((c) => c.homeAway === where) || {};
+      const h = side('home'), a = side('away');
+      if (!h.team || !a.team) continue;
+      meetings.set(g.id, { date: g.date || '', competition: [g.competitionName, g.roundName].filter(Boolean).join(' · '),
+        home: h.team.displayName || '', away: a.team.displayName || '', score: h.score != null && a.score != null && h.score !== '' ? `${h.score} – ${a.score}` : '' });
     }
   }
   const h2h = [...meetings.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 10);
