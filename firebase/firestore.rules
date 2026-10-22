@@ -79,6 +79,19 @@ service cloud.firestore {
       allow get, create, update: if administrator();
       allow delete, list: if false;
     }
+    // An app signing in from a phone: the administrator's Google ID token under <app key><code>
+    // (8 characters, both needed to read it), readable for 5 minutes and deleted by the app once used.
+    match /calamarDeviceLogins/{id} {
+      allow create: if administrator()
+        && id.matches('^[2-9A-HJ-NP-Z]{8}$')
+        && request.resource.data.keys().hasOnly(['idToken', 'createdAt'])
+        && request.resource.data.idToken is string
+        && request.resource.data.idToken.size() < 4096
+        && request.resource.data.createdAt == request.time;
+      allow get: if request.time < resource.data.createdAt + duration.value(5, 'm');
+      allow delete: if true;
+      allow update, list: if false;
+    }
     match /{document=**} {
       allow read, write: if false;
     }
