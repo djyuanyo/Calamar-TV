@@ -442,11 +442,8 @@ initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
-let embedFrame = null;
 function stop() {
   playbackGeneration++;
-  if (embedFrame) { embedFrame.remove(); embedFrame = null; }
-  player.classList.remove('is-embed');
   video.onerror = null;
   video.onplaying = null;
   if (stopTs) { stopTs(); stopTs = null; }
@@ -531,38 +528,6 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
-  if (source.how.kind === 'embed') {
-    // LuluStream ties each video address to the address that opened its player page (403 for anyone else),
-    // so the hosting reads the page and relays the video to our player; if it cannot, LuluStream's own
-    // player is shown, with our title bar and Back button above it.
-    const showEmbed = () => {
-      if (generation !== playbackGeneration) return;
-      if (hls) { hls.destroy(); hls = null; }
-      video.onerror = null; video.onplaying = null;
-      video.removeAttribute('src'); video.load();
-      player.classList.add('is-embed');
-      playerStatus.textContent = '';
-      embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
-        allowfullscreen: true, referrerpolicy: 'origin' });
-      player.querySelector('.player-stage').append(embedFrame);
-    };
-    let started = false;
-    const failed = (data) => { if (started) next(data); else showEmbed(); };
-    if (window.Hls?.isSupported()) {
-      hls = new window.Hls({ lowLatencyMode: false });
-      hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) failed(data); });
-      hls.loadSource(source.how.relay);
-      hls.attachMedia(video);
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = source.how.relay;
-    else { showEmbed(); return; }
-    controls.attach(hls);
-    video.onplaying = () => { started = true; if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
-    video.onerror = () => { const failure = videoFailure(video.error); if (failure) failed(failure); };
-    video.play().catch(() => {
-      if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
-    });
-    return;
-  }
   if (source.how.kind === 'ts') {
     video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
     video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
@@ -602,15 +567,17 @@ function playSource(c, index) {
     });
     return;
   }
+  // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
+  const address = source.how.address || source.url;
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
       if (data.fatal) next(data);
     });
-    hls.loadSource(source.url);
+    hls.loadSource(address);
     hls.attachMedia(video);
   } else {
-    video.src = source.url;
+    video.src = address;
   }
   controls.attach(hls);
   video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };

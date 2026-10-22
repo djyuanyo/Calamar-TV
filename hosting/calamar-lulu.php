@@ -6,8 +6,6 @@
 //    (seg=…): nothing is written to disk, but every film watched on the web passes through here (1–2 GB).
 //  - GET code=…: the video address (debug=1: what the player page contains; probar=1: open that address).
 
-// Interruptor: false stops relaying video (the web then shows LuluStream's own player). The app does not use it.
-const LULU_VIDEO_RELAY = true;
 const LULU_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 function answer($data, $code = 200) {
@@ -167,7 +165,6 @@ function luluMain() {
 
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {
-        if (!LULU_VIDEO_RELAY) answer(array('error' => 'El paso del vídeo por el hosting está apagado.'), 503);
         $url = base64_decode(strtr((string)$_GET['seg'], '-_', '+/'), true);
         if (!is_string($url) || !preg_match('#^https://#', $url) || !hash_equals(luluSign($url, luluSecret()), (string)($_GET['sig'] ?? '')))
             answer(array('error' => 'Dirección no válida.'), 403);
@@ -181,7 +178,6 @@ function luluMain() {
 
     $code = $_GET['code'] ?? '';
     if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,20}$/', $code)) answer(array('error' => 'Código de vídeo no válido.'), 400);
-    if (isset($_GET['hls']) && !LULU_VIDEO_RELAY) answer(array('error' => 'El paso del vídeo por el hosting está apagado.'), 503);
     list($status, $html) = luluGet('https://lulustream.com/e/' . $code);
     if ($status !== 200 || $html === null)
         answer(array('error' => 'LuluStream no responde (' . $status . ').') + (isset($_GET['debug']) && $html ? array('inicio' => substr(strip_tags($html), 0, 400)) : array()), 502);

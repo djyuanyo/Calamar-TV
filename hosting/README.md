@@ -42,8 +42,8 @@ Subir `calamar-lulu.php` al `public_html`. Hace tres cosas:
 - Hace llegar los vídeos de LuluStream al reproductor de la web. LuluStream ata cada dirección de vídeo a la
   IP que abrió su página (403 para cualquier otra), así que el hosting lee la página y pasa la lista HLS y sus
   fragmentos al navegador a medida que llegan. No guarda nada en disco, pero cada película vista en la web
-  supone 1–2 GB de tráfico del hosting. Para apagarlo, cambia `const LULU_VIDEO_RELAY = true;` a `false` al
-  principio del archivo: la web mostrará entonces el reproductor de LuluStream. La app Android no lo usa.
+  supone 1–2 GB de tráfico del hosting. La web siempre usa el reproductor de Calamar TV. La app Android no lo
+  usa: lee la página desde el propio dispositivo.
 - `calamar-lulu.php?code=CÓDIGO&debug=1` muestra qué contiene la página del reproductor, para diagnosticar.
 
 Crea `calamar-lulu-secret.php` en la carpeta superior a `public_html` (firma las direcciones que relaya, para
