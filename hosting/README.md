@@ -35,11 +35,16 @@ ahora en Google Drive: la app reproduce los MKV con sonido; para la web conviene
 
 ## LuluStream
 
-Subir `calamar-lulu.php` al `public_html`. Relaya la lista de carpetas de LuluStream para «Leer carpetas de
-LuluStream» de la administración cuando el navegador no puede llamar a la API directamente (solo JSON, unos
-pocos KB; la clave no se guarda en el hosting).
+Subir `calamar-lulu.php` al `public_html`. Hace tres cosas:
 
-La web reproduce los vídeos de LuluStream con su propio reproductor: LuluStream ata cada dirección de vídeo a
-la IP que abrió su página (403 para cualquier otra), así que el hosting no puede dársela al navegador. La app
-Android lee la página desde el propio dispositivo y los reproduce con el reproductor de Calamar TV.
-`calamar-lulu.php?code=CÓDIGO&debug=1` muestra qué contiene la página del reproductor, para diagnosticar.
+- Relaya la lista de carpetas de LuluStream para «Leer carpetas de LuluStream» de la administración cuando el
+  navegador no puede llamar a la API directamente (solo JSON, unos pocos KB; la clave no se guarda).
+- Hace llegar los vídeos de LuluStream al reproductor de la web. LuluStream ata cada dirección de vídeo a la
+  IP que abrió su página (403 para cualquier otra), así que el hosting lee la página y pasa la lista HLS y sus
+  fragmentos al navegador a medida que llegan. No guarda nada en disco, pero cada película vista en la web
+  supone 1–2 GB de tráfico del hosting. Para apagarlo, cambia `const LULU_VIDEO_RELAY = true;` a `false` al
+  principio del archivo: la web mostrará entonces el reproductor de LuluStream. La app Android no lo usa.
+- `calamar-lulu.php?code=CÓDIGO&debug=1` muestra qué contiene la página del reproductor, para diagnosticar.
+
+Crea `calamar-lulu-secret.php` en la carpeta superior a `public_html` (firma las direcciones que relaya, para
+que no se pueda usar como proxy de otras webs). No lo compartas.

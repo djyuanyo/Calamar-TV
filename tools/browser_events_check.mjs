@@ -467,14 +467,24 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
-  // A LuluStream video plays in LuluStream's own player, embedded under our title bar, without asking the hosting.
-  const luluCodes = [];
-  await page.route('https://calamarmenciano.com/calamar-lulu.php?**', (route) => { luluCodes.push(route.request().url()); route.abort(); });
+  // A LuluStream video is relayed by the hosting to our player; when that fails, LuluStream's own player
+  // is shown, embedded under our title bar.
+  // hls.js (from its CDN, blocked here) is replaced by a stand-in whose list fails, as when the relay is off.
+  await page.evaluate(() => {
+    window.Hls = class {
+      static isSupported() { return true; }
+      static Events = { ERROR: 'hlsError' };
+      on(name, handler) { if (name === 'hlsError') this.failed = handler; }
+      loadSource(url) { window.__hlsSource = url; setTimeout(() => this.failed?.('hlsError', { fatal: true, details: 'manifestLoadError', response: { code: 503 } }), 50); }
+      attachMedia() {} destroy() {} stopLoad() {} startLoad() {}
+      get levels() { return []; }
+    };
+  });
   await page.locator('.poster-card', { hasText: 'Torrente' }).click();
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player iframe.player-embed').waitFor();
   assert.equal(await page.locator('#player iframe.player-embed').getAttribute('src'), 'https://lulustream.com/e/torrente1998');
-  assert.deepEqual(luluCodes, []);
+  assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');
   assert.equal(await page.locator('#player-close').isVisible(), true);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('#player iframe'));

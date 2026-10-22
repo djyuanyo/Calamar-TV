@@ -533,12 +533,34 @@ function playSource(c, index) {
   playerStatus.textContent = 'Conectando…';
   if (source.how.kind === 'embed') {
     // LuluStream ties each video address to the address that opened its player page (403 for anyone else),
-    // so a browser can only use LuluStream's own player; the app reads the page itself and plays it in ours.
-    player.classList.add('is-embed');
-    playerStatus.textContent = '';
-    embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
-      allowfullscreen: true, referrerpolicy: 'origin' });
-    player.querySelector('.player-stage').append(embedFrame);
+    // so the hosting reads the page and relays the video to our player; if it cannot, LuluStream's own
+    // player is shown, with our title bar and Back button above it.
+    const showEmbed = () => {
+      if (generation !== playbackGeneration) return;
+      if (hls) { hls.destroy(); hls = null; }
+      video.onerror = null; video.onplaying = null;
+      video.removeAttribute('src'); video.load();
+      player.classList.add('is-embed');
+      playerStatus.textContent = '';
+      embedFrame = el('iframe', { class: 'player-embed', src: source.how.embed, title: c.name, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture',
+        allowfullscreen: true, referrerpolicy: 'origin' });
+      player.querySelector('.player-stage').append(embedFrame);
+    };
+    let started = false;
+    const failed = (data) => { if (started) next(data); else showEmbed(); };
+    if (window.Hls?.isSupported()) {
+      hls = new window.Hls({ lowLatencyMode: false });
+      hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data.fatal) failed(data); });
+      hls.loadSource(source.how.relay);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = source.how.relay;
+    else { showEmbed(); return; }
+    controls.attach(hls);
+    video.onplaying = () => { started = true; if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+    video.onerror = () => { const failure = videoFailure(video.error); if (failure) failed(failure); };
+    video.play().catch(() => {
+      if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+    });
     return;
   }
   if (source.how.kind === 'ts') {

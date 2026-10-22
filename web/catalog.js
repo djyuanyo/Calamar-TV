@@ -220,7 +220,8 @@ export function webPlayback(url) {
   }
   const path = u.pathname.toLowerCase();
   const embed = lulustreamEmbed(url);
-  if (embed) return { ok: true, kind: 'embed', embed };
+  // relay: the video through the hosting (calamar-lulu.php), as LuluStream only serves who opened its page.
+  if (embed) return { ok: true, kind: 'embed', embed, relay: `${LULU_ENDPOINT}?code=${embed.split('/').pop()}&hls=1` };
   // Films and series from Google Drive play straight from the Drive API (it allows browser video).
   if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };
