@@ -99,13 +99,15 @@ function card(c, pick = null) {
 
 /**
  * The cover of an event; without one, the league's background with the home and away crests on top
- * (imported matches all share it).
+ * and the league's logo between them (imported matches all share it).
  */
 function eventCover(c, cls) {
   if (c.cover) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
   const crest = (src, side) => src ? el('img', { class: `crest ${side}`, src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: `crest ${side} crest-empty` });
   return el('span', { class: `${cls} event-generic`, style: c.background ? `background-image:url("${c.background}")` : null, 'aria-hidden': 'true' },
-    crest(c.homeLogo, 'home'), el('span', { class: 'crest-vs' }, 'VS'), crest(c.awayLogo, 'away'));
+    crest(c.homeLogo, 'home'),
+    c.leagueLogo ? el('span', { class: 'crest-league' }, el('img', { src: c.leagueLogo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })) : el('span', { class: 'crest-vs' }, 'VS'),
+    crest(c.awayLogo, 'away'));
 }
 
 /** Until an event starts its badge shows the date and time; then «En directo». */
