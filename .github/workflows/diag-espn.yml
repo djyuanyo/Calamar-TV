@@ -7,8 +7,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          for q in "tmdb_id=245648&season=1&episode=1" "tmdb_id=245648&season=1&episode=2" "tmdb_id=229513&season=1&episode=1" "tmdb_id=1396&season=1&episode=1"; do
-            echo "== $q"; curl -s -m 20 -A "CalamarTV/2.19" -w "\nHTTP %{http_code}\n" "https://api.theintrodb.org/v4/media?$q" | head -c 600; echo
-          done
-          echo "CORS:"; curl -s -o /dev/null -D - -H "Origin: https://djyuanyo.github.io" "https://api.theintrodb.org/v4/media?tmdb_id=1396&season=1&episode=1" | grep -iE "^HTTP|access-control"
-          echo "hosting relay:"; curl -s -m 20 -H "Origin: https://djyuanyo.github.io" -w "\nHTTP %{http_code}\n" "https://calamarmenciano.com/calamar-lulu.php?introdb=1&tmdb_id=1396&season=1&episode=1" | head -c 300; echo
+          echo "== share link"; curl -s -m 20 -H "Origin: https://djyuanyo.github.io" "https://calamarmenciano.com/calamar-match.php?url=https%3A%2F%2Fshare.google%2FG9VWsVvXQpxwV65YS" | head -c 800; echo
+          B=https://site.api.espn.com/apis/site/v2/sports/soccer
+          curl -s -m 30 "$B/esp.1/scoreboard?dates=20260701-20270630&limit=1000" > sb.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('sb.json'))
+          print('top keys', list(d.keys()))
+          L=d['leagues'][0]
+          print('league', {k:L[k] for k in L if k not in ('calendar',)})
+          cal=L.get('calendar'); print('calendar type', type(cal).__name__, str(cal)[:600])
+          ev=d['events']; print('events', len(ev))
+          e=ev[0]; print('event keys', list(e.keys())); print('season', e.get('season'), 'week', e.get('week'))
+          c=e['competitions'][0]; print('comp keys', list(c.keys()))
+          print('notes', c.get('notes'), 'type', c.get('type'), 'status', c['status'])
+          t=c['competitors'][0]; print('competitor keys', list(t.keys())); print('team', t['team'])
+          print('venue', c.get('venue'))
+          import collections
+          dates=sorted(x['date'] for x in ev); print('first', dates[0], 'last', dates[-1])
+          print('sample names', [x['name'] for x in ev[:3]])
+          PY
+          echo "== teams"; curl -s -m 20 "$B/esp.1/teams" | head -c 1200; echo
+          echo "== core events week"; curl -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2026/types/1/weeks?limit=50" | head -c 800; echo
+          echo "== dropdown"; curl -s -m 20 "https://site.api.espn.com/apis/site/v2/leagues/dropdown?sport=soccer&limit=300" | head -c 1500; echo
+          ID=$(python3 -c "import json;print(json.load(open('sb.json'))['events'][40]['id'])")
+          echo "== summary header $ID"; curl -s -m 20 "$B/all/summary?event=$ID" | python3 -c "import json,sys;d=json.load(sys.stdin);h=d['header'];print({k:h[k] for k in h if k!='competitions'});print(h['competitions'][0].keys())"
