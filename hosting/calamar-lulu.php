@@ -82,6 +82,11 @@ function luluVideo($scripts) {
     return null;
 }
 
+/** LuluStream's page for a video still being converted. As VideoResolver.processing() in the app. */
+function luluProcessing($html) {
+    return (bool)preg_match('/video is processing|conversion stage|pending in queue|being processed|is converting/i', $html);
+}
+
 function luluCurl($url, $timeout) {
     $ch = curl_init($url);
     curl_setopt_array($ch, array(
@@ -210,6 +215,8 @@ function luluMain() {
             'titulo' => preg_match('/<title>(.*?)<\/title>/is', $html, $t) ? trim($t[1]) : null));
     }
     $video = luluVideo($scripts);
+    // A video just uploaded is not playable until LuluStream converts it («Video is processing now»).
+    if ($video === null && luluProcessing($html)) answer(array('error' => 'processing', 'message' => 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.'), 409);
     if ($video === null) answer(array('error' => 'No se encontró el vídeo en LuluStream.'), 404);
     if (isset($_GET['probar'])) { header('Location: ' . $video, true, 302); exit; }
     if (isset($_GET['hls'])) {

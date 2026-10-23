@@ -88,4 +88,12 @@ public class VideoResolverTest {
     assertEquals(1, sources.size());
     assertEquals("https://cdn.example.net/v.m3u8", sources.get(0).url);
   }
+
+  @Test
+  public void aVideoStillBeingConvertedIsRecognised() throws Exception {
+    String page = "<div class=\"processing\">Video is processing now.<br>Conversion stage: Pending in queue #3</div>";
+    assertTrue(VideoResolver.processing(page));
+    assertTrue(VideoResolver.parse(page, "https://lulustream.com/e/abcd1234efgh").isEmpty());
+    assertFalse(VideoResolver.processing("<script>p.setup({sources:[{file:'https://cdn.example.net/v.m3u8'}]})</script>"));
+  }
 }

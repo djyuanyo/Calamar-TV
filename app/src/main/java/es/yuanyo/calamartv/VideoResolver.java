@@ -79,6 +79,14 @@ public final class VideoResolver {
     return sources;
   }
 
+  private static final Pattern PROCESSING =
+      Pattern.compile("video is processing|conversion stage|pending in queue|being processed|is converting", Pattern.CASE_INSENSITIVE);
+
+  /** LuluStream's page for a video still being converted («Video is processing now»). */
+  static boolean processing(String html) {
+    return html != null && PROCESSING.matcher(html).find();
+  }
+
   private static final Pattern PACKED =
       Pattern.compile(
           "\\}\\('((?:[^'\\\\]++|\\\\.)*+)',\\s*(\\d+),\\s*(\\d+),\\s*'((?:[^'\\\\]++|\\\\.)*+)'\\.split\\('\\|'\\)");

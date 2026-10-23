@@ -533,7 +533,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   sources.clear();
                   sources.addAll(found);
                   updateSourceButton();
-                  if (sources.isEmpty()) {
+                  if (sources.isEmpty() && VideoResolver.processing(document.html)) {
+                    // A video just uploaded to LuluStream plays once LuluStream has converted it.
+                    problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
+                  } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
                   } else {

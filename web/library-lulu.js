@@ -33,7 +33,13 @@ export async function luluApi(action, params, key, fetcher = globalThis.fetch) {
   return luluResult(data);
 }
 
-const textOf = (...values) => String(values.find((v) => v != null && v !== '') ?? '');
+// LuluStream sends names HTML-encoded («Serie &#40;Temporada 1&#41;»): they are used as written.
+const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+export const decodeHtml = (s) => String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e) => {
+  if (e[0] === '#') { const n = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : Number(e.slice(1)); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : all; }
+  return NAMED[e.toLowerCase()] ?? all;
+});
+const textOf = (...values) => decodeHtml(String(values.find((v) => v != null && v !== '') ?? ''));
 
 /** A folder's subfolders and videos: { folders: [{ id, name }], files: [{ code, title }] }. */
 export async function luluFolder(id, key, fetcher) {
@@ -182,7 +188,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   // Titles already matched (by the scan or by hand) are recognised by their links or their folder.
   const matched = Object.entries(sections).flatMap(([section, items]) => items.filter((x) => x.tmdb?.id && x.status !== 'unmatched').map((x) => ({ section, item: x })));
   const byLink = new Map(matched.flatMap(({ section, item }) => [item.url, ...(item.episodes || []).map((e) => e.url)].filter(Boolean).map((url) => [codeOf(url), { section, item }])));
-  const byFolder = new Map(matched.filter(({ item }) => item.kind === 'tv' && item.folder).map((m) => [plain(m.item.folder), m]));
+  const byFolder = new Map(matched.filter(({ item }) => item.kind === 'tv' && item.folder).map((m) => [plain(decodeHtml(m.item.folder)), m]));
   const unknown = [...scan.unknown];
   let films = 0, shows = 0, episodes = 0, pending = 0, done = 0;
   const total = scan.films.length + scan.series.length;
