@@ -9,23 +9,24 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: |
+          sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+          U=$(curl -s "https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom" | python3 -c "import json,sys;c=json.loads(json.load(sys.stdin)['fields']['json']['stringValue']);print(c['channels'][0]['streams'][0])")
+          echo "::add-mask::$U"
+          echo "Canal 0 termina en: ${U##*/}"
+          curl -s -A "VLC/3.0.20 LibVLC/3.0.20" -o /dev/null -D - --max-time 4 "$U" | grep -iE "^HTTP|^content-type" || true
+          curl -s -L -A "VLC/3.0.20 LibVLC/3.0.20" --max-time 8 "$U" -o /tmp/s.ts -w "HTTP %{http_code} %{size_download}B\n" || true
+          ffprobe -v error -show_entries stream=codec_type,codec_name,profile,width,height,r_frame_rate,sample_rate,channels -of compact /tmp/s.ts 2>&1 | head -8
           npm i -s playwright@1.48.2 >/dev/null 2>&1 && npx playwright install --with-deps chrome >/dev/null 2>&1
-          echo ESPN CORS:; curl -s -o /dev/null -D - -H 'Origin: https://djyuanyo.github.io' 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401882832' | grep -iE '^HTTP|access-control' ; curl -s -o /dev/null -D - -H 'Origin: https://djyuanyo.github.io' 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=401882832' | grep -iE '^HTTP|access-control'; curl -s -o /dev/null -D - -H 'Origin: https://djyuanyo.github.io' 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard' | grep -iE '^HTTP|access-control'
           cat > t.mjs <<'JS'
           import { chromium } from 'playwright';
-          const res = await fetch('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom');
-          const c = JSON.parse((await res.json()).fields.json.stringValue);
           const browser = await chromium.launch({ channel: 'chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
-          for (const ch of [c.channels[4], c.channels[0]]) {
-            const page = await browser.newPage();
-            const relay = [];
-            page.on('response', (r) => { if (r.url().includes('calamar-tv-relay')) relay.push(r.status()); });
-            page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('espn')) console.log('  consola:', m.text().slice(0, 160)); });
-            await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canal/' + encodeURIComponent(ch.id));
-            await page.waitForTimeout(25000);
-            const s = await page.evaluate(() => { const v = document.getElementById('video'); return { t: v.currentTime, ready: v.readyState, paused: v.paused, status: document.getElementById('player-status')?.textContent.slice(0, 200) }; });
-            console.log('==', ch.name, JSON.stringify(s), 'relay', relay.slice(0, 5));
-            await page.close();
+          const page = await browser.newPage();
+          page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' && !/espn|Failed to load resource/.test(t)) console.log('  consola:', t.slice(0, 200)); });
+          await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canal/mio-liga-campeones-mv9wjveo');
+          for (const s of [10, 20, 30]) {
+            await page.waitForTimeout(10000);
+            const v = await page.evaluate(() => { const v = document.getElementById('video'); return { t: v.currentTime, ready: v.readyState, w: v.videoWidth, status: document.getElementById('player-status')?.textContent.slice(0, 160) }; });
+            console.log(s + 's', JSON.stringify(v));
           }
           await browser.close();
           JS
