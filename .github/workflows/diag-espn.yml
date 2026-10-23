@@ -7,8 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          H=https://calamarmenciano.com/calamar-lulu.php
-          C=bq4heljir3hb
-          echo "::add-mask::$C"
-          curl -s -m 30 -H "Origin: https://djyuanyo.github.io" "$H?code=$C&debug=1" | python3 -c "import json,sys;d=json.load(sys.stdin);print('bytes',d.get('bytes'),'titulo',d.get('titulo'));print('sources',(d.get('sources') or '')[:200])" || true
-          curl -s -m 30 -H "Origin: https://djyuanyo.github.io" -o /tmp/m -w "hls HTTP %{http_code}\n" "$H?code=$C&hls=1"; head -c 120 /tmp/m; echo
+          for q in "tmdb_id=245648&season=1&episode=1" "tmdb_id=245648&season=1&episode=2" "tmdb_id=229513&season=1&episode=1" "tmdb_id=1396&season=1&episode=1"; do
+            echo "== $q"; curl -s -m 20 -A "CalamarTV/2.19" -w "\nHTTP %{http_code}\n" "https://api.theintrodb.org/v4/media?$q" | head -c 600; echo
+          done
+          echo "CORS:"; curl -s -o /dev/null -D - -H "Origin: https://djyuanyo.github.io" "https://api.theintrodb.org/v4/media?tmdb_id=1396&season=1&episode=1" | grep -iE "^HTTP|access-control"
+          echo "hosting relay:"; curl -s -m 20 -H "Origin: https://djyuanyo.github.io" -w "\nHTTP %{http_code}\n" "https://calamarmenciano.com/calamar-lulu.php?introdb=1&tmdb_id=1396&season=1&episode=1" | head -c 300; echo
