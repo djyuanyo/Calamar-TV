@@ -7,28 +7,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo start
           B=https://site.api.espn.com/apis/site/v2/sports/soccer
-          curl --compressed -s -m 30 "$B/esp.1/scoreboard?dates=20260701-20270630&limit=1000" > sb.json
+          for r in "" "?dates=20261001-20261031&limit=1000" "?dates=20260801-20261231&limit=1000" "?dates=20260801-20270630&limit=500" "?dates=2026&limit=1000"; do
+            curl --compressed -s -m 30 "$B/esp.1/scoreboard$r" > sb.json
+            echo "== range '$r'"; python3 -c "import json;d=json.load(open('sb.json'));print(d.get('message') or len(d.get('events',[])), [x['date'] for x in d.get('events',[])][:1], [x['date'] for x in d.get('events',[])][-1:])" || head -c 300 sb.json
+          done
+          curl --compressed -s -m 30 "$B/esp.1/scoreboard?dates=20261001-20261031&limit=1000" > sb.json
           python3 - <<'PY'
           import json
           d=json.load(open('sb.json'))
-          print('top keys', list(d.keys()))
           L=d['leagues'][0]
           print('league', {k:L[k] for k in L if k not in ('calendar',)})
-          cal=L.get('calendar'); print('calendar type', type(cal).__name__, str(cal)[:600])
-          ev=d['events']; print('events', len(ev))
+          cal=L.get('calendar'); print('calendar', type(cal).__name__, str(cal)[:900])
+          ev=d['events']
           e=ev[0]; print('event keys', list(e.keys())); print('season', e.get('season'), 'week', e.get('week'))
           c=e['competitions'][0]; print('comp keys', list(c.keys()))
           print('notes', c.get('notes'), 'type', c.get('type'), 'status', c['status'])
           t=c['competitors'][0]; print('competitor keys', list(t.keys())); print('team', t['team'])
           print('venue', c.get('venue'))
-          import collections
-          dates=sorted(x['date'] for x in ev); print('first', dates[0], 'last', dates[-1])
-          print('sample names', [x['name'] for x in ev[:3]])
+          for x in ev[:12]: print(x['date'], x['name'], x['competitions'][0]['status']['type']['name'])
           PY
-          echo "== teams"; curl --compressed -s -m 20 "$B/esp.1/teams" | head -c 1200; echo
-          echo "== core events week"; curl --compressed -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2026/types/1/weeks?limit=50" | head -c 800; echo
-          echo "== dropdown"; curl --compressed -s -m 20 "https://site.api.espn.com/apis/site/v2/leagues/dropdown?sport=soccer&limit=300" | head -c 1500; echo
-          ID=$(python3 -c "import json;print(json.load(open('sb.json'))['events'][40]['id'])")
-          echo "== summary header $ID"; curl --compressed -s -m 20 "$B/all/summary?event=$ID" | python3 -c "import json,sys;d=json.load(sys.stdin);h=d['header'];print({k:h[k] for k in h if k!='competitions'});print(h['competitions'][0].keys())"
+          echo "== core weeks"; curl --compressed -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2026/types/1/weeks?limit=50" | head -c 600; echo
+          echo "== core event"; ID=$(python3 -c "import json;print(json.load(open('sb.json'))['events'][0]['id'])"); curl --compressed -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/events/$ID" | head -c 1500; echo
