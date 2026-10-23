@@ -7,19 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          C=1atkdtgqs4te
-          echo "::add-mask::$C"
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-          for u in "https://lulustream.com/e/$C" "https://lulustream.com/$C" "https://luluvdo.com/e/$C"; do
-            curl -s -L -m 20 -A "$UA" -H "Referer: https://lulustream.com/" -o p.html -w "== $u HTTP %{http_code} %{size_download}B final=%{url_effective}\n" "$u"
-            python3 - <<'PY'
-          import re
-          h=open('p.html',encoding='utf-8',errors='replace').read()
-          scripts=re.findall(r'<script\b[^>]*>(.*?)</script>',h,re.S)
-          print('scripts',len(scripts),'packed', 'eval(function(p,a,c,k,e,d)' in h, 'm3u8' in h, 'sources' in h, 'jwplayer' in h)
-          for s in re.findall(r'<script\b[^>]*src=["\']([^"\']+)',h): print(' src',s[:120])
-          for s in scripts:
-            s=s.strip()
-            if s and ('player' in s or 'source' in s or 'file' in s or 'ajax' in s or 'fetch' in s or '$.' in s): print(' inline:',re.sub(r'\s+',' ',s)[:700])
-          PY
+          H=https://calamarmenciano.com/calamar-lulu.php
+          for C in duj5ak4x5waa 1atkdtgqs4te; do
+            echo "::add-mask::$C"
+            echo "== vídeo"
+            curl -s -m 30 -H "Origin: https://djyuanyo.github.io" "$H?code=$C&debug=1" | python3 -c "import json,sys;d=json.load(sys.stdin);print('bytes',d.get('bytes'),'titulo',d.get('titulo'));print('enlaces',d.get('enlaces'));print('sources',(d.get('sources') or '')[:500])" || true
+            curl -s -m 30 -H "Origin: https://djyuanyo.github.io" -o /tmp/m -w "hls HTTP %{http_code}\n" "$H?code=$C&hls=1"; head -c 200 /tmp/m | sed -E 's/seg=[^&"]+/seg=…/g'; echo
           done
