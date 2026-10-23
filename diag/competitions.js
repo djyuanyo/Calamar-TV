@@ -63,33 +63,37 @@ export async function competitionFromLink(value, fetcher = globalThis.fetch) {
 
 const DAY = 86400000;
 /**
- * «Jornada N» of every match. ESPN does not say it, so it comes from the calendar: matches within a few
- * days of each other form a round; a match whose teams already play in it, or a lone match between
- * rounds, is a postponed one and takes the oldest round both teams still owe.
+ * «Jornada N» of every match. ESPN does not say it, so it comes from the calendar: matches a few days
+ * apart in which no team plays twice form a round. A lone match between rounds, or one too many in a
+ * round, is a postponed one and takes the oldest round both teams still owe.
  */
 export function assignRounds(matches) {
   const sorted = [...matches].sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || String(a.id).localeCompare(String(b.id)));
   const clusters = [];
   for (const m of sorted) {
     const last = clusters[clusters.length - 1], at = Date.parse(m.date);
-    if (last && at <= last.start + 4.5 * DAY) last.matches.push(m);
-    else clusters.push({ start: at, matches: [m] });
+    if (last && at <= last.start + 4.5 * DAY && !last.teams.has(m.home) && !last.teams.has(m.away)) last.matches.push(m);
+    else clusters.push({ start: at, matches: [m], teams: new Set() });
+    clusters[clusters.length - 1].teams.add(m.home).add(m.away);
   }
   const teams = new Set(sorted.flatMap((m) => [m.home, m.away]));
-  const regular = Math.max(2, Math.floor(teams.size / 4));
+  const half = Math.max(1, Math.floor(teams.size / 2)), regular = Math.max(2, Math.floor(teams.size / 4));
   const rounds = [], out = new Map();
-  const free = (r, m) => !r.has(m.home) && !r.has(m.away);
+  const owed = (m, except) => rounds.find((r) => r !== except && !r.has(m.home) && !r.has(m.away));
+  const put = (m, round) => { round.add(m.home); round.add(m.away); out.set(m.id, rounds.indexOf(round) + 1); };
   for (const cluster of clusters) {
-    let current = null;
-    for (const m of cluster.matches) {
-      let round;
-      if (cluster.matches.length >= regular) {
-        if (!current) rounds.push(current = new Set());
-        round = free(current, m) ? current : rounds.find((r) => r !== current && free(r, m));
-      } else round = rounds.find((r) => free(r, m));
+    if (cluster.matches.length >= regular) {
+      const round = new Set();
+      rounds.push(round);
+      let extra = cluster.matches.length - half;
+      for (const m of cluster.matches) {
+        const older = extra > 0 ? owed(m, round) : null;
+        if (older) { put(m, older); extra--; } else put(m, round);
+      }
+    } else for (const m of cluster.matches) {
+      let round = owed(m);
       if (!round) rounds.push(round = new Set());
-      round.add(m.home); round.add(m.away);
-      out.set(m.id, rounds.indexOf(round) + 1);
+      put(m, round);
     }
   }
   return out;
