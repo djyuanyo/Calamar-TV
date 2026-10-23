@@ -68,7 +68,7 @@ public final class Catalog {
     public final String category;
     public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId;
     /** Events without a cover: the league's background and both crests. */
-    public final String background, homeLogo, awayLogo;
+    public final String background, homeLogo, awayLogo, leagueLogo;
     public final boolean highlighted;
     /** An imported match without a channel yet («Canal por confirmar»): it opens the match alone. */
     public final boolean pending;
@@ -84,7 +84,7 @@ public final class Catalog {
       this.own = own;
       event = o.optBoolean("event");
       cover = o.optString("cover");
-      background = image(o.optString("background")); homeLogo = image(o.optString("homeLogo")); awayLogo = image(o.optString("awayLogo"));
+      background = image(o.optString("background")); homeLogo = image(o.optString("homeLogo")); awayLogo = image(o.optString("awayLogo")); leagueLogo = image(o.optString("leagueLogo"));
       pending = o.optBoolean("pending");
       channelId = o.optString("channelId", o.optString("id"));
       leagueId = o.optString("leagueId");
@@ -197,7 +197,7 @@ public final class Catalog {
         String meta = SportsCatalog.meta(event, custom);
         JSONObject card = new JSONObject(event.toString()).put("id", event.getString("id")).put("name", event.getString("name"))
             .put("cover", event.optString("cover")).put("event", true)
-            .put("background", league != null ? league.optString("background") : "")
+            .put("background", league != null ? league.optString("background") : "").put("leagueLogo", league != null ? league.optString("logo") : "")
             .put("homeLogo", home != null ? home.optString("logo") : "").put("awayLogo", away != null ? away.optString("logo") : "");
         if (target != null) card.put("channelId", target.id).put("meta", meta).put("group", target.name).put("streams", new JSONArray(target.streams));
         else card.put("channelId", "").put("pending", true).put("group", Competitions.PENDING).put("streams", new JSONArray())

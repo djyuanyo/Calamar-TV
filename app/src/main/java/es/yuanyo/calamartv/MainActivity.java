@@ -716,7 +716,26 @@ public class MainActivity extends Activity {
     art.addView(crests, new FrameLayout.LayoutParams(-1, -1));
     crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1 + shift * 10));
     for (String logo : new String[] {c.homeLogo, c.awayLogo}) {
-      if (crests.getChildCount() > 1) {
+      if (crests.getChildCount() > 1 && !c.leagueLogo.isEmpty()) {
+        // The league's logo between the crests, on a dark rounded square.
+        FrameLayout slot = new FrameLayout(this);
+        FrameLayout tile = new FrameLayout(this) {
+          @Override protected void onMeasure(int w, int h) {
+            int side = Math.min(MeasureSpec.getSize(w), Math.round(MeasureSpec.getSize(h) * 0.62f));
+            int spec = MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY);
+            super.onMeasure(spec, spec);
+          }
+        };
+        GradientDrawable box = new GradientDrawable(); box.setColor(0xff0b1240); box.setCornerRadius(dp(shift > 0 ? 14 : 8));
+        tile.setBackground(box);
+        tile.setPadding(dp(4), dp(4), dp(4), dp(4));
+        ImageView league = new ImageView(this);
+        league.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image(league, c.leagueLogo);
+        tile.addView(league, new FrameLayout.LayoutParams(-1, -1));
+        slot.addView(tile, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        crests.addView(slot, new LinearLayout.LayoutParams(0, -1, 1.7f));
+      } else if (crests.getChildCount() > 1) {
         TextView vs = new TextView(this);
         vs.setText("VS"); vs.setTextColor(Ui.FG); vs.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         vs.setTextSize(shift > 0 ? 20 : 12);

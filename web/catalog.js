@@ -264,7 +264,8 @@ export function eventSlugs(custom) {
 export function eventArt(event, custom) {
   const find = (list, id) => (custom?.[list] || []).find((x) => x.id === id);
   const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
-  return { background: image(find('leagues', event.leagueId)?.background), homeLogo: image(find('teams', event.homeTeamId)?.logo), awayLogo: image(find('teams', event.awayTeamId)?.logo) };
+  const league = find('leagues', event.leagueId);
+  return { background: image(league?.background), leagueLogo: image(league?.logo), homeLogo: image(find('teams', event.homeTeamId)?.logo), awayLogo: image(find('teams', event.awayTeamId)?.logo) };
 }
 
 /**
