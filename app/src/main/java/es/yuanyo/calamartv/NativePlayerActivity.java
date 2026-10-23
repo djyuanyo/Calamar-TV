@@ -208,12 +208,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     controls.addView(fullscreenButton, fullscreenSize);
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
-    button(controls, "Refrescar", () -> {
+    Button refresh = button(controls, "Refrescar", () -> {
       automaticAttempts = 0;
       mediaHttp1 = false;
       mediaSystemRetry = false;
       if (directUrl != null) playDirect(); else resolveFresh();
     });
+    // Films and episodes have no «Refrescar»: it is for live channels and events.
+    if (progressEntry != null) refresh.setVisibility(View.GONE);
     // Events, as on the web: their preview link (cover and name in WhatsApp) through the share sheet.
     if (shareUrl != null) button(controls, "Compartir", this::share);
     castControls = new CastControls(this, controls,
@@ -533,7 +535,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   sources.clear();
                   sources.addAll(found);
                   updateSourceButton();
-                  if (sources.isEmpty()) {
+                  if (sources.isEmpty() && VideoResolver.processing(document.html)) {
+                    // A video just uploaded to LuluStream plays once LuluStream has converted it.
+                    problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
+                  } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
+                    playThroughHosting();
+                  } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
                   } else {
@@ -551,6 +558,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   if (player != null && player.isPlaying()) {
                     status.setText(
                         "No se pudo renovar. La emisión actual continúa; puedes pulsar Renovar.");
+                  } else if (Library.Media.hosting(pageUrl) != null) {
+                    // LuluStream refused this device its page: the hosting reads it, as for the web.
+                    playThroughHosting();
                   } else if (footballFallback) {
                     openWeb();
                     status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
@@ -567,6 +577,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 });
           }
         });
+  }
+
+  /** A LuluStream video through the hosting (calamar-lulu.php), when this device cannot read its page. */
+  private void playThroughHosting() {
+    sources.clear();
+    sources.add(new VideoResolver.Source("LuluStream por el hosting", Library.Media.hosting(pageUrl)));
+    selection = 0;
+    updateSourceButton();
+    playSource(sources.get(0));
   }
 
   private void playSource(VideoResolver.Source source) {
@@ -588,7 +607,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     DataSource.Factory http =
         (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
             .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
-                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null);
+                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null && !source.url.startsWith(Library.LULU_ENDPOINT));
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
@@ -700,7 +719,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     MediaItem.Builder item = new MediaItem.Builder().setUri(source.url);
     String path = Uri.parse(source.url).getPath();
-    if (path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;

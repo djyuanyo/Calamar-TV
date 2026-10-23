@@ -378,6 +378,7 @@ try {
   await page.goto(base + '/?regression=2#/inicio');
   await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
+  assert.equal(await page.locator('#player-refresh').isVisible(), true, 'channels and events keep Refrescar');
   assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
@@ -555,6 +556,7 @@ try {
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Vuelta a empezar');
+  assert.equal(await page.locator('#player-refresh').isHidden(), true, 'films and episodes have no Refrescar');
   // «Saltar intro» during the series' intro; «Siguiente capítulo» with its count during the credits.
   await page.evaluate(() => { const v = document.getElementById('video'); let t = 40;
     Object.defineProperty(v, 'currentTime', { configurable: true, get: () => t, set: (x) => { t = x; } });

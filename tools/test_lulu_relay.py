@@ -42,6 +42,12 @@ class LuluRelayTest(unittest.TestCase):
                   "'jwplayer|setup|sources|file|https|cdn1016|org|hls2|master|m3u8|xyz'.split('|')))</script>")
         self.assertEqual(php(f'echo luluVideo(luluScripts({json.dumps(packed)}));'), 'https://cdn1016.org/hls2/master.m3u8?t=xyz')
 
+    def test_a_video_still_being_converted_is_recognised(self):
+        page = '<div>Video is processing now.<br>Conversion stage: Pending in queue #3</div>'
+        self.assertEqual(php(f'echo luluProcessing({json.dumps(page)}) ? "si" : "no";'), 'si')
+        self.assertEqual(php(f'echo luluVideo(luluScripts({json.dumps(page)})) === null ? "null" : "video";'), 'null')
+        self.assertEqual(php('echo luluProcessing("<script>p.setup({sources:[]})</script>") ? "si" : "no";'), 'no')
+
     def test_only_signed_addresses_are_relayed(self):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]

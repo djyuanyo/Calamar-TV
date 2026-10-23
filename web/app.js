@@ -572,6 +572,8 @@ function playSource(c, index) {
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
+      // The hosting answers 409 while LuluStream is still converting a video just uploaded.
+      if (data.fatal && source.how.address && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
       if (data.fatal) next(data);
     });
     hls.loadSource(address);
@@ -646,6 +648,8 @@ function open(c, fromRoute = false) {
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
   shareButton.hidden = !c.event;
+  // Films and episodes have no «Refrescar»: it is for live channels and events.
+  document.getElementById('player-refresh').hidden = !!c.vod;
   playerTitle.textContent = c.name;
   refreshScores();
   playerLogo.hidden = !c.logo;

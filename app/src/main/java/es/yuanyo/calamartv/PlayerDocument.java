@@ -59,6 +59,8 @@ public final class PlayerDocument {
         c.setUseCaches(false);
         // LuluStream only gives its player to browsers.
         c.setRequestProperty("User-Agent", Library.Media.embed(current) != null ? BROWSER_USER_AGENT : USER_AGENT);
+        // LuluStream now only gives its player page to visits coming from its own site.
+        if (Library.Media.embed(current) != null) c.setRequestProperty("Referer", "https://lulustream.com/");
         c.setRequestProperty("Accept", "text/html,application/xhtml+xml");
         c.setRequestProperty("Cache-Control", "no-cache");
         int code = c.getResponseCode();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan, matchUnmatched } from '../web/library-lulu.js';
+import { cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan, matchUnmatched, decodeHtml, luluFolder } from '../web/library-lulu.js';
 
 const json = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
 
@@ -135,4 +135,13 @@ test('titles TMDB does not find are added, matched by hand, and recognised by th
   assert.deepEqual(again.sections.movies.map((m) => m.id), ['m77']);
   assert.deepEqual(again.sections.series.map((s) => [s.id, s.episodes.map((e) => e.episode)]), [['s88', [1, 2, 3]]]);
   assert.ok(!asked.some((path) => path.startsWith('/search/')), 'no new search for titles already matched');
+});
+
+test('names come HTML-encoded from LuluStream and are used as written', async () => {
+  assert.equal(decodeHtml('Cuando nadie nos ve &#40;Temporada 1&#41;'), 'Cuando nadie nos ve (Temporada 1)');
+  assert.equal(decodeHtml('Tom &amp; Jerry &#x2014; &quot;1x01&quot; &unknown;'), 'Tom & Jerry — "1x01" &unknown;');
+  const folder = await luluFolder(0, 'clave123456', async () => json({ status: 200, result: {
+    folders: [{ fld_id: 9, name: 'Cuando nadie nos ve &#40;Temporada 1&#41;' }], files: [{ file_code: 'abcd1234efgh', title: 'Torrente &amp; Cia &#40;2025&#41;.mp4' }] } }));
+  assert.deepEqual([folder.folders[0].name, folder.files[0].title], ['Cuando nadie nos ve (Temporada 1)', 'Torrente & Cia (2025).mp4']);
+  assert.deepEqual(cleanTitle(folder.files[0].title), { title: 'Torrente & Cia', year: 2025 });
 });
