@@ -648,6 +648,8 @@ function open(c, fromRoute = false) {
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
   shareButton.hidden = !c.event;
+  // Films and episodes have no «Refrescar»: it is for live channels and events.
+  document.getElementById('player-refresh').hidden = !!c.vod;
   playerTitle.textContent = c.name;
   refreshScores();
   playerLogo.hidden = !c.logo;

@@ -208,12 +208,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     controls.addView(fullscreenButton, fullscreenSize);
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
-    button(controls, "Refrescar", () -> {
+    Button refresh = button(controls, "Refrescar", () -> {
       automaticAttempts = 0;
       mediaHttp1 = false;
       mediaSystemRetry = false;
       if (directUrl != null) playDirect(); else resolveFresh();
     });
+    // Films and episodes have no «Refrescar»: it is for live channels and events.
+    if (progressEntry != null) refresh.setVisibility(View.GONE);
     // Events, as on the web: their preview link (cover and name in WhatsApp) through the share sheet.
     if (shareUrl != null) button(controls, "Compartir", this::share);
     castControls = new CastControls(this, controls,
