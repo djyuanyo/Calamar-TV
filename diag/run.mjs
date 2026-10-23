@@ -1,12 +1,11 @@
 import { writeFileSync } from 'node:fs';
-const out = {};
-const get = async (u) => { try { const r = await fetch(u); return await r.json(); } catch (e) { return { error: e.message }; } };
-const ev = await get('https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/events/748316');
-out.eventKeys = Object.keys(ev); out.week = ev.week; out.seasonType = ev.seasonType;
-const comp = ev.competitions?.[0] || {};
-out.compKeys = Object.keys(comp); out.compNotes = comp.notes; out.compType = comp.type; out.series = comp.series; out.round = comp.round; out.leg = comp.leg;
-out.summaryHeader = await get('https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=748316').then(d => ({ keys: Object.keys(d), header: { ...(d.header || {}), competitions: undefined }, gameInfo: d.gameInfo, notes: d.header?.competitions?.[0]?.notes }));
-out.weeks = await get('https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2025/types/1/weeks');
-out.calendar = await get('https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/calendar');
-out.fixturesSite = await get('https://site.web.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?dates=20260822').then(d => ({ week: d.week, ev0: d.events?.[0] && { week: d.events[0].week, notes: d.events[0].competitions?.[0]?.notes } }));
-writeFileSync('diag/core.json', JSON.stringify(out, null, 1).slice(0, 20000));
+import { fetchSeason, assignRounds } from './competitions.js';
+const lines = [];
+for (const slug of ['esp.1', 'esp.2', 'eng.1', 'ita.1', 'ger.1', 'fra.1', 'uefa.champions', 'esp.copa_del_rey']) {
+  try {
+    const s = await fetchSeason(slug); const r = assignRounds(s.matches), c = new Map();
+    for (const v of r.values()) c.set(v, (c.get(v) || 0) + 1);
+    lines.push(`${slug} ${s.name} ${s.season} teams=${s.teams.length} matches=${s.matches.length} rounds=${c.size} sizes=${JSON.stringify([...c].sort((a, b) => a[0] - b[0]).map(x => x[1]))}`);
+  } catch (e) { lines.push(`${slug} ERROR ${e.message}`); }
+}
+writeFileSync('diag/rounds.json', JSON.stringify(lines, null, 1));

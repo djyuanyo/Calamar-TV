@@ -63,38 +63,61 @@ export async function competitionFromLink(value, fetcher = globalThis.fetch) {
 
 const DAY = 86400000;
 /**
- * «Jornada N» of every match. ESPN does not say it, so it comes from the calendar: matches a few days
- * apart in which no team plays twice form a round. A lone match between rounds, or one too many in a
- * round, is a postponed one and takes the oldest round both teams still owe.
+ * «Jornada N» of every match. ESPN does not say it, so it comes from the calendar: the rounds' dates are
+ * groups of matches close together in which no team plays twice (as many as matches each team plays),
+ * matches on those dates take that round, and the rest (postponed or brought forward) take a round
+ * both teams still owe, the closest in time.
  */
 export function assignRounds(matches) {
   const sorted = [...matches].sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || String(a.id).localeCompare(String(b.id)));
-  const clusters = [];
+  const count = new Map();
+  for (const m of sorted) for (const t of [m.home, m.away]) count.set(t, (count.get(t) || 0) + 1);
+  const R = Math.max(...count.values()), regular = Math.max(1, Math.floor(count.size / 4));
+  // Rounds' dates: groups of matches a few days apart in which no team plays twice.
+  // Split where matches are more than a day and a half apart, then at the widest gap while a team plays twice.
+  const clusters = [], split = (list) => {
+    const teams = new Set();
+    const twice = list.some((m) => [m.home, m.away].some((t) => teams.has(t) || !teams.add(t)));
+    if (!twice) { clusters.push({ dates: list.map((m) => Date.parse(m.date)) }); return; }
+    let cut = 1;
+    for (let i = 1; i < list.length; i++) if (Date.parse(list[i].date) - Date.parse(list[i - 1].date) > Date.parse(list[cut].date) - Date.parse(list[cut - 1].date)) cut = i;
+    split(list.slice(0, cut)); split(list.slice(cut));
+  };
+  let group = [];
   for (const m of sorted) {
-    const last = clusters[clusters.length - 1], at = Date.parse(m.date);
-    if (last && at <= last.start + 4.5 * DAY && !last.teams.has(m.home) && !last.teams.has(m.away)) last.matches.push(m);
-    else clusters.push({ start: at, matches: [m], teams: new Set() });
-    clusters[clusters.length - 1].teams.add(m.home).add(m.away);
+    if (group.length && Date.parse(m.date) - Date.parse(group[group.length - 1].date) > 1.5 * DAY) { split(group); group = []; }
+    group.push(m);
   }
-  const teams = new Set(sorted.flatMap((m) => [m.home, m.away]));
-  const half = Math.max(1, Math.floor(teams.size / 2)), regular = Math.max(2, Math.floor(teams.size / 4));
-  const rounds = [], out = new Map();
-  const owed = (m, except) => rounds.find((r) => r !== except && !r.has(m.home) && !r.has(m.away));
-  const put = (m, round) => { round.add(m.home); round.add(m.away); out.set(m.id, rounds.indexOf(round) + 1); };
-  for (const cluster of clusters) {
-    if (cluster.matches.length >= regular) {
-      const round = new Set();
-      rounds.push(round);
-      let extra = cluster.matches.length - half;
-      for (const m of cluster.matches) {
-        const older = extra > 0 ? owed(m, round) : null;
-        if (older) { put(m, older); extra--; } else put(m, round);
-      }
-    } else for (const m of cluster.matches) {
-      let round = owed(m);
-      if (!round) rounds.push(round = new Set());
-      put(m, round);
+  if (group.length) split(group);
+  let slots = clusters.filter((c) => c.dates.length >= regular);
+  // More groups than rounds: the smallest (the latest among equals) are batches of postponed matches.
+  while (slots.length > R) { const small = slots.reduce((a, b) => (b.dates.length <= a.dates.length ? b : a)); slots = slots.filter((s) => s !== small); }
+  const centers = slots.map((s) => s.dates[Math.floor(s.dates.length / 2)]);
+  while (centers.length < R) centers.push(centers[centers.length - 1] + 7 * DAY);
+  const busy = centers.map(() => new Set()), out = new Map();
+  const put = (m, k) => { busy[k].add(m.home).add(m.away); out.set(m.id, k + 1); };
+  const free = (m, k) => !busy[k].has(m.home) && !busy[k].has(m.away);
+  // Matches on a round's dates, the closest first.
+  const near = [];
+  for (const m of sorted) {
+    const at = Date.parse(m.date); let k = -1, gap = Infinity;
+    centers.forEach((c, i) => { if (Math.abs(at - c) < gap) { gap = Math.abs(at - c); k = i; } });
+    if (gap <= 3 * DAY) near.push({ m, k, gap });
+  }
+  near.sort((a, b) => a.gap - b.gap);
+  const left = new Set(sorted);
+  for (const { m, k } of near) if (free(m, k)) { put(m, k); left.delete(m); }
+  // Postponed (or brought forward) matches: a round both teams still owe, the most constrained first.
+  while (left.size) {
+    let pick = null, options = null;
+    for (const m of left) {
+      const o = centers.map((_, k) => k).filter((k) => free(m, k));
+      if (!pick || o.length < options.length) { pick = m; options = o; }
     }
+    left.delete(pick);
+    if (!options.length) { centers.push(Infinity); busy.push(new Set()); put(pick, centers.length - 1); continue; }
+    const at = Date.parse(pick.date);
+    put(pick, options.reduce((a, b) => (Math.abs(centers[b] - at) < Math.abs(centers[a] - at) ? b : a)));
   }
   return out;
 }
