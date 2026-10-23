@@ -1,5 +1,6 @@
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
+import { fixtureEvent, weekFixtures } from './competitions.js';
 import { httpTsSource } from './http-stream.js';
 // Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
 const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
@@ -236,13 +237,20 @@ export function webPlayback(url) {
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
 
+/** Events and imported matches (as events), as the catalog keeps them. */
+export function catalogEvents(custom) {
+  return [...(custom?.events || []), ...(custom?.fixtures || []).map((f) => fixtureEvent(f, custom))];
+}
+
 /**
  * Link name of every event, from its name like channels ("local-vs-visitante"); repeated names get
- * -2, -3… in date order. tools/event_pages.py and SportsCatalog.slugs() apply the same rule.
+ * -2, -3… in date order. tools/event_pages.py and SportsCatalog.slugs() apply the same rule. Imported
+ * matches come after the events, so they never change an event's link.
  */
 export function eventSlugs(custom) {
   const out = new Map(), used = new Set();
-  for (const event of [...(custom?.events || [])].sort(eventOrder)) {
+  const all = catalogEvents(custom);
+  for (const event of [...all.filter((e) => !e.imported).sort(eventOrder), ...all.filter((e) => e.imported).sort(eventOrder)]) {
     const base = slugify(event.name);
     let slug = base;
     for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
@@ -252,16 +260,31 @@ export function eventSlugs(custom) {
   return out;
 }
 
-/** Each event has a stable identity and resolves the current channel sources. */
-export function events(channels, custom) {
+/** Card art of an event without a cover: the league's background with both crests on top. */
+export function eventArt(event, custom) {
+  const find = (list, id) => (custom?.[list] || []).find((x) => x.id === id);
+  const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
+  return { background: image(find('leagues', event.leagueId)?.background), homeLogo: image(find('teams', event.homeTeamId)?.logo), awayLogo: image(find('teams', event.awayTeamId)?.logo) };
+}
+
+/**
+ * Each event has a stable identity and resolves the current channel sources. Imported matches show
+ * only the week of their league's next match; until they have a channel they say «Canal por confirmar».
+ */
+export function events(channels, custom, now = Date.now(), { allWeeks = false } = {}) {
   const slugs = eventSlugs(custom);
-  return [...(custom?.events || [])].filter(event => !event.matchUrl || !matchExpired(event.matchId)).sort(eventOrder).flatMap((event) => {
+  const all = catalogEvents(custom).filter(event => !event.matchUrl || !matchExpired(event.matchId, now));
+  const imported = new Set(weekFixtures(all.filter((e) => e.imported), now));
+  return all.filter((e) => !e.imported || allWeeks || imported.has(e)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
-    return target ? [{ ...target, ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id),
-      event: true, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
-      streams: target.streams, playable: target.playable }] : [];
+    const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
+    if (target) return [{ ...target, ...shared, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
+      streams: target.streams, playable: target.playable }];
+    return event.imported ? [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
+      channelName: PENDING, meta: [eventMeta(event, custom), PENDING].filter(Boolean).join(' · ') }] : [];
   });
 }
+export const PENDING = 'Canal por confirmar';
 /** Home rows: one per league (with its logo), ordered by its next event; events without league last. */
 export function eventRows(list, custom) {
   const leagues = new Map((custom?.leagues || []).map((l) => [l.id, l]));

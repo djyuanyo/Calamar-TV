@@ -517,12 +517,7 @@ public class MainActivity extends Activity {
     frame.setClipToOutline(true);
     favoriteAction(frame, c);
 
-    if (c.event) {
-      ImageView cover = new ImageView(this);
-      cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-      frame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-      image(cover, c.cover);
-    }
+    if (c.event) frame.addView(eventArt(c, wide() ? 0.42f : 0), new FrameLayout.LayoutParams(-1, -1));
     int size = wide() ? 250 : 150;
     Ui.LogoView logo = new Ui.LogoView(this, c.name, 20);
     FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(size), dp(size));
@@ -663,7 +658,7 @@ public class MainActivity extends Activity {
   final Runnable scoreRefresh=new Runnable(){public void run(){
     if(!resumed)return;
     if(!scoresBusy){
-      Set<String> ids=new HashSet<>(); JSONArray all=custom.optJSONArray("events"); if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e!=null&&!e.optString("matchUrl").isEmpty()&&!e.optString("matchId").isEmpty()&&MatchScores.shouldPoll(e.optString("matchId"),System.currentTimeMillis()))ids.add(e.optString("matchId"));} collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      Set<String> ids=new HashSet<>(); for(Catalog.Channel e:Catalog.events(channels,custom))if(!e.matchUrl.isEmpty()&&!e.matchId.isEmpty()&&MatchScores.shouldPoll(e.matchId,System.currentTimeMillis()))ids.add(e.matchId); collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
       if(!ids.isEmpty()) { scoresBusy=true; new Thread(() -> {
         Map<String,MatchScores.Result> results=new HashMap<>();
         for(String id:ids)try{results.put(id,MatchScores.fetch(id));}catch(Exception ignored){results.put(id,null);}
@@ -677,8 +672,8 @@ public class MainActivity extends Activity {
   final Runnable expiryCheck=() -> pruneFinishedEvents();
   void pruneFinishedEvents(){
     handler.removeCallbacks(expiryCheck); long now=System.currentTimeMillis(),next=Long.MAX_VALUE;
-    List<String> expired=new ArrayList<>();JSONArray all=custom.optJSONArray("events");
-    if(all!=null)for(int i=0;i<all.length();i++){JSONObject e=all.optJSONObject(i);if(e==null||e.optString("matchUrl").isEmpty())continue;String id=e.optString("matchId");long end=MatchScores.deadline(id);if(MatchScores.expired(id,now))expired.add(id);else if(end>now)next=Math.min(next,end);}
+    List<String> expired=new ArrayList<>();
+    for(JSONObject e:Competitions.all(custom)){if(e.optString("matchUrl").isEmpty())continue;String id=e.optString("matchId");long end=MatchScores.deadline(id);if(MatchScores.expired(id,now))expired.add(id);else if(end>now)next=Math.min(next,end);}
     Collections.sort(expired);String signature=expired.toString();
     if(!signature.equals(expiredSignature)){expiredSignature=signature;render();if(redrawMulti!=null)redrawMulti.run();}
     if(resumed&&next!=Long.MAX_VALUE)handler.postDelayed(expiryCheck,Math.max(1,next-now+1));
@@ -702,6 +697,43 @@ public class MainActivity extends Activity {
     return badge;
   }
 
+  /**
+   * The cover of an event; without one (imported matches), the league's background with the home and
+   * away crests on top. `shift` moves the crests right, past the hero's text.
+   */
+  View eventArt(Catalog.Channel c, float shift) {
+    FrameLayout art = new FrameLayout(this);
+    ImageView cover = new ImageView(this);
+    cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+    art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
+    if (!c.cover.isEmpty()) { image(cover, c.cover); return art; }
+    art.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xff10261a, 0xff1d4029, 0xff0b1410}));
+    image(cover, c.background);
+    // Each crest gets 30% of the width and keeps its shape (FIT_CENTER), whatever the card's size.
+    LinearLayout crests = new LinearLayout(this);
+    crests.setGravity(Gravity.CENTER);
+    crests.setPadding(0, dp(10), 0, dp(10));
+    art.addView(crests, new FrameLayout.LayoutParams(-1, -1));
+    crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1 + shift * 10));
+    for (String logo : new String[] {c.homeLogo, c.awayLogo}) {
+      if (crests.getChildCount() > 1) {
+        TextView vs = new TextView(this);
+        vs.setText("VS"); vs.setTextColor(Ui.FG); vs.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        vs.setTextSize(shift > 0 ? 20 : 12);
+        vs.setShadowLayer(dp(4), 0, dp(1), 0xcc000000);
+        vs.setPadding(dp(6), 0, dp(6), 0);
+        crests.addView(vs, new LinearLayout.LayoutParams(-2, -2));
+      }
+      ImageView crest = new ImageView(this);
+      crest.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      if (logo.isEmpty()) { GradientDrawable dot = new GradientDrawable(); dot.setShape(GradientDrawable.OVAL); dot.setColor(0x24ffffff); crest.setImageDrawable(dot); }
+      else image(crest, logo);
+      crests.addView(crest, new LinearLayout.LayoutParams(0, -1, 3));
+    }
+    crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+    return art;
+  }
+
   /** A 16:9 card: colour from the name, logo, live badge, then the name and its category. */
   View card(final Catalog.Channel c, int width) {
     LinearLayout card = new LinearLayout(this);
@@ -717,10 +749,7 @@ public class MainActivity extends Activity {
     art.setDuplicateParentStateEnabled(true);
     int artHeight = Math.round(dp(width) * 9f / 16f);
     if (c.event) {
-      ImageView cover = new ImageView(this);
-      cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-      art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-      image(cover, c.cover);
+      art.addView(eventArt(c, 0), new FrameLayout.LayoutParams(-1, -1));
       // The cover covers the background's border, so the focus border goes on top, as on channels.
       art.setForeground(Ui.focusOutline(this, 12));
       art.setClipToOutline(true);
@@ -881,6 +910,13 @@ public class MainActivity extends Activity {
 
   void open(Catalog.Channel c) {
     if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis())){Toast.makeText(this,"El evento ha finalizado",Toast.LENGTH_SHORT).show();return;}
+    if (c.pending) {
+      // An imported match without a channel yet: its match page alone, with no video.
+      Intent match = new Intent(this, MatchActivity.class);
+      match.putExtra("title", c.name).putExtra("match_id", c.matchId).putExtra("event_info", eventInfo(c).toString());
+      startActivity(match);
+      return;
+    }
     if (!c.playable()) {
       try {
         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(c.web)));
@@ -906,8 +942,7 @@ public class MainActivity extends Activity {
   /** The event's teams, league, date, place and description, for the match page under the video. */
   JSONObject eventInfo(Catalog.Channel c) {
     JSONObject info = new JSONObject();
-    JSONArray events = custom.optJSONArray("events");
-    JSONObject e = SportsCatalog.find(events, c.id);
+    JSONObject e = Competitions.find(custom, c.id);
     if (e == null) e = new JSONObject();
     try {
       JSONObject home = SportsCatalog.find(custom.optJSONArray("teams"), e.optString("homeTeamId")),

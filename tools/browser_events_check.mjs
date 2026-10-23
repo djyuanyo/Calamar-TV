@@ -613,6 +613,62 @@ try {
   await page.waitForFunction(() => window.__deviceLogin === 'K7Q2XY9Z');
   await page.goto(base + '/#/tv/zz');
   await page.getByText(/Este enlace no es válido/).waitFor();
+  // Importar competición: ESPN's calendar (mocked) becomes the league, its teams and the week's matches.
+  const crestPng = await readFile(resolve(root, 'assets/favicon-192.png')).catch(() => Buffer.alloc(0));
+  await page.route('https://a.espncdn.com/**', route => route.fulfill({ contentType: 'image/png', body: crestPng }));
+  await page.route('https://example.com/fondo.jpg', route => route.fulfill({ contentType: 'image/png', body: crestPng }));
+  const espnTeam = (id, name) => ({ id, displayName: name, logo: `https://a.espncdn.com/i/teamlogos/soccer/500/${id}.png` });
+  const espnMatch = (id, date, home, away, done = false) => ({ id, date, season: { year: 2026 }, competitions: [{ status: { type: { completed: done } },
+    competitors: [{ homeAway: 'home', team: home }, { homeAway: 'away', team: away }] }] });
+  const [rm, fcb, atm, sev] = [espnTeam('86', 'Real Madrid'), espnTeam('83', 'Barcelona'), espnTeam('1068', 'Atlético Madrid'), espnTeam('243', 'Sevilla')];
+  await page.route('https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/**', route => {
+    const url = route.request().url();
+    const body = !url.includes('dates=') ? { leagues: [{ name: 'Spanish LALIGA', season: { year: 2026, startDate: '2026-06-01T04:00Z', endDate: '2027-06-01T03:59Z' }, logos: [{ href: 'https://a.espncdn.com/l.png', rel: ['default'] }] }], events: [] }
+      : url.includes('dates=2026') ? { events: [espnMatch('900', '2026-11-29T20:00Z', fcb, rm, true), espnMatch('901', '2026-12-01T20:00Z', rm, fcb),
+        espnMatch('902', '2026-12-06T20:00Z', atm, sev), espnMatch('903', '2026-12-08T20:00Z', sev, rm)] } : { events: [] };
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.goto(base + '/#/admin/ligas');
+  await page.getByLabel('O elige la competición', { exact: true }).selectOption('esp.1');
+  await page.getByRole('button', { name: 'Importar', exact: true }).click();
+  await page.waitForFunction(() => window.__published.fixtures?.length === 3);
+  const imported = await page.evaluate(() => window.__published);
+  const laliga = imported.leagues.find(l => l.espn === 'esp.1');
+  assert.equal(laliga.season, '2026/2027');
+  assert.deepEqual(imported.fixtures.map(f => f.matchId), ['901', '902', '903']);
+  await page.getByText(/LaLiga 2026\/2027: 3 partidos por jugar importados/).waitFor();
+  await page.goto(base + `/#/admin/ligas/${encodeURIComponent(laliga.id)}`);
+  await page.getByLabel('O enlace HTTPS del fondo', { exact: true }).fill('https://example.com/fondo.jpg');
+  await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await page.waitForFunction(() => window.__published.leagues.some(l => l.background === 'https://example.com/fondo.jpg'));
+  const atleti = imported.fixtures.find(f => f.matchId === '902');
+  await page.goto(base + `/#/admin/editar-evento/${encodeURIComponent(atleti.id)}`);
+  await page.getByText('Sin canal: los usuarios verán «Canal por confirmar».').waitFor();
+  await page.locator('.channel-options button').filter({ hasText: 'Sports One' }).click();
+  await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await page.waitForFunction((id) => window.__published.fixtures.find(f => f.id === id)?.channelId === 'sport-one', atleti.id);
+  const savedFixture = await page.evaluate((id) => window.__published.fixtures.find(f => f.id === id), atleti.id);
+  assert.equal(savedFixture.name, undefined, 'the name keeps following the teams');
+  assert.equal(savedFixture.matchUrl, undefined, 'the Google link keeps following the teams');
+  await page.goto(base + '/#/');
+  const weekRow = page.locator('.event-card');
+  await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).waitFor();
+  await weekRow.filter({ hasText: 'Atlético Madrid vs Sevilla' }).waitFor();
+  assert.equal(await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).count(), 0, 'next week stays hidden');
+  assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).innerText(), /Canal por confirmar/);
+  assert.equal(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic img.crest').count(), 2);
+  assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic').getAttribute('style'), /fondo\.jpg/);
+  if (process.env.CALAMAR_SHOTS) await page.screenshot({ path: `${process.env.CALAMAR_SHOTS}/competition-home.png`, fullPage: true });
+  await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).click();
+  await page.getByText('Canal por confirmar. El partido se verá aquí en cuanto tenga canal.').waitFor();
+  assert.equal(await page.locator('#player').evaluate(n => n.classList.contains('with-match')), true);
+  if (process.env.CALAMAR_SHOTS) await page.screenshot({ path: `${process.env.CALAMAR_SHOTS}/competition-pending.png` });
+  await page.getByRole('button', { name: 'Cerrar', exact: false }).first().click().catch(() => {});
+  // Once the last match of the week is over, the next week's appear.
+  await page.clock.setFixedTime(new Date('2026-12-07T01:00:00Z'));
+  await page.goto(base + '/#/canales'); await page.goto(base + '/#/');
+  await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).waitFor();
+  assert.equal(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).count(), 0);
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
+  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

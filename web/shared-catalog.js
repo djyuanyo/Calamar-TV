@@ -1,4 +1,5 @@
 import { validateSports } from './sports.js';
+import { validateFixtures } from './competitions.js';
 export const ADMIN_EMAIL = 'juanjocarrillo7@gmail.com';
 export const CATALOG_PATH = 'calamarCatalog/custom';
 
@@ -21,6 +22,8 @@ export function validateCatalog(data, { checkSize = true } = {}) {
     eventIds.add(event.id);
   }
   validateSports(data, validCover);
+  const set = (list) => new Set((list || []).map((x) => x.id));
+  validateFixtures(data, { leagues: set(data.leagues), teams: set(data.teams), channels: ids, eventIds, imageValid: validCover });
   if (data.groupOrder !== undefined && (!Array.isArray(data.groupOrder) || data.groupOrder.length > 200
       || data.groupOrder.some((g) => typeof g !== 'string' || !g.trim() || g.length > 80)
       || new Set(data.groupOrder).size !== data.groupOrder.length)) throw new Error('El orden de categorías no es válido.');

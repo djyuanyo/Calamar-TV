@@ -1,6 +1,6 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
-import { merge, events, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, events, catalogEvents, PENDING, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -83,11 +83,11 @@ function card(c, pick = null) {
     'button',
     { class: `${c.event ? 'card event-card' : 'card'}${pick?.selected ? ' picked' : ''}`, type: 'button', style: c.color && !c.event ? `--h:${hue(c.name)};--c:${c.color}` : `--h:${hue(c.name)}`,
       onclick: pick ? pick.toggle : () => open(c), 'aria-pressed': pick ? String(!!pick.selected) : null, 'aria-label': pick ? c.name : null,
-      title: pick ? `${pick.selected ? 'Quitar' : 'Añadir'} ${c.name}` : c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
+      title: pick ? `${pick.selected ? 'Quitar' : 'Añadir'} ${c.name}` : c.pending ? `${c.name} · ${PENDING}` : c.playable ? `Ver ${c.name}` : `Abrir la web de ${c.name}` },
     el(
       'span',
       { class: 'art' },
-      c.event ? el('img', { class: 'event-cover', src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : logo(c),
+      c.event ? eventCover(c, 'event-cover') : logo(c),
       c.event ? eventBadge(c, 'badge') : null,
       cardAudience(c),
       pick ? el('span', { class: 'pick-mark', 'aria-hidden': 'true' }, pick.selected ? String(pick.selected) : '+') : c.playable ? el('span', { class: 'play-hover' }, icon('play')) : null,
@@ -95,6 +95,17 @@ function card(c, pick = null) {
     el('span', { class: 'name' }, c.name),
     el('span', { class: 'sub' }, c.event ? c.meta || c.channelName : c.region || c.group),
   );
+}
+
+/**
+ * The cover of an event; without one, the league's background with the home and away crests on top
+ * (imported matches all share it).
+ */
+function eventCover(c, cls) {
+  if (c.cover) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+  const crest = (src, side) => src ? el('img', { class: `crest ${side}`, src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: `crest ${side} crest-empty` });
+  return el('span', { class: `${cls} event-generic`, style: c.background ? `background-image:url("${c.background}")` : null, 'aria-hidden': 'true' },
+    crest(c.homeLogo, 'home'), el('span', { class: 'crest-vs' }, 'VS'), crest(c.awayLogo, 'away'));
 }
 
 /** Until an event starts its badge shows the date and time; then «En directo». */
@@ -107,10 +118,16 @@ function eventBadge(c, cls) {
   return badge;
 }
 
+/**
+ * Events whose score is followed: all events (a finished one comes back if ESPN corrects it), and of the
+ * imported matches only those of the coming days, not the whole season.
+ */
+const pollableEvents = (custom, now = Date.now()) => catalogEvents(custom).filter((e) => !e.imported
+  || (Date.parse(e.startAt) <= now + 7 * 86400000 && Date.parse(e.startAt) + 86400000 > now));
 let scoreBusy = false;
 async function refreshScores() {
   if (scoreBusy || document.hidden) return;
-  const ids = [...new Set([...(state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])].filter(id => shouldPollMatch(id));
+  const ids = [...new Set([...pollableEvents(state.custom).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])].filter(id => shouldPollMatch(id));
   scoreBusy = true;
   try { await Promise.allSettled(ids.map(async id => {
     let result;
@@ -126,7 +143,7 @@ async function refreshScores() {
 let expiryTimer, expiredEvents = '';
 function syncEventExpiry() {
   clearTimeout(expiryTimer);
-  const now = Date.now(), ids = (state.custom?.events || []).filter(e => e.matchUrl && e.matchId).map(e => String(e.matchId));
+  const now = Date.now(), ids = catalogEvents(state.custom).filter(e => e.matchUrl && e.matchId).map(e => String(e.matchId));
   const fingerprint = ids.filter(id => matchExpired(id, now)).sort().join('|');
   const changed = fingerprint !== expiredEvents; expiredEvents = fingerprint;
   const next = Math.min(...ids.map(matchDeadline).filter(time => time > now));
@@ -274,7 +291,7 @@ function heroSection(list, index = 0) {
                   showHighlight(i, true);
                 },
               },
-              p.event ? el('img', { src: p.cover, alt: '', class: 'pick-cover' }) : logo(p),
+              p.event ? eventCover(p, 'pick-cover') : logo(p),
             ),
           ),
         )
@@ -283,7 +300,7 @@ function heroSection(list, index = 0) {
     'section',
     { class: c.event ? 'hero event-hero' : 'hero', style: `--h:${hue(c.name)}`, 'aria-label': 'Canal destacado' },
     el('div', { class: 'hero-bg' }),
-    c.event ? el('img', { class: 'event-hero-cover', src: c.cover, alt: '', referrerpolicy: 'no-referrer' }) : logo(c, 'hero-art'),
+    c.event ? eventCover(c, 'event-hero-cover') : logo(c, 'hero-art'),
     el(
       'div',
       { class: 'hero-body' },
@@ -456,6 +473,12 @@ function stop() {
 
 function playSource(c, index) {
   stop();
+  // An imported match without a channel yet: the match page alone, with no video.
+  if (c.pending) {
+    renderSourcePicker(playerSources, [], 0, () => {});
+    playerStatus.textContent = `${PENDING}. El partido se verá aquí en cuanto tenga canal.`;
+    return;
+  }
   const generation = playbackGeneration;
   const allSources = sourceOptions(c.streams);
   const candidates = allSources.filter((source) => source.how.ok);
@@ -637,7 +660,7 @@ let pushed = false;
 const channelLink = (c) => `${location.origin}${location.pathname}${c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`}`;
 
 function open(c, fromRoute = false) {
-  if (!c.playable) {
+  if (!c.playable && !c.pending) {
     window.open(c.web, '_blank', 'noopener');
     return;
   }
@@ -648,6 +671,8 @@ function open(c, fromRoute = false) {
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
   shareButton.hidden = !c.event;
+  // An imported match without a channel has no video: only its match page and the notice.
+  player.classList.toggle('pending', !!c.pending);
   // Films and episodes have no «Refrescar»: it is for live channels and events.
   document.getElementById('player-refresh').hidden = !!c.vod;
   playerTitle.textContent = c.name;
@@ -665,7 +690,7 @@ function open(c, fromRoute = false) {
   const withMatch = showMatchCenter(c);
   if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
   // Viewers and visits are counted per channel and event; films and episodes are not.
-  if (!c.vod) startAudience(c);
+  if (!c.vod && !c.pending) startAudience(c);
   // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
   playSource(c, 0);
@@ -923,18 +948,19 @@ async function route() {
   }
   if (sectionByPage(page)) { await libraryRoute(page, hash.split('/').slice(1), version); return; }
   if (page === 'canal' || page === 'evento') {
-    const c = page === 'evento' ? (events(state.channels, state.custom).find(e => e.slug === arg) || events(state.channels, state.custom).find(e => e.eventId === arg)) : findChannel(state.channels, arg);
+    const all = page === 'evento' ? events(state.channels, state.custom, Date.now(), { allWeeks: true }) : [];
+    const c = page === 'evento' ? (all.find(e => e.slug === arg) || all.find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.
-    if ((!c || !c.playable) && !player.hidden) hidePlayer();
+    if ((!c || (!c.playable && !c.pending)) && !player.hidden) hidePlayer();
     view.replaceChildren(
-      ...(c && !c.playable
+      ...(c && !c.playable && !c.pending
         ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
         : c
           ? home()
           : [el('p', { class: 'error' }, `No existe ${page === 'evento' ? 'el evento' : 'el canal'} «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
     );
     // A catalog refresh rebuilds the channel objects; compare ids so playback is not restarted.
-    if (c && c.playable && (player.hidden || !current || current.id !== c.id)) open(c, true);
+    if (c && (c.playable || c.pending) && (player.hidden || !current || current.id !== c.id)) open(c, true);
     else if (c && !player.hidden) {
       // New links can arrive from the admin while the current video keeps playing.
       current = c;
@@ -956,7 +982,7 @@ document.addEventListener('click', event => {
   const link = event.target.closest('a[href^="#/evento/"]');
   if (!link || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
   const key = decodeURIComponent(link.hash.split('/')[2] || '');
-  const item = events(state.channels, state.custom).find(c => c.slug === key || c.id === key);
+  const item = events(state.channels, state.custom, Date.now(), { allWeeks: true }).find(c => c.slug === key || c.id === key);
   if (item) { event.preventDefault(); open(item); }
 });
 window.addEventListener('hashchange', () => {

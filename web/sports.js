@@ -38,7 +38,7 @@ export function validateSports(data, imageValid) {
     if (data[kind] !== undefined && !Array.isArray(data[kind])) throw new Error('La lista de ligas o equipos no es válida.');
     sets[kind] = new Set();
     for (const item of data[kind] || []) {
-      if (!item || typeof item.id !== 'string' || !item.id || sets[kind].has(item.id) || typeof item.name !== 'string' || !item.name.trim() || (item.logo && !imageValid(item.logo))) throw new Error('Hay una liga o equipo incompleto o duplicado.');
+      if (!item || typeof item.id !== 'string' || !item.id || sets[kind].has(item.id) || typeof item.name !== 'string' || !item.name.trim() || (item.logo && !imageValid(item.logo)) || (item.background && !imageValid(item.background))) throw new Error('Hay una liga o equipo incompleto o duplicado.');
       sets[kind].add(item.id);
     }
   }

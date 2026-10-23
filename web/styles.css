@@ -936,3 +936,13 @@ label[hidden] { display: none; }
 .device-code-label { display: grid; gap: 8px; font-weight: 700; }
 .device-code-input { max-width: 7.5em; padding: 10px 14px; border: 1px solid #454a52; border-radius: 12px; background: var(--bg, #0b0d10); color: var(--accent, #d6ff00); font: inherit; font-size: 40px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
 .device-done { font-size: 20px; font-weight: 800; color: var(--accent, #d6ff00); }
+/* Events without a cover (imported matches): the league's background with both crests on top. */
+.event-generic { display: flex; align-items: center; justify-content: center; gap: 6%; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
+  background: radial-gradient(circle at 50% 120%, #2c5a3a, #10261a 55%, #0b1410) center / cover no-repeat; }
+.event-generic .crest { width: 30%; height: 62%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); }
+.event-generic .crest-empty { width: 24%; height: auto; aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.14); }
+.event-generic .crest-vs { color: #fff; font-weight: 800; font-size: clamp(11px, 2vw, 20px); letter-spacing: .04em; text-shadow: 0 2px 8px rgba(0,0,0,.8); }
+.event-hero .event-generic { position: absolute; inset: 0; padding-left: 30%; }
+.pick .event-generic .crest-vs { display: none; }
+@media (max-width: 600px) { .event-hero .event-generic { padding-left: 0; padding-bottom: 30%; } }
+.player.pending .player-bottom, .player.pending .player-center, .player.pending .skip-actions, .player.pending #player-refresh, .player.pending #ctl-full, .player.pending #player-viewers { display: none !important; }

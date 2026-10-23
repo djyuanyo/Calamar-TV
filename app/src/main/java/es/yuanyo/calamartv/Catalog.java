@@ -67,7 +67,11 @@ public final class Catalog {
     public final int color;
     public final String category;
     public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId;
+    /** Events without a cover: the league's background and both crests. */
+    public final String background, homeLogo, awayLogo;
     public final boolean highlighted;
+    /** An imported match without a channel yet («Canal por confirmar»): it opens the match alone. */
+    public final boolean pending;
     public final boolean event;
     public final List<String> streams;
     public final boolean geo, own;
@@ -80,6 +84,8 @@ public final class Catalog {
       this.own = own;
       event = o.optBoolean("event");
       cover = o.optString("cover");
+      background = image(o.optString("background")); homeLogo = image(o.optString("homeLogo")); awayLogo = image(o.optString("awayLogo"));
+      pending = o.optBoolean("pending");
       channelId = o.optString("channelId", o.optString("id"));
       leagueId = o.optString("leagueId");
       matchUrl = o.optString("matchUrl"); matchId = o.optString("matchId");
@@ -109,6 +115,10 @@ public final class Catalog {
     public boolean playable() {
       return !streams.isEmpty();
     }
+  }
+
+  private static String image(String url) {
+    return url != null && (url.startsWith("https://") || url.startsWith("data:image/")) ? url : "";
   }
 
   private static String https(String url) {
@@ -158,21 +168,42 @@ public final class Catalog {
 
   /** Resolve event references each time the catalog changes. */
   public static List<Channel> events(List<Channel> channels, JSONObject custom) {
+    return events(channels, custom, System.currentTimeMillis(), false);
+  }
+
+  /**
+   * Events and imported matches. Imported matches show only the Monday-to-Sunday week of their league's
+   * next match (all of them with allWeeks, for links); without a channel they say «Canal por confirmar».
+   */
+  public static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks) {
     List<Channel> out = new ArrayList<>();
-    JSONArray events = custom == null ? null : custom.optJSONArray("events");
-    if (events == null) return out;
-    for (int i = 0; i < events.length(); i++) {
-      JSONObject event = events.optJSONObject(i);
-      if (event == null || (!event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"),System.currentTimeMillis()))) continue;
-      for (Channel target : channels) if (target.id.equals(event.optString("channelId")) && target.playable()) {
-        try {
-          JSONObject card = new JSONObject(event.toString()).put("id", event.getString("id")).put("channelId", target.id).put("meta", SportsCatalog.meta(event, custom)).put("name", event.getString("name"))
-              .put("group", target.name).put("cover", event.getString("cover")).put("event", true)
-              .put("streams", new JSONArray(target.streams));
-          out.add(new Channel(card, true));
-        } catch (JSONException ignored) {}
-        break;
-      }
+    if (custom == null) return out;
+    List<JSONObject> all = new ArrayList<>(), imported = new ArrayList<>();
+    for (JSONObject event : Competitions.all(custom)) {
+      if (!event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"), now)) continue;
+      all.add(event);
+      if (event.optBoolean("imported")) imported.add(event);
+    }
+    Set<String> week = Competitions.shownWeek(imported, now);
+    for (JSONObject event : all) {
+      if (event.optBoolean("imported") && !allWeeks && !week.contains(event.optString("id"))) continue;
+      Channel target = null;
+      for (Channel c : channels) if (c.id.equals(event.optString("channelId")) && c.playable()) { target = c; break; }
+      if (target == null && !event.optBoolean("imported")) continue;
+      try {
+        JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));
+        JSONObject home = SportsCatalog.find(custom.optJSONArray("teams"), event.optString("homeTeamId"));
+        JSONObject away = SportsCatalog.find(custom.optJSONArray("teams"), event.optString("awayTeamId"));
+        String meta = SportsCatalog.meta(event, custom);
+        JSONObject card = new JSONObject(event.toString()).put("id", event.getString("id")).put("name", event.getString("name"))
+            .put("cover", event.optString("cover")).put("event", true)
+            .put("background", league != null ? league.optString("background") : "")
+            .put("homeLogo", home != null ? home.optString("logo") : "").put("awayLogo", away != null ? away.optString("logo") : "");
+        if (target != null) card.put("channelId", target.id).put("meta", meta).put("group", target.name).put("streams", new JSONArray(target.streams));
+        else card.put("channelId", "").put("pending", true).put("group", Competitions.PENDING).put("streams", new JSONArray())
+            .put("meta", meta.isEmpty() ? Competitions.PENDING : meta + " · " + Competitions.PENDING);
+        out.add(new Channel(card, true));
+      } catch (JSONException ignored) {}
     }
     Collections.sort(out, (a,b) -> { int cmp=Long.compare(SportsCatalog.instant(a.startAt), SportsCatalog.instant(b.startAt));return cmp!=0?cmp:a.id.compareTo(b.id); });
     return out;
