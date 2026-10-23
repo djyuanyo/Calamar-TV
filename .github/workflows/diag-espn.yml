@@ -7,9 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "== share link"; curl -s -m 20 -H "Origin: https://djyuanyo.github.io" "https://calamarmenciano.com/calamar-match.php?url=https%3A%2F%2Fshare.google%2FG9VWsVvXQpxwV65YS" | head -c 800; echo
+          echo start
           B=https://site.api.espn.com/apis/site/v2/sports/soccer
-          curl -s -m 30 "$B/esp.1/scoreboard?dates=20260701-20270630&limit=1000" > sb.json
+          curl --compressed -s -m 30 "$B/esp.1/scoreboard?dates=20260701-20270630&limit=1000" > sb.json
           python3 - <<'PY'
           import json
           d=json.load(open('sb.json'))
@@ -27,8 +27,8 @@ jobs:
           dates=sorted(x['date'] for x in ev); print('first', dates[0], 'last', dates[-1])
           print('sample names', [x['name'] for x in ev[:3]])
           PY
-          echo "== teams"; curl -s -m 20 "$B/esp.1/teams" | head -c 1200; echo
-          echo "== core events week"; curl -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2026/types/1/weeks?limit=50" | head -c 800; echo
-          echo "== dropdown"; curl -s -m 20 "https://site.api.espn.com/apis/site/v2/leagues/dropdown?sport=soccer&limit=300" | head -c 1500; echo
+          echo "== teams"; curl --compressed -s -m 20 "$B/esp.1/teams" | head -c 1200; echo
+          echo "== core events week"; curl --compressed -s -m 20 "https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/seasons/2026/types/1/weeks?limit=50" | head -c 800; echo
+          echo "== dropdown"; curl --compressed -s -m 20 "https://site.api.espn.com/apis/site/v2/leagues/dropdown?sport=soccer&limit=300" | head -c 1500; echo
           ID=$(python3 -c "import json;print(json.load(open('sb.json'))['events'][40]['id'])")
-          echo "== summary header $ID"; curl -s -m 20 "$B/all/summary?event=$ID" | python3 -c "import json,sys;d=json.load(sys.stdin);h=d['header'];print({k:h[k] for k in h if k!='competitions'});print(h['competitions'][0].keys())"
+          echo "== summary header $ID"; curl --compressed -s -m 20 "$B/all/summary?event=$ID" | python3 -c "import json,sys;d=json.load(sys.stdin);h=d['header'];print({k:h[k] for k in h if k!='competitions'});print(h['competitions'][0].keys())"
