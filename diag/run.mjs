@@ -17,3 +17,5 @@ boards[0].leagues[0].season.year = 2025;
 const s = parseSeason(boards, 'esp.1'); const r = assignRounds(s.matches), count = new Map();
 for (const v of r.values()) count.set(v, (count.get(v) || 0) + 1);
 console.log('2025-26', s.matches.length, JSON.stringify([...count.entries()].sort((a, b) => a[0] - b[0])));
+const by = new Map(); for (const m of s.matches) { const k = r.get(m.id); (by.get(k) || by.set(k, []).get(k)).push(m.date.slice(5, 10)); }
+console.log([...by.entries()].sort((a, b) => a[0] - b[0]).map(([k, d]) => `${k}:${[...new Set(d)].join('/')}`).join(' '));
