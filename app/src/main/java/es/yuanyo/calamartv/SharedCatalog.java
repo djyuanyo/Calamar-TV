@@ -70,9 +70,9 @@ final class SharedCatalog {
         if (UserChannels.normalize(streams.getString(j)) == null)
           throw new JSONException("Enlace no válido");
     }
+    Set<String> eventIds = new HashSet<>();
     if (data.has("events")) {
       JSONArray events = data.getJSONArray("events");
-      Set<String> eventIds = new HashSet<>();
       for (int i = 0; i < events.length(); i++) {
         JSONObject event = events.getJSONObject(i);
         String id = event.getString("id"), cover = event.getString("cover");
@@ -82,6 +82,7 @@ final class SharedCatalog {
       }
     }
     SportsCatalog.validate(data);
+    Competitions.validate(data, ids, eventIds);
     JSONArray order = data.optJSONArray("groupOrder");
     if (data.has("groupOrder") && (order == null || order.length() > 200))
       throw new JSONException("Orden de categorías no válido");

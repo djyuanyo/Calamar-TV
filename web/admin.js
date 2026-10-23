@@ -6,6 +6,7 @@ import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin } from './library.js';
+import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 
 let saving = false;
 let file = null;
@@ -172,6 +173,8 @@ function ownList(rerender) {
               onclick: async () => {
                 if (saving || !confirm(`¿Eliminar ${c.name} y sus eventos asociados?`)) return;
                 data.events = (data.events || []).filter((e) => e.channelId !== c.id);
+                // Imported matches of that channel go back to «Canal por confirmar».
+                data.fixtures = (data.fixtures || []).map(({ channelId, ...f }) => (channelId && channelId !== c.id ? { ...f, channelId } : f));
                 data.channels = data.channels.filter((x) => x.id !== c.id);
                 data.featured = data.featured.filter((id) => id !== c.id);
                 await guarded(() => saveFile(`admin: eliminar ${c.name}`), rerender);
@@ -393,7 +396,7 @@ export async function render(state) {
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
-        eventForm(eventRoute[1] ? file.data.events.find((e) => e.id === eventRoute[1]) : null, rerender),
+        eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
@@ -418,8 +421,18 @@ async function coverFromFile(file) {
   } finally { bitmap.close(); }
 }
 
+/** An event, or an imported match shown as one (`imported`), by its id. */
+function findEvent(id) {
+  const event = file.data.events.find((e) => e.id === id);
+  if (event) return event;
+  const fixture = (file.data.fixtures || []).find((f) => f.id === id);
+  return fixture ? fixtureEvent(fixture, file.data) : null;
+}
+
 function eventForm(existing, rerender) {
   const data = file.data;
+  // Imported matches may have no cover (the league's background and crests) and no channel yet.
+  const imported = !!existing?.imported;
   const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
   const league = selectField(data.leagues, existing?.leagueId, 'Sin liga');
   const home = selectField(data.teams, existing?.homeTeamId, 'Seleccionar local');
@@ -499,10 +512,10 @@ function eventForm(existing, rerender) {
   const options = el('div', { class: 'channel-options', role: 'group', 'aria-label': 'Elegir canal' });
   const draw = () => {
     const channel = data.channels.find((c) => c.id === selected);
-    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}` : 'Selecciona un canal para reproducir el evento.';
+    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}` : imported ? 'Sin canal: los usuarios verán «Canal por confirmar».' : 'Selecciona un canal para reproducir el evento.';
     const q = query.value.trim().toLocaleLowerCase('es');
     const found = data.channels.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
-    options.replaceChildren(...found.map((c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`)));
+    options.replaceChildren(...(imported ? [el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal (por confirmar)`)] : []), ...found.map((c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`)));
     if (!found.length) options.append(el('p', { class: 'note' }, data.channels.length ? 'Sin resultados.' : 'Crea primero un canal.'));
   };
   query.addEventListener('input', draw); draw();
@@ -510,8 +523,8 @@ function eventForm(existing, rerender) {
     event.preventDefault(); if (saving) return;
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
-      if (!validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
-      if (!data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
+      if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
+      if (!(imported && !selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
       const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const link = matchLink.value.trim();
       if (link) {
@@ -520,12 +533,32 @@ function eventForm(existing, rerender) {
           : existing?.matchUrl === link && existing.startAt === entry.startAt && existing.matchId ? existing : await checkMatch();
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
+      if (imported) {
+        // Only what differs from the import is kept, so the catalog stays small.
+        const raw = data.fixtures.find((f) => f.id === existing.id);
+        const fixture = { ...raw, ...entry };
+        delete fixture.imported;
+        if (!fixture.matchId) throw new Error('Los partidos importados necesitan su enlace del partido.');
+        const bare = { ...fixture }; for (const key of ['name', 'matchUrl', 'matchDate', 'season']) delete bare[key];
+        const plain = fixtureEvent(bare, data);
+        if (fixture.name === plain.name) delete fixture.name;
+        if (fixture.matchUrl === plain.matchUrl) { delete fixture.matchUrl; delete fixture.matchDate; }
+        if (fixture.season === plain.season) delete fixture.season;
+        for (const key of ['cover', 'channelId', 'venue', 'description', 'round']) if (!fixture[key]) delete fixture[key];
+        if (!fixture.featured) delete fixture.featured;
+        if (fixture.status === 'scheduled') delete fixture.status;
+        const fixtures = data.fixtures.map((f) => f.id === existing.id ? fixture : f);
+        validateCatalog({ ...data, fixtures }, { checkSize: false });
+        data.fixtures = fixtures;
+        status.textContent = 'Publicando…'; await saveFile(); location.hash = '#/admin/evento'; rerender();
+        return;
+      }
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
       validateCatalog({ ...data, events: updated }, { checkSize: false });
       data.events = updated;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field('Foto de portada', upload, 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
@@ -537,10 +570,10 @@ function eventList(rerender) {
   const output = el('div', { class: 'list' });
   const slugs = eventSlugs(data);
   const draw = () => {
-    const found = [...data.events].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
+    const found = [...data.events, ...(data.fixtures || []).map((f) => fixtureEvent(f, data))].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
     output.replaceChildren(...found.map(event => el('div', { class: 'item' },
-      el('img', { src: event.cover, alt: '', style: 'object-fit:cover' }),
-      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || 'Canal no disponible')),
+      el('img', { src: event.cover || data.teams.find((t) => t.id === event.homeTeamId)?.logo || undefined, alt: '', style: event.cover ? 'object-fit:cover' : 'object-fit:contain' }),
+      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || (event.imported ? 'Canal por confirmar · Importado' : 'Canal no disponible'))),
       el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath({ ...event, slug: slugs.get(event.id) }) }, 'Abrir evento'),
         el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
           try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink({ ...event, slug: slugs.get(event.id) })); button.textContent = 'Copiado'; }
@@ -549,7 +582,7 @@ function eventList(rerender) {
         el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),
         el('button', { class: 'btn small danger', type: 'button', onclick: () => {
           if (saving || !confirm(`¿Eliminar el evento ${event.name}?`)) return;
-          data.events = data.events.filter(e => e.id !== event.id); guarded(() => saveFile(), rerender);
+          data.events = data.events.filter(e => e.id !== event.id); data.fixtures = (data.fixtures || []).filter(f => f.id !== event.id); guarded(() => saveFile(), rerender);
         } }, 'Eliminar')))));
     if (!found.length) output.append(el('p', { class: 'note' }, 'No hay eventos para esta búsqueda.'));
   };
@@ -577,31 +610,79 @@ function entityPanel(kind, rerender) {
     catch (error) { status.textContent = error.message; }
   } });
   const league = selectField(data.leagues, existing?.leagueId, 'Sin liga principal');
+  // Leagues: the background of the cards of their matches without a cover, with both crests on top.
+  let selectedBackground = existing?.background || '';
+  const background = el('input', { type: 'url', value: selectedBackground.startsWith('https://') ? selectedBackground : '', placeholder: 'https://…/fondo.jpg' });
+  const backgroundPreview = el('img', { class: 'event-preview', alt: 'Fondo', src: selectedBackground || undefined, hidden: !selectedBackground });
+  background.addEventListener('input', () => { selectedBackground = background.value.trim(); backgroundPreview.hidden = !validCover(selectedBackground); if (!backgroundPreview.hidden) backgroundPreview.src = selectedBackground; });
+  const backgroundUpload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
+    try { selectedBackground = await coverFromFile(backgroundUpload.files[0]); background.value = ''; backgroundPreview.src = selectedBackground; backgroundPreview.hidden = false; status.textContent = 'Fondo preparado.'; }
+    catch (error) { status.textContent = error.message; }
+  } });
   const form = el('form', { class: 'form', onsubmit: async e => {
     e.preventDefault(); if (saving) return;
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre.');
-      if (selectedLogo && !validCover(selectedLogo)) throw new Error('Usa una imagen o un enlace HTTPS.');
-      const entry = { ...(existing || {}), id: existing?.id || `${team ? 'equipo' : 'liga'}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name: name.value.trim(), logo: selectedLogo, ...(team ? { leagueId: league.value } : {}) };
+      if ((selectedLogo && !validCover(selectedLogo)) || (!team && selectedBackground && !validCover(selectedBackground))) throw new Error('Usa una imagen o un enlace HTTPS.');
+      const entry = { ...(existing || {}), id: existing?.id || `${team ? 'equipo' : 'liga'}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name: name.value.trim(), logo: selectedLogo, ...(team ? { leagueId: league.value } : { background: selectedBackground }) };
+      if (!team && !entry.background) delete entry.background;
       const updated = existing ? data[kind].map(item => item.id === existing.id ? entry : item) : [...data[kind], entry];
       validateCatalog({ ...data, [kind]: updated }, { checkSize: false }); data[kind] = updated;
       await saveFile(); location.hash = `#/admin/${team ? 'equipos' : 'ligas'}`; rerender();
     } catch (error) { status.textContent = explain(error); }
-  } }, el('h2', {}, `${existing ? 'Editar' : 'Crear'} ${title}`), field(`Nombre de ${title}`, name), field(team ? 'Escudo (opcional)' : 'Logo (opcional)', upload), field('O enlace HTTPS de la imagen', logo), preview, team ? field('Liga principal', league, 'Un equipo puede participar en eventos de otras ligas.') : null,
+  } }, el('h2', {}, `${existing ? 'Editar' : 'Crear'} ${title}`), field(`Nombre de ${title}`, name), field(team ? 'Escudo (opcional)' : 'Logo (opcional)', upload), field('O enlace HTTPS de la imagen', logo), preview, team ? field('Liga principal', league, 'Un equipo puede participar en eventos de otras ligas.') : [field('Fondo de las tarjetas (opcional)', backgroundUpload, 'Portada genérica de los partidos de esta liga: cada tarjeta pone encima los escudos del local y el visitante.'), field('O enlace HTTPS del fondo', background), backgroundPreview],
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: `#/admin/${team ? 'equipos' : 'ligas'}` }, 'Cancelar edición') : null), status);
   const query = el('input', { type: 'search', placeholder: team ? 'Buscar equipo' : 'Buscar liga' }), output = el('div', { class: 'list' });
   const draw = () => output.replaceChildren(...data[kind].filter(item => item.name.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es'))).sort((a,b) => a.name.localeCompare(b.name,'es')).map(item => el('div', { class: 'item' },
     item.logo ? el('img', { src: item.logo, alt: '' }) : null, el('div', { class: 'meta' }, el('b', {}, item.name), team ? el('span', {}, data.leagues.find(l => l.id === item.leagueId)?.name || '') : null),
-    el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: `#/admin/${team ? 'equipos' : 'ligas'}/${encodeURIComponent(item.id)}` }, 'Editar'),
+    el('div', { class: 'actions' }, !team && item.espn ? el('button', { class: 'btn small secondary', type: 'button', title: 'Vuelve a leer de ESPN las fechas y horas de sus partidos', onclick: () => guarded(() => importCompetition(item.espn, rerender), rerender) }, 'Actualizar calendario') : null,
+      el('a', { class: 'btn small secondary', href: `#/admin/${team ? 'equipos' : 'ligas'}/${encodeURIComponent(item.id)}` }, 'Editar'),
     el('button', { class: 'btn small danger', type: 'button', onclick: () => {
       if (saving) return;
-      const used = data.events.some(e => team ? e.homeTeamId === item.id || e.awayTeamId === item.id : e.leagueId === item.id) || (!team && data.teams.some(t => t.leagueId === item.id));
+      const used = [...data.events, ...(data.fixtures || [])].some(e => team ? e.homeTeamId === item.id || e.awayTeamId === item.id : e.leagueId === item.id) || (!team && data.teams.some(t => t.leagueId === item.id));
       if (used) { notice = 'No se puede eliminar: está en uso. Cambia primero sus equipos o eventos asociados.'; rerender(); return; }
       if (!confirm(`¿Eliminar ${item.name}?`)) return;
       data[kind] = data[kind].filter(x => x.id !== item.id); guarded(() => saveFile(), rerender);
     } }, 'Eliminar')))));
   query.addEventListener('input', draw); draw();
-  return [form, el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
+  return [form, team ? null : importPanel(rerender), el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
+}
+
+/** Reads a competition's season from ESPN and publishes its league, teams and upcoming matches. */
+async function importCompetition(slug, rerender, report = (text) => { notice = text; }) {
+  if (saving) throw new Error('Espera a que termine la publicación.');
+  report('Leyendo el calendario de ESPN…');
+  const season = await fetchSeason(slug);
+  const { data: next, league, count } = applySeason(file.data, season);
+  validateCatalog(next);
+  Object.assign(file.data, { leagues: next.leagues, teams: next.teams, fixtures: next.fixtures });
+  await saveFile();
+  notice = `${league.name} ${league.season || ''}: ${count} partidos por jugar importados con su enlace de estadísticas. Elige el canal de cada uno en Eventos (los que no tengan canal salen como «Canal por confirmar»).`.replace('  ', ' ');
+  rerender();
+}
+
+function importPanel(rerender) {
+  const link = el('input', { type: 'url', placeholder: 'https://share.google/… de la competición' });
+  const pick = selectField(COMPETITIONS.map((c) => ({ id: c.slug, name: c.name })), '', 'Reconocer por el enlace');
+  const status = el('p', { class: 'note', role: 'status' });
+  return el('form', { class: 'form', onsubmit: async (e) => {
+    e.preventDefault(); if (saving) return;
+    status.className = 'note';
+    try {
+      let slug = pick.value;
+      if (!slug) {
+        if (!link.value.trim()) throw new Error('Pega el enlace de Google de la competición o elígela en la lista.');
+        status.textContent = 'Abriendo el enlace…';
+        const found = await competitionFromLink(link.value.trim());
+        if (!found.competition) throw new Error(`No reconozco la competición «${found.query}». Elígela en la lista.`);
+        slug = found.competition.slug;
+      }
+      await importCompetition(slug, rerender, (text) => { status.textContent = text; });
+    } catch (error) { status.textContent = explain(error); status.className = 'error'; }
+  } }, el('h2', {}, 'Importar competición'),
+  el('p', { class: 'note' }, 'Crea la liga, sus equipos con escudo y todas sus jornadas por jugar, cada partido con su enlace de Google para las estadísticas. Después, en Eventos, eliges el canal de cada partido. Pon un fondo a la liga para las tarjetas.'),
+  field('Enlace de Google de la competición', link, 'Por ejemplo, busca «LaLiga» en Google, pulsa Compartir y pega el enlace.'), field('O elige la competición', pick),
+  el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Importar')), status);
 }
 
 // ---- Statistics ---------------------------------------------------------------------------------

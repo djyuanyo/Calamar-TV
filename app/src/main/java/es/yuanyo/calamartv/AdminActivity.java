@@ -178,6 +178,10 @@ public class AdminActivity extends Activity {
                           if (linked != null) for (int e = 0; e < linked.length(); e++)
                             if (!id.equals(linked.getJSONObject(e).getString("channelId"))) remaining.put(linked.get(e));
                           next.put("events", remaining);
+                          // Imported matches of that channel go back to «Canal por confirmar».
+                          JSONArray fixtures = next.optJSONArray("fixtures");
+                          if (fixtures != null) for (int f = 0; f < fixtures.length(); f++)
+                            if (id.equals(fixtures.getJSONObject(f).optString("channelId"))) fixtures.getJSONObject(f).remove("channelId");
                           next.put("channels", withoutChannel(next.getJSONArray("channels"), id));
                           next.put("featured", withoutId(next.getJSONArray("featured"), id));
                           next.put("hidden", withoutId(next.getJSONArray("hidden"), id));
@@ -548,7 +552,7 @@ public class AdminActivity extends Activity {
         addButton("Editar "+item.optString("name"),()->editEntity(kind,item));
         addButton("Eliminar "+item.optString("name"),()->{
           String id=item.optString("id");boolean used=false;JSONArray events=catalog.optJSONArray("events"),teams=catalog.optJSONArray("teams");
-          if(events!=null)for(int e=0;e<events.length();e++){JSONObject event=events.optJSONObject(e);if(event!=null&&(team?(id.equals(event.optString("homeTeamId"))||id.equals(event.optString("awayTeamId"))):id.equals(event.optString("leagueId"))))used=true;}
+          for(JSONArray list:new JSONArray[]{events,catalog.optJSONArray("fixtures")})if(list!=null)for(int e=0;e<list.length();e++){JSONObject event=list.optJSONObject(e);if(event!=null&&(team?(id.equals(event.optString("homeTeamId"))||id.equals(event.optString("awayTeamId"))):id.equals(event.optString("leagueId"))))used=true;}
           if(!team&&teams!=null)for(int t=0;t<teams.length();t++)if(id.equals(teams.optJSONObject(t).optString("leagueId")))used=true;
           if(used){status.setText("No se puede eliminar: está en uso. Cambia primero los equipos o eventos asociados.");return;}
           new AlertDialog.Builder(this).setTitle("¿Eliminar "+item.optString("name")+"?").setNegativeButton("Cancelar",null).setPositiveButton("Eliminar",(d,w)->{

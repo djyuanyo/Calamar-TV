@@ -68,15 +68,16 @@ final class SportsCatalog {
     return slug.isEmpty() ? "canal" : slug;
   }
 
-  /** Link name of each event, as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3… */
+  /** Link name of each event and imported match, as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3… */
   static Map<String, String> slugs(JSONObject data) {
-    List<JSONObject> list = new ArrayList<>();
-    JSONArray events = data == null ? null : data.optJSONArray("events");
-    if (events != null) for (int i = 0; i < events.length(); i++) if (events.optJSONObject(i) != null) list.add(events.optJSONObject(i));
-    Collections.sort(list, (a, b) -> {
+    List<JSONObject> list = new ArrayList<>(), imported = new ArrayList<>();
+    for (JSONObject e : Competitions.all(data)) (e.optBoolean("imported") ? imported : list).add(e);
+    Comparator<JSONObject> order = (a, b) -> {
       int cmp = Long.compare(instant(a.optString("startAt")), instant(b.optString("startAt")));
       return cmp != 0 ? cmp : a.optString("id").compareTo(b.optString("id"));
-    });
+    };
+    // Imported matches come after the events, so they never change an event's link.
+    Collections.sort(list, order); Collections.sort(imported, order); list.addAll(imported);
     Map<String, String> out = new LinkedHashMap<>();
     Set<String> used = new HashSet<>();
     for (JSONObject event : list) {
@@ -97,7 +98,7 @@ final class SportsCatalog {
       Set<String> ids=new HashSet<>(); sets.put(kind,ids);
       for(int i=0;i<list.length();i++) {
         JSONObject item=list.getJSONObject(i); String id=item.getString("id");
-        if(id.isEmpty() || !ids.add(id) || item.getString("name").trim().isEmpty() || (!item.optString("logo").isEmpty() && !SharedCatalog.validCover(item.getString("logo")))) throw new JSONException("Liga o equipo incompleto o duplicado");
+        if(id.isEmpty() || !ids.add(id) || item.getString("name").trim().isEmpty() || (!item.optString("logo").isEmpty() && !SharedCatalog.validCover(item.getString("logo"))) || (!item.optString("background").isEmpty() && !SharedCatalog.validCover(item.getString("background")))) throw new JSONException("Liga o equipo incompleto o duplicado");
       }
     }
     JSONArray teams=data.optJSONArray("teams");
