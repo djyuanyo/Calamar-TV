@@ -296,6 +296,7 @@ final class Library {
   }
 
   static final int CREDITS_DEFAULT = 30;
+  static final String LULU_ENDPOINT = "https://calamarmenciano.com/calamar-lulu.php";
 
   /**
    * {intro start, intro end, credits length, credits start, credits typed} in seconds for an episode of that
@@ -362,6 +363,15 @@ final class Library {
       } catch (Exception e) {
         return null;
       }
+    }
+
+    /**
+     * The same video through the hosting (calamar-lulu.php), as the web plays it: used when LuluStream
+     * does not give this device its player page. Null when the link is not LuluStream.
+     */
+    static String hosting(String address) {
+      String embed = embed(address);
+      return embed == null ? null : LULU_ENDPOINT + "?code=" + embed.substring(embed.lastIndexOf('/') + 1) + "&hls=1";
     }
 
     static boolean allowed(String address) {
