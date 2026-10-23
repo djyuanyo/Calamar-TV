@@ -8,9 +8,7 @@ jobs:
     steps:
       - run: |
           H=https://calamarmenciano.com/calamar-lulu.php
-          for C in duj5ak4x5waa 1atkdtgqs4te; do
-            echo "::add-mask::$C"
-            echo "== vídeo"
-            curl -s -m 30 -H "Origin: https://djyuanyo.github.io" "$H?code=$C&debug=1" | python3 -c "import json,sys;d=json.load(sys.stdin);print('bytes',d.get('bytes'),'titulo',d.get('titulo'));print('enlaces',d.get('enlaces'));print('sources',(d.get('sources') or '')[:500])" || true
-            curl -s -m 30 -H "Origin: https://djyuanyo.github.io" -o /tmp/m -w "hls HTTP %{http_code}\n" "$H?code=$C&hls=1"; head -c 200 /tmp/m | sed -E 's/seg=[^&"]+/seg=…/g'; echo
-          done
+          C=bq4heljir3hb
+          echo "::add-mask::$C"
+          curl -s -m 30 -H "Origin: https://djyuanyo.github.io" "$H?code=$C&debug=1" | python3 -c "import json,sys;d=json.load(sys.stdin);print('bytes',d.get('bytes'),'titulo',d.get('titulo'));print('sources',(d.get('sources') or '')[:200])" || true
+          curl -s -m 30 -H "Origin: https://djyuanyo.github.io" -o /tmp/m -w "hls HTTP %{http_code}\n" "$H?code=$C&hls=1"; head -c 120 /tmp/m; echo
