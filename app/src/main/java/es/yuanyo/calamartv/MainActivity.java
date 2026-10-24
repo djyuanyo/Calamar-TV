@@ -953,8 +953,9 @@ public class MainActivity extends Activity {
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events open with the match under the video on phones; without a match link, with the event's own data.
     if(c.event)intent.putExtra("event_info",eventInfo(c).toString());
-    // Events can be shared from the player with their preview link (cover and name in WhatsApp).
+    // Events and channels are shared from the player with their preview link (their card in WhatsApp).
     if (c.event) intent.putExtra("share_url", SportsCatalog.link(SportsCatalog.slugs(custom).get(c.id)));
+    else { String slug = Catalog.slugs(channels).get(c.id); if (slug != null) intent.putExtra("share_url", SportsCatalog.WEB + "canal/" + slug + "/"); }
     startActivity(intent);
   }
 

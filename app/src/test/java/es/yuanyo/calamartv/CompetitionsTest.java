@@ -59,6 +59,14 @@ public class CompetitionsTest {
     assertEquals("real-madrid-vs-barcelona-2", slugs.get("partido-301"));
   }
 
+  @Test public void channelLinksFollowTheWebSlugs() throws Exception {
+    JSONObject data = catalog();
+    data.getJSONArray("channels").put(new JSONObject("{\"id\":\"dazn2\",\"name\":\"DAZN\",\"streams\":[\"https://example.com/2.m3u8\"]}"));
+    Map<String, String> slugs = Catalog.slugs(Catalog.merge(null, data));
+    assertEquals("dazn", slugs.get("dazn"));
+    assertEquals("dazn-2", slugs.get("dazn2"));
+  }
+
   @Test public void brokenImportedMatchesAreRejected() throws Exception {
     for (String change : new String[] {"{\"channelId\":\"nope\"}", "{\"homeTeamId\":\"nope\"}", "{\"startAt\":\"mañana\"}", "{\"matchId\":\"\"}", "{\"cover\":\"http://x.example/c.jpg\"}", "{\"awayTeamId\":\"rm\"}"}) {
       JSONObject data = catalog(), fixture = data.getJSONArray("fixtures").getJSONObject(0), patch = new JSONObject(change);

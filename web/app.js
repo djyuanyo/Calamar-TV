@@ -1,7 +1,7 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
 import { merge, events, catalogEvents, PENDING, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, eventShareLink, EVENT_STATES } from './sports.js';
+import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -672,7 +672,8 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
-  shareButton.hidden = !c.event;
+  // Channels and events are shared through their preview page; films and episodes are not.
+  shareButton.hidden = !!c.vod;
   // An imported match without a channel has no video: only its match page and the notice.
   player.classList.toggle('pending', !!c.pending);
   // Films and episodes have no «Refrescar»: it is for live channels and events.
@@ -838,11 +839,11 @@ document.getElementById('player-refresh').addEventListener('click', () => {
   if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl)));
 });
 document.getElementById('player-close').addEventListener('click', closePlayer);
-// Events are shared through their preview page, so WhatsApp and others show the cover and the name.
+// Events and channels are shared through their preview page, so WhatsApp and others show their card.
 const shareButton = document.getElementById('player-share');
 shareButton.addEventListener('click', async () => {
-  if (!current?.event) return;
-  const url = eventShareLink(current);
+  if (!current || current.vod) return;
+  const url = current.event ? eventShareLink(current) : channelShareLink(current);
   try {
     if (navigator.share) await navigator.share({ title: current.name, url });
     else { await navigator.clipboard.writeText(url); shareButton.textContent = 'Enlace copiado'; setTimeout(() => { shareButton.textContent = 'Compartir'; }, 2500); }
