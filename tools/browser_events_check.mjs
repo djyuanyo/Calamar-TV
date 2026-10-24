@@ -22,7 +22,7 @@ export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(chan
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
 export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
-export const watchCatalog = (fallback, next) => { next({ data: structuredClone(catalog) }); return () => {}; };
+export const watchCatalog = (fallback, next) => { const send = () => next({ data: structuredClone(catalog) }); if (sessionStorage.getItem('slowCatalog')) setTimeout(send, 1500); else send(); return () => {}; };
 const present = new Map();
 window.__visits = [];
 export const beat = async (session, target) => { present.set(session, target); };
@@ -669,6 +669,13 @@ try {
   await page.goto(base + '/#/canales'); await page.goto(base + '/#/');
   await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).waitFor();
   assert.equal(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).count(), 0);
+  // A shared link opened while the live catalog is still arriving waits for it instead of saying it does not exist.
+  await page.evaluate(() => sessionStorage.setItem('slowCatalog', '1'));
+  await page.goto(base + '/?slow=1#/evento/sevilla-vs-real-madrid');
+  await page.getByText('Abriendo el evento…').waitFor();
+  assert.equal(await page.getByText(/No existe el evento/).count(), 0);
+  await page.locator('#player-title').getByText('Sevilla vs Real Madrid', { exact: true }).waitFor();
+  await page.evaluate(() => sessionStorage.removeItem('slowCatalog'));
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

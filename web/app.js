@@ -19,6 +19,10 @@ let sharedStarted = false;
 let firebase = null;
 const shared = () => (firebase ||= import('./firebase.js'));
 let sharedValue = null;
+// True once the live catalog arrived, failed or took too long: until then a link to an event or channel
+// missing from the bundled copy is still loading, not missing.
+let sharedSettled = false;
+const settleShared = () => { if (sharedSettled) return; sharedSettled = true; if (!location.hash.startsWith('#/admin')) route(); };
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
 export async function fetchJson(path) {
@@ -35,12 +39,14 @@ export async function loadCatalog() {
   if (!sharedStarted) {
     sharedStarted = true;
     // Keep the bundled catalog usable even if Firebase cannot be reached.
+    setTimeout(settleShared, 12000);
     shared().then(({ watchCatalog }) => watchCatalog(custom, ({ data }) => {
       sharedValue = data;
+      sharedSettled = true;
       state.custom = data;
       state.channels = merge(state.tdt, data);
       if (!location.hash.startsWith('#/admin')) route();
-    }, () => {})).catch(() => {});
+    }, settleShared)).catch(settleShared);
   }
   return state;
 }
@@ -960,7 +966,9 @@ async function route() {
         ? [el('p', { class: 'status' }, `${c.name} solo tiene emisión en su web oficial: `, el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'abrir su web')), ...home()]
         : c
           ? home()
-          : [el('p', { class: 'error' }, `No existe ${page === 'evento' ? 'el evento' : 'el canal'} «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
+          : !sharedSettled
+            ? [el('p', { class: 'status loading-link' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), `Abriendo ${page === 'evento' ? 'el evento' : 'el canal'}…`)]
+            : [el('p', { class: 'error' }, `No existe ${page === 'evento' ? 'el evento' : 'el canal'} «${arg || ''}». Si es nuevo, espera unos segundos y recarga.`), ...home()]),
     );
     // A catalog refresh rebuilds the channel objects; compare ids so playback is not restarted.
     if (c && (c.playable || c.pending) && (player.hidden || !current || current.id !== c.id)) open(c, true);
