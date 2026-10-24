@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Publishes a link preview page for every event: SITE/evento/<slug>/index.html.
+"""Publishes a link preview page for every event and channel: SITE/evento/<slug>/ and SITE/canal/<slug>/.
 
 WhatsApp, Telegram and the rest read the HTML without running JavaScript and never receive the
 "#/evento/…" part of an address, so each event gets a real page on the public web with its cover and
-name as Open Graph tags; the page then opens the event. The slug is the one the web uses
-(eventSlugs() in web/catalog.js). The catalog comes from the public Firestore document, or from
-data/custom.json when Firestore does not answer.
+name as Open Graph tags; the page then opens it. Each page carries its own preview image, drawn like the
+card (tools/share_images.py): the cover, or for imported matches the league's background with both
+crests and the league's logo, or for channels their logo on their category's colour. The slugs are the
+ones the web uses (eventSlugs() and merge() in web/catalog.js). The catalog comes from the public
+Firestore document, or from data/custom.json when Firestore does not answer.
 
-Usage: event_pages.py SITE_DIR BASE_URL   e.g. event_pages.py _site https://djyuanyo.github.io/Calamar-TV/
+Usage: event_pages.py SITE_DIR BASE_URL [CACHE_DIR]   e.g. event_pages.py _site https://djyuanyo.github.io/Calamar-TV/ .share-cache
 """
 import base64
 import datetime
@@ -18,6 +20,7 @@ import pathlib
 import re
 import sys
 import unicodedata
+import urllib.parse
 import urllib.request
 import zoneinfo
 
@@ -41,9 +44,24 @@ def instant(value):
         return math.inf
 
 
+def fixture_event(fixture, catalog):
+    """Same as fixtureEvent() in web/competitions.js: an imported match named after its teams."""
+    team = {t.get('id'): t for t in catalog.get('teams') or []}
+    home = (team.get(fixture.get('homeTeamId')) or {}).get('name') or 'Local'
+    away = (team.get(fixture.get('awayTeamId')) or {}).get('name') or 'Visitante'
+    return {**fixture, 'name': fixture.get('name') or f'{home} vs {away}', 'cover': fixture.get('cover') or '', 'imported': True}
+
+
+def all_events(catalog):
+    return list(catalog.get('events') or []) + [fixture_event(f, catalog) for f in catalog.get('fixtures') or []]
+
+
 def event_slugs(catalog):
-    """Same as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3…"""
-    events = sorted(catalog.get('events') or [], key=lambda e: (instant(e.get('startAt') or ''), str(e.get('id'))))
+    """Same as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3…; imported
+    matches after the events, so they never change an event's link."""
+    order = lambda e: (instant(e.get('startAt') or ''), str(e.get('id')))
+    every = all_events(catalog)
+    events = sorted([e for e in every if not e.get('imported')], key=order) + sorted([e for e in every if e.get('imported')], key=order)
     out, used = {}, set()
     for event in events:
         base = slug = slugify(event.get('name', ''))
@@ -52,6 +70,58 @@ def event_slugs(catalog):
             slug, n = f'{base}-{n}', n + 1
         used.add(slug)
         out[event['id']] = slug
+    return out
+
+
+OWN_GROUP = 'Calamar TV'
+CATEGORY_COLORS = {OWN_GROUP: '#5a6b12', 'Generalistas': '#1f4f8f', 'Deportes': '#1d7a40', 'Informativos': '#8f2c2c',
+                   'Infantiles': '#b35c14', 'Música': '#6a2f8f', 'Autonómicos': '#1c7373'}
+EXTRA_COLORS = ['#7a5418', '#2d5a8a', '#8a2d63', '#4a6b2a', '#5c3d8a', '#8a4a2d', '#2d7a6b', '#6b6b2d']
+
+
+def default_color(name):
+    """Same as defaultColor() in web/catalog.js."""
+    if name in CATEGORY_COLORS:
+        return CATEGORY_COLORS[name]
+    h = 0
+    for ch in str(name):
+        h = (h * 31 + ord(ch)) % 360
+    return EXTRA_COLORS[h % len(EXTRA_COLORS)]
+
+
+def _stream(value):
+    try:
+        u = urllib.parse.urlsplit(str(value).strip())
+        return u.scheme in ('http', 'https') and bool(u.hostname)
+    except ValueError:
+        return False
+
+
+def channels(tdt, catalog):
+    """Same channels, order and slugs as merge() in web/catalog.js: the administrator's, then TDT."""
+    hidden, out, ids = set(catalog.get('hidden') or []), [], set()
+    for own, source in ((True, catalog.get('channels') or []), (False, (tdt or {}).get('channels') or [])):
+        for c in source:
+            if not isinstance(c, dict) or (own and c.get('hidden')):
+                continue
+            cid, playable = str(c.get('id') or ''), any(_stream(s) for s in c.get('streams') or [])
+            web = str(c.get('web') or '').startswith('https://')
+            if not cid or cid in ids or (not own and cid in hidden) or not (playable if own else playable or web):
+                continue
+            ids.add(cid)
+            out.append({**c, 'own': own, 'group': str(c.get('group') or '').strip() or (OWN_GROUP if own else 'Otros')})
+    categories = catalog.get('categories') if isinstance(catalog.get('categories'), list) else None
+    used = set()
+    for c in out:
+        found = next((k for k in categories or [] if k.get('id') == c['group']), None) or next((k for k in categories or [] if k.get('name') == c['group']), None)
+        c['shown'] = found['name'] if found else c['group']
+        c['color'] = found['color'] if found else default_color(c['group'])
+        base = slug = slugify(c.get('name') or 'Canal')
+        n = 2
+        while slug in used:
+            slug, n = f'{base}-{n}', n + 1
+        used.add(slug)
+        c['slug'] = slug
     return out
 
 
@@ -65,16 +135,16 @@ def summary(event, catalog):
     return ' · '.join(parts)
 
 
-def page(event, catalog, slug, base, image):
-    target = f'{base}#/evento/{slug}'
-    title, text = event.get('name') or 'Calamar TV', summary(event, catalog)
+def page(event, catalog, slug, base, image, kind='evento', text=None):
+    target = f'{base}#/{kind}/{slug}'
+    title, text = event.get('name') or 'Calamar TV', summary(event, catalog) if text is None else text
     e = lambda value: html.escape(str(value), quote=True)
     tags = [
         '<meta property="og:type" content="website">',
         '<meta property="og:site_name" content="Calamar TV">',
         f'<meta property="og:title" content="{e(title)}">',
         f'<meta property="og:description" content="{e(text)}">',
-        f'<meta property="og:url" content="{e(base)}evento/{e(slug)}/">',
+        f'<meta property="og:url" content="{e(base)}{kind}/{e(slug)}/">',
         f'<meta name="twitter:card" content="{"summary_large_image" if image else "summary"}">',
         f'<meta name="twitter:title" content="{e(title)}">',
         f'<meta name="twitter:description" content="{e(text)}">',
@@ -82,6 +152,9 @@ def page(event, catalog, slug, base, image):
     if image:
         tags += [f'<meta property="og:image" content="{e(image)}">', f'<meta property="og:image:alt" content="{e(title)}">',
                  f'<meta name="twitter:image" content="{e(image)}">']
+        if image.endswith('/vista.jpg'):  # Drawn here: its size is known, so previews show it at once.
+            tags += ['<meta property="og:image:type" content="image/jpeg">', '<meta property="og:image:width" content="1200">',
+                     '<meta property="og:image:height" content="630">']
     script_target = json.dumps(target).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     return ('<!doctype html>\n<html lang="es">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
@@ -124,19 +197,45 @@ def download_cover(url):
     return data, IMAGE_TYPES[kind]
 
 
-def publish(site, base, catalog, download=download_cover):
+def event_preview(event, catalog, images):
+    """The card of an event as a JPEG: its cover, or the league's background with both crests."""
+    import share_images
+    cover = images.image(event.get('cover')) if event.get('cover') else None
+    if cover:
+        return share_images.jpeg(share_images.cover_crop(cover))
+    find = lambda group, key: next((x for x in catalog.get(group) or [] if x.get('id') == event.get(key)), {})
+    league = find('leagues', 'leagueId')
+    pick = lambda value: images.image(value) if value else None
+    return share_images.jpeg(share_images.match_card(pick(league.get('background')), pick(find('teams', 'homeTeamId').get('logo')),
+                                                     pick(find('teams', 'awayTeamId').get('logo')), pick(league.get('logo'))))
+
+
+def publish(site, base, catalog, download=download_cover, images=None, tdt=None):
+    """Writes the pages. With `images` (share_images.Images) every page gets its card drawn as vista.jpg;
+    without it, events use their cover as it is."""
     site, base = pathlib.Path(site), base if base.endswith('/') else base + '/'
     slugs = event_slugs(catalog)
-    for event in catalog.get('events') or []:
+    if images:
+        images.prefetch([e.get('cover') for e in all_events(catalog)] + [x.get(k) for x in catalog.get('leagues') or [] for k in ('logo', 'background')]
+                        + [t.get('logo') for t in catalog.get('teams') or []])
+    for event in all_events(catalog):
         slug = slugs[event['id']]
         folder = site / 'evento' / slug
         folder.mkdir(parents=True, exist_ok=True)
         cover, image = str(event.get('cover') or ''), ''
-        copy = download(cover) if cover.startswith('https://') and not cover.startswith(OWN_IMAGES) else None
+        if images:
+            try:
+                (folder / 'vista.jpg').write_bytes(event_preview(event, catalog, images))
+                image = f'{base}evento/{slug}/vista.jpg'
+            except Exception as error:
+                print(f'::warning::No se pudo dibujar la vista previa de {event.get("name")} ({error})')
+        copy = download(cover) if not image and cover.startswith('https://') and not cover.startswith(OWN_IMAGES) else None
         if copy:
             data, extension = copy
             (folder / f'portada.{extension}').write_bytes(data)
             image = f'{base}evento/{slug}/portada.{extension}'
+        elif image:
+            pass
         elif cover.startswith('https://'):
             image = cover
         elif COVER.match(cover):
@@ -145,9 +244,45 @@ def publish(site, base, catalog, download=download_cover):
             (folder / name).write_bytes(base64.b64decode(data))
             image = f'{base}evento/{slug}/{name}'
         (folder / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+    if tdt is not None:
+        publish_channels(site, base, catalog, tdt, images)
     return slugs
 
 
+def publish_channels(site, base, catalog, tdt, images=None):
+    """canal/<slug>/ for every channel, with its logo on its category's colour."""
+    found = channels(tdt, catalog)
+    if images:
+        import share_images
+        images.prefetch([c.get('logo') for c in found])
+    for c in found:
+        folder = site / 'canal' / c['slug']
+        folder.mkdir(parents=True, exist_ok=True)
+        image = ''
+        if images:
+            try:
+                logo = images.image(c.get('logo')) if str(c.get('logo') or '').startswith('https://') else None
+                (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.channel_card(c['color'], logo, c.get('name'))))
+                image = f'{base}canal/{c["slug"]}/vista.jpg'
+            except Exception as error:
+                print(f'::warning::No se pudo dibujar la vista previa de {c.get("name")} ({error})')
+        elif str(c.get('logo') or '').startswith('https://'):
+            image = c['logo']
+        text = ' · '.join(x for x in (c['shown'], c.get('region'), 'En directo en Calamar TV') if x)
+        (folder / 'index.html').write_text(page(c, catalog, c['slug'], base, image, kind='canal', text=text), encoding='utf-8')
+    return found
+
+
 if __name__ == '__main__':
-    found = publish(sys.argv[1], sys.argv[2], read_catalog())
+    site, base = sys.argv[1], sys.argv[2]
+    sys.path.insert(0, str(ROOT / 'tools'))
+    try:
+        import share_images
+        images = share_images.Images(sys.argv[3] if len(sys.argv) > 3 else None)
+    except ImportError as error:  # Without Pillow the pages still work, with the covers as they are.
+        print(f'::warning::Sin Pillow no se dibujan las vistas previas ({error})')
+        images = None
+    tdt_file = pathlib.Path(site) / 'data/tdt.json'
+    tdt = json.loads(tdt_file.read_text(encoding='utf-8')) if tdt_file.exists() else {'channels': []}
+    found = publish(site, base, read_catalog(), images=images, tdt=tdt)
     print(f'Páginas de vista previa de eventos: {len(found)}')

@@ -90,7 +90,8 @@ final class SportsCatalog {
   }
 
   /** Shared link: the public web publishes evento/<slug>/ with the cover and name for WhatsApp. */
-  static String link(String slug) { return "https://djyuanyo.github.io/Calamar-TV/evento/" + slug + "/"; }
+  static final String WEB = "https://djyuanyo.github.io/Calamar-TV/";
+  static String link(String slug) { return WEB + "evento/" + slug + "/"; }
   static void validate(JSONObject data) throws JSONException {
     Map<String, Set<String>> sets = new HashMap<>();
     for (String kind : new String[]{"leagues","teams"}) {

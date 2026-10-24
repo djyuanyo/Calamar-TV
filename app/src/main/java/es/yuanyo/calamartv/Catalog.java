@@ -151,6 +151,19 @@ public final class Catalog {
     return out;
   }
 
+  /** Link name of each channel, as merge() in web/catalog.js: in catalog order, repeated names get -2, -3… */
+  public static Map<String, String> slugs(List<Channel> channels) {
+    Map<String, String> out = new HashMap<>();
+    Set<String> used = new HashSet<>();
+    for (Channel c : channels) {
+      String base = SportsCatalog.slugify(c.name), slug = base;
+      for (int n = 2; used.contains(slug); n++) slug = base + "-" + n;
+      used.add(slug);
+      out.put(c.id, slug);
+    }
+    return out;
+  }
+
   /** Featured channels in the administrator's order, falling back to the first playable ones. */
   public static List<Channel> featured(List<Channel> channels, JSONObject custom, int limit) {
     List<Channel> out = new ArrayList<>();
