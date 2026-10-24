@@ -948,3 +948,6 @@ label[hidden] { display: none; }
 .pick .event-generic .crest-vs, .pick .event-generic .crest-league { display: none; }
 @media (max-width: 600px) { .event-hero .event-generic { padding-left: 0; padding-bottom: 30%; } }
 .player.pending .player-bottom, .player.pending .player-center, .player.pending .skip-actions, .player.pending #player-refresh, .player.pending #ctl-full, .player.pending #player-viewers { display: none !important; }
+/* A shared link while the live catalog arrives. */
+.loading-link { display: flex; align-items: center; gap: 12px; }
+.loading-link .spinner { display: block; position: static; width: 22px; height: 22px; margin: 0; border-width: 3px; }
