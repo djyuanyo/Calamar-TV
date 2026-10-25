@@ -1,0 +1,773 @@
+[
+ {
+  "name": "Liga Campeones",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "thumb.wikimedia.org",
+  "path_end": "s_por_Movistar_Plus%2B_2023_Logo.svg.png",
+  "plain": [
+   200,
+   "image/webp",
+   19030,
+   false
+  ],
+  "ref": [
+   200,
+   "image/webp",
+   19030,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 2",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "static.wikia.nocookie.net",
+  "path_end": "ovistar_Plus%2B_2023.png/revision/latest",
+  "plain": [
+   403,
+   "text/html; charset=utf-8"
+  ],
+  "ref": [
+   404,
+   "image/jpeg"
+  ]
+ },
+ {
+  "name": "Liga Campeones 3",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "static.wikia.nocookie.net",
+  "path_end": "ovistar_Plus%2B_2023.png/revision/latest",
+  "plain": [
+   403,
+   "text/html; charset=utf-8"
+  ],
+  "ref": [
+   404,
+   "image/jpeg"
+  ]
+ },
+ {
+  "name": "Movistar Plus",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "/logo/countries/spain/movistar/MPLUS.png",
+  "plain": [
+   200,
+   "image/png",
+   2492,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2492,
+   false
+  ]
+ },
+ {
+  "name": "DAZN LaLiga",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "countries/spain/movistar/DAZN_LALIGA.png",
+  "plain": [
+   200,
+   "image/png",
+   19381,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   19381,
+   false
+  ]
+ },
+ {
+  "name": "Movistar LaLiga",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "tries/spain/movistar/M_LALIGA_TV_NEW.png",
+  "plain": [
+   200,
+   "image/png",
+   3010,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   3010,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 4",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_4.png",
+  "plain": [
+   200,
+   "image/png",
+   4590,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4590,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 5",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_5.png",
+  "plain": [
+   200,
+   "image/png",
+   4498,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4498,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 6",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_6.png",
+  "plain": [
+   200,
+   "image/png",
+   4635,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4635,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 7",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_7.png",
+  "plain": [
+   200,
+   "image/png",
+   4578,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4578,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 8",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_8.png",
+  "plain": [
+   200,
+   "image/png",
+   4626,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4626,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 9",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/M_Liga_de_Campeones_9.png",
+  "plain": [
+   200,
+   "image/png",
+   4614,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4614,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 10",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "pain/movistar/M_Liga_de_Campeones_10.png",
+  "plain": [
+   200,
+   "image/png",
+   4789,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4789,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 11",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "pain/movistar/M_Liga_de_Campeones_11.png",
+  "plain": [
+   200,
+   "image/png",
+   4541,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4541,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 12",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "pain/movistar/M_Liga_de_Campeones_12.png",
+  "plain": [
+   200,
+   "image/png",
+   4801,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4801,
+   false
+  ]
+ },
+ {
+  "name": "Liga Campeones 13",
+  "group": "Liga Campeones",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "pain/movistar/M_Liga_de_Campeones_13.png",
+  "plain": [
+   200,
+   "image/png",
+   4842,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4842,
+   false
+  ]
+ },
+ {
+  "name": "Movistar LaLiga 2",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ies/spain/movistar/M_LALIGA_TV_2_NEW.png",
+  "plain": [
+   200,
+   "image/png",
+   3046,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   3046,
+   false
+  ]
+ },
+ {
+  "name": "Movistar LaLiga 3",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ies/spain/movistar/M_LALIGA_TV_3_NEW.png",
+  "plain": [
+   200,
+   "image/png",
+   3044,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   3044,
+   false
+  ]
+ },
+ {
+  "name": "Movistar LaLiga4",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ies/spain/movistar/M_LALIGA_TV_4_NEW.png",
+  "plain": [
+   200,
+   "image/png",
+   2940,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2940,
+   false
+  ]
+ },
+ {
+  "name": "LaLiga TV Bar",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "countries/spain/movistar/laligabares.png",
+  "plain": [
+   200,
+   "image/png",
+   107552,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   107552,
+   false
+  ]
+ },
+ {
+  "name": "LaLiga HYPERMOTION",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "spain/movistar/LALIGA_TV_HYPERMOTION.png",
+  "plain": [
+   200,
+   "image/png",
+   4176,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4176,
+   false
+  ]
+ },
+ {
+  "name": "LaLiga HYPERMOTION 2",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ain/movistar/LALIGA_TV_HYPERMOTION_2.png",
+  "plain": [
+   200,
+   "image/png",
+   4449,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4449,
+   false
+  ]
+ },
+ {
+  "name": "LaLiga HYPERMOTION 3",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ain/movistar/LALIGA_TV_HYPERMOTION_3.png",
+  "plain": [
+   200,
+   "image/png",
+   4445,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4445,
+   false
+  ]
+ },
+ {
+  "name": "DAZN LaLiga 2",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "untries/spain/movistar/DAZN_LALIGA_2.png",
+  "plain": [
+   200,
+   "image/png",
+   19448,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   19448,
+   false
+  ]
+ },
+ {
+  "name": "OneToro",
+  "group": "Deportes",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "go/countries/spain/movistar/one_toro.png",
+  "plain": [
+   200,
+   "image/png",
+   20504,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   20504,
+   false
+  ]
+ },
+ {
+  "name": "Eurosport",
+  "group": "Deportes",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "countries/spain/movistar/Eurosport_1.png",
+  "plain": [
+   200,
+   "image/png",
+   5566,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   5566,
+   false
+  ]
+ },
+ {
+  "name": "Eurosport 2",
+  "group": "Deportes",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "countries/spain/movistar/Eurosport_2.png",
+  "plain": [
+   200,
+   "image/png",
+   5867,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   5867,
+   false
+  ]
+ },
+ {
+  "name": "M+ Vamos",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ogo/countries/spain/movistar/M_Vamos.png",
+  "plain": [
+   200,
+   "image/png",
+   6274,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   6274,
+   false
+  ]
+ },
+ {
+  "name": "M+ Vamos 2",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "/logo/countries/es/M_VAMOS_2.png",
+  "plain": [
+   200,
+   "image/png",
+   5425,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   5425,
+   false
+  ]
+ },
+ {
+  "name": "M+ Ellas Vamos",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "o/countries/spain/movistar/M_Ellas_V.png",
+  "plain": [
+   200,
+   "image/png",
+   8205,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   8205,
+   false
+  ]
+ },
+ {
+  "name": "DAZN 1",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "logo/countries/spain/movistar/DAZN_1.png",
+  "plain": [
+   200,
+   "image/png",
+   2438,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2438,
+   false
+  ]
+ },
+ {
+  "name": "DAZN 2",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "logo/countries/spain/movistar/DAZN_2.png",
+  "plain": [
+   200,
+   "image/png",
+   2764,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2764,
+   false
+  ]
+ },
+ {
+  "name": "DAZN 3",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "logo/countries/spain/movistar/DAZN_3.png",
+  "plain": [
+   200,
+   "image/png",
+   2915,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2915,
+   false
+  ]
+ },
+ {
+  "name": "DAZN 4",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "logo/countries/spain/movistar/DAZN_4.png",
+  "plain": [
+   200,
+   "image/png",
+   2652,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2652,
+   false
+  ]
+ },
+ {
+  "name": "DAZN MOTO GP",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "countries/spain/movistar/DAZN_MOTOGP.png",
+  "plain": [
+   200,
+   "image/png",
+   3663,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   3663,
+   false
+  ]
+ },
+ {
+  "name": "DAZN F1",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ogo/countries/spain/movistar/DAZN_F1.png",
+  "plain": [
+   200,
+   "image/png",
+   2634,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   2634,
+   false
+  ]
+ },
+ {
+  "name": "M+ Deportes",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "/countries/spain/movistar/M_Deportes.png",
+  "plain": [
+   200,
+   "image/png",
+   3795,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   3795,
+   false
+  ]
+ },
+ {
+  "name": "M+ Deportes 2",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ountries/spain/movistar/M_Deportes_2.png",
+  "plain": [
+   200,
+   "image/png",
+   4160,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4160,
+   false
+  ]
+ },
+ {
+  "name": "M+ Deportes 3",
+  "group": "Movistar",
+  "kind": "https",
+  "host": "docdog.top",
+  "path_end": "ountries/spain/movistar/M_Deportes_3.png",
+  "plain": [
+   200,
+   "image/png",
+   4177,
+   false
+  ],
+  "ref": [
+   200,
+   "image/png",
+   4177,
+   false
+  ]
+ },
+ {
+  "name": "Primera Federación",
+  "group": "Primera Federación",
+  "kind": "https",
+  "host": "thumb.wikimedia.org",
+  "path_end": "vg/960px-Primera_Federaci%C3%B3n.svg.png",
+  "plain": [
+   200,
+   "image/webp",
+   69972,
+   false
+  ],
+  "ref": [
+   200,
+   "image/webp",
+   69972,
+   false
+  ]
+ },
+ {
+  "name": "DAZN Baloncesto",
+  "group": "DAZN",
+  "kind": "https",
+  "host": "www.calamarmenciano.com",
+  "path_end": "/baloncesto",
+  "plain": [
+   200,
+   "text/html; charset=UTF-8",
+   338900,
+   true
+  ],
+  "ref": [
+   200,
+   "text/html; charset=UTF-8",
+   338900,
+   true
+  ]
+ }
+]
