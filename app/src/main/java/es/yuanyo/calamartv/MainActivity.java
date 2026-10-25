@@ -949,6 +949,8 @@ public class MainActivity extends Activity {
     if (UserChannels.isPage(first)) intent.putExtra("page_url", first);
     else intent.putStringArrayListExtra("media_urls", new ArrayList<>(c.streams));
     intent.putExtra("title", c.name);
+    // Every link of the channel: when one source fails the player moves on to the next.
+    intent.putStringArrayListExtra("channel_streams", new ArrayList<>(c.streams));
     intent.putExtra("audience_target",AudienceModel.target(c.event,c.id));intent.putExtra("audience_channel",c.event?c.channelId:c.id);
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events open with the match under the video on phones; without a match link, with the event's own data.

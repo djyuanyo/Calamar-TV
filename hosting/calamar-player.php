@@ -255,6 +255,12 @@ function playerMain() {
     if (!$sources) playerAnswer(array('error' => 'No se encontró ningún vídeo en la página del reproductor.'), 404);
     $pick = $_GET['src'] ?? '';
     if (is_string($pick) && preg_match('/^\d{1,2}$/', $pick) && isset($sources[(int)$pick])) $sources = array($sources[(int)$pick]);
+    // A new attempt after the video was cut (intento=1, 2…) starts from another source of the page.
+    $round = $_GET['intento'] ?? '';
+    if (is_string($round) && preg_match('/^[1-9]$/', $round) && count($sources) > 1) {
+        $shift = (int)$round % count($sources);
+        $sources = array_merge(array_slice($sources, $shift), array_slice($sources, 0, $shift));
+    }
     if (isset($_GET['list'])) playerAnswer(array('sources' => count($sources)));
     // The first source that answers: servers of the same page often fail one at a time.
     foreach ($sources as $video) {
