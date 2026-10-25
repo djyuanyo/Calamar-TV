@@ -10,7 +10,7 @@ import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryP
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
-import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, liveCounts } from './audience.js';
+import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, CARDS_MS, CARD_TARGETS } from './audience.js';
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
@@ -177,21 +177,26 @@ function cardAudience(c) {
 }
 function paintCardAudience() {
   for (const node of document.querySelectorAll('[data-audience-target]')) {
+    // Only the first cards are counted; the others show no number rather than a wrong 0.
+    node.hidden = cardsReady && !cardCounts.has(node.dataset.audienceTarget);
     const count = cardsReady ? cardCounts.get(node.dataset.audienceTarget) || 0 : '—';
     node.querySelector('b').textContent = String(count); node.setAttribute('aria-label', count === '—' ? 'Espectadores no disponibles' : `${count} personas viendo`);
   }
 }
 async function refreshCardAudience() {
-  if (document.hidden || cardsBusy || !document.querySelector('[data-audience-target]')) return;
-  if (cardsCheckedAt && Date.now() - cardsCheckedAt < COUNT_MS) { paintCardAudience(); return; }
+  // Not while a player covers the cards: viewers would spend reads on numbers nobody sees.
+  if (document.hidden || cardsBusy || !document.querySelector('[data-audience-target]') || document.getElementById('player')?.hidden === false) return;
+  const targets = [...new Set([...document.querySelectorAll('[data-audience-target]')].map((n) => n.dataset.audienceTarget))].slice(0, CARD_TARGETS);
+  const known = targets.every((t) => cardCounts.has(t));
+  if (cardsCheckedAt && known && Date.now() - cardsCheckedAt < CARDS_MS) { paintCardAudience(); return; }
   cardsBusy = true;
   try {
-    const f = await shared(), counts = liveCounts(await f.audience());
+    const f = await shared(), counts = await f.viewersOf(targets);
     cardCounts.clear(); for (const [target, count] of counts) cardCounts.set(target, count); cardsReady = true;
   } catch { cardsReady = false; }
   finally { cardsBusy = false; cardsCheckedAt = Date.now(); paintCardAudience(); }
 }
-setInterval(refreshCardAudience, COUNT_MS);
+setInterval(refreshCardAudience, CARDS_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { cardsCheckedAt = 0; refreshCardAudience(); } });
 new MutationObserver(records => { if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches('[data-audience-target]') || n.querySelector('[data-audience-target]'))))) refreshCardAudience(); }).observe(view, { childList: true, subtree: true });
 

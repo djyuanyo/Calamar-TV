@@ -19,8 +19,8 @@ final class AudienceSession {
   private Task<Void> writes=Tasks.forResult(null);
   private boolean opened,playing,visited,counting;
   private int generation;
-  private final Runnable heartbeat=new Runnable(){public void run(){if(!opened)return;if(playing)writePresence();handler.postDelayed(this,60000);}};
-  private final Runnable refresh=new Runnable(){public void run(){if(!opened)return;readCount();handler.postDelayed(this,30000);}};
+  private final Runnable heartbeat=new Runnable(){public void run(){if(!opened)return;if(playing)writePresence();handler.postDelayed(this,AudienceModel.HEARTBEAT_MS);}};
+  private final Runnable refresh=new Runnable(){public void run(){if(!opened)return;readCount();handler.postDelayed(this,AudienceModel.COUNT_MS);}};
 
   AudienceSession(Context context,String target,String channelId,Count count){
     this.target=AudienceModel.validTarget(target)?target:null;this.channelId=channelId;this.count=count;

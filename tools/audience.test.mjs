@@ -8,8 +8,10 @@ test('presence documents name only what is watched and readers accept nearby min
   const p = presence('c:la-1', now);
   assert.deepEqual(Object.keys(p).sort(), ['beat', 'minute', 'target']);
   assert.ok(liveBeats('c:la-1', now).includes(p.beat));
-  assert.ok(liveBeats('c:la-1', now + 120000).includes(p.beat));
-  assert.ok(!liveBeats('c:la-1', now + 240000).includes(p.beat));
+  // A viewer beats every 3 minutes: its last beat still counts 4 minutes later.
+  assert.ok(liveBeats('c:la-1', now + 240000).includes(p.beat));
+  assert.ok(!liveBeats('c:la-1', now + 360000).includes(p.beat));
+  assert.equal(liveBeats('c:la-1', now).length, 6);
   assert.match(sessionId(), /^[A-Za-z0-9]{24}$/);
 });
 test('live counts group recent viewers and ignore stale ones', () => {

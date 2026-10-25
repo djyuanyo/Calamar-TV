@@ -2,9 +2,17 @@
 // Firestore access lives in firebase.js and the limits are enforced by firebase/firestore.rules.
 export const AUDIENCE_PATH = 'calamarAudience';
 export const VISITS_PATH = 'calamarVisits';
-/** Each viewer refreshes its presence once a minute; anyone seen in the last ~3 minutes counts. */
-export const HEARTBEAT_MS = 60000;
-export const COUNT_MS = 30000;
+/**
+ * Each viewer refreshes its presence every 3 minutes and anyone seen in the last ~5 minutes counts; the
+ * player asks for its number every 2 minutes and the cards every 3. The free Firestore plan has a daily
+ * quota (20,000 writes, 50,000 reads), and a big match with hundreds of viewers used it up.
+ */
+export const HEARTBEAT_MS = 180000;
+export const COUNT_MS = 120000;
+export const CARDS_MS = 180000;
+/** Cards whose number is asked (one read each); the first ones on the page, events before channels. */
+export const CARD_TARGETS = 30;
+const WINDOW = [-4, 1];
 
 export const minuteOf = (now = Date.now()) => Math.floor(now / 60000);
 
@@ -13,11 +21,14 @@ export function audienceTarget(item) {
   return item.event ? `e:${item.eventId || item.id}` : `c:${item.id}`;
 }
 
-/** The beats a reader accepts: two minutes back and one ahead, to absorb clock differences. */
+/** The beats a reader accepts: four minutes back and one ahead, to absorb clock differences. */
 export function liveBeats(target, now = Date.now()) {
-  const m = minuteOf(now);
-  return [m - 2, m - 1, m, m + 1].map((minute) => `${target}|${minute}`);
+  const m = minuteOf(now), out = [];
+  for (let minute = m + WINDOW[0]; minute <= m + WINDOW[1]; minute++) out.push(`${target}|${minute}`);
+  return out;
 }
+/** First minute a live presence may carry. */
+export const liveFrom = (now = Date.now()) => minuteOf(now) + WINDOW[0];
 
 export function presence(target, now = Date.now()) {
   const minute = minuteOf(now);
@@ -41,7 +52,7 @@ export function madridDay(now = Date.now()) {
 
 /** Live presence documents grouped by what they watch: Map(target -> viewers). */
 export function liveCounts(docs, now = Date.now()) {
-  const from = minuteOf(now) - 2, to = minuteOf(now) + 1;
+  const from = minuteOf(now) + WINDOW[0], to = minuteOf(now) + WINDOW[1];
   const out = new Map();
   for (const d of docs) if (Number.isInteger(d.minute) && d.minute >= from && d.minute <= to && typeof d.target === 'string') out.set(d.target, (out.get(d.target) || 0) + 1);
   return out;
