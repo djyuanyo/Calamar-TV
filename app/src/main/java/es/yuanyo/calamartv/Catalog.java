@@ -151,6 +151,22 @@ public final class Catalog {
     return out;
   }
 
+  /**
+   * The copy of a logo on the public web (tools/logo_mirror.py): logos/ plus the first 24 hex digits of
+   * the SHA-256 of its address. Null for images already on the public web.
+   */
+  public static String mirror(String url) {
+    if (url == null || !url.startsWith("https://") || url.startsWith(SportsCatalog.WEB)) return null;
+    try {
+      byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(url.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder();
+      for (int i = 0; i < 12; i++) hex.append(String.format(Locale.ROOT, "%02x", hash[i]));
+      return SportsCatalog.WEB + "logos/" + hex + ".png";
+    } catch (java.security.NoSuchAlgorithmException impossible) {
+      return null;
+    }
+  }
+
   /** Link name of each channel, as merge() in web/catalog.js: in catalog order, repeated names get -2, -3… */
   public static Map<String, String> slugs(List<Channel> channels) {
     Map<String, String> out = new HashMap<>();

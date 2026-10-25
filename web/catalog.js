@@ -43,6 +43,14 @@ function validUrl(value) {
 
 const https = (value) => (typeof value === 'string' && value.startsWith('https://') ? value : '');
 
+/**
+ * Copies of logos on this web (tools/logo_mirror.py, data/logos.json): some logo sites are blocked by
+ * Spanish operators or refuse other webs, so the copy is shown when there is one.
+ */
+let logoCopies = {};
+export function setLogoCopies(map) { logoCopies = map && typeof map === 'object' ? map : {}; }
+export const mirrorLogo = (url) => (typeof logoCopies[url] === 'string' && /^logos\/[0-9a-f]{24}\.png$/.test(logoCopies[url]) ? logoCopies[url] : url);
+
 /** Readable, URL-safe form of a name: "Canal Sur Andalucía" -> "canal-sur-andalucia". */
 export function slugify(text) {
   return String(text).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'canal';
@@ -61,7 +69,7 @@ function channel(o, own) {
     name: String(o.name || 'Canal'),
     group,
     region: String(o.region || ''),
-    logo: https(o.logo),
+    logo: mirrorLogo(https(o.logo)),
     web: https(o.web),
     streams,
     geo: !!o.geo,
@@ -274,7 +282,8 @@ export function eventArt(event, custom) {
   const find = (list, id) => (custom?.[list] || []).find((x) => x.id === id);
   const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
   const league = find('leagues', event.leagueId);
-  return { background: image(league?.background), leagueLogo: image(league?.logo), homeLogo: image(find('teams', event.homeTeamId)?.logo), awayLogo: image(find('teams', event.awayTeamId)?.logo) };
+  const logo = (v) => mirrorLogo(image(v));
+  return { background: image(league?.background), leagueLogo: logo(league?.logo), homeLogo: logo(find('teams', event.homeTeamId)?.logo), awayLogo: logo(find('teams', event.awayTeamId)?.logo) };
 }
 
 /**
@@ -302,7 +311,7 @@ export function eventRows(list, custom) {
   for (const event of list) {
     const league = leagues.get(event.leagueId);
     const key = league ? league.id : '';
-    if (!rows.has(key)) rows.set(key, { id: key, name: league ? league.name : 'Otros eventos', logo: https(league?.logo) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
+    if (!rows.has(key)) rows.set(key, { id: key, name: league ? league.name : 'Otros eventos', logo: mirrorLogo(https(league?.logo)) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
     rows.get(key).events.push(event);
   }
   const out = [...rows.values()];
