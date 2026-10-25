@@ -10,9 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: node diag/run.mjs
+      - run: python3 diag/page.py
       - run: |
           git config user.name diag; git config user.email diag@example.com
           git add diag/*.json && git commit -m "dump data" && git push
