@@ -378,7 +378,8 @@ try {
   await page.goto(base + '/?regression=2#/inicio');
   await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
-  assert.equal(await page.locator('#player-refresh').isVisible(), true, 'channels and events keep Refrescar');
+  assert.equal(await page.locator('#player-refresh').count(), 0, 'no Refrescar button in the player');
+  assert.equal(await page.locator('#player-share svg').count(), 1, 'sharing is an icon');
   assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
@@ -510,7 +511,7 @@ try {
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
   // A LuluStream video always plays in our player, through the hosting (LuluStream only serves who opened
   // its page). hls.js (from its CDN, blocked here) is replaced by a stand-in whose list fails, to see that a
-  // failure shows our message with «Refrescar» and never LuluStream's player.
+  // failure shows our message with «Reintentar» and never LuluStream's player.
   await page.evaluate(() => {
     window.Hls = class {
       static isSupported() { return true; }
@@ -523,7 +524,7 @@ try {
   });
   await page.locator('.poster-card', { hasText: 'Torrente' }).click();
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
-  await page.locator('#player-status').getByRole('button', { name: '↻ Refrescar' }).waitFor();
+  await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
   assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');
   assert.equal(await page.locator('#player iframe').count(), 0);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
@@ -556,7 +557,7 @@ try {
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Los hombres de Paco · T10 · Vuelta a empezar');
-  assert.equal(await page.locator('#player-refresh').isHidden(), true, 'films and episodes have no Refrescar');
+  assert.equal(await page.locator('#player-share').isHidden(), true, 'films and episodes are not shared');
   // «Saltar intro» during the series' intro; «Siguiente capítulo» with its count during the credits.
   await page.evaluate(() => { const v = document.getElementById('video'); let t = 40;
     Object.defineProperty(v, 'currentTime', { configurable: true, get: () => t, set: (x) => { t = x; } });
@@ -697,7 +698,7 @@ try {
   await page.goto(base + '/?pagina=1#/canal/canal-pagina');
   await page.getByText('La emisión se ha cortado. Reconectando…').waitFor();
   await page.clock.runFor(10000);
-  await page.locator('#player-status').getByRole('button', { name: '↻ Refrescar' }).waitFor();
+  await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
   const asked = await page.evaluate(() => window.__hlsSources);
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);

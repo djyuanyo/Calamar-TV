@@ -217,7 +217,8 @@ final class Ui {
     PLAY,
     EYE,
     BACK,
-    ADMIN
+    ADMIN,
+    SHARE
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -244,6 +245,18 @@ final class Ui {
       } else if (icon == Icon.EYE) {
         path.moveTo(2f,12f);path.cubicTo(6f,3f,18f,3f,22f,12f);path.cubicTo(18f,21f,6f,21f,2f,12f);path.close();
         path.addCircle(12f,12f,3f,Path.Direction.CW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);
+      } else if (icon == Icon.SHARE) {
+        // Three dots joined by two lines, as the web's share button.
+        path.addCircle(18f, 5f, 3f, Path.Direction.CW);
+        path.addCircle(6f, 12f, 3f, Path.Direction.CW);
+        path.addCircle(18f, 19f, 3f, Path.Direction.CW);
+        path.moveTo(8.6f, 10.5f);
+        path.lineTo(15.4f, 6.5f);
+        path.moveTo(8.6f, 13.5f);
+        path.lineTo(15.4f, 17.5f);
+        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        paint.setStrokeWidth(2.2f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
       } else if (icon == Icon.ADMIN) {
         // Account silhouette: head and shoulders, as the web's admin button.
         path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);
