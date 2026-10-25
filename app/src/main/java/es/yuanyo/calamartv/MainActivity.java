@@ -1106,8 +1106,8 @@ public class MainActivity extends Activity {
       protected Bitmap doInBackground(Void... v) {
         // Some logo sites are blocked by Spanish operators: their copy on the public web still loads.
         String copy = copyFirst ? Catalog.mirror(url) : null;
-        Bitmap found = copy != null ? download(copy) : null;
-        return found != null ? found : download(url);
+        Bitmap found = copy != null ? readBitmap(copy) : null;
+        return found != null ? found : readBitmap(url);
       }
 
       protected void onPostExecute(Bitmap b) {
@@ -1120,7 +1120,7 @@ public class MainActivity extends Activity {
   }
 
   /** An image read from the network, scaled down when large; null when it cannot be read. */
-  static Bitmap download(String address) {
+  static Bitmap readBitmap(String address) {
     try {
       HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
       c.setConnectTimeout(6000);
