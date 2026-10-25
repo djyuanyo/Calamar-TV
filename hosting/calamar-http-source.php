@@ -48,3 +48,13 @@ function redirectTarget($base, $location) {
     if (strpos($location, '?') === 0) return $root . $path . $location;
     return $root . substr($path, 0, strrpos($path, '/') + 1) . $location;
 }
+
+/**
+ * Key the hosting's own video worker (calamar-cast.php) sends to calamar-tv-relay.php, so its single
+ * connection to the provider is not cut every 120 seconds. Derived from the worker's secret; null until
+ * calamar-cast.php has created it.
+ */
+function calamarWorkerKey(): ?string {
+    $secret = @file_get_contents(sys_get_temp_dir() . '/calamar-cast-' . substr(hash('sha256', __DIR__), 0, 16) . '/secret');
+    return is_string($secret) && strlen($secret) >= 32 ? hash_hmac('sha256', 'calamar-tv-relay worker', $secret) : null;
+}

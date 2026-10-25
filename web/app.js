@@ -583,42 +583,53 @@ function playSource(c, index) {
   };
   playerStatus.textContent = 'Conectando…';
   if (source.how.kind === 'ts') {
-    video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
-    video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
     controls.attach(null);
-    stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
-      onFailure: (data) => queueMicrotask(async () => {
-        if (generation !== playbackGeneration) return;
-        if (!source.how.relay || !/codec|decode|buffer/i.test(data?.details || '')) { next(data); return; }
-        if (stopTs) { stopTs(); stopTs = null; }
-        video.removeAttribute('src');
-        video.load();
-        playerStatus.textContent = 'Adaptando el vídeo para este navegador…';
-        try {
-          const compatible = await prepareCastSource(source.url, {
-            isCurrent: () => generation === playbackGeneration,
-            onStatus: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Adaptando el vídeo para este navegador…'; },
-          });
-          if (generation !== playbackGeneration || !compatible) return;
-          video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
-          if (window.Hls?.isSupported()) {
-            hls = new window.Hls({ lowLatencyMode: false });
-            hls.on(window.Hls.Events.ERROR, (_event, failure) => { if (failure.fatal) next(failure); });
-            hls.loadSource(compatible.url);
-            hls.attachMedia(video);
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
-          else { next({ details: 'codecUnsupported' }); return; }
-          controls.attach(hls);
-          video.play().catch(() => {
-            if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
-          });
-        } catch (error) {
-          if (generation === playbackGeneration) next({ ...data, userMessage: error.message || 'No se pudo adaptar el vídeo en el hosting.' });
-        }
-      }),
-      onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la emisión…'; },
-      onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
-    });
+    // The hosting's adapted HLS of the channel (calamar-cast.php): one continuous connection to the
+    // provider shared by every viewer, so the picture does not jump each time a browser connection ends.
+    const adapted = async (data, message) => {
+      if (stopTs) { stopTs(); stopTs = null; }
+      video.removeAttribute('src');
+      video.load();
+      playerStatus.textContent = message;
+      const compatible = await prepareCastSource(source.url, {
+        isCurrent: () => generation === playbackGeneration,
+        onStatus: () => { if (generation === playbackGeneration) playerStatus.textContent = message; },
+      });
+      if (generation !== playbackGeneration || !compatible) return;
+      video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+      video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
+      if (window.Hls?.isSupported()) {
+        hls = new window.Hls({ lowLatencyMode: false });
+        hls.on(window.Hls.Events.ERROR, (_event, failure) => { if (failure.fatal) next(failure); });
+        hls.loadSource(compatible.url);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
+      else { next({ ...data, details: 'codecUnsupported' }); return; }
+      controls.attach(hls);
+      video.play().catch(() => {
+        if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+      });
+    };
+    const direct = () => {
+      video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
+      video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
+      controls.attach(null);
+      stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
+        onFailure: (data) => queueMicrotask(async () => {
+          if (generation !== playbackGeneration) return;
+          if (!source.how.relay || !/codec|decode|buffer/i.test(data?.details || '')) { next(data); return; }
+          try { await adapted(data, 'Adaptando el vídeo para este navegador…'); }
+          catch (error) {
+            if (generation === playbackGeneration) next({ ...data, userMessage: error.message || 'No se pudo adaptar el vídeo en el hosting.' });
+          }
+        }),
+        onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la emisión…'; },
+        onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
+      });
+    };
+    if (!source.how.relay) { direct(); return; }
+    // Without FFmpeg on the hosting (or if it fails) the stream comes through the relay as before.
+    adapted(null, 'Preparando el canal…').catch(() => { if (generation === playbackGeneration && !failureHandled) direct(); });
     return;
   }
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.

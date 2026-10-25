@@ -1,5 +1,5 @@
 <?php
-/** Shared, on-demand H.264/AAC HLS for Chromecast. No source URLs in public URLs or logs. */
+/** Shared, on-demand H.264/AAC HLS for Chromecast and the web. No source URLs in public URLs or logs. */
 declare(strict_types=1);
 ini_set('display_errors', '0');
 umask(0077);
@@ -40,12 +40,13 @@ function castCapabilities(): array {
         'worker_lock' => $flock !== '', 'binary' => $binary];
 }
 
-function castArguments(string $binary, string $source, string $folder): array {
+function castArguments(string $binary, string $source, string $folder, string $worker = ''): array {
     $args = [$binary, '-hide_banner', '-loglevel', 'quiet', '-nostdin', '-y',
         '-threads', '2', '-rw_timeout', '15000000', '-reconnect', '1', '-reconnect_at_eof', '1',
         '-reconnect_streamed', '1', '-reconnect_delay_max', '3', '-tls_verify', '1',
         '-verifyhost', 'calamarmenciano.com',
-        '-headers', 'X-Calamar-Source: ' . base64_encode($source) . "\r\n",
+        // The worker key keeps this one connection to the provider open (the relay cuts others at 120 s).
+        '-headers', 'X-Calamar-Source: ' . base64_encode($source) . "\r\n" . ($worker !== '' ? 'X-Calamar-Worker: ' . $worker . "\r\n" : ''),
         '-i', CAST_INPUT_URL, '-map', '0:v:0', '-map', '0:a:0?',
         '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=25',
         '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-tune', 'zerolatency',
@@ -163,7 +164,7 @@ try {
     if (!$alive && !$recent) {
         foreach (glob($folder . '/seg*.ts*') ?: [] as $old) @unlink($old);
         @unlink($folder . '/live.m3u8');
-        $command = implode(' ', array_map('escapeshellarg', castArguments($cap['binary'], $source, $folder)));
+        $command = implode(' ', array_map('escapeshellarg', castArguments($cap['binary'], $source, $folder, calamarWorkerKey() ?? '')));
         $script = $folder . '/worker.sh'; file_put_contents($script, castWorker($command, $folder));
         @touch($folder . '/launched');
         // Discard every subprocess log: FFmpeg errors can otherwise reveal the source headers.
