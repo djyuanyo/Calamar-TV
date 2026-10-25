@@ -4,7 +4,10 @@ H = {'Origin': 'https://djyuanyo.github.io', 'User-Agent': 'Mozilla/5.0'}
 out = {}
 try:
     data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
-    src = next(s for c in data['channels'] for s in c.get('streams', []) if s.startswith('http://31.43.191.125:8080/') and s.endswith('/244'))
+    found = [s for c in data['channels'] for s in c.get('streams', []) if '31.43.191.125' in s]
+    out['matches'] = [s.rsplit('/', 1)[-1] for s in found]
+    src = next((s for s in found if s.rstrip('/').endswith('/244')), found[0] if found else None)
+    if not src: raise RuntimeError('canal no encontrado en el catálogo publicado')
     hdr = dict(H, **{'X-Calamar-Source': base64.b64encode(src.encode()).decode()})
     # 1) The browser relay: how fast does video arrive (bytes in 20 s)?
     t = time.time(); n = 0
@@ -41,5 +44,5 @@ try:
             t = time.time(); b = urllib.request.urlopen(urllib.request.Request(segs[-1], headers=H), timeout=30).read()
             out['segment'] = {'bytes': len(b), 's': round(time.time() - t, 2)}
 except Exception as e:
-    out['error'] = str(e)[:300]
+    out['error'] = repr(e)[:300]
 open('diag/zico.json', 'w').write(json.dumps(out, indent=1))
