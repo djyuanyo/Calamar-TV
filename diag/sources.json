@@ -1,0 +1,197 @@
+[
+ {
+  "sources": [
+   {
+    "label": "CDN 4",
+    "locked": null,
+    "link": "https://cdn4.zicotv.cc/\u2026.m3u8",
+    "keys": [
+     "label",
+     "premium",
+     "url"
+    ]
+   },
+   {
+    "label": "CDN 3",
+    "locked": null,
+    "link": "https://cdn3.zicotv.cc/\u2026.m3u8",
+    "keys": [
+     "label",
+     "premium",
+     "url"
+    ]
+   },
+   {
+    "label": "CDN 5",
+    "locked": null,
+    "link": "https://cdn5.zicotv.cc/\u2026.m3u8",
+    "keys": [
+     "label",
+     "premium",
+     "url"
+    ]
+   },
+   {
+    "label": "CDN 2",
+    "locked": null,
+    "link": "https://cdn2.zicotv.cc/\u2026.m3u8",
+    "keys": [
+     "label",
+     "premium",
+     "url"
+    ]
+   },
+   {
+    "label": "CDN 1",
+    "locked": null,
+    "link": "https://cdn.zicotv.cc/\u2026.m3u8",
+    "keys": [
+     "hidden",
+     "label",
+     "premium",
+     "url"
+    ]
+   },
+   {
+    "label": "CDN Premium",
+    "locked": true,
+    "link": "https://zicotv.cc/\u2026",
+    "keys": [
+     "label",
+     "locked",
+     "premium",
+     "url"
+    ]
+   }
+  ]
+ },
+ {
+  "link": "https://cdn4.zicotv.cc/\u2026.m3u8",
+  "plain": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "browser-origin": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "page-referer": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "child": {
+   "status": 200,
+   "acao": null,
+   "ctype": "application/vnd.apple.mpegurl",
+   "len": 671
+  },
+  "child_plain": 200
+ },
+ {
+  "link": "https://cdn3.zicotv.cc/\u2026.m3u8",
+  "plain": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "browser-origin": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "page-referer": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "child": {
+   "status": 200,
+   "acao": null,
+   "ctype": "application/vnd.apple.mpegurl",
+   "len": 671
+  },
+  "child_plain": 200
+ },
+ {
+  "link": "https://cdn5.zicotv.cc/\u2026.m3u8",
+  "plain": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "browser-origin": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "page-referer": {
+   "status": 200,
+   "acao": "*",
+   "ctype": "application/vnd.apple.mpegurl",
+   "variant": true,
+   "key": false,
+   "n": 1,
+   "first_ext": ".m3u8",
+   "same_host": true,
+   "token_in_query": true
+  },
+  "child": {
+   "status": 200,
+   "acao": null,
+   "ctype": "application/vnd.apple.mpegurl",
+   "len": 671
+  },
+  "child_plain": 200
+ }
+]
