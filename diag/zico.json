@@ -1,6 +1,10 @@
-{
- "cast": [
-  200,
-  "{\"ready\":true,\"ffmpeg\":true,\"commands\":true,\"worker_lock\":true}"
- ]
-}
+[
+ {
+  "channel": "Movistar LaLiga",
+  "error": "HTTP Error 502: Bad Gateway"
+ },
+ {
+  "channel": "Primera Federación",
+  "error": "HTTP Error 502: Bad Gateway"
+ }
+]
