@@ -560,7 +560,7 @@ function playSource(c, index) {
         // Firebase may have delivered fresh URLs since playback began.
         const latest = state.channels.find((item) => item.id === c.id) || c;
         playSource(latest, 0);
-      } }, '↻ Refrescar');
+      } }, '↻ Reintentar');
       // Direct navigation may work even when hls.js fetches from GitHub Pages are
       // rejected by CORS or by the origin policy of the upstream CDN.
       // Use a real link instead of trying to proxy or bypass access controls.
@@ -647,10 +647,10 @@ function playSource(c, index) {
 }
 
 function pagePlaybackError(code) {
-  if (code === 403) return 'El hosting solo abre reproductores de canales del catálogo publicado. Si acabas de añadir el enlace, espera un minuto y pulsa Refrescar.';
+  if (code === 403) return 'El hosting solo abre reproductores de canales del catálogo publicado. Si acabas de añadir el enlace, espera un minuto y pulsa Reintentar.';
   if (code === 404) return 'No se encontró el vídeo en la página del reproductor, o falta subir calamar-player.php al hosting.';
   if (code === 400) return 'Este enlace de reproductor no es válido.';
-  return 'La página del reproductor no responde o ninguna de sus fuentes funciona ahora. Pulsa Refrescar en un momento.';
+  return 'La página del reproductor no responde o ninguna de sus fuentes funciona ahora. Pulsa Reintentar en un momento.';
 }
 
 // ---- Audience -------------------------------------------------------------------------------
@@ -715,8 +715,6 @@ function open(c, fromRoute = false) {
   shareButton.hidden = !!c.vod;
   // An imported match without a channel has no video: only its match page and the notice.
   player.classList.toggle('pending', !!c.pending);
-  // Films and episodes have no «Refrescar»: it is for live channels and events.
-  document.getElementById('player-refresh').hidden = !!c.vod;
   playerTitle.textContent = c.name;
   refreshScores();
   playerLogo.hidden = !c.logo;
@@ -874,9 +872,6 @@ function closePlayer() {
   }
 }
 
-document.getElementById('player-refresh').addEventListener('click', () => {
-  if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl)));
-});
 document.getElementById('player-close').addEventListener('click', closePlayer);
 // Events and channels are shared through their preview page, so WhatsApp and others show their card.
 const shareButton = document.getElementById('player-share');
@@ -885,7 +880,7 @@ shareButton.addEventListener('click', async () => {
   const url = current.event ? eventShareLink(current) : channelShareLink(current);
   try {
     if (navigator.share) await navigator.share({ title: current.name, url });
-    else { await navigator.clipboard.writeText(url); shareButton.textContent = 'Enlace copiado'; setTimeout(() => { shareButton.textContent = 'Compartir'; }, 2500); }
+    else { await navigator.clipboard.writeText(url); playerStatus.textContent = 'Enlace copiado.'; setTimeout(() => { if (playerStatus.textContent === 'Enlace copiado.') playerStatus.textContent = ''; }, 2500); }
   } catch (error) {
     if (error?.name !== 'AbortError') playerStatus.textContent = `Copia este enlace para compartir: ${url}`;
   }

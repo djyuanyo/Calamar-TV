@@ -233,16 +233,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     controls.addView(fullscreenButton, fullscreenSize);
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
-    Button refresh = button(controls, "Refrescar", () -> {
-      automaticAttempts = 0;
-      mediaHttp1 = false;
-      mediaSystemRetry = false;
-      if (directUrl != null) playDirect(); else resolveFresh();
-    });
-    // Films and episodes have no «Refrescar»: it is for live channels and events.
-    if (progressEntry != null) refresh.setVisibility(View.GONE);
-    // Events, as on the web: their preview link (cover and name in WhatsApp) through the share sheet.
-    if (shareUrl != null) button(controls, "Compartir", this::share);
+    // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
+    if (shareUrl != null) {
+      ImageButton shareButton = new ImageButton(this);
+      shareButton.setImageDrawable(Ui.icon(Ui.Icon.SHARE, Ui.FG, Ui.dp(this, 22)));
+      shareButton.setContentDescription("Compartir");
+      shareButton.setPadding(Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9));
+      shareButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
+      shareButton.setFocusable(true);
+      shareButton.setOnClickListener(v -> share());
+      controls.addView(shareButton, new LinearLayout.LayoutParams(fullscreenSize));
+    }
     castControls = new CastControls(this, controls,
         () -> !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
@@ -772,7 +773,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
       } else {
-        problem("La fuente no responde. Pulsa Refrescar o prueba otra fuente.");
+        problem("La fuente no responde. Prueba otra opción en Fuentes o vuelve a abrir el canal.");
         releasePlayer();
         refreshAutomatically("Probando otra conexión…");
       }
@@ -829,8 +830,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       }
       problem(
           directUrl != null
-              ? "No se pudo reproducir el enlace. Comprueba el enlace o pulsa Refrescar."
-              : "No se pudo recuperar la emisión. Pulsa Refrescar o Fuentes.");
+              ? "No se pudo reproducir el enlace. Comprueba el enlace o vuelve a abrir el canal."
+              : "No se pudo recuperar la emisión. Prueba otra opción en Fuentes o vuelve a abrir el canal.");
       return;
     }
     status.setText(message);
@@ -1084,7 +1085,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               android.webkit.WebResourceError error) {
             if (resource.isForMainFrame() && active && generation == request && browser == view)
               problem(
-                  "No se pudo cargar el reproductor web. Comprueba la conexión y pulsa Refrescar.");
+                  "No se pudo cargar el reproductor web. Comprueba la conexión y vuelve a abrir el canal.");
           }
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
