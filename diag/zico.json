@@ -1,0 +1,35 @@
+[
+ {
+  "channel": "Movistar LaLiga",
+  "option": 2,
+  "host": "zicotv.cc",
+  "kind": "api",
+  "relay": [
+   200,
+   "#EXTM3U"
+  ],
+  "secs": 0.8
+ },
+ {
+  "channel": "Primera Federación",
+  "option": 1,
+  "host": "zicotv.cc",
+  "kind": "api",
+  "relay": [
+   200,
+   "#EXTM3U"
+  ],
+  "secs": 1.2
+ },
+ {
+  "channel": "DAZN Baloncesto",
+  "option": 1,
+  "host": "bp.zicotv.cc",
+  "kind": "channels",
+  "relay": [
+   404,
+   "{\"error\":\"No se encontr\\u00f3 ning\\u00fan v\\u00eddeo en la p\\u00e1gina del reproductor.\"}"
+  ],
+  "secs": 0.5
+ }
+]
