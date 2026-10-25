@@ -380,6 +380,7 @@ try {
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
   assert.equal(await page.locator('#player-refresh').count(), 0, 'no Refrescar button in the player');
   assert.equal(await page.locator('#player-share svg').count(), 1, 'sharing is an icon');
+  assert.equal(await page.locator('.player-bottom #ctl-full').count(), 1, 'full screen is in the bottom controls');
   assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
