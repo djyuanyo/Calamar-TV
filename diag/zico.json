@@ -1,48 +1,162 @@
 {
- "matches": [
-  "265",
-  "129635",
-  "129636",
-  "87109",
-  "97138",
-  "268",
-  "269",
-  "270",
-  "271",
-  "272",
-  "273",
-  "274",
-  "275",
-  "276",
-  "277",
-  "255",
-  "256",
-  "56470",
-  "283",
-  "246",
-  "634",
-  "635",
-  "128942",
-  "38816",
-  "281",
-  "282",
-  "632",
-  "156835",
-  "723",
-  "247",
-  "248",
-  "249",
-  "250",
-  "154467",
-  "251",
-  "286",
-  "288",
-  "289"
- ],
- "relay": {
-  "mbps": 2.96,
-  "bytes": 15721500
- },
- "cast_ready_s": 28.7,
- "error": "<HTTPError 404: 'Not Found'>"
+"log": [
+{
+"start": 202,
+"state": "preparing",
+"t": 1.9
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 3.8
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 6.0
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 7.9
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 9.8
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 12.0
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 14.1
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 15.9
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 17.9
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 19.5
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 21.5
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 23.2
+},
+{
+"start": 202,
+"state": "preparing",
+"t": 25.4
+},
+{
+"start": 200,
+"state": "ready",
+"t": 27.4
+},
+{
+"seq": 1792964464,
+"n": 4,
+"dur": 0.04,
+"seg_kb": 121,
+"seg_s": 1.55,
+"t": 29.6
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 36.4
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 44.0
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 53.8
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 63.9
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 75.5
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 82.1
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 88.6
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 95.1
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 101.6
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 108.1
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 114.7
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 121.6
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 128.1
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 134.6
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 141.1
+},
+{
+"http": 404,
+"body": "{\"error\":\"El v\u00eddeo ha terminado. Vuelve a enviarlo desde Calamar TV.\"}",
+"t": 147.6
+}
+]
 }
