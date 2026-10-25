@@ -212,7 +212,15 @@ export function lulustreamEmbed(url) {
 
 export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
 
-export function webPlayback(url) {
+/**
+ * Player pages (a web with the video inside): the app reads them itself; browsers cannot reach their
+ * video (CORS), so the hosting reads the page and relays its HLS list (calamar-player.php).
+ */
+export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
+export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
+
+/** `pages`: player pages play through the hosting (channels); otherwise they need the app. */
+export function webPlayback(url, { pages = false } = {}) {
   let u;
   try {
     u = new URL(url);
@@ -234,6 +242,7 @@ export function webPlayback(url) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
 

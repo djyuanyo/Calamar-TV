@@ -3,7 +3,7 @@ import { webPlayback, streamExpiry } from './catalog.js';
 /** Keep catalog numbering, including unavailable alternatives, so a source never silently vanishes. */
 export function sourceOptions(streams, now = Date.now()) {
   return streams.map((url, index) => {
-    const how = webPlayback(url);
+    const how = webPlayback(url, { pages: true });
     const expiry = streamExpiry(url);
     const expired = !!expiry && expiry <= now;
     return {

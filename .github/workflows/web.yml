@@ -31,6 +31,7 @@ jobs:
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
           php -l hosting/calamar-lulu.php
+          php -l hosting/calamar-player.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
       # Pillow draws the preview images of shared links (tools/share_images.py).
