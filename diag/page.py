@@ -42,3 +42,53 @@ for c in data.get('channels', []):
             row['error'] = str(e)[:200]
         out.append(row)
 open('diag/page.json', 'w').write(json.dumps(out, indent=1))
+
+# Sources and whether a browser could read them (CORS) or needs the hosting.
+def zt(html):
+    m = re.search(r'\b(?:var|let|const)\s+ZT_SOURCES\s*=\s*(\[)', html)
+    if not m: return []
+    i, depth, q, esc = m.start(1), 0, False, False
+    for j in range(i, len(html)):
+        ch = html[j]
+        if q:
+            if esc: esc = False
+            elif ch == '\\': esc = True
+            elif ch == '"': q = False
+        elif ch == '"': q = True
+        elif ch == '[': depth += 1
+        elif ch == ']':
+            depth -= 1
+            if depth == 0: return json.loads(html[i:j + 1])
+    return []
+def get(u, headers):
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(u, headers=headers), timeout=20)
+        return r.status, dict(r.headers), r.read(400_000).decode('utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), ''
+    except Exception as e:
+        return str(e)[:80], {}, ''
+report = []
+for c in data.get('channels', []):
+    if 'federaci' not in c.get('name', '').lower(): continue
+    st, final, html, _ = fetch(c['streams'][0])
+    sources = zt(html)
+    report.append({'sources': [{'label': s.get('label'), 'locked': s.get('locked'), 'link': mask(urllib.parse.urljoin(final, s.get('url', ''))), 'keys': sorted(s.keys())} for s in sources]})
+    for s in [s for s in sources if not s.get('locked')][:3]:
+        u = urllib.parse.urljoin(final, s['url'])
+        row = {'link': mask(u)}
+        for name, h in (('plain', {'User-Agent': UA}), ('browser-origin', {'User-Agent': UA, 'Origin': 'https://djyuanyo.github.io', 'Referer': 'https://djyuanyo.github.io/'}),
+                        ('page-referer', {'User-Agent': UA, 'Referer': final, 'Origin': 'https://zicotv.cc'})):
+            code, hdr, body = get(u, h)
+            lines = [l for l in body.splitlines() if l and not l.startswith('#')]
+            row[name] = {'status': code, 'acao': hdr.get('Access-Control-Allow-Origin') or hdr.get('access-control-allow-origin'), 'ctype': hdr.get('Content-Type'),
+                         'variant': '#EXT-X-STREAM-INF' in body, 'key': '#EXT-X-KEY' in body, 'n': len(lines), 'first_ext': os.path.splitext(urllib.parse.urlsplit(urllib.parse.urljoin(u, lines[0])).path)[1] if lines else None,
+                         'same_host': (host(urllib.parse.urljoin(u, lines[0])) == host(u)) if lines else None, 'token_in_query': bool(urllib.parse.urlsplit(u).query)}
+            if name == 'page-referer' and lines:
+                child = urllib.parse.urljoin(u, lines[0])
+                c2, h2, b2 = get(child, h)
+                row['child'] = {'status': c2, 'acao': h2.get('Access-Control-Allow-Origin'), 'ctype': h2.get('Content-Type'), 'len': len(b2)}
+                cp, hp, _ = get(child, {'User-Agent': UA})
+                row['child_plain'] = cp
+        report.append(row)
+open('diag/sources.json', 'w').write(json.dumps(report, indent=1))
