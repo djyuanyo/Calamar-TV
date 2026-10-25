@@ -130,7 +130,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     rememberPosition();
     handler.postDelayed(this, 10000);
   }};
-  private final Runnable renewal = () -> refreshAutomatically("Renovando la fuente…");
+  // A planned renewal (the video's token is about to expire) reads the page again for the same video:
+  // it is not a failure, so it neither moves to another video nor counts as an attempt.
+  private final Runnable renewal = () -> {
+    if (!active || resolving || webMode) return;
+    status.setText("Renovando la fuente…");
+    resolveFresh();
+  };
 
   @Override
   public void onCreate(Bundle state) {
@@ -554,6 +560,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
+                  // The hosting's copy goes second: when the first video does not load (operators block
+                  // the video servers during matches), the next try already goes through the hosting.
+                  if (channelPage() && !sources.isEmpty())
+                    sources.add(Math.min(1, sources.size()), new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
                     // A video just uploaded to LuluStream plays once LuluStream has converted it.
@@ -581,6 +591,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (channelPage()) {
+                    // The page itself cannot be reached from here: the hosting reads it, as for the web.
+                    sources.clear();
+                    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
+                    selection = 0;
+                    updateSourceButton();
+                    playSource(sources.get(0));
                   } else if (footballFallback) {
                     openWeb();
                     status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
@@ -597,6 +614,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 });
           }
         });
+  }
+
+  /** A player page of a catalog channel, which the hosting can read (not LuluStream, it has its own file). */
+  private boolean channelPage() {
+    return pageUrl != null && channelPages.contains(pageUrl) && Library.Media.hosting(pageUrl) == null;
   }
 
   /** A LuluStream video through the hosting (calamar-lulu.php), when this device cannot read its page. */
@@ -739,7 +761,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     MediaItem.Builder item = new MediaItem.Builder().setUri(source.url);
     String path = Uri.parse(source.url).getPath();
-    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT) || source.url.startsWith(Library.PLAYER_ENDPOINT)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;

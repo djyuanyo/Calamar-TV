@@ -297,6 +297,16 @@ final class Library {
 
   static final int CREDITS_DEFAULT = 30;
   static final String LULU_ENDPOINT = "https://calamarmenciano.com/calamar-lulu.php";
+  /** Player pages of catalog channels read by the hosting (calamar-player.php), as the web plays them. */
+  static final String PLAYER_ENDPOINT = "https://calamarmenciano.com/calamar-player.php";
+
+  static String playerRelay(String page) {
+    try {
+      return PLAYER_ENDPOINT + "?page=" + java.net.URLEncoder.encode(page.trim(), "UTF-8").replace("+", "%20") + "&hls=1";
+    } catch (java.io.UnsupportedEncodingException impossible) {
+      throw new IllegalStateException(impossible);
+    }
+  }
 
   /**
    * {intro start, intro end, credits length, credits start, credits typed} in seconds for an episode of that
