@@ -538,6 +538,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(renewal);
     final int request = ++generation;
     status.setText("Buscando una fuente de vídeo vigente…");
+    if (channelPage()) {
+      // As on the web: the hosting reads the page and relays its video (calamar-player.php), so operators
+      // that block the page or its video servers during matches do not stop it. A new attempt asks the
+      // hosting to start from another video of the page (CDN 2, CDN 3…).
+      resolving = false;
+      sources.clear();
+      sources.add(new VideoResolver.Source(title == null ? "Canal" : title,
+          Library.playerRelay(pageUrl) + (automaticAttempts > 0 ? "&intento=" + Math.min(9, automaticAttempts) : "")));
+      selection = 0;
+      updateSourceButton();
+      playSource(sources.get(0));
+      return;
+    }
     if (VideoResolver.isMedia(pageUrl)) {
       resolving = false;
       sources.clear();
@@ -560,10 +573,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
-                  // The hosting's copy goes second: when the first video does not load (operators block
-                  // the video servers during matches), the next try already goes through the hosting.
-                  if (channelPage() && !sources.isEmpty())
-                    sources.add(Math.min(1, sources.size()), new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
                     // A video just uploaded to LuluStream plays once LuluStream has converted it.
@@ -591,13 +600,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (channelPage()) {
-                    // The page itself cannot be reached from here: the hosting reads it, as for the web.
-                    sources.clear();
-                    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
-                    selection = 0;
-                    updateSourceButton();
-                    playSource(sources.get(0));
                   } else if (footballFallback) {
                     openWeb();
                     status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
@@ -616,7 +618,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
   }
 
-  /** A player page of a catalog channel, which the hosting can read (not LuluStream, it has its own file). */
+  /** A player page of a catalog channel, which the hosting reads (not LuluStream, it has its own file). */
   private boolean channelPage() {
     return pageUrl != null && channelPages.contains(pageUrl) && Library.Media.hosting(pageUrl) == null;
   }
