@@ -604,7 +604,9 @@ function playSource(c, index) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
       // The hosting answers 409 while LuluStream is still converting a video just uploaded.
-      if (data.fatal && source.how.address && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
+      if (data.fatal && source.how.address && !source.how.page && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
+      // Player pages read by the hosting (calamar-player.php): what failed, in plain words.
+      if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
       if (data.fatal) next(data);
     });
     hls.loadSource(address);
@@ -618,6 +620,13 @@ function playSource(c, index) {
   video.play().catch(() => {
     if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
+}
+
+function pagePlaybackError(code) {
+  if (code === 403) return 'El hosting solo abre reproductores de canales del catálogo publicado. Si acabas de añadir el enlace, espera un minuto y pulsa Refrescar.';
+  if (code === 404) return 'No se encontró el vídeo en la página del reproductor, o falta subir calamar-player.php al hosting.';
+  if (code === 400) return 'Este enlace de reproductor no es válido.';
+  return 'La página del reproductor no responde o ninguna de sus fuentes funciona ahora. Pulsa Refrescar en un momento.';
 }
 
 // ---- Audience -------------------------------------------------------------------------------

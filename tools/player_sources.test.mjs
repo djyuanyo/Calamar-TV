@@ -44,3 +44,15 @@ test('source selector appears only for multiple sources and disappears when retu
   renderSourcePicker(container, [], 0, () => {});
   assert.equal(container.hidden, true);
 });
+
+test('player pages of channels play through the hosting; elsewhere they still need the app', async () => {
+  const { webPlayback } = await import('../web/catalog.js');
+  const page = 'https://zicotv.cc/canal/primera-federacion?x=1';
+  const [source] = sourceOptions([page]);
+  assert.equal(source.available, true);
+  assert.equal(source.how.kind, 'hls');
+  assert.equal(source.how.page, true);
+  assert.equal(source.how.address, 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fzicotv.cc%2Fcanal%2Fprimera-federacion%3Fx%3D1&hls=1');
+  assert.equal(webPlayback(page).ok, false);
+  assert.equal(sourceOptions(['https://cdn.example/live.m3u8'])[0].how.address, undefined);
+});
