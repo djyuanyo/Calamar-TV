@@ -676,6 +676,32 @@ try {
   assert.equal(await page.getByText(/No existe el evento/).count(), 0);
   await page.locator('#player-title').getByText('Sevilla vs Real Madrid', { exact: true }).waitFor();
   await page.evaluate(() => sessionStorage.removeItem('slowCatalog'));
+  // A player page (read by the hosting) that keeps failing: the web asks the hosting again, from another
+  // of the page's videos (intento=1, 2, 3), before showing the failure.
+  await page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.push({ id: 'pagina', name: 'Canal Página', group: 'Deportes', streams: ['https://player.example/canal/uno'] });
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  });
+  await page.addInitScript(() => {
+    window.__hlsSources = [];
+    window.Hls = class {
+      static isSupported() { return true; }
+      static Events = { ERROR: 'hlsError' };
+      on(name, handler) { if (name === 'hlsError') this.failed = handler; }
+      loadSource(url) { window.__hlsSources.push(url); setTimeout(() => this.failed?.('hlsError', { fatal: true, type: 'networkError', details: 'manifestLoadError', response: { code: 502 }, url }), 50); }
+      attachMedia() {} destroy() {} stopLoad() {} startLoad() {}
+      get levels() { return []; }
+    };
+  });
+  await page.goto(base + '/?pagina=1#/canal/canal-pagina');
+  await page.getByText('La emisión se ha cortado. Reconectando…').waitFor();
+  await page.clock.runFor(10000);
+  await page.locator('#player-status').getByRole('button', { name: '↻ Refrescar' }).waitFor();
+  const asked = await page.evaluate(() => window.__hlsSources);
+  const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
+  assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
+  assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

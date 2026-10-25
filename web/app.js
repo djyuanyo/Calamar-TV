@@ -479,6 +479,18 @@ function stop() {
   controls.reset();
 }
 
+/**
+ * Automatic recovery: when the last source of a channel fails, it starts again from the first, up to
+ * three rounds every two minutes. A player page read by the hosting is asked again with the round
+ * number, so the hosting starts from another of its videos (CDN 2, CDN 3…).
+ */
+const recovery = { key: '', rounds: 0, since: 0 };
+function recoveryRound(c, now = Date.now()) {
+  if (recovery.key !== c.id || now - recovery.since > 120000) Object.assign(recovery, { key: c.id, rounds: 0, since: now });
+  return ++recovery.rounds <= 3 ? recovery.rounds : 0;
+}
+const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
+
 function playSource(c, index) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
@@ -513,6 +525,16 @@ function playSource(c, index) {
     if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, playable[position + 1].index);
+    } else if (recoveryRound(c)) {
+      // Back to the first source: a server that failed a moment ago often answers again.
+      if (hls) hls.stopLoad();
+      if (stopTs) { stopTs(); stopTs = null; }
+      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : 'La emisión se ha cortado. Reconectando…';
+      setTimeout(() => {
+        if (generation !== playbackGeneration) return;
+        const latest = state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, playable[0].index);
+      }, 2000);
     } else {
       // A fatal network error is no longer a buffering state. Keep the failure
       // visible and stop outstanding requests until the user retries.
@@ -599,7 +621,8 @@ function playSource(c, index) {
     return;
   }
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
-  const address = source.how.address || source.url;
+  const round = roundOf(c);
+  const address = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {

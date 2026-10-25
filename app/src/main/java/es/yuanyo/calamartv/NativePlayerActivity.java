@@ -99,6 +99,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** All official alternatives for a direct channel; a failing one moves on to the next. */
   private final List<String> directUrls = new ArrayList<>();
+  /**
+   * The channel's player pages, in catalog order. When every video of one page fails, the next page is
+   * tried, and after the pages the direct links (pageIndex past the end means the direct links).
+   */
+  private final List<String> channelPages = new ArrayList<>();
+  private int pageIndex = -1;
+  private boolean directTried;
 
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
@@ -146,7 +153,25 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       String url = UserChannels.normalize(candidate);
       if (url != null && !directUrls.contains(url)) directUrls.add(url);
     }
-    directUrl = directUrls.isEmpty() ? null : directUrls.get(0);
+    // Channels: player pages among their links are read as pages (one after another), not played as
+    // videos. Films keep their single link as it is (a Drive link has no extension either).
+    ArrayList<String> everything = getIntent().getStringArrayListExtra("channel_streams");
+    if (everything != null) {
+      if (pageUrl != null && UserChannels.isPage(pageUrl)) channelPages.add(pageUrl);
+      for (String candidate : everything) {
+        String url = UserChannels.normalize(candidate);
+        if (url == null) continue;
+        if (UserChannels.isPage(url)) { if (!channelPages.contains(url)) channelPages.add(url); }
+        else if (!directUrls.contains(url)) directUrls.add(url);
+      }
+      directUrls.removeIf(UserChannels::isPage);
+    }
+    // A channel whose first link is a page starts with that page; its direct links wait their turn.
+    boolean startWithPage = everything != null && pageUrl != null;
+    directUrl = startWithPage || directUrls.isEmpty() ? null : directUrls.get(0);
+    if (directUrl == null && pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
+    pageIndex = directUrl != null ? -1 : channelPages.indexOf(pageUrl);
+    directTried = directUrl != null;
     if (directUrl != null) pageUrl = null;
     else if (pageUrl == null || !pageUrl.startsWith("https://")) {
       finish();
@@ -789,10 +814,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       automaticAttempts = 0;
       attemptWindow = now;
     }
-    // Direct channels with alternatives try each source before giving up.
+    // Direct channels with alternatives try each source before giving up; a player page with several
+    // videos (CDN 1, CDN 2…) moves on to its next video, as the page is read again.
     if (directUrl != null && directUrls.size() > 1) selection = (selection + 1) % directUrls.size();
-    int limit = Math.max(3, directUrls.size());
+    else if (directUrl == null && sources.size() > 1) selection = (selection + 1) % sources.size();
+    int limit = Math.max(3, Math.max(directUrls.size(), sources.size()));
     if (++automaticAttempts > limit || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
+      // Every video of this source failed: the channel's next source, if it has one.
+      if (switchChannelSource()) return;
       if (footballFallback && directUrl == null) {
         openWeb();
         status.setText("La fuente directa falló. Modo web del proveedor.");
@@ -809,6 +838,29 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private final Runnable renewalRequest = this::resolveFresh;
+
+  /** Moves to the channel's next player page, or after the pages to its direct links; false when none is left. */
+  private boolean switchChannelSource() {
+    if (pageIndex + 1 < channelPages.size()) {
+      pageIndex++;
+      directUrl = null;
+      pageUrl = channelPages.get(pageIndex);
+      documentUrl = pageUrl;
+    } else if (!directTried && !directUrls.isEmpty()) {
+      directTried = true;
+      pageIndex = channelPages.size();
+      directUrl = directUrls.get(0);
+      pageUrl = null;
+      documentUrl = directUrl;
+    } else return false;
+    automaticAttempts = 0;
+    attemptWindow = android.os.SystemClock.elapsedRealtime();
+    selection = 0;
+    sources.clear();
+    status.setText("Esta fuente no responde. Probando la siguiente fuente del canal…");
+    handler.postDelayed(renewalRequest, 1500);
+    return true;
+  }
 
   private String reportHeader() {
     Uri page = Uri.parse(directUrl != null ? directUrl : pageUrl);
