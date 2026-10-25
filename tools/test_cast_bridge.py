@@ -55,6 +55,11 @@ class CastBridgeTest(unittest.TestCase):
                 + json.dumps(directory) + '));'))
             self.assertIn('-tls_verify', args)
             self.assertEqual(args[args.index('-i') + 1], 'https://calamarmenciano.com/calamar-tv-relay.php?stream=1')
+            self.assertNotIn('X-Calamar-Worker', args[args.index('-headers') + 1])
+            keyed = json.loads(self.php('echo json_encode(castArguments("ffmpeg", "http://31.43.191.125:8080/Test/Pass/123", '
+                + json.dumps(directory) + ', "abc123"));'))
+            # The hosting's own worker keeps its single connection to the provider open.
+            self.assertIn('X-Calamar-Worker: abc123\r\n', keyed[keyed.index('-headers') + 1])
             # Feed a real local HEVC fixture to exactly the production output arguments.
             command = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(source)] + args[args.index('-i') + 2:]
             subprocess.run(command, check=True, timeout=40)

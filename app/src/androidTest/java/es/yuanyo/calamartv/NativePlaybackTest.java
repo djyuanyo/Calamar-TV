@@ -43,6 +43,8 @@ public class NativePlaybackTest {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(video()); server.enqueue(video()); server.enqueue(video()); server.start();
       String original="http://31.43.191.125:8080/test-user/test-password/244";
+      // A provider this device cannot reach: it goes through the hosting.
+      HttpIptvDataSource.RELAYED.add("31.43.191.125:8080");
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("media_url",server.url("/bootstrap.ts").toString()).putExtra("title","Prueba puente HTTPS");
       try (ActivityScenario<NativePlayerActivity> scenario=ActivityScenario.launch(intent)) {
@@ -81,7 +83,7 @@ public class NativePlaybackTest {
           }
         }
         assertTrue("IPTV must use the web transport with credentials exclusively in the header",found);
-      }
+      } finally { HttpIptvDataSource.RELAYED.clear(); }
     }
   }
 

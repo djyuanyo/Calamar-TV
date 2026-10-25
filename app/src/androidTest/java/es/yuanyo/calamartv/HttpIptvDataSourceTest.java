@@ -13,9 +13,13 @@ import org.junit.runner.RunWith;
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HttpIptvDataSourceTest {
   static class Fake implements DataSource {
-    List<DataSpec> requests=new ArrayList<>();int reads,closes;
+    List<DataSpec> requests=new ArrayList<>();int reads,closes;boolean blocked;
     public void addTransferListener(TransferListener l){}
-    public long open(DataSpec s){requests.add(s);reads=0;return 188;}
+    public long open(DataSpec s) throws java.io.IOException {
+      requests.add(s);reads=0;
+      if(blocked && !s.uri.equals(HttpIptvDataSource.ENDPOINT))throw new java.io.IOException("blocked by the operator");
+      return 188;
+    }
     public int read(byte[] b,int o,int n){if(reads++>0)return C.RESULT_END_OF_INPUT;b[o]=71;return 1;}
     public Uri getUri(){return requests.get(requests.size()-1).uri;}
     public Map<String,List<String>> getResponseHeaders(){return Collections.emptyMap();}
@@ -27,15 +31,36 @@ public class HttpIptvDataSourceTest {
     assertFalse(transport.mediaFactory(null,false,"https://tdt.example/live.m3u8").createDataSource() instanceof HttpIptvDataSource);
     assertTrue(transport.mediaFactory(null,false,"http://cdn.example/user/password/244").createDataSource() instanceof HttpIptvDataSource);
   }
-  @Test public void finiteHostingConnectionsRenewWithoutEndingLivePlayback() throws Exception {
+  @Test public void iptvPlaysStraightFromTheProviderAsInVlc() throws Exception {
+    HttpIptvDataSource.RELAYED.clear();
     Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
+    String original="http://31.43.191.125:8080/user/password/244";
+    assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original),5000,C.LENGTH_UNSET)));
+    byte[] bytes=new byte[188];assertEquals(1,source.read(bytes,0,188));
+    // The provider closed the connection: a fresh live connection, never a seek into the old stream.
+    assertEquals(1,source.read(bytes,0,188));
+    assertEquals(2,upstream.requests.size());
+    for(DataSpec request:upstream.requests){assertEquals(original,request.uri.toString());assertEquals(0,request.position);}
+    assertTrue(HttpIptvDataSource.RELAYED.isEmpty());
+    source.close();
+  }
+  @Test public void finiteHostingConnectionsRenewWithoutEndingLivePlayback() throws Exception {
+    HttpIptvDataSource.RELAYED.clear();
+    Fake upstream=new Fake();upstream.blocked=true;HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
     String original="http://31.43.191.125:8080/user/password/244";
     assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original))));
     byte[] bytes=new byte[188];assertEquals(1,source.read(bytes,0,188));assertEquals(1,source.read(bytes,0,188));
-    assertEquals(2,upstream.requests.size());assertEquals(1,upstream.closes);
+    // The direct try failed (blocked), then the hosting, renewed once.
+    assertEquals(3,upstream.requests.size());assertEquals(2,upstream.closes);
+    assertEquals(original,upstream.requests.remove(0).uri.toString());
+    assertTrue(HttpIptvDataSource.RELAYED.contains("31.43.191.125:8080"));
     assertEquals(original,source.getUri().toString());
     for(DataSpec request:upstream.requests){assertEquals(HttpIptvDataSource.ENDPOINT,request.uri);assertEquals(0,request.position);assertEquals(C.LENGTH_UNSET,request.length);assertFalse(request.uri.toString().contains("password"));}
-    source.close();assertEquals(2,upstream.closes);
+    source.close();assertEquals(3,upstream.closes);
+    // The next connection to that provider goes straight to the hosting.
+    Fake next=new Fake();next.blocked=true;HttpIptvDataSource again=new HttpIptvDataSource(next,HttpIptvDataSource.ENDPOINT);
+    again.open(new DataSpec(Uri.parse(original)));assertEquals(1,next.requests.size());assertEquals(HttpIptvDataSource.ENDPOINT,next.requests.get(0).uri);
+    HttpIptvDataSource.RELAYED.clear();
   }
   @Test public void tdtHttpsAndLocalHttpRemainDirectAndKeepTheirEndOfInput() throws Exception {
     for(String address:new String[]{"https://tdt.example/live.m3u8","http://127.0.0.1/local.ts"}){

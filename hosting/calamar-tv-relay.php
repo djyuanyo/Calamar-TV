@@ -26,7 +26,13 @@ if (isset($_GET['stream'])) {
     if (!httpTsSourceAllowed($source)) failure('Enlace IPTV HTTP no válido para el puente.', 400);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
-    $deadline = microtime(true) + 120; $started = false; $total = 0; $lastHttp = 0;
+    // Browsers get bounded connections (120 s / 64 MiB). The hosting's own video worker
+    // (calamar-cast.php, shared by every viewer of the channel) keeps one open connection.
+    $worker = calamarWorkerKey();
+    $long = $worker !== null && hash_equals($worker, (string)($_SERVER['HTTP_X_CALAMAR_WORKER'] ?? ''));
+    if ($long) @set_time_limit(0);
+    $limit = $long ? PHP_INT_MAX : 67108864;
+    $deadline = microtime(true) + ($long ? 6 * 3600 : 120); $started = false; $total = 0; $lastHttp = 0;
     for ($hop = 0; $hop < 4; $hop++) {
         $target = publicTarget($source);
         if ($target === null) { if (!$started) failure('Redirección no pública o no compatible.'); break; }
@@ -47,19 +53,19 @@ if (isset($_GET['stream'])) {
                 if (stripos($line, 'Location:') === 0) $location = trim(substr($line, 9));
                 return strlen($line);
             },
-            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$status, &$total, &$started) {
+            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$status, &$total, &$started, $limit) {
                 if (connection_aborted()) return 0;
                 if (!in_array($status, array(200, 206), true)) {
-                    $total += strlen($chunk); return $total > 67108864 ? 0 : strlen($chunk);
+                    $total += strlen($chunk); return $total > $limit ? 0 : strlen($chunk);
                 }
                 if (!$started) {
                     header('Content-Type: video/mp2t'); header('X-Accel-Buffering: no');
                     header('X-Content-Type-Options: nosniff'); $started = true;
                 }
-                $remaining = 67108864 - $total;
+                $remaining = $limit - $total;
                 $piece = substr($chunk, 0, max(0, $remaining));
                 $total += strlen($piece); echo $piece; flush();
-                return $total >= 67108864 ? 0 : strlen($chunk);
+                return $total >= $limit ? 0 : strlen($chunk);
             },
         ));
         curl_exec($ch); $lastHttp = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
