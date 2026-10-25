@@ -538,19 +538,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(renewal);
     final int request = ++generation;
     status.setText("Buscando una fuente de vídeo vigente…");
-    if (channelPage()) {
-      // As on the web: the hosting reads the page and relays its video (calamar-player.php), so operators
-      // that block the page or its video servers during matches do not stop it. A new attempt asks the
-      // hosting to start from another video of the page (CDN 2, CDN 3…).
-      resolving = false;
-      sources.clear();
-      sources.add(new VideoResolver.Source(title == null ? "Canal" : title,
-          Library.playerRelay(pageUrl) + (automaticAttempts > 0 ? "&intento=" + Math.min(9, automaticAttempts) : "")));
-      selection = 0;
-      updateSourceButton();
-      playSource(sources.get(0));
-      return;
-    }
     if (VideoResolver.isMedia(pageUrl)) {
       resolving = false;
       sources.clear();
@@ -573,6 +560,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
+                  // Each phone reads the page and its videos itself, as a viewer of the page. The hosting
+                  // (calamar-player.php) is only the last option: with every viewer behind its single
+                  // address the page refused it, and one server cannot carry a big match for everyone.
+                  if (channelPage() && !sources.isEmpty())
+                    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
                     // A video just uploaded to LuluStream plays once LuluStream has converted it.
@@ -600,6 +592,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (channelPage()) {
+                    // The page cannot be reached from this phone (blocked by the operator): the hosting.
+                    sources.clear();
+                    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
+                    selection = 0;
+                    updateSourceButton();
+                    playSource(sources.get(0));
                   } else if (footballFallback) {
                     openWeb();
                     status.setText("No hay fuente directa. Reproduciendo desde el proveedor.");
@@ -657,8 +656,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
     player =
         new ExoPlayer.Builder(this)
+            // Up to 30 s ahead (it starts after 2.5 s): with only 5 s, a slow piece from a distant
+            // server stopped the picture.
             .setLoadControl(new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5000, 20000, 1000, 2000)
+                .setBufferDurationsMs(12000, 30000, 2500, 5000)
                 .setPrioritizeTimeOverSizeThresholds(true).build())
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
             .build();
