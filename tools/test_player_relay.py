@@ -85,6 +85,12 @@ class PlayerRelayTest(unittest.TestCase):
                     urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-player.php?page=x',
                                                                   headers={'Origin': 'https://evil.example'}), timeout=5)
                 self.assertEqual(other.exception.code, 403)
+                # Chromecast asks for signed addresses from its own origin: allowed, but only with a valid signature.
+                with self.assertRaises(urllib.error.HTTPError) as cast:
+                    urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-player.php?seg={bad}&p=&sig=00000000000000000000000000000000&l=1',
+                                                                  headers={'Origin': 'https://www.gstatic.com'}), timeout=5)
+                self.assertEqual(cast.exception.code, 403)
+                self.assertEqual(cast.exception.headers['Access-Control-Allow-Origin'], '*')
             finally:
                 server.terminate(); server.wait()
             self.assertEqual(list(pathlib.Path(home).iterdir()), [])
