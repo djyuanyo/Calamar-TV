@@ -9,7 +9,7 @@ export function sourceOptions(streams, now = Date.now()) {
     return {
       url, index, how, expiry,
       available: how.ok && !expired,
-      label: `Fuente ${index + 1}`,
+      label: `Opción ${index + 1}`,
       reason: expired ? 'Caducada' : how.ok ? '' : how.reason,
     };
   });

@@ -957,7 +957,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     String[] names = new String[sources.size()];
-    for (int i = 0; i < names.length; i++) names[i] = sources.get(i).label;
+    // Numbered options, whatever the provider calls them (CDN 4, Vídeo 1…).
+    for (int i = 0; i < names.length; i++) names[i] = "Opción " + (i + 1);
     new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
         .setSingleChoiceItems(
