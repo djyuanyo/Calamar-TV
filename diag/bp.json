@@ -1,0 +1,47 @@
+{
+ "status": 200,
+ "final": "bp.zicotv.cc",
+ "ctype": "text/html; charset=UTF-8",
+ "len": 8317,
+ "title": null,
+ "ZT_SOURCES": 0,
+ "m3u8": 0,
+ ".mpd": 0,
+ "clappr": 1,
+ "Clappr": 0,
+ "hls": 0,
+ "jwplayer": 0,
+ "videojs": 0,
+ "shaka": 0,
+ "atob(": 0,
+ "fetch(": 0,
+ "XMLHttpRequest": 0,
+ "api/": 0,
+ "token": 1,
+ "eval(function(p,a,c,k": 0,
+ "iframes": [],
+ "scripts": [
+  "https://cloud.umami.is/script.js",
+  "https://bp.zicotv.cc/build/assets/app-BVqozVxj.js",
+  "https://bp.zicotv.cc/build/assets/show-CxFgRrBm.js",
+  "https://bp.zicotv.cc/gwznroh.js"
+ ],
+ "m3u8_urls_hosts": [],
+ "api_like": [],
+ "inline_sizes": [
+  357,
+  274,
+  0,
+  0,
+  0,
+  48,
+  0,
+  253
+ ],
+ "snippets": [
+  "nt=\"ZicoTV\">\n    <meta property=\"og:description\" content=\"Mira eventos deportivos en vivo en ZicoTV\">\n    <meta property=\"og:url\" content=\"https://bp.zicotv.cc/channels/42898\">\n    <meta property=\"og:image\" content=\"https://bp.zicotv.cc/og-image.png\">\n    <meta property=\"og:image:secure_url\" content=\"https://bp.zicotv.cc/og-i",
+  "e=\"module\" src=\"/build/assets/show-CxFgRrBm.js\"></script>    </head>\n<body class=\"font-sans antialiased\">\n<div id=\"app\" data-page=\"{&quot;component&quot;:&quot;channels\\/show&quot;,&quot;props&quot;:{&quot;errors&quot;:{},&quot;name&quot;:&quot;ZicoTV&quot;,&quot;downloadUrl&quot;:&quot;https:\\/\\/bp.zicotv.cc\\/downloads\\/zico",
+  "quot;halloween&quot;,&quot;canReportChannels&quot;:false,&quot;canAccessChannels&quot;:true,&quot;siteNotice&quot;:null,&quot;unreadNotifications&quot;:0,&quot;channel&quot;:{&quot;id&quot;:42898,&quot;name&quot;:&quot;DAZN Baloncesto 1&quot;,&quot;category&quot;:&quot;Deportes&quot;,&quot;status&quot;:1,&quot;is_streaming&qu",
+  "uot;away_team&quot;:&quot;Baskonia&quot;,&quot;start_time&quot;:&quot;2026-10-25 17:00:00&quot;,&quot;status&quot;:&quot;live&quot;}]}},&quot;url&quot;:&quot;\\/channels\\/42898&quot;,&quot;version&quot;:&quot;24ef6231737228e8b38d3127baa42c0c&quot;,&quot;clearHistory&quot;:false,&quot;encryptHistory&quot;:false}\"></div>\n\n\n<scri"
+ ]
+}
