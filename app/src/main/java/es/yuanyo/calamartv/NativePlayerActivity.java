@@ -213,14 +213,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     LinearLayout controls = new LinearLayout(this);
     controls.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
     controls.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
-    ImageButton fullscreenButton = new ImageButton(this);
-    fullscreenButton.setImageResource(R.drawable.ic_player_fullscreen);
-    fullscreenButton.setContentDescription("Pantalla completa");
-    fullscreenButton.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
-    fullscreenButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
-    fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
-    LinearLayout.LayoutParams fullscreenSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
-    fullscreenSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+    // Full screen is the video controller's own button (bottom right), as in any player.
+    LinearLayout.LayoutParams buttonSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
+    buttonSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
     String audienceTarget=getIntent().getStringExtra("audience_target");
     if(AudienceModel.validTarget(audienceTarget)){
       viewersBadge=Ui.audienceBadge(this,12);viewersBadge.setContentDescription("Consultando espectadores");
@@ -230,7 +225,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers==1?"1 persona viendo":viewers+" personas viendo");
       });
     }
-    controls.addView(fullscreenButton, fullscreenSize);
     sourceButton = button(controls, "Fuentes", this::chooseSource);
     sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
@@ -242,7 +236,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       shareButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
       shareButton.setFocusable(true);
       shareButton.setOnClickListener(v -> share());
-      controls.addView(shareButton, new LinearLayout.LayoutParams(fullscreenSize));
+      controls.addView(shareButton, new LinearLayout.LayoutParams(buttonSize));
     }
     castControls = new CastControls(this, controls,
         () -> !currentUrl.isEmpty() ? currentUrl

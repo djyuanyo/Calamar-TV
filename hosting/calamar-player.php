@@ -6,6 +6,7 @@
 //    the list and its pieces with signed addresses (seg=…). Only pages of channels in the catalog are read.
 //    Nothing is written to disk except a one-minute copy of the public catalog, but every minute watched
 //    on the web passes through here.
+//  - GET page=…&cast=1: the signed address of that list, which Chromecast loads from its own origin.
 
 const PLAYER_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const PLAYER_CATALOG = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom';
@@ -222,8 +223,11 @@ function playerMain() {
     header('Referrer-Policy: no-referrer');
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowed = array('https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com');
-    if ($origin !== '' && !in_array($origin, $allowed, true)) playerAnswer(array('error' => 'Origen no permitido.'), 403);
-    if ($origin !== '') { header('Access-Control-Allow-Origin: ' . $origin); header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
+    // Signed addresses are handed out by this file: Chromecast plays them from its own origin.
+    if (isset($_GET['seg'])) header('Access-Control-Allow-Origin: *');
+    elseif ($origin !== '' && !in_array($origin, $allowed, true)) playerAnswer(array('error' => 'Origen no permitido.'), 403);
+    elseif ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
+    if ($origin !== '') { header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
     if (!function_exists('curl_init')) playerAnswer(array('error' => 'cURL no disponible.'), 502);
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
     if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET'); header('Access-Control-Allow-Headers: Range'); http_response_code(204); exit; }
@@ -235,7 +239,8 @@ function playerMain() {
         $url = playerUnB64($_GET['seg']); $page = playerUnB64($_GET['p'] ?? '');
         if (!is_string($url) || !is_string($page) || !preg_match('#^https://#', $url) || !hash_equals(playerSign($url, $page, $secret), (string)($_GET['sig'] ?? '')))
             playerAnswer(array('error' => 'Dirección no válida.'), 403);
-        if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '')) {
+        // l=1: a list without .m3u8 in its address (a page that is already the list).
+        if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '') || ($_GET['l'] ?? '') === '1') {
             list($status, $body, $final) = playerGet($url, $page, 2097152);
             if ($status !== 200 || !playerIsList($body)) playerAnswer(array('error' => 'El servidor no entrega la lista (' . $status . ').'), 502);
             playerList(playerRewrite($body, $final, $page, $secret));
@@ -247,10 +252,15 @@ function playerMain() {
     if (!preg_match('#^https://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
     // Only channels of the catalog: the hosting is not a relay for any page on the internet.
     if (!isset(playerCatalogStreams()[$page])) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
+    // cast=1: the signed address of the list instead of the list, for Chromecast (it cannot send the page).
+    $cast = isset($_GET['cast']);
     list($status, $html, $final) = playerGet($page, '');
     if ($status !== 200 || $html === null) playerAnswer(array('error' => 'La página del reproductor no responde (' . $status . ').'), 502);
     // The «page» is already an HLS list without .m3u8 in its address.
-    if (playerIsList($html)) playerList(playerRewrite($html, $final, $final, $secret));
+    if (playerIsList($html)) {
+        if ($cast) playerAnswer(array('url' => playerRelayed($final, $final, $secret) . '&l=1'));
+        playerList(playerRewrite($html, $final, $final, $secret));
+    }
     $sources = playerSources($html, $final);
     if (!$sources) playerAnswer(array('error' => 'No se encontró ningún vídeo en la página del reproductor.'), 404);
     $pick = $_GET['src'] ?? '';
@@ -266,7 +276,10 @@ function playerMain() {
     foreach ($sources as $video) {
         if (!preg_match('/\.m3u8$/i', parse_url($video, PHP_URL_PATH) ?: '')) continue;
         list($status, $body, $at) = playerGet($video, $final, 2097152);
-        if ($status === 200 && playerIsList($body)) playerList(playerRewrite($body, $at, $final, $secret));
+        if ($status === 200 && playerIsList($body)) {
+            if ($cast) playerAnswer(array('url' => playerRelayed($at, $final, $secret) . '&l=1'));
+            playerList(playerRewrite($body, $at, $final, $secret));
+        }
     }
     playerAnswer(array('error' => 'Ninguna fuente HLS de la página del reproductor responde.'), 502);
 }

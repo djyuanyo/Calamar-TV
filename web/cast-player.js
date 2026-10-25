@@ -1,5 +1,5 @@
-import { needsCastBridge, prepareCastSource } from './cast-adapter.js';
-/** Cast loads direct media or a server-produced H.264/AAC playlist. */
+import { castPage, needsCastBridge, prepareCastSource } from './cast-adapter.js';
+/** Cast loads direct media, a server-produced H.264/AAC playlist or the list of a player page. */
 export function castSource(address) {
   try {
     const u = new URL(address);
@@ -26,7 +26,7 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
   const send = async () => {
     const selected = getSource();
     let source = castSource(selected?.url);
-    if (!source && !needsCastBridge(selected?.url)) {
+    if (!source && !needsCastBridge(selected?.url) && !castPage(selected?.url)) {
       status('Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.');
       return;
     }
