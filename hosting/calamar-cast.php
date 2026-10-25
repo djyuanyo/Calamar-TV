@@ -40,22 +40,32 @@ function castCapabilities(): array {
         'worker_lock' => $flock !== '', 'binary' => $binary];
 }
 
-function castArguments(string $binary, string $source, string $folder, string $worker = ''): array {
-    $args = [$binary, '-hide_banner', '-loglevel', 'quiet', '-nostdin', '-y',
+/**
+ * $mode 'encode' converts any video to H.264 720p (HEVC channels); 'copy' keeps an H.264 picture as it
+ * comes and only cuts it into HLS pieces, with almost no CPU (shared hostings stop processes that
+ * encode video, which left the web without picture); 'probe' only reads what the channel carries.
+ */
+function castArguments(string $binary, string $source, string $folder, string $worker = '', string $mode = 'encode'): array {
+    $args = [$binary, '-hide_banner', '-loglevel', $mode === 'probe' ? 'info' : 'quiet', '-nostdin', '-y',
         '-threads', '2', '-rw_timeout', '15000000', '-reconnect', '1', '-reconnect_at_eof', '1',
         '-reconnect_streamed', '1', '-reconnect_delay_max', '3', '-tls_verify', '1',
         '-verifyhost', 'calamarmenciano.com',
         // The worker key keeps this one connection to the provider open (the relay cuts others at 120 s).
-        '-headers', 'X-Calamar-Source: ' . base64_encode($source) . "\r\n" . ($worker !== '' ? 'X-Calamar-Worker: ' . $worker . "\r\n" : ''),
-        '-i', CAST_INPUT_URL, '-map', '0:v:0', '-map', '0:a:0?',
-        '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=25',
-        '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-tune', 'zerolatency',
-        '-profile:v', 'main', '-level:v', '3.1', '-pix_fmt', 'yuv420p', '-b:v', '2200k',
-        '-maxrate', '2600k', '-bufsize', '5200k', '-g', '50', '-keyint_min', '50', '-sc_threshold', '0',
-        '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000',
-        '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8', '-hls_delete_threshold', '4',
-        '-hls_start_number_source', 'epoch', '-hls_flags', 'delete_segments+independent_segments+temp_file+omit_endlist',
-        '-hls_segment_filename', $folder . '/seg%d.ts', $folder . '/live.m3u8'];
+        '-headers', 'X-Calamar-Source: ' . base64_encode($source) . "\r\n" . ($worker !== '' && $mode !== 'probe' ? 'X-Calamar-Worker: ' . $worker . "\r\n" : ''),
+        '-i', CAST_INPUT_URL];
+    if ($mode === 'probe') {
+        $args = array_merge($args, ['-t', '1', '-f', 'null', '-']);
+    } else {
+        $args = array_merge($args, ['-map', '0:v:0', '-map', '0:a:0?'], $mode === 'copy' ? ['-c:v', 'copy'] : [
+            '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=25',
+            '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-tune', 'zerolatency',
+            '-profile:v', 'main', '-level:v', '3.1', '-pix_fmt', 'yuv420p', '-b:v', '2200k',
+            '-maxrate', '2600k', '-bufsize', '5200k', '-g', '50', '-keyint_min', '50', '-sc_threshold', '0'], [
+            '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000',
+            '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8', '-hls_delete_threshold', '4',
+            '-hls_start_number_source', 'epoch', '-hls_flags', 'delete_segments+independent_segments+temp_file+omit_endlist',
+            '-hls_segment_filename', $folder . '/seg%d.ts', $folder . '/live.m3u8']);
+    }
     foreach (['/etc/pki/tls/cert.pem', '/etc/ssl/certs/ca-certificates.crt'] as $ca) {
         if (is_readable($ca)) {
             array_splice($args, array_search('-headers', $args, true), 0, ['-ca_file', $ca]);
@@ -65,13 +75,18 @@ function castArguments(string $binary, string $source, string $folder, string $w
     return $args;
 }
 
-function castWorker(string $command, string $folder): string {
+function castWorker(string $command, string $folder, string $copy = '', string $probe = ''): string {
     // The supervisor owns its child PID. No user-provided command/path is interpolated unquoted.
     $dir = escapeshellarg($folder);
+    // An H.264 channel is only repackaged (copy); anything else is converted (command). The probe's
+    // output goes to grep only, never to a log.
+    $launch = $copy !== '' && $probe !== ''
+        ? "if $probe 2>&1 | grep -q 'Video: h264'; then\n  $copy </dev/null >/dev/null 2>&1 &\nelse\n  $command </dev/null >/dev/null 2>&1 &\nfi\n"
+        : "$command </dev/null >/dev/null 2>&1 &\n";
     return "#!/bin/sh\ncd $dir || exit 1\nexec 9>worker.lock\nflock -n 9 || exit 0\n"
         . "cleanup() { kill \"\$child\" 2>/dev/null; wait \"\$child\" 2>/dev/null; rm -f worker.sh worker.alive live.m3u8 live.m3u8.tmp seg*.ts seg*.ts.tmp; }\n"
         . "trap cleanup EXIT\ntrap 'exit 0' INT TERM HUP\ntouch worker.alive\n"
-        . "$command </dev/null >/dev/null 2>&1 &\nchild=\$!\n"
+        . $launch . "child=\$!\n"
         . "while kill -0 \"\$child\" 2>/dev/null; do\n"
         . "  touch worker.alive\n  now=\$(date +%s)\n  last=\$(stat -c %Y heartbeat 2>/dev/null || echo 0)\n"
         . "  [ \$((now - last)) -gt 90 ] && break\n  sleep 5\ndone\n";
@@ -164,8 +179,8 @@ try {
     if (!$alive && !$recent) {
         foreach (glob($folder . '/seg*.ts*') ?: [] as $old) @unlink($old);
         @unlink($folder . '/live.m3u8');
-        $command = implode(' ', array_map('escapeshellarg', castArguments($cap['binary'], $source, $folder, calamarWorkerKey() ?? '')));
-        $script = $folder . '/worker.sh'; file_put_contents($script, castWorker($command, $folder));
+        $shell = fn(string $mode) => implode(' ', array_map('escapeshellarg', castArguments($cap['binary'], $source, $folder, calamarWorkerKey() ?? '', $mode)));
+        $script = $folder . '/worker.sh'; file_put_contents($script, castWorker($shell('encode'), $folder, $shell('copy'), $shell('probe')));
         @touch($folder . '/launched');
         // Discard every subprocess log: FFmpeg errors can otherwise reveal the source headers.
         // Release the probe lock before the supervisor acquires it; start.lock serializes launchers.

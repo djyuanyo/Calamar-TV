@@ -71,6 +71,44 @@ class CastBridgeTest(unittest.TestCase):
             video = next(s for s in probe['streams'] if s['codec_type'] == 'video')
             self.assertLessEqual(video['height'], 720)
 
+    def test_h264_channels_are_only_repackaged_without_encoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = pathlib.Path(directory)
+            source = folder / 'input.ts'
+            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+                'testsrc2=size=640x360:rate=25', '-f', 'lavfi', '-i', 'sine=frequency=1000:sample_rate=48000',
+                '-t', '8', '-c:v', 'libx264', '-g', '25', '-c:a', 'aac', '-f', 'mpegts', str(source)],
+                check=True, stderr=subprocess.DEVNULL, timeout=40)
+            args = json.loads(self.php('echo json_encode(castArguments("ffmpeg", "http://31.43.191.125:8080/Test/Pass/123", '
+                + json.dumps(directory) + ', "k", "copy"));'))
+            self.assertEqual(args[args.index('-c:v') + 1], 'copy')
+            self.assertNotIn('libx264', args)
+            command = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(source)] + args[args.index('-i') + 2:]
+            subprocess.run(command, check=True, timeout=40)
+            self.assertGreaterEqual((folder / 'live.m3u8').read_text().count('#EXTINF:'), 3)
+            segment = next(folder.glob('seg*.ts'))
+            probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-of', 'json', str(segment)], text=True))
+            self.assertEqual({s['codec_name'] for s in probe['streams']}, {'h264', 'aac'})
+            self.assertEqual(next(s for s in probe['streams'] if s['codec_type'] == 'video')['height'], 360)
+            # The probe reads the channel only to choose; it never writes the stream.
+            probe_args = json.loads(self.php('echo json_encode(castArguments("ffmpeg", "http://31.43.191.125:8080/Test/Pass/123", '
+                + json.dumps(directory) + ', "k", "probe"));'))
+            self.assertEqual(probe_args[-3:], ['-f', 'null', '-'])
+            self.assertNotIn('X-Calamar-Worker', probe_args[probe_args.index('-headers') + 1])
+
+    def test_the_worker_repackages_h264_and_converts_the_rest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = pathlib.Path(directory)
+            for codec, expected in (('h264', 'copy'), ('hevc', 'encode')):
+                (folder / 'heartbeat').touch()
+                for name in ('copy', 'encode'): (folder / name).unlink(missing_ok=True)
+                script = self.php('echo castWorker("touch encode", ' + json.dumps(directory) + ', "touch copy", '
+                    + json.dumps(f"echo 'Stream #0:0: Video: {codec} (Main)'") + ');')
+                path = folder / 'worker.sh'; path.write_text(script)
+                subprocess.run(['/bin/sh', str(path)], timeout=10)
+                self.assertTrue((folder / expected).exists(), codec)
+                self.assertFalse((folder / ('encode' if expected == 'copy' else 'copy')).exists(), codec)
+
     def test_one_worker_per_channel_and_idle_shutdown(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = pathlib.Path(directory)
