@@ -4,7 +4,7 @@ H = {'Origin': 'https://djyuanyo.github.io', 'User-Agent': 'Mozilla/5.0'}
 out = []
 try:
     data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
-    pages = [(c['name'], s) for c in data['channels'] for s in c.get('streams', []) if 'zicotv.cc/api' in s][:2]
+    pages = [(c['name'], s) for c in data['channels'] for s in c.get('streams', []) if 'zicotv.cc/api' in s][:4]
 except Exception as e:
     pages = []; out.append({'catalog': str(e)[:200]})
 def get(url):
@@ -21,6 +21,8 @@ for name, page in pages:
         for s in segs[-3:]:
             b, secs = get(urllib.parse.urljoin(base, s))
             row['segments'].append({'bytes': len(b), 's': secs, 'mbps': round(len(b) * 8 / secs / 1e6, 1)})
+    except urllib.error.HTTPError as e:
+        row['error'] = [e.code, e.read(300).decode('utf-8', 'replace')]
     except Exception as e:
         row['error'] = str(e)[:200]
     out.append(row)
