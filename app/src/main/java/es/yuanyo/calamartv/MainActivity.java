@@ -639,17 +639,36 @@ public class MainActivity extends Activity {
   final Map<String,Long> cardViewers=new HashMap<>();boolean cardAudienceReady,cardAudienceBusy;
   final Runnable audienceRefresh=new Runnable(){public void run(){
     if(!resumed)return;
-    if(!cardAudienceBusy){cardAudienceBusy=true;com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(MainActivity.this)).collection("calamarAudience")
-      .whereGreaterThanOrEqualTo("minute",AudienceModel.minute(System.currentTimeMillis())-2).get(com.google.firebase.firestore.Source.SERVER).addOnCompleteListener(task -> {
-        cardAudienceBusy=false;if(!resumed)return;cardAudienceReady=task.isSuccessful();cardViewers.clear();
-        if(task.isSuccessful()){List<Map<String,Object>> docs=new ArrayList<>();for(com.google.firebase.firestore.DocumentSnapshot doc:task.getResult().getDocuments())docs.add(doc.getData());cardViewers.putAll(AudienceModel.counts(docs,System.currentTimeMillis()));}
+    // One count per card shown (one read each, the first ones only), never every presence document:
+    // reading them all from every phone used up the free Firestore quota during a big match.
+    LinkedHashSet<String> targets=new LinkedHashSet<>();collectAudienceTargets(root,targets);collectAudienceTargets(multiPicker,targets);
+    if(!cardAudienceBusy&&!targets.isEmpty()){
+      cardAudienceBusy=true;
+      com.google.firebase.firestore.FirebaseFirestore db=com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(MainActivity.this));
+      List<String> asked=new ArrayList<>(targets);if(asked.size()>AudienceModel.CARD_TARGETS)asked=asked.subList(0,AudienceModel.CARD_TARGETS);
+      List<com.google.android.gms.tasks.Task<com.google.firebase.firestore.AggregateQuerySnapshot>> tasks=new ArrayList<>();
+      for(String target:asked)tasks.add(db.collection("calamarAudience").whereIn("beat",AudienceModel.beats(target,System.currentTimeMillis())).count().get(com.google.firebase.firestore.AggregateSource.SERVER));
+      final List<String> names=asked;
+      com.google.android.gms.tasks.Tasks.whenAllComplete(tasks).addOnCompleteListener(done -> {
+        cardAudienceBusy=false;if(!resumed)return;cardViewers.clear();boolean ok=true;
+        for(int i=0;i<tasks.size();i++){if(tasks.get(i).isSuccessful())cardViewers.put(names.get(i),tasks.get(i).getResult().getCount());else ok=false;}
+        cardAudienceReady=ok||!cardViewers.isEmpty();
         paintCardViewers(root);paintCardViewers(multiPicker);
-      });}
-    handler.removeCallbacks(this);handler.postDelayed(this,30000);
+      });
+    }
+    handler.removeCallbacks(this);handler.postDelayed(this,AudienceModel.CARDS_MS);
   }};
+  void collectAudienceTargets(View view,Set<String> out){
+    if(view==null)return;
+    if(view.getTag() instanceof AudienceTag&&((AudienceTag)view.getTag()).target!=null)out.add(((AudienceTag)view.getTag()).target);
+    if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)collectAudienceTargets(group.getChildAt(i),out);}
+  }
   void paintCardViewers(View view){
     if(view==null)return;
-    if(view instanceof TextView&&view.getTag() instanceof AudienceTag){String target=((AudienceTag)view.getTag()).target;Long value=cardViewers.get(target);String count=cardAudienceReady?String.valueOf(value==null?0:value):"—";((TextView)view).setText(count);view.setContentDescription(count.equals("—")?"Espectadores no disponibles":count+" personas viendo");}
+    if(view instanceof TextView&&view.getTag() instanceof AudienceTag){String target=((AudienceTag)view.getTag()).target;Long value=cardViewers.get(target);
+      // Only the first cards are counted; the others show no number rather than a wrong 0.
+      view.setVisibility(cardAudienceReady&&value==null?View.GONE:View.VISIBLE);
+      String count=cardAudienceReady?String.valueOf(value==null?0:value):"—";((TextView)view).setText(count);view.setContentDescription(count.equals("—")?"Espectadores no disponibles":count+" personas viendo");}
     if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)paintCardViewers(group.getChildAt(i));}
   }
   final Map<String,MatchScores.Result> matchResults=new HashMap<>();

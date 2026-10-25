@@ -29,6 +29,7 @@ export const beat = async (session, target) => { present.set(session, target); }
 export const leave = async session => { present.delete(session); };
 export const viewers = async target => [...present.values()].filter(t => t === target).length + 2;
 export const audience = async () => [...present.values()].map(target => ({ target, minute: Math.floor(Date.now() / 60000) }));
+export const viewersOf = async targets => new Map(targets.map(target => [target, [...present.values()].filter(t => t === target).length]));
 export const purgeAudience = async () => {};
 export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
 export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
@@ -349,7 +350,8 @@ try {
   await page.clock.fastForward(31000);
   await page.locator('.event-card [data-match-id]').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
   assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
-  await page.locator('.event-card .card-viewers b').getByText('1',{exact:true}).waitFor();
+  // Cards under an open player are not counted again (Firestore quota): they keep their number.
+  assert.equal(await page.locator('.event-card .card-viewers b').first().textContent(),'0');
   scoreOffline = true;
   await page.clock.fastForward(31000);
   await page.locator('.event-card [data-match-id]').getByText('Marcador no disponible', { exact: true }).waitFor();

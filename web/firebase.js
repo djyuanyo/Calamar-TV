@@ -1,7 +1,7 @@
 import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
-import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, minuteOf } from './audience.js';
+import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
@@ -111,9 +111,14 @@ export async function viewers(target) {
   const snapshot = await getCountFromServer(query(collection(db, AUDIENCE_PATH), where('beat', 'in', liveBeats(target))));
   return snapshot.data().count;
 }
-/** Every presence seen in the last minutes; the admin panel groups them by channel and event. */
+/** Viewers of several channels or events: one count each (one read), never every presence document. */
+export async function viewersOf(targets) {
+  const counts = await Promise.all(targets.map((target) => viewers(target)));
+  return new Map(targets.map((target, i) => [target, counts[i]]));
+}
+/** Every presence seen in the last minutes (one read each); only the admin panel groups them all. */
 export async function audience() {
-  const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '>=', minuteOf() - 2)));
+  const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '>=', liveFrom())));
   return snapshot.docs.map((d) => d.data());
 }
 /** Presence left behind by closed tabs; removing it keeps the collection small. */
