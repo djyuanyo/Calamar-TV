@@ -343,7 +343,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(30), dp(30));
     lp.setMargins(dp(4), 0, 0, 0);
     r.addView(logo, 1, lp);
-    image(logo, url);
+    logo(logo, url);
   }
 
   void heading(String title, String sub) {
@@ -524,7 +524,7 @@ public class MainActivity extends Activity {
     lp.gravity = wide() ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Gravity.END | Gravity.TOP);
     lp.setMargins(0, wide() ? 0 : dp(18), dp(wide() ? 48 : 18), 0);
     frame.addView(logo, lp);
-    image(logo, c.logo);
+    logo(logo, c.logo);
     if (c.event) logo.setVisibility(View.GONE);
 
     View scrim = new View(this);
@@ -731,7 +731,7 @@ public class MainActivity extends Activity {
         tile.setPadding(dp(4), dp(4), dp(4), dp(4));
         ImageView league = new ImageView(this);
         league.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        image(league, c.leagueLogo);
+        logo(league, c.leagueLogo);
         tile.addView(league, new FrameLayout.LayoutParams(-1, -1));
         slot.addView(tile, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         crests.addView(slot, new LinearLayout.LayoutParams(0, -1, 1.7f));
@@ -746,7 +746,7 @@ public class MainActivity extends Activity {
       ImageView crest = new ImageView(this);
       crest.setScaleType(ImageView.ScaleType.FIT_CENTER);
       if (logo.isEmpty()) { GradientDrawable dot = new GradientDrawable(); dot.setShape(GradientDrawable.OVAL); dot.setColor(0x24ffffff); crest.setImageDrawable(dot); }
-      else image(crest, logo);
+      else logo(crest, logo);
       crests.addView(crest, new LinearLayout.LayoutParams(0, -1, 3));
     }
     crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
@@ -778,7 +778,7 @@ public class MainActivity extends Activity {
     FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
     logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
     art.addView(logo, logoSize);
-    image(logo, c.logo);
+    logo(logo, c.logo);
     if (c.event) logo.setVisibility(View.GONE);
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
@@ -1079,6 +1079,15 @@ public class MainActivity extends Activity {
   }
 
   void image(final ImageView view, final String url) {
+    image(view, url, false);
+  }
+
+  /** Logos and crests: the copy on the public web first (tools/logo_mirror.py), then the original. */
+  void logo(final ImageView view, final String url) {
+    image(view, url, true);
+  }
+
+  void image(final ImageView view, final String url, final boolean copyFirst) {
     if (url != null && url.startsWith("data:image/")) {
       try {
         byte[] bytes = android.util.Base64.decode(url.substring(url.indexOf(',') + 1), android.util.Base64.DEFAULT);
@@ -1095,35 +1104,10 @@ public class MainActivity extends Activity {
     view.setTag(url);
     new AsyncTask<Void, Void, Bitmap>() {
       protected Bitmap doInBackground(Void... v) {
-        try {
-          HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-          c.setConnectTimeout(6000);
-          c.setReadTimeout(7000);
-          try {
-            InputStream in = c.getInputStream();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-              if (out.size() + n > 5 * 1024 * 1024) return null;
-              out.write(buf, 0, n);
-            }
-            in.close();
-            byte[] data = out.toByteArray();
-            BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inJustDecodeBounds = true;
-            BitmapFactory.decodeByteArray(data, 0, data.length, o);
-            o.inSampleSize = 1;
-            while (o.outWidth / o.inSampleSize > 1000 || o.outHeight / o.inSampleSize > 800)
-              o.inSampleSize *= 2;
-            o.inJustDecodeBounds = false;
-            return BitmapFactory.decodeByteArray(data, 0, data.length, o);
-          } finally {
-            c.disconnect();
-          }
-        } catch (Exception e) {
-          return null;
-        }
+        // Some logo sites are blocked by Spanish operators: their copy on the public web still loads.
+        String copy = copyFirst ? Catalog.mirror(url) : null;
+        Bitmap found = copy != null ? download(copy) : null;
+        return found != null ? found : download(url);
       }
 
       protected void onPostExecute(Bitmap b) {
@@ -1133,6 +1117,40 @@ public class MainActivity extends Activity {
         }
       }
     }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+  }
+
+  /** An image read from the network, scaled down when large; null when it cannot be read. */
+  static Bitmap download(String address) {
+    try {
+      HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
+      c.setConnectTimeout(6000);
+      c.setReadTimeout(7000);
+      try {
+        if (c.getResponseCode() != 200) return null;
+        InputStream in = c.getInputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+          if (out.size() + n > 5 * 1024 * 1024) return null;
+          out.write(buf, 0, n);
+        }
+        in.close();
+        byte[] data = out.toByteArray();
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(data, 0, data.length, o);
+        o.inSampleSize = 1;
+        while (o.outWidth / o.inSampleSize > 1000 || o.outHeight / o.inSampleSize > 800)
+          o.inSampleSize *= 2;
+        o.inJustDecodeBounds = false;
+        return BitmapFactory.decodeByteArray(data, 0, data.length, o);
+      } finally {
+        c.disconnect();
+      }
+    } catch (Exception e) {
+      return null;
+    }
   }
 
 

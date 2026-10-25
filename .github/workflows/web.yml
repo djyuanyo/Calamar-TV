@@ -69,6 +69,8 @@ jobs:
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event and channel with its card drawn as image, so shared links show it in WhatsApp.
           python tools/event_pages.py _site https://djyuanyo.github.io/Calamar-TV/ .share-cache
+          # Copies of the administrator's logos on this web: some logo sites are blocked in Spain.
+          python tools/logo_mirror.py _site .share-cache
           python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

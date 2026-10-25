@@ -1,6 +1,6 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
-import { merge, events, catalogEvents, PENDING, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, setLogoCopies, events, catalogEvents, PENDING, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -32,7 +32,8 @@ export async function fetchJson(path) {
 }
 
 export async function loadCatalog() {
-  const [tdt, custom] = await Promise.all([fetchJson('data/tdt.json'), fetchJson('data/custom.json')]);
+  const [tdt, custom, copies] = await Promise.all([fetchJson('data/tdt.json'), fetchJson('data/custom.json'), fetchJson('data/logos.json').catch(() => ({}))]);
+  setLogoCopies(copies);
   state.tdt = tdt;
   state.custom = sharedValue || custom;
   state.channels = merge(tdt, state.custom);

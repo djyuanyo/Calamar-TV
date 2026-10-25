@@ -34,3 +34,14 @@ test('links made with the old internal id still find the channel', () => {
   assert.equal(findChannel(channels, 'mio-xyz-1').slug, 'canal-menciana');
   assert.equal(findChannel(channels, 'no-existe'), null);
 });
+
+test('logos with a copy on this web show the copy', async () => {
+  const { merge, setLogoCopies } = await import('../web/catalog.js');
+  const custom = { channels: [{ id: 'd', name: 'DAZN 1', logo: 'https://docdog.top/DAZN_1.png', streams: ['https://x.example/a.m3u8'] },
+    { id: 'e', name: 'Otro', logo: 'https://other.example/e.png', streams: ['https://x.example/b.m3u8'] }], featured: [], hidden: [] };
+  setLogoCopies({ 'https://docdog.top/DAZN_1.png': 'logos/d1d2ae4b65ac88a49c29625c.png', 'https://other.example/e.png': 'javascript:alert(1)' });
+  const [dazn, other] = merge({ channels: [] }, custom);
+  assert.equal(dazn.logo, 'logos/d1d2ae4b65ac88a49c29625c.png');
+  assert.equal(other.logo, 'https://other.example/e.png');
+  setLogoCopies({});
+});

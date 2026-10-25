@@ -67,6 +67,13 @@ public class CompetitionsTest {
     assertEquals("dazn-2", slugs.get("dazn2"));
   }
 
+  @Test public void logoCopiesHaveTheNameTheWebPublishes() {
+    // Same name as mirror_name() in tools/logo_mirror.py.
+    assertEquals("https://djyuanyo.github.io/Calamar-TV/logos/d1d2ae4b65ac88a49c29625c.png", Catalog.mirror("https://docdog.top/logo/countries/spain/movistar/DAZN_1.png"));
+    assertNull(Catalog.mirror("https://djyuanyo.github.io/Calamar-TV/logos/x.png"));
+    assertNull(Catalog.mirror("data:image/png;base64,AAAA"));
+  }
+
   @Test public void brokenImportedMatchesAreRejected() throws Exception {
     for (String change : new String[] {"{\"channelId\":\"nope\"}", "{\"homeTeamId\":\"nope\"}", "{\"startAt\":\"mañana\"}", "{\"matchId\":\"\"}", "{\"cover\":\"http://x.example/c.jpg\"}", "{\"awayTeamId\":\"rm\"}"}) {
       JSONObject data = catalog(), fixture = data.getJSONArray("fixtures").getJSONObject(0), patch = new JSONObject(change);
