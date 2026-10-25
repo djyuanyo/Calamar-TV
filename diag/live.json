@@ -1,0 +1,26 @@
+[
+ {
+  "step": "master",
+  "status": 200,
+  "ctype": "application/vnd.apple.mpegurl",
+  "acao": "https://djyuanyo.github.io",
+  "secs": 1.2,
+  "leaks": false,
+  "body": "#EXTM3U"
+ },
+ {
+  "step": "variant",
+  "status": 200,
+  "secs": 0.58,
+  "lines": 13
+ },
+ {
+  "step": "segment",
+  "status": 200,
+  "ctype": "video/MP2T",
+  "acao": "https://djyuanyo.github.io",
+  "secs": 2.07,
+  "bytes": 2000000,
+  "ts": true
+ }
+]
