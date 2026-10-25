@@ -1,10 +1,30 @@
 [
  {
   "channel": "Movistar LaLiga",
-  "error": "HTTP Error 502: Bad Gateway"
+  "error": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ]
  },
  {
   "channel": "Primera Federación",
-  "error": "HTTP Error 502: Bad Gateway"
+  "error": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ]
+ },
+ {
+  "channel": "DAZN Baloncesto",
+  "error": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ]
+ },
+ {
+  "channel": "DAZN Baloncesto 2",
+  "error": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ]
  }
 ]
