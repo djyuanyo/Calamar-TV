@@ -302,16 +302,22 @@ export function eventArt(event, custom) {
 /**
  * Each event has a stable identity and resolves the current channel sources. Imported matches show
  * only the week of their league's next match; until they have a channel they say «Canal por confirmar».
+ * A finished match leaves the home page and the lists but stays in the catalog: with `finished` (its
+ * own link) it is still found, with its channel or, without one, with the match alone.
  */
-export function events(channels, custom, now = Date.now(), { allWeeks = false } = {}) {
+export const FINISHED = 'Partido finalizado';
+export function events(channels, custom, now = Date.now(), { allWeeks = false, finished = false } = {}) {
   const slugs = eventSlugs(custom);
-  const all = catalogEvents(custom).filter(event => !event.matchUrl || !matchExpired(event.matchId, now));
+  const ended = (event) => !!event.matchUrl && matchExpired(event.matchId, now);
+  const all = catalogEvents(custom).filter(event => finished || !ended(event));
   const imported = new Set(weekFixtures(all.filter((e) => e.imported), now));
   return all.filter((e) => !e.imported || allWeeks || imported.has(e)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
     if (target) return [{ ...target, ...shared, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
       streams: target.streams, playable: target.playable }];
+    if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
+      channelName: FINISHED, meta: [eventMeta(event, custom), FINISHED].filter(Boolean).join(' · ') }];
     return event.imported ? [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
       channelName: PENDING, meta: [eventMeta(event, custom), PENDING].filter(Boolean).join(' · ') }] : [];
   });
