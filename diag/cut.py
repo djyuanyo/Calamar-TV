@@ -1,43 +1,27 @@
-# The new relay against the real channel for 90 s: is its output one continuous, forward-moving clock?
-import base64, json, subprocess, time, urllib.request
+# The real hosting relay (calamarmenciano.com) for 60 s: status, when bytes arrive, error text.
+import base64, json, time, urllib.request, urllib.error
 CAT = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
 data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
-src = next(s for c in data['channels'] if c['name'] == 'Movistar Plus' for s in c['streams'] if s.startswith('http://'))
-srv = subprocess.Popen(['php', '-S', '127.0.0.1:8099', '-t', 'diag/host2'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(1.5)
-req = urllib.request.Request('http://127.0.0.1:8099/calamar-tv-relay.php?stream=1', headers={
-    'Origin': 'https://djyuanyo.github.io', 'X-Calamar-Source': base64.b64encode(src.encode()).decode()})
-t = time.time(); body = bytearray(); marks = []; status = None
-try:
-    r = urllib.request.urlopen(req, timeout=40); status = r.status
-    while time.time() - t < 90:
-        chunk = r.read(65536)
-        if not chunk: break
-        body += chunk
-        marks.append((round(time.time() - t, 1), len(body)))
-except Exception as e:
-    status = type(e).__name__
-srv.terminate()
-open('/tmp/out.ts', 'wb').write(body)
-pcrs = []
-for i in range(0, len(body) - 187, 188):
-    p = body[i:i + 188]
-    if p[0] != 0x47: continue
-    if p[3] & 0x20 and p[4] >= 7 and p[5] & 0x10:
-        pcrs.append(((p[6] << 25) | (p[7] << 17) | (p[8] << 9) | (p[9] << 1) | (p[10] >> 7)) / 90000)
-back = [(round(a, 2), round(b, 2)) for a, b in zip(pcrs, pcrs[1:]) if b < a]
-gaps = [(round(a, 2), round(b, 2)) for a, b in zip(pcrs, pcrs[1:]) if b - a > 1]
-every10 = [m for m in marks if int(m[0]) % 10 == 0][::max(1, len(marks) // 20)]
-out = {'status': status, 'secs': round(time.time() - t, 1), 'bytes': len(body), 'misaligned': sum(1 for i in range(0, len(body) - 187, 188) if body[i] != 0x47),
-       'pcr_first': round(pcrs[0], 2) if pcrs else None, 'pcr_last': round(pcrs[-1], 2) if pcrs else None,
-       'backward_jumps': back[:10], 'n_backward': len(back), 'gaps_over_1s': gaps[:10], 'progress': every10}
-def errors(path):
-    p = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-f', 'null', '-'], capture_output=True, text=True)
-    lines = [l for l in p.stderr.splitlines() if l.strip()]
-    return {'n': len(lines), 'sample': sorted(set(l.split('] ')[-1][:80] for l in lines))[:8]}
-out['decode_errors_relay'] = errors('/tmp/out.ts')
-# Baseline: one direct connection of the provider, as it comes.
-r = urllib.request.urlopen(urllib.request.Request(src, headers={'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'}), timeout=30)
-open('/tmp/one.ts', 'wb').write(r.read(40_000_000))
-out['decode_errors_one_direct_connection'] = errors('/tmp/one.ts')
+chan = next(c for c in data['channels'] if c['id'] == 'mio-movistar-mvhqvujf')
+src = next(s for s in chan['streams'] if s.startswith('http://'))
+out = {'channel': chan['name'], 'runs': []}
+for attempt in range(2):
+    req = urllib.request.Request('https://calamarmenciano.com/calamar-tv-relay.php?stream=1', headers={
+        'Origin': 'https://djyuanyo.github.io', 'X-Calamar-Source': base64.b64encode(src.encode()).decode()})
+    t = time.time(); total = 0; marks = []; res = {}
+    try:
+        r = urllib.request.urlopen(req, timeout=40); res['status'] = r.status; res['ctype'] = r.headers.get('Content-Type')
+        while time.time() - t < 60:
+            chunk = r.read(65536)
+            if not chunk: res['ended'] = True; break
+            if total == 0: res['first_byte_s'] = round(time.time() - t, 2)
+            total += len(chunk)
+            if not marks or time.time() - t - marks[-1][0] >= 5: marks.append((round(time.time() - t, 1), total))
+    except urllib.error.HTTPError as e:
+        res['status'] = e.code; res['body'] = e.read(300).decode('utf-8', 'replace')
+    except Exception as e:
+        res['error'] = type(e).__name__ + ': ' + str(e)[:150]
+    res.update({'secs': round(time.time() - t, 1), 'bytes': total, 'marks': marks})
+    out['runs'].append(res)
+    time.sleep(3)
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
