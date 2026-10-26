@@ -53,6 +53,7 @@ public class ResolvedPlaybackTest {
       for (int count; (count = in.read(block)) != -1;) video.write(block, 0, count);
     }
     AtomicInteger pages = new AtomicInteger();
+    java.util.concurrent.CountDownLatch releasePage = new java.util.concurrent.CountDownLatch(1);
     AtomicBoolean matchingProfile = new AtomicBoolean(true);
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false);
@@ -64,7 +65,11 @@ public class ResolvedPlaybackTest {
           if (!manualDirect && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
           if (path.startsWith("/api/player/28")) {
             int n = pages.incrementAndGet();
-            if (manualDirect) return new MockResponse().setResponseCode(503).setHeadersDelay(10, java.util.concurrent.TimeUnit.SECONDS);
+            if (manualDirect) {
+              try { releasePage.await(20, java.util.concurrent.TimeUnit.SECONDS); }
+              catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+              return new MockResponse().setResponseCode(503);
+            }
             return new MockResponse().setHeader("Content-Type", "text/html").setBody(
                 "var ZT_SOURCES=[{\"label\":\"CDN prueba\",\"url\":\"" + origin + "live.m3u8?token=" + n + "\"}];");
           }
@@ -147,6 +152,7 @@ public class ResolvedPlaybackTest {
         onView(withText(manualDirect ? "Enlace 2 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
         onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
       } finally {
+        releasePage.countDown();
         clientField.set(network, original);
         NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous);
       }
