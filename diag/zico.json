@@ -3,7 +3,7 @@
   "page": [
    200,
    "https://luluvdo.com/e/dab8pb27hxdg",
-   78037,
+   78031,
    true,
    false
   ],
@@ -21,7 +21,7 @@
   "page": [
    200,
    "https://luluvdo.com/e/zjmkh1lwsejz",
-   77983,
+   77972,
    true,
    false
   ],
@@ -33,6 +33,78 @@
   "hosting": [
    200,
    "#EXTM3U\n\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio0\",NAME=\"English\",LANGUAGE=\"en\",AUTOSELECT=YES,DEFAULT=YES,CHANNELS=\"2\","
+  ]
+ },
+ "ll2hidg1m59q": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/ll2hidg1m59q",
+   78065,
+   true,
+   false
+  ],
+  "m3u8_host": "lswr7ctginee.tnmr.org",
+  "master": [
+   200,
+   "#EXTM3U"
+  ],
+  "hosting": [
+   200,
+   "#EXTM3U\n\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio0\",NAME=\"English\",LANGUAGE=\"en\",AUTOSELECT=YES,DEFAULT=YES,CHANNELS=\"2\","
+  ]
+ },
+ "shrtan7z8hmm": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/shrtan7z8hmm",
+   78053,
+   true,
+   false
+  ],
+  "m3u8_host": "yojunsewpcak.tnmr.org",
+  "master": [
+   200,
+   "#EXTM3U"
+  ],
+  "hosting": [
+   200,
+   "#EXTM3U\n\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs0\",NAME=\"Espa\u00f1ol\",LANGUAGE=\"es\",AUTOSELECT=YES,DEFAULT=YES,URI=\"calam"
+  ]
+ },
+ "odql1gbzy42u": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/odql1gbzy42u",
+   78060,
+   true,
+   false
+  ],
+  "m3u8_host": "zm8xui93brqn.tnmr.org",
+  "master": [
+   404,
+   "Not Fou"
+  ],
+  "hosting": [
+   502,
+   "{\"error\":\"LuluStream no entrega la lista (404).\"}"
+  ]
+ },
+ "duj5ak4x5waa": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/duj5ak4x5waa",
+   77959,
+   true,
+   false
+  ],
+  "m3u8_host": "cdn1016.cdn-tnmr.org",
+  "master": [
+   200,
+   "#EXTM3U"
+  ],
+  "hosting": [
+   200,
+   "#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=2727757,RESOLUTION=1920x1080,FRAME-RATE=24.390,CODECS=\"avc1.640028,mp4a"
   ]
  }
 }
