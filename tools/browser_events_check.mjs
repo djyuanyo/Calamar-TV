@@ -706,6 +706,23 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
+  // zicotv: its own player inside ours, straight from zicotv; nothing goes through the hosting.
+  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', body: '<p>Reproductor de zicotv</p>' }));
+  await page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  });
+  await page.evaluate(() => { window.__hlsSources = []; });
+  await page.goto(base + '/?zico=1#/canal/canal-zico');
+  await page.locator('#player-frame').waitFor();
+  assert.equal(await page.locator('#player-frame').getAttribute('src'), 'https://zicotv.cc/api/player/1');
+  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), true);
+  assert.equal(await page.frameLocator('#player-frame').getByText('Reproductor de zicotv').count(), 1);
+  assert.equal(await page.locator('#player-close').isVisible(), true);
+  assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
+  await page.locator('#player-close').click();
+  assert.equal(await page.locator('#player-frame').count(), 0);
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

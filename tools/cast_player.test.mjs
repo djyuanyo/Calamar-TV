@@ -137,7 +137,7 @@ test('closing the channel cancels compatibility preparation without another host
 });
 
 test('player pages go to the TV as the signed list relayed by calamar-player.php', async () => {
-  const page = 'https://zicotv.cc/api/canal/42';
+  const page = 'https://player.example/api/canal/42';
   const asked = [];
   const fetcher = async (url) => { asked.push(url); return { ok: true, json: async () => ({ url: 'calamar-player.php?seg=aHR0cHM6Ly9jZG4&p=aHR0cHM6Ly96&sig=' + 'b'.repeat(32) + '&l=1' }) }; };
   const f = fixture({ prepareSource: (address, options) => prepareCastSource(address, { ...options, fetcher }) });
@@ -150,7 +150,7 @@ test('player pages go to the TV as the signed list relayed by calamar-player.php
 });
 
 test('a player page answer from another site or an old hosting file is not sent', async () => {
-  const page = 'https://zicotv.cc/api/canal/42';
+  const page = 'https://player.example/api/canal/42';
   for (const [answer, message] of [[{ url: 'https://evil.example/calamar-player.php?seg=a&sig=' + 'b'.repeat(32) }, /no válida/],
     [{ error: 'x' }, /última versión de calamar-player\.php/]]) {
     await assert.rejects(prepareCastSource(page, { fetcher: async () => ({ ok: true, json: async () => answer }) }), message);
