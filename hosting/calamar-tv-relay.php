@@ -26,13 +26,16 @@ if (isset($_GET['stream'])) {
     if (!httpTsSourceAllowed($source)) failure('Enlace IPTV HTTP no válido para el puente.', 400);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
-    // Browsers get bounded connections (120 s / 64 MiB). The hosting's own video worker
+    // Browsers get bounded connections (15 min / 512 MiB). The hosting's own video worker
     // (calamar-cast.php, shared by every viewer of the channel) keeps one open connection.
     $worker = calamarWorkerKey();
     $long = $worker !== null && hash_equals($worker, (string)($_SERVER['HTTP_X_CALAMAR_WORKER'] ?? ''));
     if ($long) @set_time_limit(0);
-    $limit = $long ? PHP_INT_MAX : 67108864;
-    $deadline = microtime(true) + ($long ? 6 * 3600 : 120); $started = false; $total = 0; $lastHttp = 0;
+    // A browser keeps its connection up to 15 minutes / 512 MiB (it reconnects by itself after): each
+    // end is a jump in the picture, and 120 s / 64 MiB cut a 4 Mbps channel every two minutes.
+    if (!$long) @set_time_limit(930);
+    $limit = $long ? PHP_INT_MAX : 536870912;
+    $deadline = microtime(true) + ($long ? 6 * 3600 : 900); $started = false; $total = 0; $lastHttp = 0;
     for ($hop = 0; $hop < 4; $hop++) {
         $target = publicTarget($source);
         if ($target === null) { if (!$started) failure('Redirección no pública o no compatible.'); break; }

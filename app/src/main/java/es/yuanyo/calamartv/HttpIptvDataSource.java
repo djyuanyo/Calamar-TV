@@ -79,7 +79,7 @@ final class HttpIptvDataSource implements DataSource {
     }
     if(bytes>0)received=true;
     if(!iptv || bytes!=C.RESULT_END_OF_INPUT || !opened)return bytes;
-    // A live channel never ends: the hosting ends a request after 120 seconds / 64 MiB on purpose, and a
+    // A live channel never ends: the hosting ends a request after 15 minutes / 512 MiB on purpose, and a
     // provider may close a connection. Keep the TS extractor alive and open a fresh live connection,
     // without seeking into the old stream.
     for(int attempt=0;attempt<2 && opened;attempt++) {
