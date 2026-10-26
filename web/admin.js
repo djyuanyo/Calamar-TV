@@ -8,6 +8,32 @@ import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin } from './library.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 
+// Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
+// reads their calendars from ESPN again and publishes the weeks that come in, in a single save.
+const CALENDARS_KEY = 'calamar-calendars-refreshed';
+let calendarsChecked = false;
+async function refreshCalendars(rerender) {
+  if (calendarsChecked || saving || !file?.data) return;
+  calendarsChecked = true;
+  let last = 0;
+  try { last = Number(localStorage.getItem(CALENDARS_KEY)) || 0; } catch {}
+  const leagues = (file.data.leagues || []).filter((l) => l.espn && COMPETITIONS.some((c) => c.slug === l.espn));
+  if (!leagues.length || Date.now() - last < 20 * 3600000) return;
+  const seasons = [];
+  for (const l of leagues) { try { seasons.push(await fetchSeason(l.espn)); } catch { /* That league waits for the next day. */ } }
+  if (!seasons.length || saving || !file?.data) return;
+  let next = file.data;
+  for (const season of seasons) next = applySeason(next, season).data;
+  try {
+    validateCatalog(next);
+    Object.assign(file.data, { leagues: next.leagues, teams: next.teams, fixtures: next.fixtures });
+    await saveFile();
+    try { localStorage.setItem(CALENDARS_KEY, String(Date.now())); } catch {}
+    notice = `Guardado. Calendarios actualizados: ${seasons.length} competiciones con sus próximas 5 semanas.`;
+  } catch (error) { notice = `No se pudieron actualizar los calendarios: ${explain(error)}`; }
+  if (location.hash.startsWith('#/admin')) rerender();
+}
+
 let saving = false;
 let file = null;
 let notice = '';
@@ -370,6 +396,7 @@ export async function render(state) {
       state.tdt = { channels: [] };
     }
   }
+  refreshCalendars(rerender);
   // Keep the public view in this tab consistent with what was just saved.
   state.custom = file.data;
   state.channels = merge(state.tdt, file.data);
@@ -657,7 +684,7 @@ async function importCompetition(slug, rerender, report = (text) => { notice = t
   validateCatalog(next);
   Object.assign(file.data, { leagues: next.leagues, teams: next.teams, fixtures: next.fixtures });
   await saveFile();
-  notice = `${league.name} ${league.season || ''}: ${count} partidos por jugar importados con su enlace de estadísticas. Elige el canal de cada uno en Eventos (los que no tengan canal salen como «Canal por confirmar»).`.replace('  ', ' ');
+  notice = `${league.name} ${league.season || ''}: ${count} partidos de las próximas 5 semanas importados con su enlace de estadísticas. Elige el canal de cada uno en Eventos (los que no tengan canal salen como «Canal por confirmar»).`.replace('  ', ' ');
   rerender();
 }
 
@@ -680,7 +707,7 @@ function importPanel(rerender) {
       await importCompetition(slug, rerender, (text) => { status.textContent = text; });
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
   } }, el('h2', {}, 'Importar competición'),
-  el('p', { class: 'note' }, 'Crea la liga, sus equipos con escudo y todas sus jornadas por jugar, cada partido con su enlace de Google para las estadísticas. Después, en Eventos, eliges el canal de cada partido. Pon un fondo a la liga para las tarjetas.'),
+  el('p', { class: 'note' }, 'Crea la liga, sus equipos con escudo y sus partidos de las próximas 5 semanas, cada uno con su enlace de Google para las estadísticas; al abrir el administrador, una vez al día, se añaden las semanas siguientes. Después, en Eventos, eliges el canal de cada partido. Pon un fondo a la liga para las tarjetas.'),
   field('Enlace de Google de la competición', link, 'Por ejemplo, busca «LaLiga» en Google, pulsa Compartir y pega el enlace.'), field('O elige la competición', pick),
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Importar')), status);
 }

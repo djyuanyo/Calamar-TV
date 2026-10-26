@@ -644,7 +644,7 @@ try {
   const laliga = imported.leagues.find(l => l.espn === 'esp.1');
   assert.equal(laliga.season, '2026/2027');
   assert.deepEqual(imported.fixtures.map(f => f.matchId), ['901', '902', '903']);
-  await page.getByText(/LaLiga 2026\/2027: 3 partidos por jugar importados/).waitFor();
+  await page.getByText(/LaLiga 2026\/2027: 3 partidos de las próximas 5 semanas importados/).waitFor();
   await page.goto(base + `/#/admin/ligas/${encodeURIComponent(laliga.id)}`);
   await page.getByLabel('O enlace HTTPS del fondo', { exact: true }).fill('https://example.com/fondo.jpg');
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();

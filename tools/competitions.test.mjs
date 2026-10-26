@@ -104,6 +104,22 @@ test('updating keeps the channel and cover set by hand and follows new times', (
   assert.equal(data.fixtures[0].startAt, '2026-10-24T16:15:00.000Z');
 });
 
+test('only the next five weeks are kept, unless a match already has a channel', () => {
+  const far = seasonFixture();
+  far.matches.push({ ...far.matches.find((m) => m.id === '304'), id: '399', date: '2026-12-20T19:00:00.000Z' });
+  const first = applySeason(base(), far, now).data;
+  assert.equal(first.fixtures.some((f) => f.matchId === '399'), false);
+  // A later refresh brings it in once it is near.
+  const later = applySeason(first, far, Date.parse('2026-11-20T10:00:00Z')).data;
+  assert.equal(later.fixtures.some((f) => f.matchId === '399'), true);
+  // Chosen by hand (a channel), it stays even if the window moves back.
+  later.fixtures = later.fixtures.map((f) => (f.matchId === '399' ? { ...f, channelId: 'dazn' } : f));
+  assert.equal(applySeason(later, far, now).data.fixtures.some((f) => f.matchId === '399'), true);
+  // A catalog with the whole season shrinks to the window at the next refresh.
+  const whole = { ...first, fixtures: [...first.fixtures, { ...first.fixtures[0], id: 'partido-399', matchId: '399', startAt: '2026-12-20T19:00:00.000Z' }] };
+  assert.equal(applySeason(whole, far, now).data.fixtures.some((f) => f.matchId === '399'), false);
+});
+
 test('viewers see the Monday-to-Sunday week of the next match, then the next week', () => {
   assert.equal(madridWeek('2026-10-25T22:30:00Z'), '2026-10-19'); // Sunday 23:30 in Madrid is still that week.
   assert.equal(madridWeek('2026-10-25T23:30:00Z'), '2026-10-26'); // Monday 00:30 in Madrid.
