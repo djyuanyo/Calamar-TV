@@ -1,5 +1,5 @@
 <?php
-// HTTPS transport for public HTTP IPTV streams, with bounded connections.
+// HTTPS transport for public HTTP IPTV streams, open while the viewer watches.
 ini_set('display_errors', '0');
 @set_time_limit(125);
 header('Cache-Control: no-store');
@@ -26,26 +26,18 @@ if (isset($_GET['stream'])) {
     if (!httpTsSourceAllowed($source)) failure('Enlace IPTV HTTP no válido para el puente.', 400);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
-    // Browsers get bounded connections (15 min / 512 MiB). The hosting's own video worker
-    // (calamar-cast.php, shared by every viewer of the channel) keeps one open connection.
-    $worker = calamarWorkerKey();
-    $long = $worker !== null && hash_equals($worker, (string)($_SERVER['HTTP_X_CALAMAR_WORKER'] ?? ''));
-    if ($long) @set_time_limit(0);
-    // A browser keeps its connection up to 15 minutes / 512 MiB (it reconnects by itself after): each
-    // end is a jump in the picture, and 120 s / 64 MiB cut a 4 Mbps channel every two minutes.
-    if (!$long) @set_time_limit(930);
-    $limit = $long ? PHP_INT_MAX : 536870912;
-    $deadline = microtime(true) + ($long ? 6 * 3600 : 900); $started = false; $total = 0; $lastHttp = 0;
+    // The connection lasts while the viewer stays on the channel: it ends when the browser leaves
+    // (connection_aborted) or when the provider stops sending video for 20 s (the player reconnects).
+    @set_time_limit(0);
+    $started = false; $lastHttp = 0;
     for ($hop = 0; $hop < 4; $hop++) {
         $target = publicTarget($source);
         if ($target === null) { if (!$started) failure('Redirección no pública o no compatible.'); break; }
-        $ms = (int)(($deadline - microtime(true)) * 1000);
-        if ($ms <= 0) break;
         $location = ''; $status = 0;
         $ch = curl_init($source);
         curl_setopt_array($ch, array(
-            CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => min(4000, $ms),
-            CURLOPT_TIMEOUT_MS => $ms, CURLOPT_PROXY => '',
+            CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 4000,
+            CURLOPT_LOW_SPEED_LIMIT => 1, CURLOPT_LOW_SPEED_TIME => 20, CURLOPT_PROXY => '',
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip']),
@@ -56,19 +48,16 @@ if (isset($_GET['stream'])) {
                 if (stripos($line, 'Location:') === 0) $location = trim(substr($line, 9));
                 return strlen($line);
             },
-            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$status, &$total, &$started, $limit) {
+            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$status, &$started) {
                 if (connection_aborted()) return 0;
-                if (!in_array($status, array(200, 206), true)) {
-                    $total += strlen($chunk); return $total > $limit ? 0 : strlen($chunk);
-                }
+                // Error pages and redirects are read but not passed on (at most 64 KiB).
+                if (!in_array($status, array(200, 206), true)) return curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD) > 65536 ? 0 : strlen($chunk);
                 if (!$started) {
                     header('Content-Type: video/mp2t'); header('X-Accel-Buffering: no');
                     header('X-Content-Type-Options: nosniff'); $started = true;
                 }
-                $remaining = $limit - $total;
-                $piece = substr($chunk, 0, max(0, $remaining));
-                $total += strlen($piece); echo $piece; flush();
-                return $total >= $limit ? 0 : strlen($chunk);
+                echo $chunk; flush();
+                return strlen($chunk);
             },
         ));
         curl_exec($ch); $lastHttp = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
