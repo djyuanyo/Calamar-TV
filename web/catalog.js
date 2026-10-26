@@ -227,10 +227,16 @@ export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
 export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
-/**
- * Player pages shown as they are, inside the player (their own player, straight from their servers):
- * zicotv allows other webs to show its pages and refuses the hosting, so its video never passes through it.
- */
+/** Only the public player endpoint. Other provider pages keep their own player. */
+export function renewablePage(address) {
+  try {
+    const u = new URL(address);
+    return u.protocol === 'https:' && !u.username && !u.password
+      && (u.hostname === 'zicotv.cc' || u.hostname.endsWith('.zicotv.cc'))
+      && /^\/api\/player\/\d+\/?$/.test(u.pathname);
+  } catch { return false; }
+}
+
 const FRAME_HOSTS = ['zicotv.cc'];
 export function framedPage(url) {
   try {
@@ -262,6 +268,7 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
   if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };

@@ -591,7 +591,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   lastReport = reportHeader() + "\nConsulta de página: " + reason;
                   if (player != null && player.isPlaying()) {
                     status.setText(
-                        "No se pudo renovar. La emisión actual continúa; puedes pulsar Renovar.");
+                        "No se pudo renovar. La emisión actual continúa; reintentando…");
+                    handler.removeCallbacks(renewal);
+                    handler.postDelayed(renewal, 15000L);
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
@@ -639,7 +641,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     castPlayback = false;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {
-      problem("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");
+      refreshAutomatically("El proveedor devolvió un enlace caducado. Solicitando uno nuevo…");
       return;
     }
     clearWeb();

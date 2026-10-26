@@ -201,3 +201,12 @@ Varios canales o eventos a la vez, en la web (menú **Multipantalla**, `#/multip
 En la app (2.9.2), a pantalla completa, al tocar el vídeo aparecen arriba —sobre el vídeo, como en la web— el título y los botones (pantalla completa, fuentes, refrescar, compartir y enviar a la TV); se ocultan junto con los controles del reproductor. En los eventos, **Compartir** abre el menú de compartir de Android con el enlace de vista previa del evento.
 
 En la web, al pulsar un canal o evento (tarjeta o «Ver ahora») el reproductor se abre a pantalla completa, como en la app (en móviles, en horizontal). Un enlace abierto directamente empieza en el reproductor normal, porque los navegadores solo permiten la pantalla completa tras un toque.
+
+
+## Enlaces de canal con token temporal (2.20.14)
+
+En el canal se guarda el enlace fijo `https://zicotv.cc/api/player/28`, en lugar del M3U8 con token. La web lee desde el dispositivo las fuentes públicas de ese reproductor, reproduce HLS en Calamar TV y vuelve a consultar la misma página 30 segundos antes de la caducidad indicada. Si devuelve el mismo token, espera al menos 15 segundos; si no hay fecha reconocible, consulta cada cinco minutos. Los errores 401/403, fallos fatales y bloqueos de carga provocan una nueva consulta con reintentos espaciados y cambio de CDN. Al cerrar o cambiar de canal se cancelan consultas, temporizadores y reproducción. Los tokens quedan solo en memoria.
+
+Se necesita que el proveedor permita consultar la página y reproducir sus fuentes desde el navegador (CORS y las restricciones de la señal siguen aplicándose). Si no expone fuentes públicas, bloquea la consulta o falla repetidamente el vídeo, se usa su reproductor integrado. No se envía ZicoTV al hosting. Android ya resuelve las páginas y programa la renovación desde el dispositivo; ahora reintenta también si falla una renovación mientras sigue reproduciendo y cuando la página devuelve un enlace caducado.
+
+Pruebas: `node --test tools/renewable_player.test.mjs tools/player_sources.test.mjs` y `node tools/browser_events_check.mjs`.
