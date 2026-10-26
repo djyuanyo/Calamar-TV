@@ -90,6 +90,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean diagnosing;
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
+  private AlertDialog sourceDialog;
   private boolean mediaSystemRetry;
   private Runnable bufferingTimeout;
   private String mediaProgress = "Sin descargas de vídeo registradas.";
@@ -342,7 +343,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void keepControlsVisible(boolean loading) {
-    if (playerView == null) return;
+    if (playerView == null || (sourceDialog != null && sourceDialog.isShowing())) return;
     playerView.setControllerShowTimeoutMs(loading ? 0 : 4000);
     playerView.setControllerHideOnTouch(!loading);
     if (loading) {
@@ -478,7 +479,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   public void onWindowFocusChanged(boolean hasFocus) {
     super.onWindowFocusChanged(hasFocus);
     // The system shows its bars again when another app was in front; hide them once more.
-    if (hasFocus && fullscreen) applySystemBars(true);
+    if (hasFocus && fullscreen && (sourceDialog == null || !sourceDialog.isShowing())) applySystemBars(true);
   }
 
   private void chooseDns() {
@@ -1055,6 +1056,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseSource() {
+    if (sourceDialog != null && sourceDialog.isShowing()) return;
     List<String> names = new ArrayList<>();
     List<Runnable> actions = new ArrayList<>();
     // Catalog links remain selectable before the remote page responds.
@@ -1088,13 +1090,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       names.add("Volver a buscar fuentes");
       actions.add(() -> { if (!resolving) resolveFresh(); });
     }
-    new AlertDialog.Builder(this)
+    sourceDialog = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
         })
         .setNegativeButton("Cerrar", null)
-        .show();
+        .create();
+    sourceDialog.setOnDismissListener(dialog -> {
+      sourceDialog = null;
+      if (active) {
+        playerView.showController();
+        keepControlsVisible(player == null || player.getPlaybackState() != Player.STATE_READY);
+      }
+    });
+    sourceDialog.show();
   }
 
   private void selectChannelAddress(String address, boolean page) {
@@ -1290,6 +1300,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override
   protected void onStop() {
     active = false;
+    if (sourceDialog != null) { sourceDialog.dismiss(); sourceDialog = null; }
     generation++;
     resolving = false;
     diagnosing = false;

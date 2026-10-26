@@ -6,6 +6,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import android.content.Intent;
 import android.os.SystemClock;
 import android.view.View;
@@ -111,8 +112,8 @@ public class ResolvedPlaybackTest {
               ((Button) button.get(activity)).performClick();
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
-          onView(withText("Enlace 1 · zicotv.cc")).check(matches(isChecked()));
-          onView(withText("Enlace 2 · Vídeo directo")).perform(click());
+          onView(withText("Enlace 1 · zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
+          onView(withText("Enlace 2 · Vídeo directo")).inRoot(isDialog()).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + 30000;
@@ -143,8 +144,8 @@ public class ResolvedPlaybackTest {
             ((Button) button.get(activity)).performClick();
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
-        onView(withText(manualDirect ? "Enlace 2 · Vídeo directo" : "CDN · CDN prueba")).check(matches(isChecked()));
-        onView(withText("Cerrar")).perform(click());
+        onView(withText(manualDirect ? "Enlace 2 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
       } finally {
         clientField.set(network, original);
         NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous);

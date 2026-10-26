@@ -59,6 +59,17 @@ jobs:
           target: google_apis
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Mostrar errores del reproductor en el emulador
+        if: failure()
+        run: |
+          python - <<'PYCODE'
+          import pathlib, re, html
+          root = pathlib.Path('app/build/reports/androidTests/connected')
+          for name in ('ResolvedPlaybackTest', 'ChromiumPlaybackTest'):
+              for path in root.rglob('*' + name + '.html'):
+                  print('Informe:', path)
+                  print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])
+          PYCODE
       - name: Guardar informe de reproducción Android
         if: always()
         uses: actions/upload-artifact@v4
