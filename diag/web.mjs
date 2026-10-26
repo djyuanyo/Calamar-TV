@@ -12,11 +12,15 @@ await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canales', { waitUntil: 
 await page.waitForTimeout(5000);
 out.cards = await page.locator('.card').count();
 out.firstCards = await page.locator('.card').evaluateAll((cs) => cs.slice(0, 5).map((c) => c.textContent.trim().slice(0, 40)));
-const target = page.locator('.card', { hasText: 'DAZN' }).first();
-await (await target.count() ? target : page.locator('.card').first()).click().catch((e) => out.console.push('click ' + e.message));
-for (const t of [5, 15, 30]) {
-  await page.waitForTimeout(t === 5 ? 5000 : (t === 15 ? 10000 : 15000));
-  out['at' + t] = await page.evaluate(() => { const v = document.querySelector('#video'); return { title: document.querySelector('#player-title')?.textContent, status: document.querySelector('#player-status')?.textContent?.slice(0, 200), ready: v?.readyState, time: v?.currentTime, paused: v?.paused, err: v?.error?.code }; });
+out.tests = {};
+for (const name of ['Movistar Plus', 'DAZN 1', 'La 1']) {
+  await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canales', { waitUntil: 'load', timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(6000);
+  const card = page.locator('.card', { hasText: new RegExp('^\\d*' + name.replace(/[+]/g, '\\+') + '[A-Z]') }).first();
+  if (!(await card.count())) { out.tests[name] = 'no card'; continue; }
+  await card.click().catch((e) => { out.tests[name] = 'click ' + e.message; });
+  await page.waitForTimeout(25000);
+  out.tests[name] = await page.evaluate(() => { const v = document.querySelector('#video'); return { title: document.querySelector('#player-title')?.textContent, status: document.querySelector('#player-status')?.textContent?.slice(0, 220), ready: v?.readyState, time: Math.round(v?.currentTime || 0), paused: v?.paused, err: v?.error?.code }; });
 }
 await page.screenshot({ path: 'diag/web.png' });
 fs.writeFileSync('diag/web.json', JSON.stringify(out, null, 1));
