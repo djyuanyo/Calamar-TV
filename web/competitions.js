@@ -171,9 +171,18 @@ export async function fetchSeason(slug, fetcher = globalThis.fetch) {
 
 const used = (data) => new Set([...(data.leagues || []), ...(data.teams || [])].map((x) => x.id));
 /**
+ * Only the next weeks of each competition are kept in the catalog (one Firestore document of at most
+ * 500 KB, which apps already installed also check): whole seasons of nine competitions did not fit.
+ * The admin refreshes the calendars every day, so later weeks come in as they get near.
+ */
+export const FIXTURE_WINDOW_MS = 35 * DAY;
+/** A fixture with a channel, a cover or set as featured by hand stays even beyond the window. */
+const chosen = (f) => !!(f?.channelId || f?.cover || f?.featured);
+/**
  * Adds or refreshes an imported competition in the catalog (a copy is returned). Existing teams are
  * reused by their ESPN number or name; fixtures keep the channel, cover and anything set by hand, and
- * only their date and round follow ESPN. Matches already played are left out to keep the catalog small.
+ * only their date and round follow ESPN. Matches already played and those beyond the next five weeks
+ * are left out to keep the catalog small.
  */
 export function applySeason(data, season, now = Date.now()) {
   const next = { ...data, leagues: [...(data.leagues || [])], teams: [...(data.teams || [])], fixtures: [...(data.fixtures || [])] };
@@ -203,8 +212,9 @@ export function applySeason(data, season, now = Date.now()) {
   const fresh = new Set();
   for (const m of season.matches) {
     if (m.done || Date.parse(m.date) < now - 6 * 3600000) continue;
-    fresh.add(m.id);
     const old = kept.get(m.id);
+    if (Date.parse(m.date) > now + FIXTURE_WINDOW_MS && !chosen(old)) continue;
+    fresh.add(m.id);
     const fixture = { ...(old || { id: `partido-${m.id}` }), leagueId: league.id, homeTeamId: teamOf.get(m.home), awayTeamId: teamOf.get(m.away),
       startAt: m.date, round: `${CUPS.has(season.slug) ? 'Ronda' : 'Jornada'} ${rounds.get(m.id)}`, matchId: m.id };
     if (fixture.matchDate) fixture.matchDate = m.date;
