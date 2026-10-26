@@ -23,9 +23,22 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Verificar adaptación real de HEVC a HLS para Chromecast
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq php-cli ffmpeg
+          # The Ubuntu mirrors sometimes hang apt-get forever: install only what is missing, with a
+          # time limit per try and up to three tries.
+          missing=""
+          command -v php >/dev/null || missing="$missing php-cli"
+          command -v ffmpeg >/dev/null || missing="$missing ffmpeg"
+          if [ -n "$missing" ]; then
+            apt="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+            for try in 1 2 3; do
+              if timeout 120 sudo apt-get $apt update -qq && timeout 300 sudo apt-get $apt install -y -qq $missing; then break; fi
+              [ "$try" = 3 ] && exit 1
+              echo "::warning::apt-get no respondió (intento $try); se reintenta"
+              sleep 10
+            done
+          fi
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
