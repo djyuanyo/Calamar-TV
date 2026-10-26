@@ -64,8 +64,16 @@ class LuluRelayTest(unittest.TestCase):
                     with self.assertRaises(urllib.error.HTTPError) as refused:
                         urllib.request.urlopen(f'http://127.0.0.1:{port}/calamar-lulu.php?{query}', timeout=5)
                     self.assertEqual(refused.exception.code, 403)
-                with self.assertRaises(urllib.error.HTTPError) as other:
+                # Chromecast reads the film from its own origin: the video answers any origin (here 502,
+                # as the test reaches no LuluStream), with an open CORS header and nothing else.
+                with self.assertRaises(urllib.error.HTTPError) as cast:
                     urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-lulu.php?code=abc12345&hls=1',
+                                                                  headers={'Origin': 'https://www.gstatic.com'}), timeout=5)
+                self.assertNotEqual(cast.exception.code, 403)
+                self.assertEqual(cast.exception.headers['Access-Control-Allow-Origin'], '*')
+                # Everything else stays only for the web.
+                with self.assertRaises(urllib.error.HTTPError) as other:
+                    urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-lulu.php?introdb=1&tmdb_id=1&season=1&episode=1',
                                                                   headers={'Origin': 'https://evil.example'}), timeout=5)
                 self.assertEqual(other.exception.code, 403)
             finally:
