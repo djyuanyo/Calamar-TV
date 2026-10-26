@@ -31,10 +31,10 @@ function relayMain() {
     // starts again with the last ~40 s they keep. The relay opens the next one too and passes on only
     // what comes after the last moment already sent (tsSplice), so the browser gets one continuous video.
     @set_time_limit(0);
-    $headers = false; $lastHttp = 0; $splice = array('pcr' => null);
+    $headers = false; $lastHttp = 0; $splice = null;
     $lastVideo = microtime(true);
     while (!connection_aborted()) {
-        $splice['skip'] = $splice['pcr'] !== null; $splice['ahead'] = false; $splice['carry'] = '';
+        $splice = tsSpliceNext($splice);
         $got = relayConnection($source, $headers, $lastHttp, $splice);
         if (!$headers) failure($got === null ? 'Redirección no pública o no compatible.' : 'No se recibió vídeo. HTTP del proveedor: ' . ($lastHttp ?: 'sin respuesta'));
         if ($got) $lastVideo = microtime(true);
@@ -51,29 +51,60 @@ function tsPcr($packet) {
     return (($b[0] << 25) | ($b[1] << 17) | ($b[2] << 9) | ($b[3] << 1) | ($b[4] >> 7)) / 90000;
 }
 
+/** The packet's PID. */
+function tsPid($packet) {
+    return ((ord($packet[1]) & 0x1f) << 8) | ord($packet[2]);
+}
+
+/** Whether a packet starts a new PES or table (payload unit start). */
+function tsStarts($packet) {
+    return (bool)(ord($packet[1]) & 0x40);
+}
+
 /** Whether a packet starts a picture a decoder can begin with (random access indicator). */
 function tsKeyframe($packet) {
     return (ord($packet[3]) & 0x20) && ord($packet[4]) > 0 && (ord($packet[5]) & 0x40);
 }
 
+/** A fresh state for tsSplice, or the one for the next connection of the same viewer. */
+function tsSpliceNext($state = null) {
+    $state = $state ?: array('pcr' => null, 'video' => null);
+    // What was held after the last keyframe is dropped: the next connection resends that picture whole.
+    return array('pcr' => $state['pcr'], 'video' => $state['video'], 'skip' => true, 'ahead' => $state['pcr'] === null,
+        'carry' => '', 'hold' => '', 'seen' => $state['pcr'], 'wait' => array());
+}
+
 /**
- * The part of a chunk to pass on. $state: 'pcr' last clock sent, 'skip' while a new connection repeats
- * what was already sent, 'ahead' once its clock passed 'pcr', 'carry' an incomplete packet. It resumes at
- * the first keyframe after the last clock sent; a clock far away (the channel restarted) resumes at once.
+ * The part of a chunk to pass on, cut only at keyframes of the video (the PID carrying the clock), so the
+ * browser never gets half a picture: what came after the last keyframe is held until the next one, and
+ * dropped if the connection ends first. A new connection repeats the last ~40 s: it resumes at the first
+ * keyframe after the last clock sent ('pcr'), and every other stream at its next unit start. A clock far
+ * away (the channel restarted) resumes at once.
  */
 function tsSplice(&$state, $chunk) {
     $data = $state['carry'] . $chunk; $out = ''; $i = 0; $length = strlen($data);
     while ($i + 188 <= $length) {
         if ($data[$i] !== "\x47") { $i++; continue; }
         $packet = substr($data, $i, 188); $i += 188;
-        $pcr = tsPcr($packet);
+        $pid = tsPid($packet); $pcr = tsPcr($packet);
+        if ($pcr !== null && $state['video'] === null) $state['video'] = $pid;
+        $key = $pid === $state['video'] && tsKeyframe($packet) && tsStarts($packet);
         if ($state['skip']) {
-            if ($pcr !== null && ($pcr > $state['pcr'] || abs($pcr - $state['pcr']) > 120)) $state['ahead'] = true;
-            if (!$state['ahead'] || !tsKeyframe($packet)) continue;
-            $state['skip'] = false;
+            if ($pcr !== null && ($state['pcr'] === null || $pcr > $state['pcr'] || abs($pcr - $state['pcr']) > 120)) $state['ahead'] = true;
+            if (!$state['ahead'] || !$key) { if ($pcr !== null && $state['ahead']) $state['seen'] = $pcr; continue; }
+            $state['skip'] = false; $state['wait'] = array($pid => false);
         }
-        if ($pcr !== null) $state['pcr'] = $pcr;
-        $out .= $packet;
+        if (!isset($state['wait'][$pid])) {
+            if (!tsStarts($packet)) continue; // Another stream joins at its next unit, never halfway.
+            $state['wait'][$pid] = false;
+        }
+        if ($key) {
+            $out .= $state['hold']; $state['hold'] = ''; $state['pcr'] = $state['seen'];
+        }
+        if ($pcr !== null) $state['seen'] = $pcr;
+        $state['hold'] .= $packet;
+        // A video with no keyframes marked is passed on anyway, a few megabytes at a time.
+        if (strlen($state['hold']) > 8 << 20) { $out .= $state['hold']; $state['hold'] = ''; $state['pcr'] = $state['seen']; }
     }
     $state['carry'] = substr($data, $i);
     return $out;
