@@ -10,7 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 diag/zico.py
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: node diag/web.mjs
       - run: |
           git config user.name diag; git config user.email diag@example.com
-          git add diag/*.json && git commit -m "dump data" && git push
+          git add diag/*.json diag/*.png && git commit -m "dump data" && git push
