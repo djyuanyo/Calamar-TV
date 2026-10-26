@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
 import android.content.Intent;
 import android.os.SystemClock;
 import android.view.View;
@@ -90,12 +92,26 @@ public class ResolvedPlaybackTest {
         if (manualDirect) {
           long lookupDeadline = SystemClock.elapsedRealtime() + 10000;
           while (pages.get() == 0 && SystemClock.elapsedRealtime() < lookupDeadline) SystemClock.sleep(100);
+          AtomicBoolean controlsVisible = new AtomicBoolean();
+          long controlsDeadline = SystemClock.elapsedRealtime() + 3000;
+          while (!controlsVisible.get() && SystemClock.elapsedRealtime() < controlsDeadline) {
+            scenario.onActivity(activity -> {
+              try {
+                Field view = NativePlayerActivity.class.getDeclaredField("playerView"); view.setAccessible(true);
+                androidx.media3.ui.PlayerView playerView = (androidx.media3.ui.PlayerView) view.get(activity);
+                controlsVisible.set(playerView.getControllerShowTimeoutMs() == 0 && playerView.isControllerFullyVisible());
+              } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+            });
+            SystemClock.sleep(50);
+          }
+          assertTrue("Loading/error controls must stay visible without a video", controlsVisible.get());
           scenario.onActivity(activity -> {
             try {
               Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true);
               ((Button) button.get(activity)).performClick();
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
+          onView(withText("Enlace 1 · zicotv.cc")).check(matches(isChecked()));
           onView(withText("Enlace 2 · Vídeo directo")).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
@@ -121,6 +137,14 @@ public class ResolvedPlaybackTest {
             assertNull("A resolved channel must stay in our native player", browserField.get(activity));
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
+        scenario.onActivity(activity -> {
+          try {
+            Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true);
+            ((Button) button.get(activity)).performClick();
+          } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        });
+        onView(withText(manualDirect ? "Enlace 2 · Vídeo directo" : "CDN · CDN prueba")).check(matches(isChecked()));
+        onView(withText("Cerrar")).perform(click());
       } finally {
         clientField.set(network, original);
         NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous);
