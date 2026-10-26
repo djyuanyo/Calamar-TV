@@ -245,7 +245,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       controls.addView(shareButton, new LinearLayout.LayoutParams(buttonSize));
     }
     castControls = new CastControls(this, controls,
-        () -> !currentUrl.isEmpty() ? currentUrl
+        // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
+        // hosting's copy of it, which it can read.
+        () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
+            : !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
         title, () -> {
           castPlayback = true;

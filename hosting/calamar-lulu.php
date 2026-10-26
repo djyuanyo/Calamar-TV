@@ -150,8 +150,13 @@ function luluMain() {
     header('Referrer-Policy: no-referrer');
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowed = array('https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com');
-    if ($origin !== '' && !in_array($origin, $allowed, true)) answer(array('error' => 'Origen no permitido.'), 403);
-    if ($origin !== '') { header('Access-Control-Allow-Origin: ' . $origin); header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
+    // Chromecast plays a film from its own origin: the video (code=…&hls=1 and its signed pieces) is
+    // open to any origin, as it already is without one (the app); the rest only to this web.
+    $video = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && (isset($_GET['seg']) || isset($_GET['code']));
+    if ($origin !== '' && !in_array($origin, $allowed, true)) {
+        if (!$video) answer(array('error' => 'Origen no permitido.'), 403);
+        header('Access-Control-Allow-Origin: *'); header('Access-Control-Expose-Headers: Content-Length, Content-Range');
+    } elseif ($origin !== '') { header('Access-Control-Allow-Origin: ' . $origin); header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
     if (!function_exists('curl_init')) answer(array('error' => 'cURL no disponible.'), 502);
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
     if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET, POST'); header('Access-Control-Allow-Headers: Range'); http_response_code(204); exit; }

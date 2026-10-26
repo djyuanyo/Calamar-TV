@@ -4,6 +4,14 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 public class CastSourceTest {
+  @Test public void luluStreamFilmsGoToTheTvThroughTheHosting() {
+    String film = Library.Media.hosting("https://lulustream.com/shrtan7z8hmm");
+    assertEquals("https://calamarmenciano.com/calamar-lulu.php?code=shrtan7z8hmm&hls=1", film);
+    assertEquals("application/x-mpegURL", CastSource.contentType(film));
+    assertTrue(CastSource.onDemand(film));
+    assertFalse(CastSource.onDemand("https://example.com/live.m3u8"));
+    assertFalse(CastSource.onDemand("https://calamarmenciano.com/calamar-lulu.php?introdb=1"));
+  }
   @Test public void supportsDirectMediaWithoutChangingSignedLinks() {
     assertEquals("application/x-mpegURL", CastSource.contentType("https://example.com/a.M3U8?token=A%2Bb&x=1"));
     assertEquals("application/dash+xml", CastSource.contentType("https://example.com/a.mpd"));

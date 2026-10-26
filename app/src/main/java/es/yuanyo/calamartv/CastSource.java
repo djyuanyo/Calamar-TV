@@ -8,6 +8,7 @@ public final class CastSource {
   private CastSource() {}
 
   public static String contentType(String address) {
+    if (onDemand(address)) return "application/x-mpegURL";
     try {
       URI u = URI.create(address);
       if (!("http".equalsIgnoreCase(u.getScheme()) || "https".equalsIgnoreCase(u.getScheme()))
@@ -19,6 +20,11 @@ public final class CastSource {
       if (path.endsWith(".webm")) return "video/webm";
     } catch (Exception invalid) { /* No URL or secret is written to logs. */ }
     return null;
+  }
+
+  /** A LuluStream film through the hosting (calamar-lulu.php): an HLS list the TV can read, not live. */
+  public static boolean onDemand(String address) {
+    return address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1");
   }
 
   public static boolean live(String type) {
