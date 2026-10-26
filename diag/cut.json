@@ -1,0 +1,8 @@
+{
+ "new_relay_realtime_90s": {
+  "secs": 90.0,
+  "curl_exit": 28,
+  "out": "200 65194846 video/mp2t",
+  "err": "curl: (28) Operation timed out after 90000 milliseconds with 65194846 bytes received"
+ }
+}
