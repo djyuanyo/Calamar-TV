@@ -1439,11 +1439,11 @@ public class MainActivity extends Activity {
         });
       }
     } else {
-    LinearLayout r = null;
-    for (int i = 0; i < items.size(); i++) {
-      if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
-      r.addView(poster(items.get(i), width));
-    }
+      LinearLayout r = null;
+      for (int i = 0; i < items.size(); i++) {
+        if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
+        r.addView(poster(items.get(i), width));
+      }
     }
     if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }

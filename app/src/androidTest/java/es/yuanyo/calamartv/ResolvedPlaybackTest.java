@@ -39,7 +39,7 @@ public class ResolvedPlaybackTest {
   @Test public void extractedHttpsHlsActuallyPlaysAndShowsSources() throws Exception { playback(false, false); }
   @Test public void rejectedTokenReadsFreshPageAndRecoversNatively() throws Exception { playback(true, false); }
 
-  @Test public void sourcePickerOffersCatalogAlternativeWhenPageCannotLoad() throws Exception { playback(false, true); }
+  @Test public void sourcePickerOffersCatalogAlternativeWhilePageIsStalled() throws Exception { playback(false, true); }
 
   private void playback(boolean rejectFirst, boolean manualDirect) throws Exception {
     HeldCertificate certificate = new HeldCertificate.Builder().commonName("player.example")
@@ -64,7 +64,7 @@ public class ResolvedPlaybackTest {
           if (!manualDirect && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
           if (path.startsWith("/api/player/28")) {
             int n = pages.incrementAndGet();
-            if (manualDirect) return new MockResponse().setResponseCode(503);
+            if (manualDirect) return new MockResponse().setResponseCode(503).setHeadersDelay(10, java.util.concurrent.TimeUnit.SECONDS);
             return new MockResponse().setHeader("Content-Type", "text/html").setBody(
                 "var ZT_SOURCES=[{\"label\":\"CDN prueba\",\"url\":\"" + origin + "live.m3u8?token=" + n + "\"}];");
           }

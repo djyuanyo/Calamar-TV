@@ -1156,13 +1156,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new WebViewClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return !url.startsWith("https://");
+            return !url.startsWith("https://") || AppSources.webOnly(url);
           }
 
           @Override
           public WebResourceResponse shouldInterceptRequest(
               WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
+            if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
+                new java.io.ByteArrayInputStream(new byte[0]));
             if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
@@ -1252,7 +1254,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void detected(String address) {
-    if (!active || !webMode || !VideoResolver.isMedia(address)) return;
+    if (!active || !webMode || !VideoResolver.isMedia(address) || AppSources.webOnly(address)) return;
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);
