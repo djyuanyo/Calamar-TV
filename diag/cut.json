@@ -1,0 +1,25 @@
+{
+ "status": 200,
+ "secs": 90.3,
+ "bytes": 99680256,
+ "misaligned": 0,
+ "pcr_first": 379.3,
+ "pcr_last": 499.62,
+ "backward_jumps": [],
+ "n_backward": 0,
+ "gaps_over_1s": [],
+ "progress": [
+  [
+   10.4,
+   34209792
+  ],
+  [
+   50.1,
+   61210624
+  ],
+  [
+   50.2,
+   66191360
+  ]
+ ]
+}
