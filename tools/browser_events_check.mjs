@@ -710,7 +710,7 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // zicotv: its own player inside ours, straight from zicotv; nothing goes through the hosting.
+  // ZicoTV without exposed sources falls back to its own embedded player, without hosting.
   await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', body: '<p>Reproductor de zicotv</p>' }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
@@ -727,6 +727,14 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
   assert.equal(await page.locator('#player-frame').count(), 0);
+  // Exposed sources use our HLS player without sending the page through the hosting.
+  let tokenVersion = 0;
+  await page.route('https://zicotv.cc/api/player/1', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: 'var ZT_SOURCES = ' + JSON.stringify([{ url: `https://cdn.example/renew.m3u8?token=fresh${++tokenVersion}` }]) + ';' }));
+  await page.goto(base + '/?zico=2#/canal/canal-zico');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  await page.locator('#player-close').click();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
