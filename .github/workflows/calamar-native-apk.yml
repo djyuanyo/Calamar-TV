@@ -25,9 +25,19 @@ jobs:
       - name: Verificar adaptación real de HEVC a HLS para Chromecast
         run: |
           # Hosted runners often include both tools; avoid a mirror update on every APK build.
-          if ! command -v php >/dev/null || ! command -v ffmpeg >/dev/null; then
-            timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update -qq
-            timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y -qq php-cli ffmpeg
+          calamar_packages=()
+          command -v php >/dev/null || calamar_packages+=(php-cli)
+          command -v ffmpeg >/dev/null || calamar_packages+=(ffmpeg)
+          if [ ${#calamar_packages[@]} -gt 0 ]; then
+            # Try the image's cached package lists before contacting every configured repository.
+            if ! timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y -qq "${calamar_packages[@]}"; then
+              calamar_sources=()
+              if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+                calamar_sources=(-o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=-)
+              fi
+              timeout 180 sudo apt-get "${calamar_sources[@]}" -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update -qq
+              timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y -qq "${calamar_packages[@]}"
+            fi
           fi
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
