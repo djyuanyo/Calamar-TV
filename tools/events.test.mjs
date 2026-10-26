@@ -40,3 +40,19 @@ test('supports compressed uploads and enforces image and catalog sizes', () => {
   data.events = Array.from({ length: 5 }, (_, i) => ({ ...data.events[0], id: `match-${i}` }));
   assert.throws(() => validateCatalog(data), /tamaño/);
 });
+test('a finished match leaves the home page but its own link still opens it', async () => {
+  const { rememberMatch } = await import('../web/match-scores.js');
+  const { FINISHED } = await import('../web/catalog.js');
+  const data = catalog();
+  data.events[0] = { ...data.events[0], matchUrl: 'https://www.google.com/search?q=Local%20vs%20visitante', matchId: '90000077' };
+  const all = merge(null, data), now = Date.parse('2026-10-26T20:00:00Z');
+  rememberMatch('90000077', { state: 'finished', finishedAt: now - 3600000 }, now);
+  assert.deepEqual(events(all, data, now), []);
+  const [kept] = events(all, data, now, { finished: true });
+  assert.equal(kept.slug, 'local-vs-visitante'); assert.equal(kept.playable, true);
+  // Without its channel any more: the match alone, said as finished.
+  data.events[0].channelId = 'gone';
+  const [alone] = events(all, data, now, { finished: true });
+  assert.equal(alone.pending, true); assert.equal(alone.channelName, FINISHED); assert.match(alone.meta, /Partido finalizado$/);
+  assert.deepEqual(events(all, data, now), []);
+});
