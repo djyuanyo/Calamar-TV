@@ -1,0 +1,10 @@
+{
+ "version": "{\"relay\":4,\"php\":\"8.3.36\"}",
+ "stream": {
+  "status": 500,
+  "body": "",
+  "secs": 0.5,
+  "bytes": 0,
+  "marks": []
+ }
+}
