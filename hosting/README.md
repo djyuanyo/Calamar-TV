@@ -4,18 +4,6 @@ Subir `calamar-http-source.php` y `calamar-tv-relay.php` al `public_html` de `ca
 La web publicada solicita `https://calamarmenciano.com/calamar-tv-relay.php?stream=1`.
 El navegador transmite la URL original en `X-Calamar-Source`, nunca en la URL del puente.
 
-LiteSpeed puede cerrar por su cuenta las conexiones largas (el canal se corta cada ~40 s y vuelve a
-empezar). Para que el puente siga abierto mientras se ve el canal, añade al principio del
-`.htaccess` de `public_html`:
-
-```
-# Calamar TV: el puente IPTV sigue abierto mientras se ve el canal
-<IfModule LiteSpeed>
-RewriteEngine On
-RewriteRule ^calamar-tv-relay\.php$ - [E=noconntimeout:1]
-</IfModule>
-```
-
 Admite flujos HTTP MPEG-TS (`.ts`) y rutas IPTV `/usuario/clave/id`,
 `/usuario/clave/id.ts` o `/live/usuario/clave/id.ts`, en distintos servidores públicos
 sin añadir cada dominio por separado. Conserva las consultas y tokens tal como llegan.
