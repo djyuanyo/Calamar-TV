@@ -18,6 +18,7 @@ try:
 except Exception as e:
     status = type(e).__name__
 srv.terminate()
+open('/tmp/out.ts', 'wb').write(body)
 pcrs = []
 for i in range(0, len(body) - 187, 188):
     p = body[i:i + 188]
@@ -30,4 +31,13 @@ every10 = [m for m in marks if int(m[0]) % 10 == 0][::max(1, len(marks) // 20)]
 out = {'status': status, 'secs': round(time.time() - t, 1), 'bytes': len(body), 'misaligned': sum(1 for i in range(0, len(body) - 187, 188) if body[i] != 0x47),
        'pcr_first': round(pcrs[0], 2) if pcrs else None, 'pcr_last': round(pcrs[-1], 2) if pcrs else None,
        'backward_jumps': back[:10], 'n_backward': len(back), 'gaps_over_1s': gaps[:10], 'progress': every10}
+def errors(path):
+    p = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-f', 'null', '-'], capture_output=True, text=True)
+    lines = [l for l in p.stderr.splitlines() if l.strip()]
+    return {'n': len(lines), 'sample': sorted(set(l.split('] ')[-1][:80] for l in lines))[:8]}
+out['decode_errors_relay'] = errors('/tmp/out.ts')
+# Baseline: one direct connection of the provider, as it comes.
+r = urllib.request.urlopen(urllib.request.Request(src, headers={'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'}), timeout=30)
+open('/tmp/one.ts', 'wb').write(r.read(40_000_000))
+out['decode_errors_one_direct_connection'] = errors('/tmp/one.ts')
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
