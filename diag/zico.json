@@ -1,9 +1,38 @@
 {
- "ips": [
-  "172.238.64.33"
- ],
- "status": 200,
- "server": "LiteSpeed",
- "cf": null,
- "body": "{\"ready\":true,\"ffmpeg\":true,\"commands\":true,\"worker_lock\":true}"
+ "dab8pb27hxdg": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/dab8pb27hxdg",
+   78037,
+   true,
+   false
+  ],
+  "m3u8_host": "kod1r07903qw.tnmr.org",
+  "master": [
+   404,
+   "Not Fou"
+  ],
+  "hosting": [
+   502,
+   "{\"error\":\"LuluStream no entrega la lista (404).\"}"
+  ]
+ },
+ "zjmkh1lwsejz": {
+  "page": [
+   200,
+   "https://luluvdo.com/e/zjmkh1lwsejz",
+   77983,
+   true,
+   false
+  ],
+  "m3u8_host": "uwtltavtqodn.tnmr.org",
+  "master": [
+   200,
+   "#EXTM3U"
+  ],
+  "hosting": [
+   200,
+   "#EXTM3U\n\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio0\",NAME=\"English\",LANGUAGE=\"en\",AUTOSELECT=YES,DEFAULT=YES,CHANNELS=\"2\","
+  ]
+ }
 }
