@@ -1,23 +1,18 @@
-[
- {
-  "channel": "Primera Federación",
-  "status": 200,
-  "x-frame-options": null,
-  "csp": "",
-  "acao": "*"
- },
- {
-  "channel": "DAZN Baloncesto",
-  "status": 200,
-  "x-frame-options": null,
-  "csp": "",
-  "acao": "*"
- },
- {
-  "channel": "DAZN Baloncesto 2",
-  "status": 200,
-  "x-frame-options": null,
-  "csp": "",
-  "acao": "*"
- }
-]
+{
+ "status": 200,
+ "og": [
+  "<meta property=\"og:type\" content=\"website\">",
+  "<meta property=\"og:site_name\" content=\"Calamar TV\">",
+  "<meta property=\"og:title\" content=\"Shakhtar Donetsk vs Sporting CP\">",
+  "<meta property=\"og:description\" content=\"Champions League · martes 3 de noviembre, 18:45 · Jornada 4\">",
+  "<meta property=\"og:url\" content=\"https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/\">",
+  "<meta property=\"og:image\" content=\"https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/vista.jpg\">",
+  "<meta property=\"og:image:alt\" content=\"Shakhtar Donetsk vs Sporting CP\">",
+  "<meta property=\"og:image:type\" content=\"image/jpeg\">"
+ ],
+ "image": [
+  200,
+  "image/jpeg",
+  87260
+ ]
+}
