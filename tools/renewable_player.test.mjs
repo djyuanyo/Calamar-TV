@@ -91,10 +91,14 @@ test('stale requests cannot start playback after closing/changing the channel', 
   assert.equal(f.engines.length, 0);
   assert.equal(f.jobs.size, 0);
 });
-test('CORS rejection, locked sources and invalid data use provider player, without relay', async () => {
+test('CORS rejection, missing sources and invalid data retry without embedding the provider', async () => {
   for (const fetcher of [async () => { throw Error('CORS'); }, async () => response('var ZT_SOURCES=[];'), async () => response('var ZT_SOURCES=[bad];')]) {
     const f = fixture(fetcher); await flush();
-    assert.equal(f.fallbacks.length, 1); assert.equal(f.engines.length, 0); assert.equal(f.jobs.size, 0);
+    assert.equal(f.fallbacks.length, 0); assert.equal(f.engines.length, 0);
+    assert.equal(f.jobs.size, 1);
+    await f.tick(2000);
+    assert.equal(f.fallbacks.length, 0);
+    f.stop(); assert.equal(f.jobs.size, 0);
   }
 });
 test('temporary renewal outage retries while existing playback remains available', async () => {
@@ -106,17 +110,31 @@ test('temporary renewal outage retries while existing playback remains available
   assert.equal(f.engines.length, 2);
   f.stop();
 });
-test('repeated fatal errors stop retrying and fall back once', async () => {
+test('repeated fatal errors continue with bounded backoff in our player', async () => {
   let calls = 0;
   const f = fixture(async () => { calls++; return response(document(media(1793041200))); });
   await flush();
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     f.engines.at(-1).emitError();
     await f.tick(30000);
   }
-  assert.equal(f.fallbacks.length, 1);
-  assert.equal(calls, 6);
-  assert.equal(f.jobs.size, 0);
+  assert.equal(f.fallbacks.length, 0);
+  assert.equal(calls, 9);
+  assert.equal(f.jobs.size, 1);
+  f.stop(); assert.equal(f.jobs.size, 0);
+});
+test('a new token recovers playback after more than six failed page requests', async () => {
+  let calls = 0;
+  const f = fixture(async () => {
+    if (++calls <= 8) return { ok: false, status: 403 };
+    return response(document(media(1793041200)));
+  });
+  await flush();
+  for (let i = 0; i < 8; i++) await f.tick(30000);
+  assert.equal(calls, 9);
+  assert.equal(f.engines.length, 1);
+  assert.equal(f.fallbacks.length, 0);
+  f.stop();
 });
 test('scheduled token renewal preserves user pause and does not restart unchanged URLs', async () => {
   let calls = 0;

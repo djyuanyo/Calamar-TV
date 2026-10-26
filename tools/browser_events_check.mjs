@@ -710,23 +710,21 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // ZicoTV without exposed sources falls back to its own embedded player, without hosting.
-  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', body: '<p>Reproductor de zicotv</p>' }));
+  // Failed lookup stays in our player and retries; it must never switch to an iframe.
+  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: '<p>Sin fuentes ahora</p>' }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
-  await page.evaluate(() => { window.__hlsSources = []; });
   await page.goto(base + '/?zico=1#/canal/canal-zico');
-  await page.locator('#player-frame').waitFor();
-  assert.equal(await page.locator('#player-frame').getAttribute('src'), 'https://zicotv.cc/api/player/1');
-  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), true);
-  assert.equal(await page.frameLocator('#player-frame').getByText('Reproductor de zicotv').count(), 1);
+  await page.getByText(/No hay un M3U8 vigente/).waitFor();
+  await page.clock.runFor(90000);
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), false);
   assert.equal(await page.locator('#player-close').isVisible(), true);
   assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
-  assert.equal(await page.locator('#player-frame').count(), 0);
   // Exposed sources use our HLS player without sending the page through the hosting.
   let tokenVersion = 0;
   await page.route('https://zicotv.cc/api/player/1', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' },

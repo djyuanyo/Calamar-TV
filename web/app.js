@@ -606,7 +606,7 @@ function playSource(c, index) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
       onAttach: (instance) => { hls = instance; controls.attach(instance); },
       onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
-      onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); showFrame(); } },
+      onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
     });
     return;
   }
