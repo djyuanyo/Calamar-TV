@@ -1,18 +1,1029 @@
 {
- "status": 200,
- "og": [
-  "<meta property=\"og:type\" content=\"website\">",
-  "<meta property=\"og:site_name\" content=\"Calamar TV\">",
-  "<meta property=\"og:title\" content=\"Shakhtar Donetsk vs Sporting CP\">",
-  "<meta property=\"og:description\" content=\"Champions League · martes 3 de noviembre, 18:45 · Jornada 4\">",
-  "<meta property=\"og:url\" content=\"https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/\">",
-  "<meta property=\"og:image\" content=\"https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/vista.jpg\">",
-  "<meta property=\"og:image:alt\" content=\"Shakhtar Donetsk vs Sporting CP\">",
-  "<meta property=\"og:image:type\" content=\"image/jpeg\">"
+ "event": "Getafe at Athletic Club",
+ "id": "401882835",
+ "rosterKeys": [
+  "homeAway",
+  "winner",
+  "team",
+  "roster",
+  "uniform",
+  "formation"
  ],
- "image": [
-  200,
-  "image/jpeg",
-  87260
+ "formation": "4-2-3-1",
+ "players": [
+  {
+   "active": true,
+   "starter": true,
+   "jersey": "1",
+   "athlete": {
+    "id": "222375",
+    "uid": "s:600~a:222375",
+    "guid": "db877e27-6e30-6c82-5760-06f766ad33a3",
+    "lastName": "Simón",
+    "fullName": "Unai Simón",
+    "displayName": "Unai Simón",
+    "shortName": "U. Simón",
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "playercard",
+       "desktop",
+       "athlete"
+      ],
+      "href": "https://www.espn.com/soccer/player/_/id/222375/unai-simon",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+     }
+    ],
+    "jerseyImages": [
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/222375/jersey.png?darkMode=false",
+      "rel": [
+       "full",
+       "default"
+      ],
+      "width": 1440,
+      "height": 1440
+     },
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/222375/jersey.png?darkMode=true",
+      "rel": [
+       "full",
+       "dark"
+      ],
+      "width": 1440,
+      "height": 1440
+     }
+    ]
+   },
+   "position": {
+    "name": "Goalkeeper",
+    "displayName": "Goalkeeper",
+    "abbreviation": "G"
+   },
+   "subbedIn": false,
+   "subbedOut": false,
+   "formationPlace": "1",
+   "media": {},
+   "stats": [
+    {
+     "name": "appearances",
+     "displayName": "Appearances",
+     "shortDisplayName": "APP",
+     "description": "The number of times a player has made an appearance in a match.",
+     "abbreviation": "APP",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsCommitted",
+     "displayName": "Fouls Committed",
+     "shortDisplayName": "FC",
+     "description": "The number of fouls comitted by a player or team.",
+     "abbreviation": "FC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "foulsSuffered",
+     "displayName": "Fouls Suffered",
+     "shortDisplayName": "FA",
+     "description": "The number of fouls suffered by a player or team.",
+     "abbreviation": "FA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "ownGoals",
+     "displayName": "Own Goals",
+     "shortDisplayName": "OG",
+     "description": "The number of own goals conceded.",
+     "abbreviation": "OG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "redCards",
+     "displayName": "Red Cards",
+     "shortDisplayName": "RC",
+     "description": "The number of red cards that have been issued.",
+     "abbreviation": "RC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "subIns",
+     "displayName": "Substitute Appearances",
+     "shortDisplayName": "SUBIN",
+     "description": "The number of times a player has come on a sub in a match.",
+     "abbreviation": "SUB",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "yellowCards",
+     "displayName": "Yellow Cards",
+     "shortDisplayName": "YC",
+     "description": "The number of yellow cards accumulated.",
+     "abbreviation": "YC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalsConceded",
+     "displayName": "Goals Against",
+     "shortDisplayName": "GA",
+     "description": "The number of goals allowed by the goalkeeper.",
+     "abbreviation": "GA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "saves",
+     "displayName": "Saves",
+     "shortDisplayName": "SV",
+     "description": "The number of times a goalkeeper makes a save.",
+     "abbreviation": "SV",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "shotsFaced",
+     "displayName": "Shots Faced",
+     "shortDisplayName": "SHF",
+     "description": "The number of shots on target a goalkeeper has faced.",
+     "abbreviation": "SHF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalAssists",
+     "displayName": "Assists",
+     "shortDisplayName": "A",
+     "description": "The number of assists.",
+     "abbreviation": "A",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsOnTarget",
+     "displayName": "Shots On Goal",
+     "shortDisplayName": "SOG",
+     "description": "The number of shots that are on goal.",
+     "abbreviation": "SOG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalGoals",
+     "displayName": "Total Goals",
+     "shortDisplayName": "G",
+     "description": "The number of goals scored against the opposing team.",
+     "abbreviation": "G",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Shots",
+     "shortDisplayName": "SHOT",
+     "description": "The number of shots attempted.",
+     "abbreviation": "SHOT",
+     "value": 0.0,
+     "displayValue": "0"
+    }
+   ]
+  },
+  {
+   "active": true,
+   "starter": true,
+   "jersey": "4",
+   "athlete": {
+    "id": "308254",
+    "uid": "s:600~a:308254",
+    "guid": "f029d6c1-52e1-3c68-a7f3-233a117f2d2b",
+    "lastName": "Paredes",
+    "fullName": "Aitor Paredes",
+    "displayName": "Aitor Paredes",
+    "shortName": "A. Paredes",
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "playercard",
+       "desktop",
+       "athlete"
+      ],
+      "href": "https://www.espn.com/soccer/player/_/id/308254/aitor-paredes",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+     }
+    ],
+    "jerseyImages": [
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/308254/jersey.png?darkMode=false",
+      "rel": [
+       "full",
+       "default"
+      ],
+      "width": 1440,
+      "height": 1440
+     },
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/308254/jersey.png?darkMode=true",
+      "rel": [
+       "full",
+       "dark"
+      ],
+      "width": 1440,
+      "height": 1440
+     }
+    ]
+   },
+   "position": {
+    "name": "Center Left Defender",
+    "displayName": "Center Left Defender",
+    "abbreviation": "CD-L"
+   },
+   "subbedIn": false,
+   "subbedOut": false,
+   "formationPlace": "6",
+   "media": {},
+   "stats": [
+    {
+     "name": "appearances",
+     "displayName": "Appearances",
+     "shortDisplayName": "APP",
+     "description": "The number of times a player has made an appearance in a match.",
+     "abbreviation": "APP",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsCommitted",
+     "displayName": "Fouls Committed",
+     "shortDisplayName": "FC",
+     "description": "The number of fouls comitted by a player or team.",
+     "abbreviation": "FC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "foulsSuffered",
+     "displayName": "Fouls Suffered",
+     "shortDisplayName": "FA",
+     "description": "The number of fouls suffered by a player or team.",
+     "abbreviation": "FA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "ownGoals",
+     "displayName": "Own Goals",
+     "shortDisplayName": "OG",
+     "description": "The number of own goals conceded.",
+     "abbreviation": "OG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "redCards",
+     "displayName": "Red Cards",
+     "shortDisplayName": "RC",
+     "description": "The number of red cards that have been issued.",
+     "abbreviation": "RC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "subIns",
+     "displayName": "Substitute Appearances",
+     "shortDisplayName": "SUBIN",
+     "description": "The number of times a player has come on a sub in a match.",
+     "abbreviation": "SUB",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "yellowCards",
+     "displayName": "Yellow Cards",
+     "shortDisplayName": "YC",
+     "description": "The number of yellow cards accumulated.",
+     "abbreviation": "YC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalsConceded",
+     "displayName": "Goals Against",
+     "shortDisplayName": "GA",
+     "description": "The number of goals allowed by the goalkeeper.",
+     "abbreviation": "GA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsFaced",
+     "displayName": "Shots Faced",
+     "shortDisplayName": "SHF",
+     "description": "The number of shots on target a goalkeeper has faced.",
+     "abbreviation": "SHF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalAssists",
+     "displayName": "Assists",
+     "shortDisplayName": "A",
+     "description": "The number of assists.",
+     "abbreviation": "A",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "offsides",
+     "displayName": "Offsides",
+     "shortDisplayName": "OF",
+     "description": "The number of times a player or team gets caught offside.",
+     "abbreviation": "OF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsOnTarget",
+     "displayName": "Shots On Goal",
+     "shortDisplayName": "SOG",
+     "description": "The number of shots that are on goal.",
+     "abbreviation": "SOG",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "totalGoals",
+     "displayName": "Total Goals",
+     "shortDisplayName": "G",
+     "description": "The number of goals scored against the opposing team.",
+     "abbreviation": "G",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Shots",
+     "shortDisplayName": "SHOT",
+     "description": "The number of shots attempted.",
+     "abbreviation": "SHOT",
+     "value": 1.0,
+     "displayValue": "1"
+    }
+   ],
+   "plays": [
+    {
+     "clock": {
+      "displayValue": "70'"
+     },
+     "scoringPlay": true,
+     "substitution": false,
+     "redCard": false,
+     "yellowCard": false,
+     "penaltyKick": false,
+     "ownGoal": false,
+     "didScore": true
+    }
+   ]
+  },
+  {
+   "active": true,
+   "starter": true,
+   "jersey": "3",
+   "athlete": {
+    "id": "274016",
+    "uid": "s:600~a:274016",
+    "guid": "8a260e19-8f13-5720-da10-b51c40f7bccf",
+    "lastName": "Vivian",
+    "fullName": "Dani Vivian",
+    "displayName": "Dani Vivian",
+    "shortName": "D. Vivian",
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "playercard",
+       "desktop",
+       "athlete"
+      ],
+      "href": "https://www.espn.com/soccer/player/_/id/274016/dani-vivian",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+     }
+    ],
+    "jerseyImages": [
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/274016/jersey.png?darkMode=false",
+      "rel": [
+       "full",
+       "default"
+      ],
+      "width": 1440,
+      "height": 1440
+     },
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/274016/jersey.png?darkMode=true",
+      "rel": [
+       "full",
+       "dark"
+      ],
+      "width": 1440,
+      "height": 1440
+     }
+    ]
+   },
+   "position": {
+    "name": "Center Right Defender",
+    "displayName": "Center Right Defender",
+    "abbreviation": "CD-R"
+   },
+   "subbedIn": false,
+   "subbedOut": false,
+   "formationPlace": "5",
+   "media": {},
+   "stats": [
+    {
+     "name": "appearances",
+     "displayName": "Appearances",
+     "shortDisplayName": "APP",
+     "description": "The number of times a player has made an appearance in a match.",
+     "abbreviation": "APP",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsCommitted",
+     "displayName": "Fouls Committed",
+     "shortDisplayName": "FC",
+     "description": "The number of fouls comitted by a player or team.",
+     "abbreviation": "FC",
+     "value": 2.0,
+     "displayValue": "2"
+    },
+    {
+     "name": "foulsSuffered",
+     "displayName": "Fouls Suffered",
+     "shortDisplayName": "FA",
+     "description": "The number of fouls suffered by a player or team.",
+     "abbreviation": "FA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "ownGoals",
+     "displayName": "Own Goals",
+     "shortDisplayName": "OG",
+     "description": "The number of own goals conceded.",
+     "abbreviation": "OG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "redCards",
+     "displayName": "Red Cards",
+     "shortDisplayName": "RC",
+     "description": "The number of red cards that have been issued.",
+     "abbreviation": "RC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "subIns",
+     "displayName": "Substitute Appearances",
+     "shortDisplayName": "SUBIN",
+     "description": "The number of times a player has come on a sub in a match.",
+     "abbreviation": "SUB",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "yellowCards",
+     "displayName": "Yellow Cards",
+     "shortDisplayName": "YC",
+     "description": "The number of yellow cards accumulated.",
+     "abbreviation": "YC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalsConceded",
+     "displayName": "Goals Against",
+     "shortDisplayName": "GA",
+     "description": "The number of goals allowed by the goalkeeper.",
+     "abbreviation": "GA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsFaced",
+     "displayName": "Shots Faced",
+     "shortDisplayName": "SHF",
+     "description": "The number of shots on target a goalkeeper has faced.",
+     "abbreviation": "SHF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalAssists",
+     "displayName": "Assists",
+     "shortDisplayName": "A",
+     "description": "The number of assists.",
+     "abbreviation": "A",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "offsides",
+     "displayName": "Offsides",
+     "shortDisplayName": "OF",
+     "description": "The number of times a player or team gets caught offside.",
+     "abbreviation": "OF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsOnTarget",
+     "displayName": "Shots On Goal",
+     "shortDisplayName": "SOG",
+     "description": "The number of shots that are on goal.",
+     "abbreviation": "SOG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalGoals",
+     "displayName": "Total Goals",
+     "shortDisplayName": "G",
+     "description": "The number of goals scored against the opposing team.",
+     "abbreviation": "G",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Shots",
+     "shortDisplayName": "SHOT",
+     "description": "The number of shots attempted.",
+     "abbreviation": "SHOT",
+     "value": 1.0,
+     "displayValue": "1"
+    }
+   ]
+  },
+  {
+   "active": true,
+   "starter": true,
+   "jersey": "28",
+   "athlete": {
+    "id": "388805",
+    "uid": "s:600~a:388805",
+    "guid": "aefe0a33-39b4-3222-99ea-e524004a3afa",
+    "lastName": "Canales",
+    "fullName": "Peio Canales",
+    "displayName": "Peio Canales",
+    "shortName": "P. Canales",
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "playercard",
+       "desktop",
+       "athlete"
+      ],
+      "href": "https://www.espn.com/soccer/player/_/id/388805/peio-canales",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+     }
+    ],
+    "jerseyImages": [
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/388805/jersey.png?darkMode=false",
+      "rel": [
+       "full",
+       "default"
+      ],
+      "width": 1440,
+      "height": 1440
+     },
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/388805/jersey.png?darkMode=true",
+      "rel": [
+       "full",
+       "dark"
+      ],
+      "width": 1440,
+      "height": 1440
+     }
+    ]
+   },
+   "position": {
+    "name": "Left Midfielder",
+    "displayName": "Left Midfielder",
+    "abbreviation": "LM"
+   },
+   "subbedIn": false,
+   "subbedOut": true,
+   "formationPlace": "4",
+   "media": {},
+   "stats": [
+    {
+     "name": "appearances",
+     "displayName": "Appearances",
+     "shortDisplayName": "APP",
+     "description": "The number of times a player has made an appearance in a match.",
+     "abbreviation": "APP",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsCommitted",
+     "displayName": "Fouls Committed",
+     "shortDisplayName": "FC",
+     "description": "The number of fouls comitted by a player or team.",
+     "abbreviation": "FC",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsSuffered",
+     "displayName": "Fouls Suffered",
+     "shortDisplayName": "FA",
+     "description": "The number of fouls suffered by a player or team.",
+     "abbreviation": "FA",
+     "value": 2.0,
+     "displayValue": "2"
+    },
+    {
+     "name": "ownGoals",
+     "displayName": "Own Goals",
+     "shortDisplayName": "OG",
+     "description": "The number of own goals conceded.",
+     "abbreviation": "OG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "redCards",
+     "displayName": "Red Cards",
+     "shortDisplayName": "RC",
+     "description": "The number of red cards that have been issued.",
+     "abbreviation": "RC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "subIns",
+     "displayName": "Substitute Appearances",
+     "shortDisplayName": "SUBIN",
+     "description": "The number of times a player has come on a sub in a match.",
+     "abbreviation": "SUB",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "yellowCards",
+     "displayName": "Yellow Cards",
+     "shortDisplayName": "YC",
+     "description": "The number of yellow cards accumulated.",
+     "abbreviation": "YC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalsConceded",
+     "displayName": "Goals Against",
+     "shortDisplayName": "GA",
+     "description": "The number of goals allowed by the goalkeeper.",
+     "abbreviation": "GA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsFaced",
+     "displayName": "Shots Faced",
+     "shortDisplayName": "SHF",
+     "description": "The number of shots on target a goalkeeper has faced.",
+     "abbreviation": "SHF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalAssists",
+     "displayName": "Assists",
+     "shortDisplayName": "A",
+     "description": "The number of assists.",
+     "abbreviation": "A",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "offsides",
+     "displayName": "Offsides",
+     "shortDisplayName": "OF",
+     "description": "The number of times a player or team gets caught offside.",
+     "abbreviation": "OF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsOnTarget",
+     "displayName": "Shots On Goal",
+     "shortDisplayName": "SOG",
+     "description": "The number of shots that are on goal.",
+     "abbreviation": "SOG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalGoals",
+     "displayName": "Total Goals",
+     "shortDisplayName": "G",
+     "description": "The number of goals scored against the opposing team.",
+     "abbreviation": "G",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Shots",
+     "shortDisplayName": "SHOT",
+     "description": "The number of shots attempted.",
+     "abbreviation": "SHOT",
+     "value": 1.0,
+     "displayValue": "1"
+    }
+   ],
+   "subbedOutFor": {
+    "jersey": "6",
+    "athlete": {
+     "id": "318785",
+     "displayName": "Beñat Prados",
+     "links": [
+      {
+       "language": "en-US",
+       "rel": [
+        "playercard",
+        "desktop",
+        "athlete"
+       ],
+       "href": "https://www.espn.com/soccer/player/_/id/318785/benat-prados",
+       "text": "Player Card",
+       "shortText": "Player Card",
+       "isExternal": false,
+       "isPremium": false
+      }
+     ]
+    }
+   },
+   "plays": [
+    {
+     "clock": {
+      "displayValue": "84'"
+     },
+     "scoringPlay": false,
+     "substitution": true,
+     "redCard": false,
+     "yellowCard": false,
+     "penaltyKick": false,
+     "ownGoal": false
+    }
+   ]
+  },
+  {
+   "active": true,
+   "starter": true,
+   "jersey": "16",
+   "athlete": {
+    "id": "157708",
+    "uid": "s:600~a:157708",
+    "guid": "2456404f-fbbc-afe0-7c34-91f03dfd9600",
+    "lastName": "Ruiz de Galarreta",
+    "fullName": "Iñigo Ruiz de Galarreta",
+    "displayName": "Iñigo Ruiz de Galarreta",
+    "shortName": "I. Ruiz de Galarreta",
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "playercard",
+       "desktop",
+       "athlete"
+      ],
+      "href": "https://www.espn.com/soccer/player/_/id/157708/inigo-ruiz-de-galarreta",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+     }
+    ],
+    "jerseyImages": [
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/157708/jersey.png?darkMode=false",
+      "rel": [
+       "full",
+       "default"
+      ],
+      "width": 1440,
+      "height": 1440
+     },
+     {
+      "href": "https://stitcher.espn.com/sports/soccer/leagues/esp.1/events/401882835/athletes/157708/jersey.png?darkMode=true",
+      "rel": [
+       "full",
+       "dark"
+      ],
+      "width": 1440,
+      "height": 1440
+     }
+    ]
+   },
+   "position": {
+    "name": "Right Midfielder",
+    "displayName": "Right Midfielder",
+    "abbreviation": "RM"
+   },
+   "subbedIn": false,
+   "subbedOut": true,
+   "formationPlace": "8",
+   "media": {},
+   "stats": [
+    {
+     "name": "appearances",
+     "displayName": "Appearances",
+     "shortDisplayName": "APP",
+     "description": "The number of times a player has made an appearance in a match.",
+     "abbreviation": "APP",
+     "value": 1.0,
+     "displayValue": "1"
+    },
+    {
+     "name": "foulsCommitted",
+     "displayName": "Fouls Committed",
+     "shortDisplayName": "FC",
+     "description": "The number of fouls comitted by a player or team.",
+     "abbreviation": "FC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "foulsSuffered",
+     "displayName": "Fouls Suffered",
+     "shortDisplayName": "FA",
+     "description": "The number of fouls suffered by a player or team.",
+     "abbreviation": "FA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "ownGoals",
+     "displayName": "Own Goals",
+     "shortDisplayName": "OG",
+     "description": "The number of own goals conceded.",
+     "abbreviation": "OG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "redCards",
+     "displayName": "Red Cards",
+     "shortDisplayName": "RC",
+     "description": "The number of red cards that have been issued.",
+     "abbreviation": "RC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "subIns",
+     "displayName": "Substitute Appearances",
+     "shortDisplayName": "SUBIN",
+     "description": "The number of times a player has come on a sub in a match.",
+     "abbreviation": "SUB",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "yellowCards",
+     "displayName": "Yellow Cards",
+     "shortDisplayName": "YC",
+     "description": "The number of yellow cards accumulated.",
+     "abbreviation": "YC",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalsConceded",
+     "displayName": "Goals Against",
+     "shortDisplayName": "GA",
+     "description": "The number of goals allowed by the goalkeeper.",
+     "abbreviation": "GA",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsFaced",
+     "displayName": "Shots Faced",
+     "shortDisplayName": "SHF",
+     "description": "The number of shots on target a goalkeeper has faced.",
+     "abbreviation": "SHF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "goalAssists",
+     "displayName": "Assists",
+     "shortDisplayName": "A",
+     "description": "The number of assists.",
+     "abbreviation": "A",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "offsides",
+     "displayName": "Offsides",
+     "shortDisplayName": "OF",
+     "description": "The number of times a player or team gets caught offside.",
+     "abbreviation": "OF",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "shotsOnTarget",
+     "displayName": "Shots On Goal",
+     "shortDisplayName": "SOG",
+     "description": "The number of shots that are on goal.",
+     "abbreviation": "SOG",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalGoals",
+     "displayName": "Total Goals",
+     "shortDisplayName": "G",
+     "description": "The number of goals scored against the opposing team.",
+     "abbreviation": "G",
+     "value": 0.0,
+     "displayValue": "0"
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Shots",
+     "shortDisplayName": "SHOT",
+     "description": "The number of shots attempted.",
+     "abbreviation": "SHOT",
+     "value": 0.0,
+     "displayValue": "0"
+    }
+   ],
+   "subbedOutFor": {
+    "jersey": "24",
+    "athlete": {
+     "id": "388803",
+     "displayName": "Beñat Gerenabarrena",
+     "links": [
+      {
+       "language": "en-US",
+       "rel": [
+        "playercard",
+        "desktop",
+        "athlete"
+       ],
+       "href": "https://www.espn.com/soccer/player/_/id/388803/benat-gerenabarrena",
+       "text": "Player Card",
+       "shortText": "Player Card",
+       "isExternal": false,
+       "isPremium": false
+      }
+     ]
+    }
+   },
+   "plays": [
+    {
+     "clock": {
+      "displayValue": "18'"
+     },
+     "scoringPlay": false,
+     "substitution": true,
+     "redCard": false,
+     "yellowCard": false,
+     "penaltyKick": false,
+     "ownGoal": false
+    }
+   ]
+  }
  ]
 }
