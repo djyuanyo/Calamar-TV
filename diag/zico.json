@@ -1,26 +1,23 @@
 [
  {
   "channel": "Primera Federación",
-  "hosting": [
-   502,
-   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
-  ],
-  "direct": 200
+  "status": 200,
+  "x-frame-options": null,
+  "csp": "",
+  "acao": "*"
  },
  {
   "channel": "DAZN Baloncesto",
-  "hosting": [
-   502,
-   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
-  ],
-  "direct": 200
+  "status": 200,
+  "x-frame-options": null,
+  "csp": "",
+  "acao": "*"
  },
  {
   "channel": "DAZN Baloncesto 2",
-  "hosting": [
-   502,
-   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
-  ],
-  "direct": 200
+  "status": 200,
+  "x-frame-options": null,
+  "csp": "",
+  "acao": "*"
  }
 ]
