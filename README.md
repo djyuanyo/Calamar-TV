@@ -228,3 +228,12 @@ La consulta de documentos públicos ZicoTV y los M3U8 extraídos usan un perfil 
 Fuentes abre siempre un selector de los enlaces guardados del canal, incluso si todavía no se ha recibido ningún CDN. Después de consultar la página también muestra sus CDN disponibles. Elegir un vídeo directo funciona aunque la consulta de la página haya fallado. No se inventan direcciones CDN cuando el proveedor aún no las ha devuelto.
 
 Pruebas: casos unitarios de RESET/HTTP1 y rechazo HTTP; ResolvedPlaybackTest verifica reproducción HTTPS nativa, coherencia del perfil de consulta/vídeo, recuperación del token y elección del enlace alternativo cuando la página devuelve un error.
+
+
+## Conexión Chromium y controles visibles (2.20.17)
+
+Si ZicoTV funciona en Chrome pero la consulta de la app falla por conexión, la app prueba Cronet (motor de red Chromium) para leer la página y después reproducir su HLS en el mismo ExoPlayer de Calamar. Incluye la biblioteca nativa para Android y Android TV sin requerir Google Play ni una VPN instalada. Los rechazos HTTP y la validación TLS siguen aplicándose. No se envía la señal a un proxy ni se muestra el reproductor de ZicoTV. Este cambio requiere comprobar su resultado en la conexión concreta del usuario: una prueba local no demuestra que una señal externa vaya a estar disponible.
+
+Los controles permanecen visibles mientras no hay vídeo o está cargando. Fuentes usa selección única y marca la URL seleccionada: el CDN actual, si ya se ha obtenido, o el enlace del canal mientras se consulta. El diagnóstico compara también Chromium con los otros motores sin incluir tokens.
+
+Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y la fuente marcada, además de la reproducción/resolución existentes. ChromiumPlaybackTest verifica conexiones reales con Cronet y decodificación HLS nativa de un vídeo local.
