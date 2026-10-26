@@ -483,6 +483,8 @@ function stop() {
   video.removeAttribute('src');
   video.load();
   controls.reset();
+  document.getElementById('player-frame')?.remove();
+  player.classList.remove('framed');
 }
 
 /**
@@ -587,6 +589,16 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
+  if (source.how.kind === 'frame') {
+    // The page's own player, straight from its servers: nothing passes through the hosting.
+    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.url, title: c.name,
+      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+    document.querySelector('#player .player-stage').append(frame);
+    player.classList.add('framed');
+    controls.attach(null);
+    playerStatus.textContent = '';
+    return;
+  }
   if (source.how.kind === 'ts') {
     controls.attach(null);
     // The hosting's adapted HLS of the channel (calamar-cast.php): one continuous connection to the

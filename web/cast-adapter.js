@@ -5,7 +5,8 @@ import { PLAYER_ENDPOINT, webPlayback } from './catalog.js';
 
 export const needsCastBridge = httpTsSource;
 /** Player pages (zicotv and similar): the TV gets the list relayed by calamar-player.php, as the web plays it. */
-export const castPage = (address) => !!webPlayback(String(address || ''), { pages: true }).page;
+export const castPage = (address) => webPlayback(String(address || ''), { pages: true }).kind === 'hls'
+  && !!webPlayback(String(address || ''), { pages: true }).page;
 
 async function preparePageCast(address, fetcher, onStatus) {
   onStatus('Preparando el canal para la TV…');

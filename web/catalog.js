@@ -227,7 +227,19 @@ export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
 export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
-/** `pages`: player pages play through the hosting (channels); otherwise they need the app. */
+/**
+ * Player pages shown as they are, inside the player (their own player, straight from their servers):
+ * zicotv allows other webs to show its pages and refuses the hosting, so its video never passes through it.
+ */
+const FRAME_HOSTS = ['zicotv.cc'];
+export function framedPage(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && FRAME_HOSTS.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+  } catch { return false; }
+}
+
+/** `pages`: player pages play through the hosting (channels) or in a frame; otherwise they need the app. */
 export function webPlayback(url, { pages = false } = {}) {
   let u;
   try {
@@ -250,6 +262,7 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
