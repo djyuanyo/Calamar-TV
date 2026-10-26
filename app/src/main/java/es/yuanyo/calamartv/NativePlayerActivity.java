@@ -232,7 +232,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       });
     }
     sourceButton = button(controls, "Fuentes", this::chooseSource);
-    sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
+    sourceButton.setVisibility(View.VISIBLE);
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
     if (shareUrl != null) {
       ImageButton shareButton = new ImageButton(this);
@@ -340,7 +340,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void updateSourceButton() {
-    if (sourceButton != null) sourceButton.setVisibility(sources.size() > 1 ? View.VISIBLE : View.GONE);
+    if (sourceButton != null) sourceButton.setVisibility(View.VISIBLE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -481,6 +481,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               NetworkTransport.select(this, providers[index]);
               transport = NetworkTransport.get(this);
               mediaHttp1 = false;
+              mediaSystemRetry = false;
               generation++;
               resolving = false;
               automaticAttempts = 0;
@@ -552,13 +553,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     worker.execute(
         () -> {
           try {
-            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl, transport);
+            NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
+            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl, pageTransport,
+                pageTransport.provider == DnsProvider.SYSTEM ? null : NetworkTransport.get(DnsProvider.SYSTEM));
             List<VideoResolver.Source> found = VideoResolver.parse(document.html, document.url);
             handler.post(
                 () -> {
                   if (!active || request != generation) return;
                   resolving = false;
                   documentUrl = document.url;
+                  if (document.usedFallback) { mediaSystemRetry = true; mediaHttp1 = true; }
                   lastReport =
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
@@ -566,7 +570,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   // Each phone reads the page and its videos itself, as a viewer of the page. The hosting
                   // (calamar-player.php) is only the last option: with every viewer behind its single
                   // address the page refused it, and one server cannot carry a big match for everyone.
-                  if (channelPage() && !sources.isEmpty())
+                  if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
@@ -574,6 +578,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
+                  } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
+                    refreshAutomatically("El proveedor no ha devuelto una fuente vigente. Reintentando…");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -597,6 +603,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (VideoResolver.renewablePage(pageUrl)) {
+                    refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
                     // The page cannot be reached from this phone (blocked by the operator): the hosting.
                     sources.clear();
@@ -717,6 +725,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (instance != player || !active) return;
             if (state == Player.STATE_READY) {
               cancelBufferingTimeout();
+              automaticAttempts = 0;
               status.setText("");
             } else if (state == Player.STATE_BUFFERING) {
               status.setText("Cargando vídeo…");
@@ -814,7 +823,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     lastReport += "\nReintento: DNS del sistema · HTTP/1.1";
     // Release first: a previously playing instance must not short-circuit the retry.
     releasePlayer();
-    playSource(source);
+    // A page-issued URL belongs to the connection that obtained it. Read it again after changing networks.
+    if (directUrl == null && VideoResolver.renewablePage(pageUrl)) resolveFresh();
+    else playSource(source);
     return true;
   }
 
@@ -838,6 +849,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (now - attemptWindow > 120000) {
       automaticAttempts = 0;
       attemptWindow = now;
+    }
+    if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
+      if (sources.size() > 1) selection = (selection + 1) % sources.size();
+      long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
+      status.setText(message);
+      handler.removeCallbacks(renewalRequest);
+      handler.postDelayed(renewalRequest, delay);
+      return;
     }
     // Direct channels with alternatives try each source before giving up; a player page with several
     // videos (CDN 1, CDN 2…) moves on to its next video, as the page is read again.
@@ -978,12 +997,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void chooseSource() {
     if (sources.isEmpty()) {
-      Toast.makeText(this, "Aún no se ha detectado una fuente", Toast.LENGTH_SHORT).show();
+      Toast.makeText(this, resolving ? "Buscando fuentes…" : "Consultando fuentes del canal…", Toast.LENGTH_SHORT).show();
+      if (!resolving) resolveFresh();
       return;
     }
     String[] names = new String[sources.size()];
     // Numbered options, whatever the provider calls them (CDN 4, Vídeo 1…).
-    for (int i = 0; i < names.length; i++) names[i] = "Opción " + (i + 1);
+    for (int i = 0; i < names.length; i++) names[i] = "Opción " + (i + 1) + " · " + sources.get(i).label;
     new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
         .setSingleChoiceItems(
