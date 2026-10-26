@@ -37,10 +37,12 @@ class LineupsTest(unittest.TestCase):
         team = {'players': [
             {'player': {'name': 'Unai Simón', 'photo': 'https://media.api-sports.io/football/players/47.png'}, 'statistics': [{'games': {'number': 1, 'rating': '7.36'}}]},
             {'player': {'name': 'Suplente', 'photo': 'http://bad.example/x.png'}, 'statistics': [{'games': {'number': 22, 'rating': None}}]},
+            {'player': {'name': 'Sin jugar', 'photo': ''}, 'statistics': [{'games': {'number': 12, 'rating': '0'}}]},
         ]}
         self.assertEqual(json.loads(php(f'echo json_encode(lineupsPlayers({lit(team)}));')), [
             {'number': '1', 'name': 'Unai Simón', 'photo': 'https://media.api-sports.io/football/players/47.png', 'rating': 7.4},
-            {'number': '22', 'name': 'Suplente', 'photo': '', 'rating': None}])
+            {'number': '22', 'name': 'Suplente', 'photo': '', 'rating': None},
+            {'number': '12', 'name': 'Sin jugar', 'photo': '', 'rating': None}])
 
     def test_api_errors_are_told_in_its_own_words(self):
         out = subprocess.run(['php', '-r', f'require {json.dumps(PHP)}; lineupsApi("/fixtures?date=2099-01-01", 0, "k", function () {{ return json_encode(["errors" => ["plan" => "Free plans do not have access to this season."]]); }});'],

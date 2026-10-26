@@ -94,7 +94,8 @@ function lineupsPlayers($team) {
     $out = [];
     foreach (($team['players'] ?? []) as $p) {
         $games = $p['statistics'][0]['games'] ?? [];
-        $rating = is_numeric($games['rating'] ?? null) ? round((float)$games['rating'], 1) : null;
+        // Players who did not play come with no rating or a 0: they show none.
+        $rating = is_numeric($games['rating'] ?? null) && (float)$games['rating'] > 0 ? round((float)$games['rating'], 1) : null;
         $photo = (string)($p['player']['photo'] ?? '');
         $out[] = ['number' => isset($games['number']) ? (string)$games['number'] : '', 'name' => (string)($p['player']['name'] ?? ''),
             'photo' => preg_match('#^https://#', $photo) ? $photo : '', 'rating' => $rating];
