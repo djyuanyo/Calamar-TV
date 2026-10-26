@@ -5,6 +5,9 @@ function failure($message, $code = 502) {
 }
 require_once __DIR__ . '/calamar-http-source.php';
 
+// Raised with each change of the splicing, so the version running on the hosting can be checked.
+const RELAY_VERSION = 3;
+
 function relayMain() {
     ini_set('display_errors', '0');
     @set_time_limit(125);
@@ -19,6 +22,11 @@ function relayMain() {
     header('Access-Control-Allow-Headers: X-Calamar-Source, Range');
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') failure('Método no permitido.', 405);
+    header('X-Calamar-Relay: ' . RELAY_VERSION);
+    if (isset($_GET['version'])) {
+        header('Content-Type: application/json');
+        echo json_encode(array('relay' => RELAY_VERSION, 'php' => PHP_VERSION)); exit;
+    }
     if (!isset($_GET['stream'])) failure('Abre este puente desde Calamar TV.', 400);
     if (!function_exists('curl_init')) failure('cURL no disponible.');
     $source = base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
