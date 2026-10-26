@@ -1,5 +1,5 @@
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
-import { parseMatchCenter, renderMatchCenter, eventMatchModel } from './match-center.js';
+import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -835,10 +835,29 @@ async function resumeEntry(entry) {
 // event has a Google match link, otherwise from the event's own teams, league, date and description.
 const matchPanel = document.getElementById('match-center');
 let matchTab = 'general', matchShown = '', matchModel = null, matchTimer = null;
+// Players' photos and ratings, asked only with the line-ups open and at most every 5 minutes
+// (the hosting keeps them too: API-Football's free plan has 100 requests a day).
+const playerExtras = { key: '', at: 0, data: null, busy: false };
+function loadPlayerExtras() {
+  const m = matchModel;
+  if (matchTab !== 'lineups' || !m?.lineups?.length || !m.home?.name || !m.away?.name || !m.date) return;
+  const key = `${m.home.name}|${m.away.name}|${m.date.slice(0, 10)}`;
+  if (playerExtras.busy || (playerExtras.key === key && Date.now() - playerExtras.at < 300000)) return;
+  Object.assign(playerExtras, { key, at: Date.now(), busy: true });
+  const url = `${LINEUPS_ENDPOINT}?home=${encodeURIComponent(m.home.name)}&away=${encodeURIComponent(m.away.name)}&date=${m.date.slice(0, 10)}`;
+  fetch(url, { cache: 'no-store', referrerPolicy: 'no-referrer' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
+    playerExtras.busy = false;
+    if (playerExtras.key !== key) return;
+    playerExtras.data = data?.teams ? data : null;
+    if (playerExtras.data) paintMatch();
+  });
+}
 function paintMatch() {
   if (!matchModel) return;
+  loadPlayerExtras();
   const focused = matchPanel.contains(document.activeElement) ? document.activeElement.id : '';
-  matchPanel.replaceChildren(...renderMatchCenter(el, matchModel, matchTab, (tab, focus) => {
+  const extras = playerExtras.key === `${matchModel.home?.name}|${matchModel.away?.name}|${String(matchModel.date || '').slice(0, 10)}` ? playerExtras.data : null;
+  matchPanel.replaceChildren(...renderMatchCenter(el, withPlayerExtras(matchModel, extras), matchTab, (tab, focus) => {
     matchTab = tab; paintMatch();
     if (focus) document.getElementById(`mc-tab-${tab}`)?.focus();
   }).filter(Boolean));

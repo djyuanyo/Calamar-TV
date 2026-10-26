@@ -169,6 +169,20 @@ export function parseMatchCenter(data) {
   };
 }
 
+/** Photos and ratings (API-Football, through the hosting) added to ESPN's players by side and number. */
+export const LINEUPS_ENDPOINT = 'https://calamarmenciano.com/calamar-lineups.php';
+export function withPlayerExtras(m, extras) {
+  if (!extras?.teams || !m?.lineups?.length) return m;
+  const add = (side) => (p) => {
+    const found = (extras.teams[side] || []).find((x) => x.number !== '' && String(x.number) === String(p.number));
+    if (!found) return p;
+    return { ...p, photo: /^https:\/\//.test(found.photo || '') ? found.photo : '', rating: Number.isFinite(found.rating) ? found.rating : null };
+  };
+  return { ...m, lineups: m.lineups.map((l) => ({ ...l, starters: l.starters.map(add(l.side)), subs: l.subs.map(add(l.side)) })) };
+}
+/** Google's colours for a rating: blue for 8 and more, green from 7, yellow from 6, orange below. */
+export const ratingClass = (r) => (r >= 8 ? 'mc-r8' : r >= 7 ? 'mc-r7' : r >= 6 ? 'mc-r6' : 'mc-r5');
+
 /** The event's own data (teams, league, date, place, description), for events without ESPN data. */
 export function eventMatchModel(c, custom, status = '') {
   const find = (list, id) => (custom?.[list] || []).find((x) => x.id === id);
@@ -217,13 +231,17 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty(m.state === 'scheduled' ? 'Las estadísticas aparecen cuando empieza el partido.' : 'No hay estadísticas de este partido.')];
   } else if (tab === 'lineups') {
     const list = (players) => el('ol', { class: 'mc-players' }, players.map((p) => el('li', {},
-      el('span', { class: 'mc-number' }, p.number), el('span', { class: 'mc-name' }, p.name, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ` ↑${p.subAt ? ` ${p.subAt}` : ''}`) : null),
+      el('span', { class: 'mc-number' }, p.number), el('span', { class: 'mc-name' }, p.name, Number.isFinite(p.rating) ? el('i', { class: `mc-rating inline ${ratingClass(p.rating)}` }, p.rating.toFixed(1)) : null, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ` ↑${p.subAt ? ` ${p.subAt}` : ''}`) : null),
       el('span', { class: 'mc-pos' }, p.position))));
     // Both elevens on one pitch, as Google shows them: the home team from the top goal, the away team
     // from the bottom one. Each player: his shirt, number and name, goals, cards and when he was changed.
     const marker = (p) => el('li', { class: 'mc-man' },
-      el('span', { class: 'mc-shirt' },
-        p.shirt ? el('img', { src: p.shirt, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', onerror: (e) => e.target.replaceWith(el('b', {}, p.number || '·')) }) : el('b', {}, p.number || '·'),
+      el('span', { class: `mc-shirt${p.photo ? ' photo' : ''}` },
+        // His photo when API-Football has it; otherwise the shirt of the match; otherwise his number.
+        p.photo || p.shirt ? el('img', { src: p.photo || p.shirt, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', onerror: (e) => {
+          if (p.photo && p.shirt && e.target.src !== p.shirt) { e.target.src = p.shirt; e.target.parentNode.classList.remove('photo'); } else e.target.replaceWith(el('b', {}, p.number || '·'));
+        } }) : el('b', {}, p.number || '·'),
+        Number.isFinite(p.rating) ? el('i', { class: `mc-rating ${ratingClass(p.rating)}`, title: 'Nota del partido' }, p.rating.toFixed(1)) : null,
         p.subbedOut ? el('i', { class: 'mc-badge out', title: `Sustituido${p.subAt ? ` en el ${p.subAt}` : ''}` }, '↓') : null,
         p.goals || p.ownGoals ? el('i', { class: 'mc-badge goal', title: `${p.goals ? `${p.goals} gol${p.goals > 1 ? 'es' : ''}` : ''}${p.ownGoals ? ' (en propia puerta)' : ''}` }, '⚽', p.goals > 1 ? el('small', {}, String(p.goals)) : null) : null,
         p.red ? el('i', { class: 'mc-badge card red', title: 'Tarjeta roja' }) : p.yellow ? el('i', { class: 'mc-badge card yellow', title: 'Tarjeta amarilla' }) : null),

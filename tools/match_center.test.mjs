@@ -105,3 +105,18 @@ test('line-ups go on the pitch in the rows of their formation, from the right to
   assert.deepEqual(names(pitchRows('', xi('1:G 2:RB 3:LB 5:CD-R 6:CD-L 4:DM 8:CM-R 10:CM-L 7:RW 11:LW 9:F'))),
     ['G', 'RB CD-R CD-L LB', 'DM', 'CM-R CM-L', 'RW LW', 'F']);
 });
+
+test('photos and ratings go to ESPN players by side and number', async () => {
+  const { withPlayerExtras, ratingClass } = await import('../web/match-center.js');
+  const m = { lineups: [{ side: 'home', starters: [{ number: '1', name: 'Unai Simón' }, { number: '9', name: 'Iñaki Williams' }], subs: [{ number: '22', name: 'Nico Serrano' }] },
+    { side: 'away', starters: [{ number: '1', name: 'David Soria' }], subs: [] }] };
+  const extras = { teams: { home: [{ number: '1', photo: 'https://media.api-sports.io/football/players/47.png', rating: 7.4 }, { number: '22', photo: 'http://x/y.png', rating: 6.1 }],
+    away: [{ number: '1', photo: '', rating: 5.8 }] } };
+  const out = withPlayerExtras(m, extras);
+  assert.deepEqual(out.lineups[0].starters[0], { number: '1', name: 'Unai Simón', photo: 'https://media.api-sports.io/football/players/47.png', rating: 7.4 });
+  assert.deepEqual(out.lineups[0].starters[1], { number: '9', name: 'Iñaki Williams' });
+  assert.equal(out.lineups[0].subs[0].photo, '');
+  assert.equal(out.lineups[1].starters[0].rating, 5.8);
+  assert.equal(withPlayerExtras(m, null), m);
+  assert.deepEqual([8.4, 7.3, 6.5, 5.2].map(ratingClass), ['mc-r8', 'mc-r7', 'mc-r6', 'mc-r5']);
+});

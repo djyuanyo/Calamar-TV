@@ -990,3 +990,16 @@ label[hidden] { display: none; }
 .mc-man-name b { font-weight: 800; }
 .mc-pitch + .mc-lineups { margin-top: 14px; }
 @media (max-width: 480px) { .mc-shirt { width: 42px; height: 42px; } .mc-shirt img { width: 34px; height: 34px; } .mc-man-name { font-size: 12px; } }
+
+/* Photos and ratings (API-Football). */
+.mc-shirt.photo { overflow: visible; background: #e8eaed; }
+.mc-shirt.photo img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+.mc-rating { position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); padding: 1px 6px; border-radius: 999px; font-style: normal; font-size: 12px; font-weight: 700; color: #10331f; background: #c8e6c9; line-height: 1.35; }
+.mc-rating.mc-r8 { background: #a6d1ff; color: #0d2b4d; }
+.mc-rating.mc-r7 { background: #c8e6c9; }
+.mc-rating.mc-r6 { background: #fff0a8; color: #4a3b00; }
+.mc-rating.mc-r5 { background: #ffd0a6; color: #4d2200; }
+.mc-rating.inline { position: static; transform: none; margin-left: 8px; font-size: 11px; vertical-align: middle; }
+.mc-man { padding-bottom: 2px; }
+.mc-man .mc-shirt + .mc-man-name { margin-top: 6px; }
+@media (max-width: 480px) { .mc-shirt.photo img { width: 42px; height: 42px; } }

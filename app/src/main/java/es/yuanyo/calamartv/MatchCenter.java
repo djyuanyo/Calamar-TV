@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -41,7 +42,8 @@ final class MatchCenter {
   static final class Form { String result = "", score = "", opponent = ""; }
   static final class Meeting { String date = "", competition = "", home = "", away = "", score = ""; boolean upcoming, dateKnown = true; }
   static final class Player implements Pitch.Spot {
-    String number = "", name = "", shortName = "", position = "", place = "", shirt = "", subAt = ""; boolean in, out; int goals, ownGoals, yellow, red;
+    String number = "", name = "", shortName = "", position = "", place = "", shirt = "", subAt = "", photo = ""; boolean in, out; int goals, ownGoals, yellow, red;
+    double rating = Double.NaN;
     public String position() { return position; }
     public String place() { return place; }
   }
@@ -460,6 +462,7 @@ final class MatchCenter {
       box.addView(text(note, 14, Ui.MUTED, false));
       add(box);
     }
+    if (tab.equals("lineups")) { playerExtras(m); applyExtras(m, extrasKey.equals(extrasKey(m)) ? extras : null); }
     if (tab.equals("stats")) stats(m); else if (tab.equals("lineups")) lineups(m); else if (tab.equals("h2h")) h2h(m); else general(m);
     LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
     cp.setMargins(0, dp(12), 0, 0);
@@ -853,6 +856,76 @@ final class MatchCenter {
   }
 
   static final int GRASS = 0xff1f7a45, CHALK = 0x47ffffff;
+  static final String LINEUPS = "https://calamarmenciano.com/calamar-lineups.php";
+
+  // Players' photos and ratings (API-Football, through the hosting): asked with the line-ups open, at
+  // most every 5 minutes; the hosting keeps them too (the free plan has 100 requests a day).
+  String extrasKey = ""; long extrasAt; JSONObject extras; boolean extrasBusy;
+
+  static String extrasKey(Model m) {
+    return m.home.name + "|" + m.away.name + "|" + (m.date.length() >= 10 ? m.date.substring(0, 10) : "");
+  }
+
+  void playerExtras(Model m) {
+    if (m.lineups.isEmpty() || m.home.name.isEmpty() || m.away.name.isEmpty() || !m.date.matches("\\d{4}-\\d{2}-\\d{2}.*")) return;
+    final String key = extrasKey(m);
+    if (extrasBusy || (key.equals(extrasKey) && System.currentTimeMillis() - extrasAt < 300000)) return;
+    if (!key.equals(extrasKey)) extras = null;
+    extrasKey = key; extrasAt = System.currentTimeMillis(); extrasBusy = true;
+    final String url = LINEUPS + "?home=" + Uri.encode(m.home.name) + "&away=" + Uri.encode(m.away.name) + "&date=" + m.date.substring(0, 10);
+    new Thread(() -> {
+      JSONObject found = null;
+      try {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(8000); c.setReadTimeout(15000);
+        try {
+          if (c.getResponseCode() == 200) {
+            try (InputStream in = c.getInputStream()) {
+              JSONObject answer = new JSONObject(new String(readAll(in), "UTF-8"));
+              found = answer.optJSONObject("teams");
+            }
+          }
+        } finally { c.disconnect(); }
+      } catch (Exception ignored) {}
+      final JSONObject teams = found;
+      handler.post(() -> {
+        extrasBusy = false;
+        if (!key.equals(extrasKey) || teams == null) return;
+        extras = teams;
+        if (model != null && tab.equals("lineups")) show(model);
+      });
+    }).start();
+  }
+
+  static byte[] readAll(InputStream in) throws java.io.IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buffer = new byte[8192];
+    for (int n; (n = in.read(buffer)) != -1;) out.write(buffer, 0, n);
+    return out.toByteArray();
+  }
+
+  /** Photos and ratings to ESPN's players, by side and number (as withPlayerExtras() on the web). */
+  static void applyExtras(Model m, JSONObject teams) {
+    if (teams == null) return;
+    for (Lineup l : m.lineups) {
+      JSONArray list = teams.optJSONArray(l.side);
+      if (list == null) continue;
+      List<Player> all = new ArrayList<>(l.starters); all.addAll(l.subs);
+      for (Player p : all) {
+        for (int i = 0; i < list.length(); i++) {
+          JSONObject x = list.optJSONObject(i);
+          if (x == null || p.number.isEmpty() || !p.number.equals(x.optString("number"))) continue;
+          String photo = x.optString("photo");
+          p.photo = photo.startsWith("https://") ? photo : "";
+          p.rating = x.isNull("rating") ? Double.NaN : x.optDouble("rating", Double.NaN);
+          break;
+        }
+      }
+    }
+  }
+
+  /** Google's colours for a rating: blue from 8, green from 7, yellow from 6, orange below. */
+  static int ratingColor(double r) { return r >= 8 ? 0xffa6d1ff : r >= 7 ? 0xffc8e6c9 : r >= 6 ? 0xfffff0a8 : 0xffffd0a6; }
 
   /**
    * Both elevens on one pitch, as Google shows them: the home team from the top goal (its right on the
@@ -934,12 +1007,15 @@ final class MatchCenter {
     TextView number = text(p.number.isEmpty() ? "·" : p.number, 16, 0xff134a2a, true);
     number.setGravity(Gravity.CENTER);
     disc.addView(number, new FrameLayout.LayoutParams(-1, -1));
-    if (!p.shirt.isEmpty()) {
+    // His photo when API-Football has it; otherwise the shirt of the match; otherwise his number.
+    if (!p.photo.isEmpty() || !p.shirt.isEmpty()) {
       ImageView shirt = new ImageView(context);
-      shirt.setScaleType(ImageView.ScaleType.FIT_CENTER);
-      shirt.setPadding(dp(4), dp(4), dp(4), dp(4));
+      boolean photo = !p.photo.isEmpty();
+      shirt.setScaleType(photo ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER);
+      if (!photo) shirt.setPadding(dp(4), dp(4), dp(4), dp(4));
+      disc.setClipToOutline(true);
       disc.addView(shirt, new FrameLayout.LayoutParams(-1, -1));
-      load(shirt, number, p.shirt);
+      load(shirt, number, photo ? p.photo : p.shirt);
     }
     FrameLayout.LayoutParams discLp = new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER);
     spot.addView(disc, discLp);
@@ -952,7 +1028,14 @@ final class MatchCenter {
       cardLp.rightMargin = dp(4);
       spot.addView(card, cardLp);
     }
-    box.addView(spot, new LinearLayout.LayoutParams(dp(56), dp(50)));
+    if (!Double.isNaN(p.rating)) {
+      TextView rating = text(String.format(Locale.ROOT, "%.1f", p.rating), 11, 0xff10331f, true);
+      rating.setGravity(Gravity.CENTER);
+      rating.setPadding(dp(5), 0, dp(5), 0);
+      rating.setBackground(Ui.shape(context, ratingColor(p.rating), 999, 0, 0));
+      spot.addView(rating, new FrameLayout.LayoutParams(-2, dp(16), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+    }
+    box.addView(spot, new LinearLayout.LayoutParams(dp(56), dp(56)));
     TextView name = text((p.number.isEmpty() ? "" : p.number + " ") + (p.shortName.isEmpty() ? p.name : p.shortName), 12, 0xffffffff, false);
     name.setSingleLine(true); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
     name.setGravity(Gravity.CENTER);
@@ -962,6 +1045,7 @@ final class MatchCenter {
     if (p.goals > 0) said.append(", ").append(p.goals).append(p.goals > 1 ? " goles" : " gol");
     if (p.red > 0) said.append(", tarjeta roja"); else if (p.yellow > 0) said.append(", tarjeta amarilla");
     if (p.out) said.append(", sustituido").append(p.subAt.isEmpty() ? "" : " en el " + p.subAt);
+    if (!Double.isNaN(p.rating)) said.append(", nota ").append(String.format(Locale.ROOT, "%.1f", p.rating));
     box.setContentDescription(said);
     return box;
   }
@@ -982,7 +1066,8 @@ final class MatchCenter {
       TextView number = text(p.number, 14, side.equals("home") ? HOME : AWAY, true);
       number.setGravity(Gravity.END);
       r.addView(number, new LinearLayout.LayoutParams(dp(28), -2));
-      TextView name = text(p.name + (p.out ? " ↓" : "") + (p.in ? " ↑" + (p.subAt.isEmpty() ? "" : " " + p.subAt) : ""), 14, Ui.FG, false);
+      TextView name = text(p.name + (p.out ? " ↓" : "") + (p.in ? " ↑" + (p.subAt.isEmpty() ? "" : " " + p.subAt) : "")
+          + (Double.isNaN(p.rating) ? "" : String.format(Locale.ROOT, "  ·  %.1f", p.rating)), 14, Ui.FG, false);
       name.setPadding(dp(10), 0, dp(8), 0);
       r.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
       r.addView(text(p.position, 12, Ui.MUTED, false));
