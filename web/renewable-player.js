@@ -51,7 +51,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   };
   const retry = () => {
     if (stopped || request || recovering) return;
-    if (++failures >= 6) { fallback(); return; }
+    failures++;
     recovering = true;
     onStatus('La emisión se ha cortado. Renovando enlace y reconectando…');
     schedule(Math.min(30000, 1000 * 2 ** Math.min(failures, 5)));
@@ -85,7 +85,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       const html = await response.text();
       if (stopped || controller.signal.aborted) return;
       const sources = pageSources(html, response.url || page).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
-      if (!sources.length) { fallback(); return; }
+      if (!sources.length) throw new Error('No hay un M3U8 vigente en la respuesta del proveedor.');
       // Preserve the chosen CDN on renewal; after an error try the next CDN from the fresh page.
       let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);
       if (recovering && index >= 0) index = (index + 1) % sources.length;
@@ -94,12 +94,17 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       if (stopped) return;
       recovering = false;
       schedule(renewalDelay(url, now()));
-    } catch {
+    } catch (error) {
       if (stopped) return;
-      // If the browser/provider disallows reading the page, use its public embedded player.
-      if (!loaded || ++failures >= 6) { fallback(); return; }
-      onStatus('No se pudo renovar el enlace. Reintentando…');
-      schedule(Math.min(30000, 1000 * 2 ** failures));
+      failures++;
+      // A transient outage must not replace the Calamar player. Keep the current buffer and
+      // request fresh public sources with bounded backoff until the viewer closes the channel.
+      const delay = Math.min(30000, 1000 * 2 ** Math.min(failures, 5));
+      const detail = /^HTTP \d{3}$/.test(error?.message || '') ? `El proveedor responde ${error.message}. `
+        : error?.message === 'No hay un M3U8 vigente en la respuesta del proveedor.' ? error.message + ' '
+        : 'No se pudo consultar el enlace del proveedor. ';
+      onStatus(`${detail}Reintentando en ${delay / 1000} s…`);
+      schedule(delay);
     } finally {
       timers.clearTimeout(timeout);
       if (request === controller) request = null;
