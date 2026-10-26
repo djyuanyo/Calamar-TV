@@ -1057,6 +1057,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void chooseSource() {
     if (sourceDialog != null && sourceDialog.isShowing()) return;
+    final boolean restoreFullscreen = fullscreen;
+    // Give the modal its own normal input window rather than competing with the video surface.
+    if (restoreFullscreen) setFullscreen(false);
     List<String> names = new ArrayList<>();
     List<Runnable> actions = new ArrayList<>();
     // Catalog links remain selectable before the remote page responds.
@@ -1100,11 +1103,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     sourceDialog.setOnDismissListener(dialog -> {
       sourceDialog = null;
       if (active) {
+        if (restoreFullscreen) setFullscreen(true);
         playerView.showController();
         keepControlsVisible(player == null || player.getPlaybackState() != Player.STATE_READY);
       }
     });
     sourceDialog.show();
+    sourceDialog.getListView().requestFocus();
   }
 
   private void selectChannelAddress(String address, boolean page) {
