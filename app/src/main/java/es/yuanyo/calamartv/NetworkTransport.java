@@ -58,6 +58,12 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
     return new PlayerHttpConnection(url, client);
   }
 
+  /** Same resolver and TLS verification; HTTP/1.1 is available for servers resetting HTTP/2. */
+  public PlayerDocument.ConnectionFactory pageFactory(boolean http1) {
+    OkHttpClient pageClient = SecureDnsClients.forMedia(client, http1);
+    return url -> new PlayerHttpConnection(url, pageClient);
+  }
+
   public DataSource.Factory mediaFactory(String referer) {
     return mediaFactory(referer, false);
   }
@@ -71,7 +77,7 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
   }
 
   /**
-   * @param browser the video was read from a page fetched as a browser (LuluStream): its server may
+   * @param browser the video was read from a page fetched as a browser (LuluStream or ZicoTV): its server may
    *     only serve the same browser, coming from that page.
    */
   public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource, boolean browser) {

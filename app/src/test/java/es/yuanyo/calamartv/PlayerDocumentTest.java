@@ -125,4 +125,29 @@ public class PlayerDocumentTest {
         url -> { throw new AssertionError("Working selected DNS must be preserved"); });
     assertFalse(result.usedFallback);
   }
+  @Test public void connectionResetRetriesHttp1BeforeChangingDns() throws Exception {
+    Connection http1 = new Connection(new URL("https://zicotv.cc/api/player/28"), 200, "sources");
+    int[] attempts = {0};
+    PlayerDocument.Result result = PlayerDocument.fetch(http1.getURL().toString(), url -> {
+      attempts[0]++; throw new java.net.SocketException("Connection reset");
+    }, url -> { attempts[0]++; return http1; }, url -> { throw new AssertionError("Do not change DNS after HTTP/1.1 succeeds"); });
+    assertEquals(2, attempts[0]); assertTrue(result.usedHttp1); assertFalse(result.usedFallback);
+    assertEquals(PlayerDocument.BROWSER_USER_AGENT, http1.getRequestProperty("User-Agent"));
+  }
+
+  @Test public void deviceConnectionIsLastRetryAfterBothProtocolAttemptsFail() throws Exception {
+    Connection device = new Connection(new URL("https://zicotv.cc/api/player/28"), 200, "sources");
+    int[] attempts = {0};
+    PlayerDocument.ConnectionFactory reset = url -> { attempts[0]++; throw new java.net.SocketException("Connection reset"); };
+    PlayerDocument.Result result = PlayerDocument.fetch(device.getURL().toString(), reset, reset, url -> device);
+    assertEquals(2, attempts[0]); assertTrue(result.usedFallback); assertTrue(result.usedHttp1);
+  }
+
+  @Test public void httpRejectionStopsProtocolAndDnsRetries() throws Exception {
+    Connection rejected = new Connection(new URL("https://zicotv.cc/api/player/28"), 403, "");
+    PlayerDocument.ConnectionFactory unexpected = url -> { throw new AssertionError("HTTP rejection must stay unchanged"); };
+    try {
+      PlayerDocument.fetch(rejected.getURL().toString(), url -> rejected, unexpected, unexpected); fail();
+    } catch (PlayerDocument.HttpFailure expected) { assertEquals(403, expected.status); }
+  }
 }
