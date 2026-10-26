@@ -99,7 +99,7 @@ public final class PlayerDocument {
         c.setInstanceFollowRedirects(false);
         c.setUseCaches(false);
         // Public web player documents and their media use the same browser profile.
-        c.setRequestProperty("User-Agent", (Library.Media.embed(current) != null || VideoResolver.renewablePage(current)) ? BROWSER_USER_AGENT : USER_AGENT);
+        c.setRequestProperty("User-Agent", BROWSER_USER_AGENT);
         // LuluStream now only gives its player page to visits coming from its own site.
         if (Library.Media.embed(current) != null) c.setRequestProperty("Referer", "https://lulustream.com/");
         c.setRequestProperty("Accept", "text/html,application/xhtml+xml");

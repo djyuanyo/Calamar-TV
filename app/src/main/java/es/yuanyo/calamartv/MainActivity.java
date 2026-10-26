@@ -315,6 +315,7 @@ public class MainActivity extends Activity {
     ScrollView scroll = new ScrollView(this);
     catalogScroll = scroll;
     scroll.getViewTreeObserver().addOnScrollChangedListener(this::updateLazySections);
+    scroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateLazySections);
     scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> updateLazySections());
     scroll.setClipToPadding(false);
     list = new LinearLayout(this);
@@ -887,9 +888,11 @@ public class MainActivity extends Activity {
     void populate() {
       if (getChildCount() != 0) return;
       try {
+        boolean focused = hasFocus();
         View content = factory.call();
-        setFocusable(false);
         addView(content, new FrameLayout.LayoutParams(-1, -2));
+        setFocusable(false);
+        if (focused) content.requestFocus(View.FOCUS_DOWN);
       } catch (Exception error) { throw new IllegalStateException(error); }
     }
     void update(int top, int bottom) {
