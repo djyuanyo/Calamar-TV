@@ -10,11 +10,9 @@ def run(args):
     err = re.sub(r'https?://\S+', '<url>', p.stderr.strip())[:200]
     return {'secs': round(time.time() - t, 1), 'curl_exit': p.returncode, 'out': p.stdout, 'err': err}
 out = {}
-out['direct_vlc_ua'] = run(['-A', 'VLC/3.0.20 LibVLC/3.0.20', src])
-time.sleep(3)
-out['relay'] = run(['-H', 'Origin: https://djyuanyo.github.io', '-H', 'X-Calamar-Source: ' + base64.b64encode(src.encode()).decode(),
-                    'https://calamarmenciano.com/calamar-tv-relay.php?stream=1'])
-time.sleep(3)
-out['relay_http11'] = run(['--http1.1', '-H', 'Origin: https://djyuanyo.github.io', '-H', 'X-Calamar-Source: ' + base64.b64encode(src.encode()).decode(),
-                    'https://calamarmenciano.com/calamar-tv-relay.php?stream=1'])
+relay = ['-H', 'Origin: https://djyuanyo.github.io', '-H', 'X-Calamar-Source: ' + base64.b64encode(src.encode()).decode(),
+         'https://calamarmenciano.com/calamar-tv-relay.php?stream=1']
+out['direct_follow'] = run(['-L', '-A', 'VLC/3.0.20 LibVLC/3.0.20', src]); time.sleep(3)
+out['direct_follow_realtime'] = run(['-L', '--limit-rate', '700k', '-A', 'VLC/3.0.20 LibVLC/3.0.20', src]); time.sleep(3)
+out['relay_realtime'] = run(['--limit-rate', '700k'] + relay)
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
