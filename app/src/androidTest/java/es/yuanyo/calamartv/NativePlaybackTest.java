@@ -87,7 +87,13 @@ public class NativePlaybackTest {
     }
   }
 
-  private void playback(boolean stalled, String path) throws Exception {
+  @Test public void zicoSourcesAreSkippedAndTheAlternativeActuallyPlays() throws Exception {
+    playback(false, "/live.ts", true);
+  }
+
+  private void playback(boolean stalled, String path) throws Exception { playback(stalled, path, false); }
+
+  private void playback(boolean stalled, String path, boolean mixedCatalog) throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       if (stalled) server.enqueue(video().throttleBody(1, 5, TimeUnit.SECONDS));
       boolean hls = path.endsWith(".m3u8");
@@ -98,7 +104,22 @@ public class NativePlaybackTest {
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.CLOUDFLARE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("media_url", server.url(path).toString()).putExtra("title", "Prueba TS");
+      if (mixedCatalog) {
+        java.util.ArrayList<String> sources = new java.util.ArrayList<>(java.util.Arrays.asList(
+            "https://bp.zicotv.cc/api/player/28", "https://cdn4.zicotv.cc/live/index.m3u8?token=old", server.url(path).toString()));
+        intent.putExtra("page_url", sources.get(0));
+        intent.putStringArrayListExtra("media_urls", sources);
+        intent.putStringArrayListExtra("channel_streams", sources);
+      }
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
+        if (mixedCatalog) scenario.onActivity(activity -> {
+          try {
+            Field pages = NativePlayerActivity.class.getDeclaredField("channelPages"); pages.setAccessible(true);
+            Field direct = NativePlayerActivity.class.getDeclaredField("directUrls"); direct.setAccessible(true);
+            assertTrue(((java.util.List<?>) pages.get(activity)).isEmpty());
+            assertEquals(java.util.Collections.singletonList(server.url(path).toString()), direct.get(activity));
+          } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + (stalled ? 55000 : 20000);
         while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {
