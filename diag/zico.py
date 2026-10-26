@@ -14,7 +14,7 @@ try:
         d = json.loads(r.read()); log(start=r.status, state=d.get('state'))
         if d.get('url'): url = d['url']; break
         time.sleep(1)
-    while url and time.time() - T0 < 150:
+    while url and time.time() - T0 < 130:
         try:
             pl = urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=20).read().decode()
             seq = int(re.search(r'#EXT-X-MEDIA-SEQUENCE:(\d+)', pl).group(1))
@@ -28,3 +28,4 @@ try:
 except Exception as e:
     out['error'] = repr(e)[:300]
 open('diag/zico.json', 'w').write(json.dumps(out, indent=0))
+# run 1793002646
