@@ -168,7 +168,7 @@ public final class MultiPlayerActivity extends Activity {
     int count = Math.min(titles.size(), MultiScreen.MAX);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if (MultiScreen.landscape(count)) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-    for (int i = 0; i < count; i++) tiles.add(new Tile(titles.get(i), Arrays.asList(streams.get(i).split("\n"))));
+    for (int i = 0; i < count; i++) tiles.add(new Tile(titles.get(i), AppSources.forAndroid(Arrays.asList(streams.get(i).split("\n")))));
     ArrayList<String> targets=getIntent().getStringArrayListExtra("audience_targets"),channels=getIntent().getStringArrayListExtra("audience_channels");
     for(int i=0;i<tiles.size();i++)if(targets!=null&&i<targets.size()&&AudienceModel.validTarget(targets.get(i))){
       final Tile tile=tiles.get(i);String channel=channels!=null&&i<channels.size()?channels.get(i):null;

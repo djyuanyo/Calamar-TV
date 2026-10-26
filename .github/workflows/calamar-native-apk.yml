@@ -75,7 +75,7 @@ jobs:
           python - <<'PYCODE'
           import pathlib, re, html
           root = pathlib.Path('app/build/reports/androidTests/connected')
-          for name in ('ResolvedPlaybackTest', 'ChromiumPlaybackTest'):
+          for name in ('ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
               for path in root.rglob('*' + name + '.html'):
                   print('Informe:', path)
                   print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])
@@ -142,7 +142,26 @@ jobs:
           (cd dist && zip "Calamar-TV-$version-compilada.zip" *.apk)
           (cd hosting && zip ../dist/Calamar-Chromecast-hosting.zip calamar-cast.php calamar-cast-install.php calamar-http-source.php calamar-tv-relay.php README-Chromecast.txt)
           (cd hosting && zip ../dist/Calamar-Marcadores-hosting.zip calamar-match.php calamar-http-source.php README-Marcadores.txt)
+          # The in-app updater accepts only a signed release APK and verifies this checksum/size.
+          if [ -n "$CALAMAR_KEYSTORE_PATH" ]; then
+            python - <<'PYUPDATE'
+          import hashlib, json, pathlib, re
+          gradle = pathlib.Path('app/build.gradle').read_text()
+          version = re.search(r"versionName '([^']+)'", gradle)[1]
+          code = int(re.search(r"versionCode (\d+)", gradle)[1])
+          apk = pathlib.Path(f'dist/Calamar-TV-{version}.apk')
+          manifest = {'applicationId': 'es.yuanyo.calamartv', 'versionName': version,
+                      'versionCode': code, 'bytes': apk.stat().st_size,
+                      'sha256': hashlib.file_digest(apk.open('rb'), 'sha256').hexdigest(),
+                      'apkUrl': f'https://github.com/djyuanyo/Calamar-TV/releases/download/v{version}/Calamar-TV-{version}.apk'}
+          pathlib.Path('dist/Calamar-TV-update.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PYUPDATE
+          fi
           gh release upload "v$version" dist/*.apk dist/*.zip --clobber
+          # Publish metadata last, so a checker can never see a version without its APK.
+          if [ -f dist/Calamar-TV-update.json ]; then
+            gh release upload "v$version" dist/Calamar-TV-update.json --clobber
+          fi
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
         continue-on-error: true

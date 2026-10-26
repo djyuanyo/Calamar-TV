@@ -13,6 +13,7 @@ import java.io.*;
 import java.net.*;
 import java.text.*;
 import java.util.*;
+import java.util.concurrent.*;
 import org.json.*;
 
 /** Calamar TV: free-to-air TDT channels plus the administrator's channels, shared with the web. */
@@ -22,6 +23,23 @@ public class MainActivity extends Activity {
 
   final int FG = Ui.FG, MUTED = Ui.MUTED;
   LinearLayout root, list, filters;
+  ScrollView catalogScroll;
+  AppUpdater updater;
+  boolean television;
+  final List<LazySection> lazySections = new ArrayList<>();
+  final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
+  final ExecutorService sharedWorker = Executors.newSingleThreadExecutor();
+  final ExecutorService imageWorker = Executors.newFixedThreadPool(2);
+  final Map<String, List<java.lang.ref.WeakReference<ImageView>>> pendingImages = new HashMap<>();
+  int imageGeneration;
+  long sharedServerAt;
+  long sharedRevision = -1;
+  boolean sharedRefreshBusy;
+  int sharedSession;
+  String lastRenderKey = "";
+  final Runnable searchRender = this::render;
+  final Runnable lazyUpdate = this::updateLazySections;
+
   TextView message;
   JSONObject tdt = new JSONObject(), custom = new JSONObject();
   List<Catalog.Channel> channels = new ArrayList<>();
@@ -43,7 +61,7 @@ public class MainActivity extends Activity {
   int heroIndex;
   boolean resumed;
   final Runnable heroAdvance = new Runnable() { public void run() {
-    if (resumed && heroHost != null && heroItems.size() > 1) { showHero((heroIndex + 1) % heroItems.size(), false); }
+    if (resumed && !television && heroHost != null && heroItems.size() > 1) { showHero((heroIndex + 1) % heroItems.size(), false); }
   }};
   final Handler handler = new Handler(Looper.getMainLooper());
   final Runnable refresh =
@@ -56,9 +74,13 @@ public class MainActivity extends Activity {
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
+    television = getPackageManager().hasSystemFeature("android.software.leanback")
+        || ((UiModeManager) getSystemService(UI_MODE_SERVICE)).getCurrentModeType()
+            == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
     MatchScores.initialize(this);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+    updater = createUpdater();
     restore();
     favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet()));
     home();
@@ -116,6 +138,7 @@ public class MainActivity extends Activity {
   }
 
   void load() {
+    refreshSharedCatalog();
     if (busy) return;
     busy = true;
     loadError = "";
@@ -145,10 +168,13 @@ public class MainActivity extends Activity {
 
       protected void onPostExecute(JSONObject[] result) {
         busy = false;
-        if (isFinishing()) return;
+        if (isFinishing() || isDestroyed()) return;
         if (result != null) {
           tdt = result[0];
-          if (!sharedAvailable) custom = result[1];
+          // A cached Firestore copy must not pin an old catalog forever. A live server snapshot
+          // remains authoritative; otherwise accept the fresh public copy when it contains channels.
+          if (sharedServerAt == 0 && (!sharedAvailable || result[1].optJSONArray("channels") != null
+              && result[1].optJSONArray("channels").length() > 0)) custom = result[1];
           channels = Catalog.merge(tdt, custom);
           updatedAt = System.currentTimeMillis();
           origin = "En línea";
@@ -156,21 +182,25 @@ public class MainActivity extends Activity {
         loadError = error == null ? "" : error + " · Se muestra el último catálogo disponible.";
         View focused = getCurrentFocus();
         int focusId = focused != null ? focused.getId() : View.NO_ID;
-        renderFilters();
-        render();
+        String renderKey = tdt.toString() + custom.toString();
+        if (!renderKey.equals(lastRenderKey)) {
+          lastRenderKey = renderKey;
+          renderFilters();
+          render();
+        } else if (message != null) message.setText(status());
         if (focusId != View.NO_ID && root != null) {
           View replacement = root.findViewById(focusId);
           if (replacement != null) replacement.requestFocus();
         }
       }
-    }.execute();
+    }.executeOnExecutor(catalogWorker);
   }
 
   String status() {
     int playable = 0;
     for (Catalog.Channel c : channels) if (c.playable()) playable++;
     SimpleDateFormat stamp = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());
-    return origin
+    return "v" + BuildConfig.VERSION_NAME + " · " + origin
         + (busy ? " · Actualizando…" : "")
         + "  /  "
         + playable
@@ -216,6 +246,10 @@ public class MainActivity extends Activity {
           }
         });
     addButton(mast, refreshButton);
+    Button updates = Ui.pill(this, "↓", Ui.Kind.SURFACE, true);
+    updates.setContentDescription("Actualizaciones");
+    updates.setOnClickListener(v -> { if (updater != null) updater.check(true); });
+    addButton(mast, updates);
     // Icon only (account silhouette); the name stays for screen readers and as a tooltip.
     ImageButton admin = new ImageButton(this);
     admin.setImageDrawable(Ui.icon(Ui.Icon.ADMIN, Ui.MUTED, dp(22)));
@@ -244,7 +278,7 @@ public class MainActivity extends Activity {
     root.addView(search, searchParams);
     search.addTextChangedListener(new android.text.TextWatcher() {
       public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-      public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); render(); }
+      public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); handler.removeCallbacks(searchRender); handler.postDelayed(searchRender, 180); }
       public void afterTextChanged(android.text.Editable s) {}
     });
 
@@ -279,6 +313,9 @@ public class MainActivity extends Activity {
     message.setPadding(0, dp(4), 0, dp(2));
     root.addView(message);
     ScrollView scroll = new ScrollView(this);
+    catalogScroll = scroll;
+    scroll.getViewTreeObserver().addOnScrollChangedListener(this::updateLazySections);
+    scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> updateLazySections());
     scroll.setClipToPadding(false);
     list = new LinearLayout(this);
     list.setOrientation(LinearLayout.VERTICAL);
@@ -366,6 +403,7 @@ public class MainActivity extends Activity {
   void render() {
     if (list == null) return;
     handler.removeCallbacks(heroAdvance); heroHost = null;
+    lazySections.clear();
     list.removeAllViews();
     message.setText(status());
     if (Library.section(mode) != null) {
@@ -436,14 +474,14 @@ public class MainActivity extends Activity {
     boolean focused = heroHost.hasFocus();
     heroIndex = index; heroHost.removeAllViews();
     View next = heroView(heroItems, index); heroHost.addView(next, new FrameLayout.LayoutParams(-1, -1));
-    next.setAlpha(0f); next.animate().alpha(1f).setDuration(350).start();
+    if (!television) { next.setAlpha(0f); next.animate().alpha(1f).setDuration(350).start(); }
     if (focused || user) { View control = next.findViewWithTag("hero-watch"); if (control != null) control.requestFocus(); }
     restartHeroTimer();
   }
 
   void restartHeroTimer() {
     handler.removeCallbacks(heroAdvance);
-    if (resumed && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
+    if (resumed && !television && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
   }
 
   /**
@@ -811,7 +849,7 @@ public class MainActivity extends Activity {
     wholeName(name);
     name.setPadding(dp(2), dp(8), dp(2), 0);
     card.addView(name, new LinearLayout.LayoutParams(-1, 0, 1));
-    TextView sub = label(c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
+    TextView sub = label(AppSources.forAndroid(c.streams).isEmpty() && c.playable() ? "Disponible en la web" : c.event ? c.meta : c.region.isEmpty() ? c.group : c.region, 12, Ui.MUTED);
     sub.setSingleLine(!c.event);
     if (c.event) { sub.setMaxLines(2); sub.setMinLines(2); }
     sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -832,16 +870,73 @@ public class MainActivity extends Activity {
     return card;
   }
 
+  final class LazySection extends FrameLayout {
+    final java.util.concurrent.Callable<View> factory;
+    int rememberedHeight;
+    LazySection(int height, java.util.concurrent.Callable<View> factory) {
+      super(MainActivity.this);
+      this.factory = factory;
+      rememberedHeight = height;
+      setMinimumHeight(height);
+      setFocusable(true);
+      setContentDescription("Más canales");
+      setOnFocusChangeListener((v, focused) -> {
+        if (focused) { populate(); if (getChildCount() > 0) getChildAt(0).requestFocus(View.FOCUS_DOWN); }
+      });
+    }
+    void populate() {
+      if (getChildCount() != 0) return;
+      try {
+        View content = factory.call();
+        setFocusable(false);
+        addView(content, new FrameLayout.LayoutParams(-1, -2));
+      } catch (Exception error) { throw new IllegalStateException(error); }
+    }
+    void update(int top, int bottom) {
+      int y = getTop(), height = Math.max(getHeight(), rememberedHeight);
+      if (y + height >= top && y <= bottom) populate();
+      else if (getChildCount() > 0 && !hasFocus()) {
+        rememberedHeight = height;
+        setMinimumHeight(height);
+        removeAllViews();
+        setFocusable(true);
+      }
+    }
+  }
+
+  void lazyRow(int height, java.util.concurrent.Callable<View> factory) {
+    LazySection section = new LazySection(dp(height), factory);
+    lazySections.add(section);
+    list.addView(section, new LinearLayout.LayoutParams(-1, -2));
+    handler.removeCallbacks(lazyUpdate);
+    handler.post(lazyUpdate);
+  }
+
+  void updateLazySections() {
+    if (!television || catalogScroll == null || !resumed || isDestroyed()) return;
+    int margin = catalogScroll.getHeight();
+    if (margin <= 0 || list.isLayoutRequested()) return;
+    int top = catalogScroll.getScrollY() - margin;
+    int bottom = top + margin * 3;
+    for (LazySection section : lazySections) section.update(top, bottom);
+  }
+
   void carousel(List<Catalog.Channel> a, int limit) {
+    if (television) {
+      // Groups remain complete. Their cards are created only as the row approaches the screen.
+      lazyRow(220, () -> channelCarousel(a, limit));
+    } else list.addView(channelCarousel(a, limit));
+  }
+
+  View channelCarousel(List<Catalog.Channel> a, int limit) {
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);
     LinearLayout r = row();
     r.setGravity(Gravity.TOP);
-    for (int i = 0; i < Math.min(a.size(), limit); i++)
-      r.addView(card(a.get(i), wide() ? 230 : 172));
+    for (int i = 0; i < Math.min(a.size(), limit); i++) r.addView(card(a.get(i), wide() ? 230 : 172));
     h.addView(r);
-    list.addView(h);
+    return h;
   }
 
   int gridWidth(int columns) {
@@ -854,6 +949,7 @@ public class MainActivity extends Activity {
     for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels, custom).entrySet()) {
       if (!group.equals("Todos") && !group.equals(e.getKey())) continue;
       heading(e.getKey(), e.getValue().size() + " canales");
+      if (television) { channelGrid(regionSorted(e.getValue())); continue; }
       String region = null;
       LinearLayout r = null;
       int i = 0;
@@ -933,7 +1029,7 @@ public class MainActivity extends Activity {
     search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});
     watch.setOnClickListener(v -> {
       if(selected.size()<2)return;
-      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",c.streams));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
+      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",AppSources.forAndroid(c.streams)));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
       dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
     });
     multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});dialog.show();
@@ -943,7 +1039,8 @@ public class MainActivity extends Activity {
 
   /** Channels whose links are videos the player opens directly (not pages resolved in the full player). */
   boolean directMedia(Catalog.Channel c) {
-    return c.playable() && !UserChannels.isPage(c.streams.get(0));
+    List<String> sources = AppSources.forAndroid(c.streams);
+    return !sources.isEmpty() && !UserChannels.isPage(sources.get(0));
   }
 
   void open(Catalog.Channel c) {
@@ -963,13 +1060,18 @@ public class MainActivity extends Activity {
       }
       return;
     }
+    ArrayList<String> playableSources = AppSources.forAndroid(c.streams);
+    if (playableSources.isEmpty()) {
+      Toast.makeText(this, "Este canal solo tiene fuentes disponibles en la web", Toast.LENGTH_LONG).show();
+      return;
+    }
     Intent intent = new Intent(this, NativePlayerActivity.class);
-    String first = c.streams.get(0);
+    String first = playableSources.get(0);
     if (UserChannels.isPage(first)) intent.putExtra("page_url", first);
-    else intent.putStringArrayListExtra("media_urls", new ArrayList<>(c.streams));
+    else intent.putStringArrayListExtra("media_urls", playableSources);
     intent.putExtra("title", c.name);
     // Every link of the channel: when one source fails the player moves on to the next.
-    intent.putStringArrayListExtra("channel_streams", new ArrayList<>(c.streams));
+    intent.putStringArrayListExtra("channel_streams", playableSources);
     intent.putExtra("audience_target",AudienceModel.target(c.event,c.id));intent.putExtra("audience_channel",c.event?c.channelId:c.id);
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events open with the match under the video on phones; without a match link, with the event's own data.
@@ -1002,8 +1104,11 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
+    if (updater != null) updater.pause();
+    sharedSession++;
     resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
+    handler.removeCallbacks(searchRender);
     if (sharedListener != null) {
       sharedListener.remove();
       sharedListener = null;
@@ -1012,43 +1117,78 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
+    if (updater != null) updater.resume();
     // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
     if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }
-    resumed = true; handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
-    if (heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
+    resumed = true; handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
+    if (!television && heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);
-    sharedListener =
-        SharedCatalog.document(this)
-            .addSnapshotListener(
-                (snapshot, error) -> {
-                  if (isFinishing()
-                      || error != null
-                      || snapshot == null
-                      || !snapshot.exists()
-                      || snapshot.getMetadata().hasPendingWrites()) return;
-                  try {
-                    JSONObject next = SharedCatalog.decode(snapshot);
-                    if (sharedAvailable && next.toString().equals(custom.toString())) return;
-                    boolean menuChanged = libraryShown(next) != libraryShown(custom);
-                    custom = next;
-                    sharedAvailable = true;
-                    SharedCatalog.cache(this, custom);
-                    channels = Catalog.merge(tdt, custom);
-                    if (menuChanged) {
-                      home();
-                      return;
-                    }
-                    renderFilters();
-                    render();
-                  } catch (Exception ignored) {
-                  }
-                });
+    observeSharedCatalog();
+  }
+
+  AppUpdater createUpdater() { return new AppUpdater(this); }
+
+  void observeSharedCatalog() {
+    final int session = ++sharedSession;
+    sharedListener = SharedCatalog.document(this).addSnapshotListener(
+        sharedWorker, com.google.firebase.firestore.MetadataChanges.INCLUDE,
+        (snapshot, error) -> {
+          if (error == null) acceptSharedSnapshot(snapshot, session);
+        });
+  }
+
+  /** Explicit server read on opening/refresh; the disk copy is only the offline starting point. */
+  void refreshSharedCatalog() {
+    if (sharedRefreshBusy || !resumed || isDestroyed()) return;
+    sharedRefreshBusy = true;
+    final int session = sharedSession;
+    SharedCatalog.document(this).get(com.google.firebase.firestore.Source.SERVER)
+        .addOnCompleteListener(sharedWorker, result -> {
+          if (result.isSuccessful()) acceptSharedSnapshot(result.getResult(), session);
+          runOnUiThread(() -> sharedRefreshBusy = false);
+        });
+  }
+
+  void acceptSharedSnapshot(com.google.firebase.firestore.DocumentSnapshot snapshot, int session) {
+    if (snapshot == null || !snapshot.exists() || snapshot.getMetadata().hasPendingWrites()) return;
+    try {
+      JSONObject next = SharedCatalog.decode(snapshot);
+      boolean server = !snapshot.getMetadata().isFromCache();
+      Long revisionValue = snapshot.getLong("revision");
+      final long revision = revisionValue == null ? 0 : revisionValue;
+      runOnUiThread(() -> {
+        if (!resumed || isFinishing() || isDestroyed() || session != sharedSession) return;
+        if (revision < sharedRevision) return;
+        if (server) { sharedServerAt = System.currentTimeMillis(); sharedRevision = revision; }
+        else if (sharedServerAt > 0) return;
+        if (sharedAvailable && next.toString().equals(custom.toString())) return;
+        boolean menuChanged = libraryShown(next) != libraryShown(custom);
+        custom = next;
+        sharedAvailable = true;
+        sharedWorker.execute(() -> SharedCatalog.cache(this, next));
+        channels = Catalog.merge(tdt, custom);
+        lastRenderKey = tdt.toString() + custom.toString();
+        View focused = getCurrentFocus();
+        int focusId = focused == null ? View.NO_ID : focused.getId();
+        if (menuChanged) home();
+        else { renderFilters(); render(); }
+        View replacement = focusId == View.NO_ID ? null : root.findViewById(focusId);
+        if (replacement != null) replacement.requestFocus();
+      });
+    } catch (Exception ignored) {}
   }
 
   protected void onDestroy() {
+    if (updater != null) updater.close();
     handler.removeCallbacksAndMessages(null);
+    imageGeneration++;
+    imageWorker.shutdownNow();
+    catalogWorker.shutdownNow();
+    sharedWorker.shutdownNow();
+    pendingImages.clear();
+    lazySections.clear();
     images.evictAll();
     super.onDestroy();
   }
@@ -1107,35 +1247,50 @@ public class MainActivity extends Activity {
   }
 
   void image(final ImageView view, final String url, final boolean copyFirst) {
-    if (url != null && url.startsWith("data:image/")) {
-      try {
-        byte[] bytes = android.util.Base64.decode(url.substring(url.indexOf(',') + 1), android.util.Base64.DEFAULT);
-        view.setImageBitmap(BitmapFactory.decodeByteArray(bytes, 0, bytes.length));
-      } catch (IllegalArgumentException ignored) {}
-      return;
-    }
-    if (url == null || !url.startsWith("https://")) return;
-    Bitmap cached = images.get(url);
-    if (cached != null) {
-      view.setImageBitmap(cached);
-      return;
-    }
+    if (url == null || !(url.startsWith("https://") || url.startsWith("data:image/"))) return;
     view.setTag(url);
-    new AsyncTask<Void, Void, Bitmap>() {
-      protected Bitmap doInBackground(Void... v) {
-        // Some logo sites are blocked by Spanish operators: their copy on the public web still loads.
-        String copy = copyFirst ? Catalog.mirror(url) : null;
-        Bitmap found = copy != null ? readBitmap(copy) : null;
-        return found != null ? found : readBitmap(url);
-      }
-
-      protected void onPostExecute(Bitmap b) {
-        if (b != null) {
-          images.put(url, b);
-          if (url.equals(view.getTag()) && !isFinishing()) view.setImageBitmap(b);
+    Bitmap cached = images.get(url);
+    if (cached != null) { view.setImageBitmap(cached); return; }
+    List<java.lang.ref.WeakReference<ImageView>> waiting = pendingImages.get(url);
+    if (waiting != null) { waiting.add(new java.lang.ref.WeakReference<>(view)); return; }
+    waiting = new ArrayList<>();
+    waiting.add(new java.lang.ref.WeakReference<>(view));
+    pendingImages.put(url, waiting);
+    final int generation = imageGeneration;
+    imageWorker.execute(() -> {
+      Bitmap result = null;
+      try {
+        if (url.startsWith("data:image/")) {
+          byte[] data = android.util.Base64.decode(url.substring(url.indexOf(',') + 1), android.util.Base64.DEFAULT);
+          result = decodeBitmap(data);
+        } else {
+          String copy = copyFirst ? Catalog.mirror(url) : null;
+          result = copy == null ? null : readBitmap(copy);
+          if (result == null) result = readBitmap(url);
         }
-      }
-    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+      } catch (IllegalArgumentException ignored) {}
+      final Bitmap bitmap = result;
+      handler.post(() -> {
+        if (generation != imageGeneration || isDestroyed()) return;
+        List<java.lang.ref.WeakReference<ImageView>> targets = pendingImages.remove(url);
+        if (bitmap == null) return;
+        images.put(url, bitmap);
+        if (targets != null) for (java.lang.ref.WeakReference<ImageView> ref : targets) {
+          ImageView target = ref.get();
+          if (target != null && url.equals(target.getTag())) target.setImageBitmap(bitmap);
+        }
+      });
+    });
+  }
+
+  static Bitmap decodeBitmap(byte[] data) {
+    BitmapFactory.Options o = new BitmapFactory.Options();
+    o.inJustDecodeBounds = true;
+    BitmapFactory.decodeByteArray(data, 0, data.length, o);
+    o.inSampleSize = 1;
+    while (o.outWidth / o.inSampleSize > 960 || o.outHeight / o.inSampleSize > 540) o.inSampleSize *= 2;
+    o.inJustDecodeBounds = false;
+    return BitmapFactory.decodeByteArray(data, 0, data.length, o);
   }
 
   /** An image read from the network, scaled down when large; null when it cannot be read. */
@@ -1156,14 +1311,7 @@ public class MainActivity extends Activity {
         }
         in.close();
         byte[] data = out.toByteArray();
-        BitmapFactory.Options o = new BitmapFactory.Options();
-        o.inJustDecodeBounds = true;
-        BitmapFactory.decodeByteArray(data, 0, data.length, o);
-        o.inSampleSize = 1;
-        while (o.outWidth / o.inSampleSize > 1000 || o.outHeight / o.inSampleSize > 800)
-          o.inSampleSize *= 2;
-        o.inJustDecodeBounds = false;
-        return BitmapFactory.decodeByteArray(data, 0, data.length, o);
+        return decodeBitmap(data);
       } finally {
         c.disconnect();
       }
@@ -1183,6 +1331,17 @@ public class MainActivity extends Activity {
 
   void channelGrid(List<Catalog.Channel> items) {
     int cols = wide() ? 4 : 2;
+    if (television) {
+      for (int i = 0; i < items.size(); i += cols) {
+        final List<Catalog.Channel> batch = new ArrayList<>(items.subList(i, Math.min(i + cols, items.size())));
+        lazyRow(gridWidth(cols) * 9 / 16 + 100, () -> {
+          LinearLayout row = row(); row.setGravity(Gravity.TOP);
+          for (Catalog.Channel channel : batch) row.addView(card(channel, gridWidth(cols)));
+          return row;
+        });
+      }
+      return;
+    }
     LinearLayout r = null;
     for (int i = 0; i < items.size(); i++) {
       if (i % cols == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
@@ -1270,10 +1429,21 @@ public class MainActivity extends Activity {
       list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
     int columns = wide() ? 6 : 3;
     int width = gridWidth(columns);
-    LinearLayout r = null;
-    for (int i = 0; i < items.size(); i++) {
-      if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
-      r.addView(poster(items.get(i), width));
+    if (television) {
+      for (int i = 0; i < items.size(); i += columns) {
+        final List<Library.Item> batch = new ArrayList<>(items.subList(i, Math.min(i + columns, items.size())));
+        lazyRow(width * 3 / 2 + 90, () -> {
+          LinearLayout row = row(); row.setGravity(Gravity.TOP);
+          for (Library.Item item : batch) row.addView(poster(item, width));
+          return row;
+        });
+      }
+    } else {
+      LinearLayout r = null;
+      for (int i = 0; i < items.size(); i++) {
+        if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
+        r.addView(poster(items.get(i), width));
+      }
     }
     if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }

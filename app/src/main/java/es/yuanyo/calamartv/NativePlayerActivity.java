@@ -145,6 +145,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onCreate(state);
     MatchScores.initialize(this);
     pageUrl = getIntent().getStringExtra("page_url");
+    if (AppSources.webOnly(pageUrl)) pageUrl = null;
     title = getIntent().getStringExtra("title");
     shareUrl = getIntent().getStringExtra("share_url");
     footballFallback = getIntent().getBooleanExtra("football_fallback", false);
@@ -159,7 +160,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     urls.add(0, getIntent().getStringExtra("media_url"));
     for (String candidate : urls) {
       String url = UserChannels.normalize(candidate);
-      if (url != null && !directUrls.contains(url)) directUrls.add(url);
+      if (url != null && !AppSources.webOnly(url) && !directUrls.contains(url)) directUrls.add(url);
     }
     // Channels: player pages among their links are read as pages (one after another), not played as
     // videos. Films keep their single link as it is (a Drive link has no extension either).
@@ -168,13 +169,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (pageUrl != null && UserChannels.isPage(pageUrl)) channelPages.add(pageUrl);
       for (String candidate : everything) {
         String url = UserChannels.normalize(candidate);
-        if (url == null) continue;
+        if (url == null || AppSources.webOnly(url)) continue;
         if (UserChannels.isPage(url)) { if (!channelPages.contains(url)) channelPages.add(url); }
         else if (!directUrls.contains(url)) directUrls.add(url);
       }
       directUrls.removeIf(UserChannels::isPage);
     }
     // A channel whose first link is a page starts with that page; its direct links wait their turn.
+    if (pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
     boolean startWithPage = everything != null && pageUrl != null;
     directUrl = startWithPage || directUrls.isEmpty() ? null : directUrls.get(0);
     if (directUrl == null && pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
@@ -182,6 +184,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     directTried = directUrl != null;
     if (directUrl != null) pageUrl = null;
     else if (pageUrl == null || !pageUrl.startsWith("https://")) {
+      Toast.makeText(this, "No hay fuentes disponibles para Android", Toast.LENGTH_LONG).show();
       finish();
       return;
     }
@@ -589,6 +592,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             final PlayerDocument.Result document = fetched;
             final boolean documentChromium = usedChromium;
             List<VideoResolver.Source> found = VideoResolver.parse(document.html, document.url);
+            found.removeIf(source -> AppSources.webOnly(source.url));
             handler.post(
                 () -> {
                   if (!active || request != generation) return;
@@ -702,7 +706,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         http =
             (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
             .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
-                directUrl == null && pageUrl != null && (Library.Media.embed(pageUrl) != null || VideoResolver.renewablePage(pageUrl))
+                directUrl == null && pageUrl != null
                     && !source.url.startsWith(Library.LULU_ENDPOINT) && !source.url.startsWith(Library.PLAYER_ENDPOINT));
       }
     } catch (java.io.IOException failure) {
@@ -718,7 +722,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             // server stopped the picture.
             .setLoadControl(new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(12000, 30000, 2500, 5000)
-                .setPrioritizeTimeOverSizeThresholds(true).build())
+                .setTargetBufferBytes(isTelevision() ? 16 * 1024 * 1024 : 32 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false).build())
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
             .build();
     player.setAudioAttributes(
@@ -1151,13 +1156,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new WebViewClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return !url.startsWith("https://");
+            return !url.startsWith("https://") || AppSources.webOnly(url);
           }
 
           @Override
           public WebResourceResponse shouldInterceptRequest(
               WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
+            if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
+                new java.io.ByteArrayInputStream(new byte[0]));
             if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
@@ -1247,7 +1254,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void detected(String address) {
-    if (!active || !webMode || !VideoResolver.isMedia(address)) return;
+    if (!active || !webMode || !VideoResolver.isMedia(address) || AppSources.webOnly(address)) return;
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);
