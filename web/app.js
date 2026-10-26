@@ -633,9 +633,9 @@ function playSource(c, index) {
         onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
       });
     };
-    if (!source.how.relay) { direct(); return; }
-    // Without FFmpeg on the hosting (or if it fails) the stream comes through the relay as before.
-    adapted(null, 'Preparando el canal…').catch(() => { if (generation === playbackGeneration && !failureHandled) direct(); });
+    // The relay first: the hosting stops its own FFmpeg process after about 30 seconds, so the shared
+    // adapted HLS only serves channels the browser cannot decode (HEVC), as before.
+    direct();
     return;
   }
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
