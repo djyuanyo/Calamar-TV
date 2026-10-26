@@ -958,3 +958,35 @@ label[hidden] { display: none; }
 .player.framed video, .player.framed .player-shade, .player.framed .player-center, .player.framed .player-bottom,
 .player.framed .skip-actions, .player.framed #ctl-cast { display: none !important; }
 .player.framed .player-top { opacity: 1 !important; pointer-events: auto !important; background: linear-gradient(#000c, #0000); }
+
+/* Line-ups on a pitch, as Google shows them. */
+.mc-pitch { position: relative; overflow: hidden; border-radius: 16px; background: #1f7a45;
+  background-image: repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0 52px, transparent 52px 104px); }
+.mc-pitch::before, .mc-pitch::after { content: ''; position: absolute; left: 50%; pointer-events: none; }
+.mc-pitch::before { top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px; border: 2px solid rgba(255,255,255,.28); border-radius: 50%; }
+.mc-pitch::after { top: 50%; left: 0; right: 0; border-top: 2px solid rgba(255,255,255,.28); }
+.mc-half { position: relative; display: grid; gap: 14px; padding: 0 6px 22px; }
+.mc-half.mc-away { padding: 22px 6px 0; }
+.mc-half::before { content: ''; position: absolute; left: 22%; right: 22%; height: 64px; border: 2px solid rgba(255,255,255,.28); pointer-events: none; }
+.mc-half.mc-home::before { top: 46px; border-top: 0; }
+.mc-half.mc-away::before { bottom: 46px; border-bottom: 0; }
+.mc-half-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(0,0,0,.18); color: #fff; font-weight: 700; margin: 0 -6px; }
+.mc-half-head .mc-crest { width: 28px; height: 28px; font-size: 10px; flex: none; }
+.mc-half-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-half-head small { padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.85); color: #134a2a; font-size: 13px; }
+.mc-row { list-style: none; margin: 0; padding: 0; display: flex; justify-content: space-around; gap: 2px; position: relative; }
+.mc-man { flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 4px; text-align: center; color: #fff; }
+.mc-shirt { position: relative; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.9); }
+.mc-shirt img { width: 40px; height: 40px; object-fit: contain; }
+.mc-shirt b { color: #134a2a; font-size: 17px; }
+.mc-badge { position: absolute; display: grid; place-items: center; font-style: normal; font-size: 12px; line-height: 1; }
+.mc-badge.out { top: -4px; left: -6px; width: 18px; height: 18px; border-radius: 50%; background: #fde2e1; color: #c62828; font-weight: 800; }
+.mc-badge.goal { bottom: -2px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+.mc-badge.goal small { position: absolute; top: -6px; right: -6px; font-size: 10px; font-weight: 800; color: #fff; background: #134a2a; border-radius: 999px; padding: 1px 4px; }
+.mc-badge.card { top: -3px; right: -4px; width: 11px; height: 15px; border-radius: 2px; }
+.mc-badge.card.yellow { background: #f5c518; }
+.mc-badge.card.red { background: #e53935; }
+.mc-man-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.mc-man-name b { font-weight: 800; }
+.mc-pitch + .mc-lineups { margin-top: 14px; }
+@media (max-width: 480px) { .mc-shirt { width: 42px; height: 42px; } .mc-shirt img { width: 34px; height: 34px; } .mc-man-name { font-size: 12px; } }

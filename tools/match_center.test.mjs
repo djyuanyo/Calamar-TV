@@ -87,3 +87,21 @@ test('before kick-off: last meetings (seasonseries) and last results (lastFiveGa
   const parts = renderMatchCenter(el, m, 'h2h', () => {});
   assert.match(text(parts[2]), /^Próximo Fecha por definir 2026-27 LALIGA Real Madrid vs Barcelona .*2025-26 LALIGA Barcelona 2 – 0 Real Madrid/);
 });
+
+test('line-ups go on the pitch in the rows of their formation, from the right to the left', async () => {
+  const { pitchRows } = await import('../web/match-center.js');
+  // Real ESPN elevens (formationPlace:position).
+  const xi = (text) => text.split(' ').map((t) => { const [place, position] = t.split(':'); return { place, position, name: `${place}${position}` }; });
+  const names = (rows) => rows.map((row) => row.map((p) => p.position).join(' '));
+  assert.deepEqual(names(pitchRows('4-2-3-1', xi('1:G 2:RB 3:LB 4:LM 5:CD-R 6:CD-L 7:AM-R 8:RM 9:F 10:AM 11:AM-L'))),
+    ['G', 'RB CD-R CD-L LB', 'RM LM', 'AM-R AM AM-L', 'F']);
+  assert.deepEqual(names(pitchRows('5-4-1', xi('1:G 2:RB 3:LB 4:CD-L 5:CD 6:CD-R 7:RM 8:CM-R 9:F 10:CM-L 11:LM'))),
+    ['G', 'RB CD-R CD CD-L LB', 'RM CM-R CM-L LM', 'F']);
+  assert.deepEqual(names(pitchRows('3-4-3', xi('1:G 2:RM 3:LM 4:CD-L 5:CD 6:CD-R 7:CM-R 8:CM-L 9:F 10:CF-R 11:CF-L'))),
+    ['G', 'CD-R CD CD-L', 'RM CM-R CM-L LM', 'CF-R F CF-L']);
+  assert.deepEqual(names(pitchRows('3-4-2-1', xi('1:G 2:RM 3:LM 4:CD-L 5:CD 6:CD-R 7:CM-R 8:CM-L 9:F 10:CF-R 11:CF-L'))),
+    ['G', 'CD-R CD CD-L', 'RM CM-R CM-L LM', 'CF-R CF-L', 'F']);
+  // A formation that does not add up: one row per kind of position.
+  assert.deepEqual(names(pitchRows('', xi('1:G 2:RB 3:LB 5:CD-R 6:CD-L 4:DM 8:CM-R 10:CM-L 7:RW 11:LW 9:F'))),
+    ['G', 'RB CD-R CD-L LB', 'DM', 'CM-R CM-L', 'RW LW', 'F']);
+});

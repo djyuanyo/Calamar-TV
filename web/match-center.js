@@ -29,6 +29,48 @@ function eventKind(e) {
 /** «45'+2'» is minute 47; «67'» is 67. */
 export const minuteOf = (text) => (String(text || '').match(/\d+/g) || []).slice(0, 2).reduce((a, b) => a + Number(b), 0);
 
+/** Where a position plays, from the goal outwards (ESPN's abbreviations: G, RB, CD-L, DM, LM, AM-R, CF-L, F…). */
+function depthOf(abbr) {
+  const a = String(abbr || '').toUpperCase();
+  if (a === 'G' || a === 'GK') return 0;
+  if (/^(RB|LB|CB|CD|SW|RWB|LWB|D)(-|$)/.test(a)) return 1;
+  if (/^DM/.test(a)) return 2;
+  if (/^(AM|RW|LW|W)(-|$)/.test(a)) return 4;
+  // A centre forward goes ahead of the forwards beside him (3-4-2-1: two behind, one in front).
+  if (/^(F|CF|ST|S)$/.test(a)) return 5.5;
+  if (/^(F|CF|ST|LF|RF)(-|$)/.test(a)) return 5;
+  return 3;
+}
+/** From the team's right touchline (0: RB, RM…) through right of centre (1: CD-R), centre (2) and left of centre (3) to its left touchline (4). */
+function flankOf(abbr) {
+  const a = String(abbr || '').toUpperCase();
+  return /^R(B|M|W|WB|F)$/.test(a) ? 0 : /-R$/.test(a) ? 1 : /-L$/.test(a) ? 3 : /^L(B|M|W|WB|F)$/.test(a) ? 4 : 2;
+}
+/**
+ * The starting eleven in rows, from the goalkeeper outwards, each row from the team's right to its left.
+ * The formation (4-2-3-1) gives how many play in each row; the positions, who goes in which.
+ */
+export function pitchRows(formation, starters) {
+  const place = (p) => Number(p.place) || 99;
+  const keeper = starters.filter((p) => depthOf(p.position) === 0).slice(0, 1);
+  const outfield = starters.filter((p) => !keeper.includes(p))
+    .sort((a, b) => depthOf(a.position) - depthOf(b.position) || place(a) - place(b));
+  const counts = String(formation || '').split('-').map(Number).filter((n) => n > 0);
+  let rows = [];
+  if (counts.reduce((a, b) => a + b, 0) === outfield.length) {
+    let at = 0;
+    for (const n of counts) { rows.push(outfield.slice(at, at + n)); at += n; }
+  } else {
+    // Without a formation that adds up: one row per kind of position.
+    for (const p of outfield) {
+      const last = rows[rows.length - 1];
+      if (last && depthOf(last[0].position) === depthOf(p.position)) last.push(p); else rows.push([p]);
+    }
+  }
+  rows = rows.map((row) => row.sort((a, b) => flankOf(a.position) - flankOf(b.position) || place(a) - place(b)));
+  return keeper.length ? [keeper, ...rows] : rows;
+}
+
 /** Turns ESPN's summary into what the tabs show; anything ESPN leaves out is simply not shown. */
 export function parseMatchCenter(data) {
   const header = data.header || {}, competition = header.competitions?.[0] || {};
@@ -65,8 +107,14 @@ export function parseMatchCenter(data) {
   const lineups = ['home', 'away'].map((side) => {
     const r = (data.rosters || []).find((x) => x.homeAway === side);
     if (!r?.roster?.length) return null;
-    const player = (p) => ({ number: p.jersey || '', name: p.athlete?.displayName || p.athlete?.shortName || '', position: p.position?.abbreviation || '',
-      subbedIn: !!p.subbedIn, subbedOut: !!p.subbedOut });
+    const stat = (p, name) => Number((p.stats || []).find((x) => x.name === name)?.value ?? (p.stats || []).find((x) => x.name === name)?.displayValue) || 0;
+    const subAt = (p) => (p.plays || []).find((x) => x.substitution)?.clock?.displayValue || '';
+    const shirt = (p) => valid((p.athlete?.jerseyImages || []).find((j) => (j.rel || []).includes('dark'))?.href
+      || p.athlete?.jerseyImages?.[0]?.href || '');
+    const player = (p) => ({ number: p.jersey || '', name: p.athlete?.displayName || p.athlete?.shortName || '', short: p.athlete?.shortName || p.athlete?.displayName || '',
+      position: p.position?.abbreviation || '', place: p.formationPlace || '', shirt: shirt(p),
+      goals: stat(p, 'totalGoals'), ownGoals: stat(p, 'ownGoals'), assists: stat(p, 'goalAssists'), yellow: stat(p, 'yellowCards'), red: stat(p, 'redCards'),
+      subbedIn: !!p.subbedIn, subbedOut: !!p.subbedOut, subAt: subAt(p) });
     const sorted = [...r.roster].sort((a, b) => (Number(a.formationPlace) || 99) - (Number(b.formationPlace) || 99));
     return { side, team: side === 'home' ? home : away, formation: r.formation || '',
       starters: sorted.filter((p) => p.starter).map(player), subs: sorted.filter((p) => !p.starter).map(player) };
@@ -169,11 +217,30 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty(m.state === 'scheduled' ? 'Las estadísticas aparecen cuando empieza el partido.' : 'No hay estadísticas de este partido.')];
   } else if (tab === 'lineups') {
     const list = (players) => el('ol', { class: 'mc-players' }, players.map((p) => el('li', {},
-      el('span', { class: 'mc-number' }, p.number), el('span', { class: 'mc-name' }, p.name, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ' ↑') : null),
+      el('span', { class: 'mc-number' }, p.number), el('span', { class: 'mc-name' }, p.name, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ` ↑${p.subAt ? ` ${p.subAt}` : ''}`) : null),
       el('span', { class: 'mc-pos' }, p.position))));
-    body = m.lineups.length ? el('div', { class: 'mc-lineups' }, m.lineups.map((l) => el('section', { class: `mc-lineup ${l.side}` },
-      el('h3', {}, crest(l.team), el('span', {}, l.team.name), l.formation ? el('small', {}, l.formation) : null),
-      list(l.starters), l.subs.length ? [el('h4', {}, 'Suplentes'), list(l.subs)] : null)))
+    // Both elevens on one pitch, as Google shows them: the home team from the top goal, the away team
+    // from the bottom one. Each player: his shirt, number and name, goals, cards and when he was changed.
+    const marker = (p) => el('li', { class: 'mc-man' },
+      el('span', { class: 'mc-shirt' },
+        p.shirt ? el('img', { src: p.shirt, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', onerror: (e) => e.target.replaceWith(el('b', {}, p.number || '·')) }) : el('b', {}, p.number || '·'),
+        p.subbedOut ? el('i', { class: 'mc-badge out', title: `Sustituido${p.subAt ? ` en el ${p.subAt}` : ''}` }, '↓') : null,
+        p.goals || p.ownGoals ? el('i', { class: 'mc-badge goal', title: `${p.goals ? `${p.goals} gol${p.goals > 1 ? 'es' : ''}` : ''}${p.ownGoals ? ' (en propia puerta)' : ''}` }, '⚽', p.goals > 1 ? el('small', {}, String(p.goals)) : null) : null,
+        p.red ? el('i', { class: 'mc-badge card red', title: 'Tarjeta roja' }) : p.yellow ? el('i', { class: 'mc-badge card yellow', title: 'Tarjeta amarilla' }) : null),
+      el('span', { class: 'mc-man-name' }, p.number ? el('b', {}, p.number) : null, ' ', p.short || p.name));
+    const half = (l, top) => {
+      const rows = pitchRows(l.formation, l.starters);
+      // The home team attacks downwards (its right is the viewer's left); the away team upwards.
+      const lines = (top ? rows : [...rows].reverse()).map((row) => el('ol', { class: 'mc-row' }, (top ? row : [...row].reverse()).map(marker)));
+      const head = el('div', { class: 'mc-half-head' }, crest(l.team), el('span', {}, l.team.name), l.formation ? el('small', {}, l.formation) : null);
+      return el('section', { class: `mc-half ${top ? 'mc-home' : 'mc-away'}`, 'aria-label': `${l.team.name}${l.formation ? `, ${l.formation}` : ''}` },
+        top ? [head, ...lines] : [...lines, head]);
+    };
+    const homeLine = m.lineups.find((l) => l.side === 'home'), awayLine = m.lineups.find((l) => l.side === 'away');
+    const halves = [homeLine && half(homeLine, true), awayLine && half(awayLine, !homeLine)].filter(Boolean);
+    const benches = m.lineups.filter((l) => l.subs.length).map((l) => el('section', { class: `mc-lineup ${l.side}` },
+      el('h3', {}, crest(l.team), el('span', {}, `Suplentes · ${l.team.name}`)), list(l.subs)));
+    body = m.lineups.length ? [el('div', { class: 'mc-pitch' }, halves), benches.length ? el('div', { class: 'mc-lineups' }, benches) : null]
       : [noLink, empty(m.state === 'scheduled' ? 'Las alineaciones se publican poco antes del partido.' : 'No hay alineaciones de este partido.')];
   } else if (tab === 'h2h') {
     body = m.h2h.length ? el('ol', { class: 'mc-h2h' }, m.h2h.map((g) => el('li', {},

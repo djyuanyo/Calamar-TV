@@ -40,7 +40,11 @@ final class MatchCenter {
   static final class Stat { String key = "", label = "", home = "", away = ""; double share = 0.5; }
   static final class Form { String result = "", score = "", opponent = ""; }
   static final class Meeting { String date = "", competition = "", home = "", away = "", score = ""; boolean upcoming, dateKnown = true; }
-  static final class Player { String number = "", name = "", position = ""; boolean in, out; }
+  static final class Player implements Pitch.Spot {
+    String number = "", name = "", shortName = "", position = "", place = "", shirt = "", subAt = ""; boolean in, out; int goals, ownGoals, yellow, red;
+    public String position() { return position; }
+    public String place() { return place; }
+  }
   static final class Lineup { String side = "", formation = ""; Team team; final List<Player> starters = new ArrayList<>(), subs = new ArrayList<>(); }
   static final class Model {
     String status = "", state = "", league = "", date = "", venue = "", city = "", referee = "", clock = "", round = "", description = "", note = "", source = "espn";
@@ -161,9 +165,37 @@ final class MatchCenter {
           pl.number = p.optString("jersey");
           JSONObject athlete = p.optJSONObject("athlete");
           pl.name = athlete == null ? "" : athlete.optString("displayName", athlete.optString("shortName"));
+          pl.shortName = athlete == null ? "" : athlete.optString("shortName", pl.name);
           JSONObject position = p.optJSONObject("position");
           pl.position = position == null ? "" : position.optString("abbreviation");
+          pl.place = p.optString("formationPlace");
           pl.in = p.optBoolean("subbedIn"); pl.out = p.optBoolean("subbedOut");
+          // The shirt with his number (ESPN draws it per match), on the dark background when there is one.
+          JSONArray shirts = athlete == null ? null : athlete.optJSONArray("jerseyImages");
+          for (int k = 0; shirts != null && k < shirts.length(); k++) {
+            JSONObject j = shirts.optJSONObject(k);
+            String href = j == null ? "" : j.optString("href");
+            if (!href.startsWith("https://")) continue;
+            if (pl.shirt.isEmpty() || String.valueOf(j.optJSONArray("rel")).contains("dark")) pl.shirt = href;
+          }
+          JSONArray stats = p.optJSONArray("stats");
+          for (int k = 0; stats != null && k < stats.length(); k++) {
+            JSONObject st = stats.optJSONObject(k);
+            if (st == null) continue;
+            int value = (int) number(st.optString("value", st.optString("displayValue")));
+            switch (st.optString("name")) {
+              case "totalGoals": pl.goals = value; break;
+              case "ownGoals": pl.ownGoals = value; break;
+              case "yellowCards": pl.yellow = value; break;
+              case "redCards": pl.red = value; break;
+              default: break;
+            }
+          }
+          JSONArray plays = p.optJSONArray("plays");
+          for (int k = 0; plays != null && k < plays.length(); k++) {
+            JSONObject play = plays.optJSONObject(k);
+            if (play != null && play.optBoolean("substitution")) { JSONObject clock = play.optJSONObject("clock"); pl.subAt = clock == null ? "" : clock.optString("displayValue"); break; }
+          }
           (p.optBoolean("starter") ? l.starters : l.subs).add(pl);
         }
         m.lineups.add(l);
@@ -820,32 +852,126 @@ final class MatchCenter {
     return track;
   }
 
+  static final int GRASS = 0xff1f7a45, CHALK = 0x47ffffff;
+
+  /**
+   * Both elevens on one pitch, as Google shows them: the home team from the top goal (its right on the
+   * viewer's left), the away team from the bottom one. Then each bench.
+   */
   void lineups(Model m) {
     if (m.lineups.isEmpty()) { empty(m.state.equals("scheduled") ? "Las alineaciones se publican poco antes del partido." : "No hay alineaciones de este partido."); return; }
+    Lineup home = null, away = null;
+    for (Lineup l : m.lineups) if (l.side.equals("home")) home = l; else away = l;
+    LinearLayout pitch = new LinearLayout(context);
+    pitch.setOrientation(LinearLayout.VERTICAL);
+    pitch.setBackground(Ui.shape(context, GRASS, 16, 0, 0));
+    pitch.setClipToOutline(true);
+    if (home != null) half(pitch, home, true);
+    if (home != null && away != null) {
+      View line = new View(context);
+      line.setBackgroundColor(CHALK);
+      pitch.addView(line, new LinearLayout.LayoutParams(-1, dp(2)));
+    }
+    if (away != null) half(pitch, away, home == null);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+    lp.bottomMargin = dp(14);
+    add(pitch);
+    pitch.setLayoutParams(lp);
     for (Lineup l : m.lineups) {
+      if (l.subs.isEmpty()) continue;
       LinearLayout box = card();
       LinearLayout head = new LinearLayout(context);
       head.setGravity(Gravity.CENTER_VERTICAL);
       head.addView(crest(l.team, 28), new LinearLayout.LayoutParams(dp(28), dp(28)));
-      TextView name = text(l.team.name, 16, Ui.FG, true);
+      TextView name = text("Suplentes · " + l.team.name, 16, Ui.FG, true);
       name.setPadding(dp(10), 0, dp(10), 0);
       head.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-      if (!l.formation.isEmpty()) {
-        TextView formation = text(l.formation, 12, l.side.equals("home") ? HOME : AWAY, true);
-        formation.setPadding(dp(8), dp(3), dp(8), dp(3));
-        formation.setBackground(Ui.shape(context, SURFACE_2, 999, 0, 0));
-        head.addView(formation);
-      }
       box.addView(head);
-      players(box, l.starters, l.side);
-      if (!l.subs.isEmpty()) {
-        TextView subs = text("SUPLENTES", 12, Ui.MUTED, true);
-        subs.setPadding(0, dp(14), 0, dp(4));
-        box.addView(subs);
-        players(box, l.subs, l.side);
-      }
+      players(box, l.subs, l.side);
       add(box);
     }
+  }
+
+  void half(LinearLayout pitch, Lineup l, boolean top) {
+    LinearLayout head = new LinearLayout(context);
+    head.setGravity(Gravity.CENTER_VERTICAL);
+    head.setPadding(dp(12), dp(10), dp(12), dp(10));
+    head.setBackgroundColor(0x2e000000);
+    head.addView(crest(l.team, 28), new LinearLayout.LayoutParams(dp(28), dp(28)));
+    TextView name = text(l.team.name, 16, Ui.FG, true);
+    name.setSingleLine(true); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    name.setPadding(dp(10), 0, dp(10), 0);
+    head.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+    if (!l.formation.isEmpty()) {
+      TextView formation = text(l.formation, 13, 0xff134a2a, true);
+      formation.setPadding(dp(10), dp(3), dp(10), dp(3));
+      formation.setBackground(Ui.shape(context, 0xd9ffffff, 999, 0, 0));
+      head.addView(formation);
+    }
+    List<List<Player>> rows = Pitch.rows(l.formation, l.starters);
+    if (!top) Collections.reverse(rows);
+    if (top) pitch.addView(head);
+    for (List<Player> row : rows) {
+      LinearLayout line = new LinearLayout(context);
+      line.setPadding(dp(4), dp(10), dp(4), dp(4));
+      List<Player> order = new ArrayList<>(row);
+      // The away team attacks upwards: its left is the viewer's left.
+      if (!top) Collections.reverse(order);
+      for (Player p : order) line.addView(man(p), new LinearLayout.LayoutParams(0, -2, 1));
+      pitch.addView(line);
+    }
+    if (!top) pitch.addView(head);
+  }
+
+  /** A player on the pitch: his shirt (or number), goals, cards and an arrow if he was changed; under it his number and name. */
+  View man(Player p) {
+    LinearLayout box = new LinearLayout(context);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setGravity(Gravity.CENTER_HORIZONTAL);
+    FrameLayout spot = new FrameLayout(context);
+    FrameLayout disc = new FrameLayout(context);
+    disc.setBackground(Ui.shape(context, 0xe6ffffff, 999, 0, 0));
+    TextView number = text(p.number.isEmpty() ? "·" : p.number, 16, 0xff134a2a, true);
+    number.setGravity(Gravity.CENTER);
+    disc.addView(number, new FrameLayout.LayoutParams(-1, -1));
+    if (!p.shirt.isEmpty()) {
+      ImageView shirt = new ImageView(context);
+      shirt.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      shirt.setPadding(dp(4), dp(4), dp(4), dp(4));
+      disc.addView(shirt, new FrameLayout.LayoutParams(-1, -1));
+      load(shirt, number, p.shirt);
+    }
+    FrameLayout.LayoutParams discLp = new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER);
+    spot.addView(disc, discLp);
+    if (p.out) spot.addView(badge("↓", 0xffc62828, 0xfffde2e1), new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.TOP | Gravity.START));
+    if (p.goals > 0 || p.ownGoals > 0) spot.addView(badge(p.goals > 1 ? "⚽" + p.goals : "⚽", 0xff134a2a, 0xffffffff), new FrameLayout.LayoutParams(-2, dp(18), Gravity.BOTTOM | Gravity.END));
+    if (p.red > 0 || p.yellow > 0) {
+      View card = new View(context);
+      card.setBackground(Ui.shape(context, p.red > 0 ? 0xffe53935 : 0xfff5c518, 2, 0, 0));
+      FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(dp(10), dp(14), Gravity.TOP | Gravity.END);
+      cardLp.rightMargin = dp(4);
+      spot.addView(card, cardLp);
+    }
+    box.addView(spot, new LinearLayout.LayoutParams(dp(56), dp(50)));
+    TextView name = text((p.number.isEmpty() ? "" : p.number + " ") + (p.shortName.isEmpty() ? p.name : p.shortName), 12, 0xffffffff, false);
+    name.setSingleLine(true); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    name.setGravity(Gravity.CENTER);
+    name.setShadowLayer(dp(2), 0, dp(1), 0x80000000);
+    box.addView(name, new LinearLayout.LayoutParams(-1, -2));
+    StringBuilder said = new StringBuilder(p.number + " " + p.name);
+    if (p.goals > 0) said.append(", ").append(p.goals).append(p.goals > 1 ? " goles" : " gol");
+    if (p.red > 0) said.append(", tarjeta roja"); else if (p.yellow > 0) said.append(", tarjeta amarilla");
+    if (p.out) said.append(", sustituido").append(p.subAt.isEmpty() ? "" : " en el " + p.subAt);
+    box.setContentDescription(said);
+    return box;
+  }
+
+  TextView badge(String value, int fg, int bg) {
+    TextView t = text(value, 10, fg, true);
+    t.setGravity(Gravity.CENTER);
+    t.setPadding(dp(3), 0, dp(3), 0);
+    t.setBackground(Ui.shape(context, bg, 999, 0, 0));
+    return t;
   }
 
   void players(LinearLayout box, List<Player> list, String side) {
@@ -856,7 +982,7 @@ final class MatchCenter {
       TextView number = text(p.number, 14, side.equals("home") ? HOME : AWAY, true);
       number.setGravity(Gravity.END);
       r.addView(number, new LinearLayout.LayoutParams(dp(28), -2));
-      TextView name = text(p.name + (p.out ? " ↓" : "") + (p.in ? " ↑" : ""), 14, Ui.FG, false);
+      TextView name = text(p.name + (p.out ? " ↓" : "") + (p.in ? " ↑" + (p.subAt.isEmpty() ? "" : " " + p.subAt) : ""), 14, Ui.FG, false);
       name.setPadding(dp(10), 0, dp(8), 0);
       r.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
       r.addView(text(p.position, 12, Ui.MUTED, false));
