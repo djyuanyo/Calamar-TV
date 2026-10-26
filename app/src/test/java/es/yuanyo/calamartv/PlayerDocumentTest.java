@@ -100,4 +100,29 @@ public class PlayerDocumentTest {
       assertTrue(c.closed);
     }
   }
+  @Test public void networkFailureRetriesDeviceTransportAndMarksResult() throws Exception {
+    Connection alternate = new Connection(new URL("https://zicotv.cc/api/player/28"), 200, "sources");
+    int[] attempts = {0};
+    PlayerDocument.Result result = PlayerDocument.fetch(alternate.getURL().toString(), url -> {
+      attempts[0]++; throw new java.net.UnknownHostException("private DNS unavailable");
+    }, url -> { attempts[0]++; return alternate; });
+    assertEquals(2, attempts[0]); assertTrue(result.usedFallback);
+    assertEquals("sources", result.html); assertTrue(alternate.closed);
+  }
+
+  @Test public void httpRejectionNeverChangesTransport() throws Exception {
+    Connection rejected = new Connection(new URL("https://zicotv.cc/api/player/28"), 403, "");
+    try {
+      PlayerDocument.fetch(rejected.getURL().toString(), url -> rejected,
+          url -> { throw new AssertionError("An HTTP rejection must not change networks"); });
+      fail();
+    } catch (PlayerDocument.HttpFailure expected) { assertEquals(403, expected.status); }
+  }
+
+  @Test public void healthyPageKeepsSelectedTransport() throws Exception {
+    Connection primary = new Connection(new URL("https://zicotv.cc/api/player/28"), 200, "sources");
+    PlayerDocument.Result result = PlayerDocument.fetch(primary.getURL().toString(), url -> primary,
+        url -> { throw new AssertionError("Working selected DNS must be preserved"); });
+    assertFalse(result.usedFallback);
+  }
 }

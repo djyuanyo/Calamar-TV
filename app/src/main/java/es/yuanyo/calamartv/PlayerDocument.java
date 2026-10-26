@@ -30,8 +30,14 @@ public final class PlayerDocument {
 
   public static final class Result {
     public final String html, url;
+    public final boolean usedFallback;
 
     Result(String html, String url) {
+      this(html, url, false);
+    }
+
+    Result(String html, String url, boolean usedFallback) {
+      this.usedFallback = usedFallback;
       this.html = html;
       this.url = url;
     }
@@ -41,6 +47,16 @@ public final class PlayerDocument {
 
   public static Result fetch(String address) throws IOException {
     return fetch(address, url -> (HttpURLConnection) url.openConnection());
+  }
+
+  /** Retry a network failure on the device connection; HTTP rejections are returned unchanged. */
+  public static Result fetch(String address, ConnectionFactory primary, ConnectionFactory fallback) throws IOException {
+    try { return fetch(address, primary); }
+    catch (IOException failure) {
+      if (fallback == null || failure instanceof HttpFailure) throw failure;
+      Result result = fetch(address, fallback);
+      return new Result(result.html, result.url, true);
+    }
   }
 
   public static Result fetch(String address, ConnectionFactory connections) throws IOException {

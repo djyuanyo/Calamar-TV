@@ -210,3 +210,12 @@ En el canal se guarda el enlace fijo `https://zicotv.cc/api/player/28`, en lugar
 Se necesita que el proveedor permita consultar la página y reproducir sus fuentes desde el navegador (CORS y las restricciones de la señal siguen aplicándose). Si no expone fuentes públicas, bloquea la consulta o falla repetidamente el vídeo, se conserva el reproductor de Calamar, se muestra el fallo y se sigue consultando con esperas de hasta 30 segundos. No cambia automáticamente al reproductor incrustado. No se envía ZicoTV al hosting. Android ya resuelve las páginas y programa la renovación desde el dispositivo; ahora reintenta también si falla una renovación mientras sigue reproduciendo y cuando la página devuelve un enlace caducado.
 
 Pruebas: `node --test tools/renewable_player.test.mjs tools/player_sources.test.mjs` y `node tools/browser_events_check.mjs`.
+
+
+## Reproducción de canales resueltos en Android (2.20.15)
+
+La consulta de la página del canal usa también la conexión del dispositivo si el DNS seleccionado falla por un error de red; una respuesta HTTP de rechazo no cambia de conexión. El vídeo y las renovaciones continúan usando la conexión que obtuvo la fuente. Al cambiar manualmente de DNS se restablece esa elección. Si se cambia de red durante un fallo de vídeo, se vuelve a leer la página para obtener una fuente nueva.
+
+El botón Fuentes permanece visible, incluso con una sola opción o mientras se buscan fuentes. Si no hay ninguna todavía permite volver a consultar el canal; las opciones muestran también el nombre del CDN. Los canales ZicoTV con enlace fijo siguen reintentando en el reproductor nativo, sin enviarlos automáticamente al hosting ni a una página incrustada.
+
+Pruebas: `PlayerDocumentTest`, `VideoResolverTest` y `ResolvedPlaybackTest` (página HTTPS y vídeo reales servidos por un servidor local TLS en el emulador; reproducción nativa y recuperación después de un 403). La respuesta del proveedor desde el dispositivo sigue determinando si una señal externa puede reproducirse.
