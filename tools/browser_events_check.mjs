@@ -323,7 +323,11 @@ try {
   assert.match(await page.locator('.mc-stats').textContent(), /58%.*Posesión.*42%.*14.*Tiros.*9.*6.*Tiros a puerta.*3/);
   await page.getByRole('tab', { name: 'Estadísticas' }).press('ArrowRight');
   assert.equal(await page.getByRole('tab', { name: 'Alineaciones' }).getAttribute('aria-selected'), 'true');
-  assert.match(await page.locator('.mc-lineups').textContent(), /Levante4-4-2.*1Andrés Fernández.*Suplentes.*20Roger Brugué.*Athletic Club4-2-3-1.*Iñaki Williams ↓/);
+  // Both elevens on one pitch (home from the top goal, away from the bottom one), then the benches.
+  assert.match(await page.locator('.mc-pitch').textContent(), /Levante4-4-2.*1 Andrés Fernández.*Iñaki Williams.*Athletic Club4-2-3-1$/);
+  assert.equal(await page.locator('.mc-half').count(), 2);
+  assert.equal(await page.locator('.mc-man', { hasText: 'Iñaki Williams' }).locator('.mc-badge.out').count(), 1);
+  assert.match(await page.locator('.mc-lineups').textContent(), /Suplentes · Levante.*20Roger Brugué/);
   await page.getByRole('tab', { name: 'H2H' }).click();
   assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
   await page.getByRole('tab', { name: 'General' }).click();
