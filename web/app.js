@@ -604,7 +604,8 @@ function playSource(c, index) {
       video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
       video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
       if (window.Hls?.isSupported()) {
-        hls = new window.Hls({ lowLatencyMode: false });
+        // 10 s behind the live edge (5 pieces of 2 s): a slow piece from the hosting does not stop the picture.
+        hls = new window.Hls({ lowLatencyMode: false, liveSyncDurationCount: 5, liveMaxLatencyDurationCount: 7 });
         hls.on(window.Hls.Events.ERROR, (_event, failure) => { if (failure.fatal) next(failure); });
         hls.loadSource(compatible.url);
         hls.attachMedia(video);
