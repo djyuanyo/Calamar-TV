@@ -131,7 +131,9 @@ class SharedRelayTest(unittest.TestCase):
                 probe.bind(('127.0.0.1', 0)); port = probe.getsockname()[1]
             temp = pathlib.Path(folder) / 'tmp'; temp.mkdir()
             env = {**os.environ, 'CALAMAR_RELAY_TEST_LOCAL': '1', 'TMPDIR': str(temp), 'PHP_CLI_SERVER_WORKERS': '6'}
-            server = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}', '-t', str(PHP.parent)], env=env,
+            # The hosting disables these: the relay must work without them.
+            disabled = 'curl_multi_init,curl_multi_exec,curl_multi_select,curl_multi_info_read,getmypid'
+            server = subprocess.Popen(['php', '-d', 'disable_functions=' + disabled, '-S', f'127.0.0.1:{port}', '-t', str(PHP.parent)], env=env,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 time.sleep(1)

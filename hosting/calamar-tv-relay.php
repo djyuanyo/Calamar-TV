@@ -11,7 +11,7 @@ function failure($message, $code = 502) {
 require_once __DIR__ . '/calamar-http-source.php';
 
 // Raised with each change, so the version running on the hosting can be checked (?version=1).
-const RELAY_VERSION = 5;
+const RELAY_VERSION = 6;
 const RELAY_PIECE = 1048576;     // A new piece every ~1 MiB, always starting at a keyframe.
 const RELAY_PIECES = 24;         // Pieces kept per channel (~24 MiB).
 const RELAY_IDLE = 15;           // Seconds without viewers before the provider connection closes.
@@ -44,12 +44,12 @@ function relayMain() {
         $dir = relayDir('check'); $file = @fopen($dir . '/writer.lock', 'c');
         echo json_encode(array('relay' => RELAY_VERSION, 'php' => PHP_VERSION, 'temp' => sys_get_temp_dir(),
             'writable' => @file_put_contents($dir . '/probe', 'x') === 1, 'lock' => $file && flock($file, LOCK_EX | LOCK_NB),
-            'disabled' => array_values(array_filter(array('curl_multi_init', 'curl_multi_select', 'ignore_user_abort',
+            'disabled' => array_values(array_filter(array('curl_exec', 'ignore_user_abort',
                 'random_bytes', 'flock', 'scandir', 'set_time_limit', 'connection_aborted', 'usleep', 'getmypid'), function ($f) { return !function_exists($f); }))));
         exit;
     }
     if (!isset($_GET['stream'])) failure('Abre este puente desde Calamar TV.', 400);
-    if (!function_exists('curl_multi_init')) failure('cURL no disponible.');
+    if (!function_exists('curl_init')) failure('cURL no disponible.');
     $source = base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
     if (!is_string($source) || strlen($source) > 2048) failure('Falta el enlace de la prueba.', 400);
     if (!httpTsSourceAllowed($source) && !relayTestUpstream()) failure('Enlace IPTV HTTP no válido para el puente.', 400);
@@ -97,41 +97,51 @@ function relayServe($source) {
     @set_time_limit(0);
     if (function_exists('ignore_user_abort')) ignore_user_abort(true); // A writer whose own viewer left keeps going while others watch.
     $dir = relayDir($source);
-    $me = $dir . '/viewers/' . bin2hex(random_bytes(6));
-    @touch($me);
-    register_shutdown_function(function () use (&$me) { if ($me) @unlink($me); });
+    $now = microtime(true);
+    $viewer = array('dir' => $dir, 'me' => $dir . '/viewers/' . bin2hex(random_bytes(6)), 'seq' => null, 'offset' => 0,
+        'headers' => false, 'started' => $now, 'lastData' => $now, 'beat' => 0, 'done' => false);
+    @touch($viewer['me']);
+    register_shutdown_function(function () use (&$viewer) { if ($viewer['me']) @unlink($viewer['me']); });
     $lock = @fopen($dir . '/writer.lock', 'c');
     if (!$lock) failure('El hosting no deja escribir en su carpeta temporal.');
-    $writer = null; $seq = null; $offset = 0; $headers = false; $lockAt = 0;
-    $started = microtime(true); $lastData = $started; $beat = 0;
+    $lockAt = 0;
     while (true) {
-        $now = microtime(true);
-        $watching = !connection_aborted();
-        if ($watching && $now - $beat > 2) { @touch($me); $beat = $now; }
-        if (!$watching && $me) { @unlink($me); $me = null; }
-        if ($writer === null && $now >= $lockAt && flock($lock, LOCK_EX | LOCK_NB)) $writer = relayWriterStart($dir, $source);
-        if ($writer !== null) {
-            relayPump($writer, 0.2);
-            if (relayViewers($dir) === 0 || $writer['failed']) {
-                if ($writer['failed']) $lockAt = $now + 10;
-                relayWriterStop($writer); flock($lock, LOCK_UN); $writer = null;
-            }
-        } else usleep(200000);
-        if (!$watching) { if ($writer === null) break; continue; }
-        $state = relayState($dir);
-        if (!$headers && $state && !empty($state['error']) && $now - $started > 3) failure($state['error']);
-        if ($state && isset($state['seq'])) {
-            // A new viewer starts one piece behind the newest (a keyframe, with a little margin);
-            // one that fell behind the pieces kept jumps forward the same way.
-            if ($seq === null || $seq < $state['first']) { $seq = max($state['first'], $state['seq'] - 1); $offset = 0; }
-            $sent = relaySend($dir, $seq, $offset, $headers);
-            if ($sent > 0) $lastData = $now;
-            elseif ($seq < $state['seq']) { $seq++; $offset = 0; continue; }
+        if (microtime(true) >= $lockAt && flock($lock, LOCK_EX | LOCK_NB)) {
+            // This viewer holds the only provider connection; it keeps sending its own video meanwhile.
+            $result = relayWriterRun($dir, $source, function () use (&$viewer) { relayTick($viewer); });
+            flock($lock, LOCK_UN);
+            if ($result === 'failed') $lockAt = microtime(true) + 10;
+            if ($viewer['done'] || connection_aborted()) break;
+            continue;
         }
-        if (!$headers && $now - $started > 25) failure('No llega vídeo del proveedor IPTV.');
-        if ($headers && $now - $lastData > 30) break; // The player reconnects by itself.
+        if (!relayTick($viewer)) break;
+        usleep(200000);
     }
     exit;
+}
+
+/** One step of a viewer: a sign of life, and the video written since its last step. False once it ended. */
+function relayTick(&$viewer) {
+    if ($viewer['done']) return false;
+    $now = microtime(true);
+    if (connection_aborted()) {
+        if ($viewer['me']) { @unlink($viewer['me']); $viewer['me'] = null; }
+        $viewer['done'] = true; return false;
+    }
+    if ($now - $viewer['beat'] > 2) { @touch($viewer['me']); $viewer['beat'] = $now; }
+    $state = relayState($viewer['dir']);
+    if (!$viewer['headers'] && $state && !empty($state['error']) && $now - $viewer['started'] > 3) failure($state['error']);
+    for ($step = 0; $state && isset($state['seq']) && $step < 8; $step++) {
+        // A new viewer starts one piece behind the newest (a keyframe, with a little margin);
+        // one that fell behind the pieces kept jumps forward the same way.
+        if ($viewer['seq'] === null || $viewer['seq'] < $state['first']) { $viewer['seq'] = max($state['first'], $state['seq'] - 1); $viewer['offset'] = 0; }
+        if (relaySend($viewer['dir'], $viewer['seq'], $viewer['offset'], $viewer['headers']) > 0) $viewer['lastData'] = $now;
+        elseif ($viewer['seq'] < $state['seq']) { $viewer['seq']++; $viewer['offset'] = 0; continue; }
+        break;
+    }
+    if (!$viewer['headers'] && $now - $viewer['started'] > 25) failure('No llega vídeo del proveedor IPTV.');
+    if ($viewer['headers'] && $now - $viewer['lastData'] > 30) { $viewer['done'] = true; return false; } // The player reconnects by itself.
+    return true;
 }
 
 /** Sends what piece $seq has after $offset; how many bytes. */
@@ -156,6 +166,27 @@ function relaySend($dir, $seq, &$offset, &$headers) {
 
 // ---- The writer: the only connection to the provider -------------------------------------------
 
+/**
+ * Keeps the provider connection while anyone watches, opening the next one each time it ends; $tick
+ * serves this process's own viewer in between. 'idle' when nobody watches, 'failed' after 40 s without video.
+ */
+function relayWriterRun($dir, $source, $tick) {
+    $writer = relayWriterStart($dir, $source);
+    while (true) {
+        if (relayViewers($dir) === 0) return 'idle';
+        if (microtime(true) - $writer['lastVideo'] > 40) {
+            $state = relayState($dir) ?: array();
+            $state['error'] = 'El proveedor IPTV no envía vídeo. HTTP: ' . ($writer['http'] ?: 'sin respuesta');
+            relaySaveState($dir, $state);
+            return 'failed';
+        }
+        if (microtime(true) < $writer['retryAt']) { $tick(); usleep(200000); continue; }
+        relayConnect($writer, $tick);
+        if ($writer['stop']) return 'idle';
+        relayFinished($writer);
+    }
+}
+
 function relayWriterStart($dir, $source) {
     $state = relayState($dir) ?: array();
     // A writer taking over continues after the last moment already written (tsSplice), in a new piece.
@@ -166,46 +197,32 @@ function relayWriterStart($dir, $source) {
         while ($first < $seq) @unlink($dir . '/seg-' . $first++ . '.ts');
         $state = array('seq' => $seq, 'first' => $seq, 'pcr' => null, 'video' => null, 'time' => time());
     }
-    $writer = array('dir' => $dir, 'source' => $source, 'multi' => curl_multi_init(), 'handle' => null,
-        'url' => $source, 'hop' => 0, 'status' => 0, 'location' => '', 'got' => false, 'retryAt' => 0.0,
-        'seq' => $seq, 'first' => $first, 'size' => 0, 'fresh' => true, 'lastVideo' => microtime(true),
-        'failed' => false, 'http' => 0, 'misses' => 0,
+    $writer = array('dir' => $dir, 'source' => $source, 'url' => $source, 'hop' => 0, 'status' => 0, 'location' => '',
+        'got' => false, 'retryAt' => 0.0, 'seq' => $seq, 'first' => $first, 'size' => 0, 'fresh' => true,
+        'lastVideo' => microtime(true), 'http' => 0, 'misses' => 0, 'stop' => false, 'tickAt' => 0.0, 'checkAt' => 0.0,
         'splice' => tsSpliceNext(array('pcr' => $state['pcr'] ?? null, 'video' => $state['video'] ?? null)));
     unset($state['error']);
     if ($state) relaySaveState($dir, $state);
     return $writer;
 }
 
-function relayWriterStop(&$writer) {
-    if ($writer['handle']) { curl_multi_remove_handle($writer['multi'], $writer['handle']); curl_close($writer['handle']); }
-    curl_multi_close($writer['multi']);
-}
-
-/** Moves the provider connection forward for up to $wait seconds, and opens the next one when it ends. */
-function relayPump(&$writer, $wait) {
+/** Between two pieces of the transfer: serves this viewer every 0.2 s, and stops when nobody watches. */
+function relayPulse(&$writer, $tick) {
     $now = microtime(true);
-    if (!$writer['handle'] && $now >= $writer['retryAt']) relayOpen($writer);
-    if (!$writer['handle']) { usleep((int)($wait * 1000000)); return; }
-    $running = 0;
-    curl_multi_exec($writer['multi'], $running);
-    if ($running) { curl_multi_select($writer['multi'], $wait); curl_multi_exec($writer['multi'], $running); }
-    while ($info = curl_multi_info_read($writer['multi'])) {
-        if ($info['handle'] === $writer['handle']) relayFinished($writer);
+    if ($now >= $writer['tickAt']) { $tick(); $writer['tickAt'] = $now + 0.2; }
+    if ($now >= $writer['checkAt']) {
+        $writer['checkAt'] = $now + 2;
+        if (relayViewers($writer['dir']) === 0) $writer['stop'] = true;
     }
-    // No new video for 40 s: tell the viewers and give the lock up (the next viewer request tries again).
-    if (microtime(true) - $writer['lastVideo'] > 40) {
-        $writer['failed'] = true;
-        $state = relayState($writer['dir']) ?: array();
-        $state['error'] = 'El proveedor IPTV no envía vídeo. HTTP: ' . ($writer['http'] ?: 'sin respuesta');
-        relaySaveState($writer['dir'], $state);
-    }
+    return !$writer['stop'];
 }
 
-function relayOpen(&$writer) {
+/** One connection to the provider (one hop of its redirects), until it ends. */
+function relayConnect(&$writer, $tick) {
     if (relayTestUpstream()) $target = null;
     else {
         $target = publicTarget($writer['url']);
-        if ($target === null) { relayRetry($writer, 2); return; }
+        if ($target === null) { $writer['http'] = 0; $writer['location'] = ''; return; }
     }
     $writer['status'] = 0; $writer['location'] = '';
     $ch = curl_init($writer['url']);
@@ -222,24 +239,25 @@ function relayOpen(&$writer) {
             if (stripos($line, 'Location:') === 0) $writer['location'] = trim(substr($line, 9));
             return strlen($line);
         },
-        CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$writer) {
+        CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$writer, $tick) {
             // Error pages and redirects are read but not kept (at most 64 KiB).
             if (!in_array($writer['status'], array(200, 206), true)) return curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD) > 65536 ? 0 : strlen($chunk);
             relayWrite($writer, tsSplice($writer['splice'], $chunk));
-            return strlen($chunk);
+            return relayPulse($writer, $tick) ? strlen($chunk) : 0;
         },
+        // Called about once a second even while nothing arrives, so the viewer is served all the same.
+        CURLOPT_NOPROGRESS => false,
+        CURLOPT_XFERINFOFUNCTION => function () use (&$writer, $tick) { return relayPulse($writer, $tick) ? 0 : 1; },
     );
     if ($target !== null) $options[CURLOPT_RESOLVE] = array($target['host'] . ':' . $target['port'] . ':' . $target['ip']);
     curl_setopt_array($ch, $options);
-    $writer['handle'] = $ch;
-    curl_multi_add_handle($writer['multi'], $ch);
+    curl_exec($ch);
+    $writer['http'] = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 }
 
 /** A provider connection ended: follow its redirect, or open the next connection from the start. */
 function relayFinished(&$writer) {
-    $ch = $writer['handle'];
-    $writer['http'] = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_multi_remove_handle($writer['multi'], $ch); curl_close($ch); $writer['handle'] = null;
     $redirect = in_array($writer['http'], array(301, 302, 303, 307, 308), true) && $writer['location'] && $writer['hop'] < 4;
     $next = $redirect ? redirectTarget($writer['url'], $writer['location']) : null;
     if ($next !== null) { $writer['url'] = $next; $writer['hop']++; $writer['retryAt'] = 0.0; return; }
@@ -250,13 +268,9 @@ function relayFinished(&$writer) {
         $state['error'] = 'El proveedor IPTV no envía vídeo. HTTP: ' . ($writer['http'] ?: 'sin respuesta');
         relaySaveState($writer['dir'], $state);
     }
-    relayRetry($writer, $got ? 0.1 : 1.5);
-}
-
-function relayRetry(&$writer, $seconds) {
     $writer['url'] = $writer['source']; $writer['hop'] = 0; $writer['got'] = false;
     $writer['splice'] = tsSpliceNext($writer['splice']);
-    $writer['retryAt'] = microtime(true) + $seconds;
+    $writer['retryAt'] = microtime(true) + ($got ? 0.1 : 1.5);
 }
 
 /** Keeps new video: whole stretches from a keyframe (tsSplice), in pieces that each start at one. */
