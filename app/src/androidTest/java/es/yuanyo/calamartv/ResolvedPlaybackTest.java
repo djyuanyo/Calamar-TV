@@ -1,6 +1,9 @@
 package es.yuanyo.calamartv;
 
 import static org.junit.Assert.*;
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
+import static androidx.test.espresso.action.ViewActions.click;
 import android.content.Intent;
 import android.os.SystemClock;
 import android.view.View;
@@ -30,10 +33,12 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class ResolvedPlaybackTest {
-  @Test public void extractedHttpsHlsActuallyPlaysAndShowsSources() throws Exception { playback(false); }
-  @Test public void rejectedTokenReadsFreshPageAndRecoversNatively() throws Exception { playback(true); }
+  @Test public void extractedHttpsHlsActuallyPlaysAndShowsSources() throws Exception { playback(false, false); }
+  @Test public void rejectedTokenReadsFreshPageAndRecoversNatively() throws Exception { playback(true, false); }
 
-  private void playback(boolean rejectFirst) throws Exception {
+  @Test public void sourcePickerOffersCatalogAlternativeWhenPageCannotLoad() throws Exception { playback(false, true); }
+
+  private void playback(boolean rejectFirst, boolean manualDirect) throws Exception {
     HeldCertificate certificate = new HeldCertificate.Builder().commonName("zicotv.cc")
         .addSubjectAlternativeName("zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(certificate).build();
@@ -45,6 +50,7 @@ public class ResolvedPlaybackTest {
       for (int count; (count = in.read(block)) != -1;) video.write(block, 0, count);
     }
     AtomicInteger pages = new AtomicInteger();
+    AtomicBoolean matchingProfile = new AtomicBoolean(true);
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false);
       server.start();
@@ -52,8 +58,10 @@ public class ResolvedPlaybackTest {
       server.setDispatcher(new Dispatcher() {
         @Override public MockResponse dispatch(RecordedRequest request) {
           String path = request.getPath();
+          if (!manualDirect && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
           if (path.startsWith("/api/player/28")) {
             int n = pages.incrementAndGet();
+            if (manualDirect) return new MockResponse().setResponseCode(503);
             return new MockResponse().setHeader("Content-Type", "text/html").setBody(
                 "var ZT_SOURCES=[{\"label\":\"CDN prueba\",\"url\":\"" + origin + "live.m3u8?token=" + n + "\"}];");
           }
@@ -76,7 +84,20 @@ public class ResolvedPlaybackTest {
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("page_url", origin + "api/player/28").putExtra("title", "Prueba de canal resuelto");
+      if (manualDirect) intent.putStringArrayListExtra("channel_streams", new java.util.ArrayList<>(
+          java.util.Arrays.asList(origin + "api/player/28", origin + "live.m3u8?token=direct")));
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
+        if (manualDirect) {
+          long lookupDeadline = SystemClock.elapsedRealtime() + 10000;
+          while (pages.get() == 0 && SystemClock.elapsedRealtime() < lookupDeadline) SystemClock.sleep(100);
+          scenario.onActivity(activity -> {
+            try {
+              Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true);
+              ((Button) button.get(activity)).performClick();
+            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+          });
+          onView(withText("Enlace 2 · Vídeo directo")).perform(click());
+        }
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + 30000;
         while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {
@@ -91,6 +112,7 @@ public class ResolvedPlaybackTest {
         }
         assertTrue("The resolved HTTPS video never played in ExoPlayer", playing.get());
         assertTrue(pages.get() >= (rejectFirst ? 2 : 1));
+        assertTrue("Page and extracted HLS must use the same browser profile", matchingProfile.get());
         scenario.onActivity(activity -> {
           try {
             Field buttonField = NativePlayerActivity.class.getDeclaredField("sourceButton"); buttonField.setAccessible(true);

@@ -550,19 +550,22 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playSource(sources.get(0));
       return;
     }
+    final String requestedPage = pageUrl;
     worker.execute(
         () -> {
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
-            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl, pageTransport,
-                pageTransport.provider == DnsProvider.SYSTEM ? null : NetworkTransport.get(DnsProvider.SYSTEM));
+            PlayerDocument.Result document = PlayerDocument.fetch(requestedPage, pageTransport.pageFactory(mediaHttp1),
+                mediaHttp1 ? null : pageTransport.pageFactory(true),
+                pageTransport.provider == DnsProvider.SYSTEM ? null : NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
             List<VideoResolver.Source> found = VideoResolver.parse(document.html, document.url);
             handler.post(
                 () -> {
                   if (!active || request != generation) return;
                   resolving = false;
                   documentUrl = document.url;
-                  if (document.usedFallback) { mediaSystemRetry = true; mediaHttp1 = true; }
+                  if (document.usedFallback) mediaSystemRetry = true;
+                  if (document.usedHttp1) mediaHttp1 = true;
                   lastReport =
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
@@ -663,7 +666,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     DataSource.Factory http =
         (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
             .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
-                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null && !source.url.startsWith(Library.LULU_ENDPOINT));
+                directUrl == null && pageUrl != null && (Library.Media.embed(pageUrl) != null || VideoResolver.renewablePage(pageUrl))
+                    && !source.url.startsWith(Library.LULU_ENDPOINT) && !source.url.startsWith(Library.PLAYER_ENDPOINT));
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
@@ -996,28 +1000,56 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseSource() {
-    if (sources.isEmpty()) {
-      Toast.makeText(this, resolving ? "Buscando fuentes…" : "Consultando fuentes del canal…", Toast.LENGTH_SHORT).show();
-      if (!resolving) resolveFresh();
-      return;
+    List<String> names = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    // Catalog links remain selectable before the remote page responds.
+    List<String> pages = new ArrayList<>(channelPages);
+    if (pageUrl != null && !pages.contains(pageUrl)) pages.add(pageUrl);
+    int number = 0;
+    for (String address : pages) {
+      names.add("Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      actions.add(() -> selectChannelAddress(address, true));
     }
-    String[] names = new String[sources.size()];
-    // Numbered options, whatever the provider calls them (CDN 4, Vídeo 1…).
-    for (int i = 0; i < names.length; i++) names[i] = "Opción " + (i + 1) + " · " + sources.get(i).label;
+    for (String address : directUrls) {
+      names.add("Enlace " + (++number) + " · Vídeo directo");
+      actions.add(() -> selectChannelAddress(address, false));
+    }
+    if (directUrl == null) {
+      for (int i = 0; i < sources.size(); i++) {
+        final VideoResolver.Source source = sources.get(i);
+        final int selected = i;
+        names.add("CDN · " + source.label);
+        actions.add(() -> {
+          generation++; resolving = false;
+          handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+          selection = selected; automaticAttempts = 0; playSource(source);
+        });
+      }
+    }
+    if (names.isEmpty()) {
+      names.add("Volver a buscar fuentes");
+      actions.add(() -> { if (!resolving) resolveFresh(); });
+    }
     new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
-        .setSingleChoiceItems(
-            names,
-            selection,
-            (dialog, index) -> {
-              selection = index;
-              automaticAttempts = 0;
-              if (directUrl != null && webMode) openDirectWeb();
-              else playSource(sources.get(index));
-              dialog.dismiss();
-            })
+        .setItems(names.toArray(new String[0]), (dialog, index) -> actions.get(index).run())
         .setNegativeButton("Cerrar", null)
         .show();
+  }
+
+  private void selectChannelAddress(String address, boolean page) {
+    generation++; resolving = false; webMode = false;
+    handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+    automaticAttempts = 0; selection = 0;
+    clearWeb(); releasePlayer(); sources.clear();
+    if (page) {
+      directUrl = null; pageUrl = address; documentUrl = address; directTried = false;
+      pageIndex = channelPages.indexOf(address);
+    } else {
+      directUrl = address; pageUrl = null; documentUrl = address;
+      selection = Math.max(0, directUrls.indexOf(address)); directTried = true;
+    }
+    resolveFresh();
   }
 
   private void openWeb() {

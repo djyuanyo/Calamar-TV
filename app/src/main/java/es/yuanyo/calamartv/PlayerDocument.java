@@ -30,14 +30,19 @@ public final class PlayerDocument {
 
   public static final class Result {
     public final String html, url;
-    public final boolean usedFallback;
+    public final boolean usedFallback, usedHttp1;
 
     Result(String html, String url) {
       this(html, url, false);
     }
 
     Result(String html, String url, boolean usedFallback) {
+      this(html, url, usedFallback, false);
+    }
+
+    Result(String html, String url, boolean usedFallback, boolean usedHttp1) {
       this.usedFallback = usedFallback;
+      this.usedHttp1 = usedHttp1;
       this.html = html;
       this.url = url;
     }
@@ -59,6 +64,26 @@ public final class PlayerDocument {
     }
   }
 
+  /** A connection RESET can depend on HTTP negotiation independently of DNS. */
+  public static Result fetch(String address, ConnectionFactory primary, ConnectionFactory http1,
+      ConnectionFactory fallback) throws IOException {
+    try { return fetch(address, primary); }
+    catch (IOException first) {
+      if (first instanceof HttpFailure) throw first;
+      if (http1 != null) {
+        try {
+          Result result = fetch(address, http1);
+          return new Result(result.html, result.url, false, true);
+        } catch (IOException second) {
+          if (second instanceof HttpFailure) throw second;
+        }
+      }
+      if (fallback == null) throw first;
+      Result result = fetch(address, fallback);
+      return new Result(result.html, result.url, true, true);
+    }
+  }
+
   public static Result fetch(String address, ConnectionFactory connections) throws IOException {
     String current = address;
     for (int redirects = 0; redirects < 6; redirects++) {
@@ -73,8 +98,8 @@ public final class PlayerDocument {
         c.setReadTimeout(15000);
         c.setInstanceFollowRedirects(false);
         c.setUseCaches(false);
-        // LuluStream only gives its player to browsers.
-        c.setRequestProperty("User-Agent", Library.Media.embed(current) != null ? BROWSER_USER_AGENT : USER_AGENT);
+        // Public web player documents and their media use the same browser profile.
+        c.setRequestProperty("User-Agent", (Library.Media.embed(current) != null || VideoResolver.renewablePage(current)) ? BROWSER_USER_AGENT : USER_AGENT);
         // LuluStream now only gives its player page to visits coming from its own site.
         if (Library.Media.embed(current) != null) c.setRequestProperty("Referer", "https://lulustream.com/");
         c.setRequestProperty("Accept", "text/html,application/xhtml+xml");

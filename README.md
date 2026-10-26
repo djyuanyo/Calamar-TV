@@ -219,3 +219,12 @@ La consulta de la página del canal usa también la conexión del dispositivo si
 El botón Fuentes permanece visible, incluso con una sola opción o mientras se buscan fuentes. Si no hay ninguna todavía permite volver a consultar el canal; las opciones muestran también el nombre del CDN. Los canales ZicoTV con enlace fijo siguen reintentando en el reproductor nativo, sin enviarlos automáticamente al hosting ni a una página incrustada.
 
 Pruebas: `PlayerDocumentTest`, `VideoResolverTest` y `ResolvedPlaybackTest` (página HTTPS y vídeo reales servidos por un servidor local TLS en el emulador; reproducción nativa y recuperación después de un 403). La respuesta del proveedor desde el dispositivo sigue determinando si una señal externa puede reproducirse.
+
+
+## RESET al consultar fuentes y selector de enlaces (2.20.16)
+
+La consulta de documentos públicos ZicoTV y los M3U8 extraídos usan un perfil de navegador coherente. Ante un error de conexión, la consulta reintenta HTTP/1.1 con el mismo DNS antes de probar la conexión del dispositivo. Las respuestas HTTP de rechazo se conservan y no desencadenan cambios de protocolo o DNS.
+
+Fuentes abre siempre un selector de los enlaces guardados del canal, incluso si todavía no se ha recibido ningún CDN. Después de consultar la página también muestra sus CDN disponibles. Elegir un vídeo directo funciona aunque la consulta de la página haya fallado. No se inventan direcciones CDN cuando el proveedor aún no las ha devuelto.
+
+Pruebas: casos unitarios de RESET/HTTP1 y rechazo HTTP; ResolvedPlaybackTest verifica reproducción HTTPS nativa, coherencia del perfil de consulta/vídeo, recuperación del token y elección del enlace alternativo cuando la página devuelve un error.
