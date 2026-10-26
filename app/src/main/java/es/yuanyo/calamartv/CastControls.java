@@ -127,7 +127,7 @@ public final class CastControls {
     MediaMetadata metadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);
     metadata.putString(MediaMetadata.KEY_TITLE, title == null ? "Calamar TV" : title);
     MediaInfo media = new MediaInfo.Builder(address).setContentType(type)
-        .setStreamType(CastSource.live(type) ? MediaInfo.STREAM_TYPE_LIVE : MediaInfo.STREAM_TYPE_BUFFERED)
+        .setStreamType(CastSource.live(type) && !CastSource.onDemand(address) ? MediaInfo.STREAM_TYPE_LIVE : MediaInfo.STREAM_TYPE_BUFFERED)
         .setMetadata(metadata).build();
     remote.load(new MediaLoadRequestData.Builder().setMediaInfo(media).setAutoplay(true).build())
         .setResultCallback(result -> {
