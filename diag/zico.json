@@ -1,40 +1,26 @@
-{
- "provider_direct": {
-  "status": 200,
-  "bytes": 200000,
-  "ts": true,
-  "s": 2.4,
-  "type": "video/mp2t"
+[
+ {
+  "channel": "Primera Federación",
+  "hosting": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ],
+  "direct": 200
  },
- "provider_direct_2": {
-  "status": 200,
-  "bytes": 0,
-  "ts": false,
-  "s": 20.5,
-  "type": "video/mp2t"
+ {
+  "channel": "DAZN Baloncesto",
+  "hosting": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ],
+  "direct": 200
  },
- "relay": {
-  "status": 200,
-  "bytes": 200000,
-  "ts": true,
-  "s": 1.8,
-  "type": "video/mp2t"
- },
- "relay_no_source": {
-  "status": 400,
-  "body": "Enlace IPTV HTTP no v\u00e1lido para el puente.",
-  "s": 0.9
- },
- "cast_status": {
-  "status": 200,
-  "bytes": 63,
-  "ts": false,
-  "s": 0.8,
-  "type": "application/json; charset=utf-8"
- },
- "other_direct": {
-  "status": 403,
-  "body": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
-  "s": 0.3
+ {
+  "channel": "DAZN Baloncesto 2",
+  "hosting": [
+   502,
+   "{\"error\":\"La p\\u00e1gina del reproductor no responde (403).\"}"
+  ],
+  "direct": 200
  }
-}
+]
