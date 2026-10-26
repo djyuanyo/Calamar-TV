@@ -27,3 +27,4 @@ except Exception as e:
 res.update({'secs': round(time.time() - t, 1), 'bytes': total, 'marks': marks})
 out['stream'] = res
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
+# run 10
