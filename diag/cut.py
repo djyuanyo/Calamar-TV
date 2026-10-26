@@ -1,19 +1,39 @@
-# How long one IPTV connection lasts: straight from GitHub, and through the hosting's relay.
-import base64, json, re, subprocess, time, urllib.request
+# What each IPTV connection carries: its PCR time range (s), so we see overlap/gaps between consecutive ones.
+import json, time, urllib.request
 CAT = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
 data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
 src = next(s for c in data['channels'] if c['name'] == 'Movistar Plus' for s in c['streams'] if s.startswith('http://'))
-def run(args):
+def info(body):
+    pcrs, rai, pids, sync_off = [], 0, {}, 0
+    i = 0
+    while i < len(body) and body[i] != 0x47: i += 1
+    sync_off = i
+    while i + 188 <= len(body):
+        p = body[i:i + 188]
+        if p[0] != 0x47: i += 1; continue
+        pid = ((p[1] & 0x1f) << 8) | p[2]; pids[pid] = pids.get(pid, 0) + 1
+        if p[3] & 0x20 and p[4] > 0:
+            flags = p[5]
+            if flags & 0x40: rai += 1
+            if flags & 0x10 and p[4] >= 7:
+                base = (p[6] << 25) | (p[7] << 17) | (p[8] << 9) | (p[9] << 1) | (p[10] >> 7)
+                pcrs.append(base / 90000)
+        i += 188
+    return {'bytes': len(body), 'sync_offset': sync_off, 'pcr_first': round(pcrs[0], 2) if pcrs else None,
+            'pcr_last': round(pcrs[-1], 2) if pcrs else None, 'pcr_min': round(min(pcrs), 2) if pcrs else None,
+            'pcr_max': round(max(pcrs), 2) if pcrs else None, 'random_access': rai, 'top_pids': sorted(pids.items(), key=lambda x: -x[1])[:4]}
+out = []
+for n in range(4):
     t = time.time()
-    p = subprocess.run(['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code} %{size_download} %{content_type}'] + args,
-                       capture_output=True, text=True)
-    err = re.sub(r'https?://\S+', '<url>', p.stderr.strip())[:200]
-    return {'secs': round(time.time() - t, 1), 'curl_exit': p.returncode, 'out': p.stdout, 'err': err}
-out = {}
-srv = subprocess.Popen(['php', '-S', '127.0.0.1:8099', '-t', 'diag/host2'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(1.5)
-local = ['-H', 'Origin: https://djyuanyo.github.io', '-H', 'X-Calamar-Source: ' + base64.b64encode(src.encode()).decode(),
-         'http://127.0.0.1:8099/calamar-tv-relay.php?stream=1']
-out['new_relay_realtime_90s'] = run(['--limit-rate', '700k', '--max-time', '90'] + local)
-srv.terminate()
+    req = urllib.request.Request(src, headers={'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'})
+    try:
+        r = urllib.request.urlopen(req, timeout=30)
+        body = b''
+        while len(body) < 80_000_000 and time.time() - t < 60:
+            chunk = r.read(65536)
+            if not chunk: break
+            body += chunk
+        out.append({'n': n, 'start': round(t % 1000, 2), 'secs': round(time.time() - t, 2), **info(body)})
+    except Exception as e:
+        out.append({'n': n, 'error': type(e).__name__ + ' ' + str(getattr(e, 'code', ''))})
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
