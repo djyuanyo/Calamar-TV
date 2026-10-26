@@ -106,3 +106,28 @@ test('temporary renewal outage retries while existing playback remains available
   assert.equal(f.engines.length, 2);
   f.stop();
 });
+test('repeated fatal errors stop retrying and fall back once', async () => {
+  let calls = 0;
+  const f = fixture(async () => { calls++; return response(document(media(1793041200))); });
+  await flush();
+  for (let i = 0; i < 6; i++) {
+    f.engines.at(-1).emitError();
+    await f.tick(30000);
+  }
+  assert.equal(f.fallbacks.length, 1);
+  assert.equal(calls, 6);
+  assert.equal(f.jobs.size, 0);
+});
+test('scheduled token renewal preserves user pause and does not restart unchanged URLs', async () => {
+  let calls = 0;
+  const f = fixture(async () => response(document(media(++calls <= 2 ? 1793040120 : 1793041320))));
+  await flush();
+  f.video.paused = true;
+  await f.tick(90000);
+  assert.equal(f.engines.length, 1);
+  assert.equal(f.video.paused, true);
+  await f.tick(15000);
+  assert.equal(f.engines.length, 2);
+  assert.equal(f.video.paused, true);
+  f.stop();
+});
