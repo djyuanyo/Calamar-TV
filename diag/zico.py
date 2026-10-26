@@ -1,11 +1,13 @@
-import json, urllib.request, urllib.error
-CAT = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
-data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
-out = []
-for c in data['channels']:
-    for s in c.get('streams', []):
-        if 'zicotv' not in s: continue
-        r = urllib.request.urlopen(urllib.request.Request(s, headers={'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36'}), timeout=20)
-        h = {k.lower(): v for k, v in r.headers.items()}
-        out.append({'channel': c['name'], 'status': r.status, 'x-frame-options': h.get('x-frame-options'), 'csp': (h.get('content-security-policy') or '')[:300], 'acao': h.get('access-control-allow-origin')})
+import json, re, urllib.request, urllib.error
+out = {}
+url = 'https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/'
+try:
+    r = urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'WhatsApp/2.23.20.0'}), timeout=20)
+    html = r.read().decode('utf-8', 'replace'); out['status'] = r.status
+    out['og'] = re.findall(r'<meta property="og:[^>]+>', html)[:8]
+    img = re.search(r'property="og:image" content="([^"]+)"', html)
+    if img:
+        i = urllib.request.urlopen(img.group(1), timeout=20); b = i.read(); out['image'] = [i.status, i.headers.get('content-type'), len(b)]
+except urllib.error.HTTPError as e:
+    out['status'] = e.code; out['body'] = e.read(300).decode('utf-8', 'replace')
 open('diag/zico.json', 'w').write(json.dumps(out, indent=1, ensure_ascii=False))
