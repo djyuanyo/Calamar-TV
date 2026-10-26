@@ -1,13 +1,9 @@
-import json, re, urllib.request, urllib.error
-out = {}
-url = 'https://djyuanyo.github.io/Calamar-TV/evento/shakhtar-donetsk-vs-sporting-cp/'
-try:
-    r = urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'WhatsApp/2.23.20.0'}), timeout=20)
-    html = r.read().decode('utf-8', 'replace'); out['status'] = r.status
-    out['og'] = re.findall(r'<meta property="og:[^>]+>', html)[:8]
-    img = re.search(r'property="og:image" content="([^"]+)"', html)
-    if img:
-        i = urllib.request.urlopen(img.group(1), timeout=20); b = i.read(); out['image'] = [i.status, i.headers.get('content-type'), len(b)]
-except urllib.error.HTTPError as e:
-    out['status'] = e.code; out['body'] = e.read(300).decode('utf-8', 'replace')
-open('diag/zico.json', 'w').write(json.dumps(out, indent=1, ensure_ascii=False))
+import json, urllib.request
+def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'}), timeout=30))
+sb = get('https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?dates=20261025')
+ev = [e for e in sb['events'] if e['status']['type']['state'] == 'post'][0]
+s = get('https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=' + ev['id'])
+out = {'event': ev['name'], 'id': ev['id'], 'rosterKeys': list(s['rosters'][0].keys()), 'formation': s['rosters'][0].get('formation')}
+r = s['rosters'][0]['roster']
+out['players'] = r[:3] + [p for p in r if p.get('subbedOut') or p.get('subbedIn')][:2]
+open('diag/zico.json', 'w').write(json.dumps(out, indent=1, ensure_ascii=False)[:60000])
