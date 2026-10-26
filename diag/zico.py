@@ -9,7 +9,7 @@ def get(url, headers=None, n=400000):
         return e.code, e.read(300).decode('utf-8', 'replace'), url
     except Exception as e:
         return repr(e)[:120], '', url
-for code in ('dab8pb27hxdg', 'zjmkh1lwsejz'):
+for code in ('dab8pb27hxdg', 'zjmkh1lwsejz', 'll2hidg1m59q', 'shrtan7z8hmm', 'odql1gbzy42u', 'duj5ak4x5waa'):
     row = {}
     st, html, final = get(f'https://lulustream.com/e/{code}')
     row['page'] = [st, final, len(html), 'eval(function(p,a,c,k' in html, bool(re.search(r'\.m3u8', html))]
@@ -29,7 +29,7 @@ for code in ('dab8pb27hxdg', 'zjmkh1lwsejz'):
         row['m3u8_host'] = urllib.parse.urlsplit(u).hostname if hasattr(urllib, 'parse') else ''
         import urllib.parse
         row['m3u8_host'] = urllib.parse.urlsplit(u).hostname
-        st2, body, _ = get(u, {'Referer': 'https://lulustream.com/', 'Origin': 'https://lulustream.com'})
+        o = urllib.parse.urlsplit(final); st2, body, _ = get(u, {'Referer': f'{o.scheme}://{o.netloc}/', 'Origin': f'{o.scheme}://{o.netloc}'})
         row['master'] = [st2, body[:7]]
     st3, body3, _ = get(f'https://calamarmenciano.com/calamar-lulu.php?code={code}&hls=1', {'Origin': 'https://djyuanyo.github.io'})
     row['hosting'] = [st3, body3[:120]]
