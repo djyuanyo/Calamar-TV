@@ -11,7 +11,7 @@ function failure($message, $code = 502) {
 require_once __DIR__ . '/calamar-http-source.php';
 
 // Raised with each change, so the version running on the hosting can be checked (?version=1).
-const RELAY_VERSION = 4;
+const RELAY_VERSION = 5;
 const RELAY_PIECE = 1048576;     // A new piece every ~1 MiB, always starting at a keyframe.
 const RELAY_PIECES = 24;         // Pieces kept per channel (~24 MiB).
 const RELAY_IDLE = 15;           // Seconds without viewers before the provider connection closes.
@@ -31,9 +31,22 @@ function relayMain() {
     header('Access-Control-Allow-Headers: X-Calamar-Source, Range');
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') failure('Método no permitido.', 405);
+    // A fatal error answers with its reason (never the IPTV link), so it can be read from outside.
+    register_shutdown_function(function () {
+        $error = error_get_last();
+        if ($error && in_array($error['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR), true) && !headers_sent()) {
+            http_response_code(500); header('Content-Type: text/plain; charset=utf-8');
+            echo 'Error del puente: ' . preg_replace('~https?://\S+~', '<url>', $error['message']) . ' (línea ' . $error['line'] . ')';
+        }
+    });
     if (isset($_GET['version'])) {
         header('Content-Type: application/json');
-        echo json_encode(array('relay' => RELAY_VERSION, 'php' => PHP_VERSION)); exit;
+        $dir = relayDir('check'); $file = @fopen($dir . '/writer.lock', 'c');
+        echo json_encode(array('relay' => RELAY_VERSION, 'php' => PHP_VERSION, 'temp' => sys_get_temp_dir(),
+            'writable' => @file_put_contents($dir . '/probe', 'x') === 1, 'lock' => $file && flock($file, LOCK_EX | LOCK_NB),
+            'disabled' => array_values(array_filter(array('curl_multi_init', 'curl_multi_select', 'ignore_user_abort',
+                'random_bytes', 'flock', 'scandir', 'set_time_limit', 'connection_aborted', 'usleep', 'getmypid'), function ($f) { return !function_exists($f); }))));
+        exit;
     }
     if (!isset($_GET['stream'])) failure('Abre este puente desde Calamar TV.', 400);
     if (!function_exists('curl_multi_init')) failure('cURL no disponible.');
@@ -63,7 +76,7 @@ function relayState($dir) {
 }
 
 function relaySaveState($dir, $state) {
-    $temporary = $dir . '/state.' . getmypid() . '.tmp';
+    $temporary = $dir . '/state.' . bin2hex(random_bytes(4)) . '.tmp';
     if (@file_put_contents($temporary, json_encode($state)) !== false) @rename($temporary, $dir . '/state.json');
 }
 
@@ -82,7 +95,7 @@ function relayViewers($dir) {
 /** One viewer: sends the channel's pieces as they are written, and writes them while it holds the lock. */
 function relayServe($source) {
     @set_time_limit(0);
-    ignore_user_abort(true); // A writer whose own viewer left keeps going while others watch.
+    if (function_exists('ignore_user_abort')) ignore_user_abort(true); // A writer whose own viewer left keeps going while others watch.
     $dir = relayDir($source);
     $me = $dir . '/viewers/' . bin2hex(random_bytes(6));
     @touch($me);
