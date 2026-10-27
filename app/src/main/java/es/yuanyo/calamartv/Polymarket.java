@@ -33,7 +33,12 @@ final class Polymarket {
   static final class Odds {
     int home, draw, away;
     double volume;
-    String url = "";
+    String url = "", slug = "";
+    String[] tokens = {"", "", ""};
+    /** Goals markets in % («+1,5 goles», «Ambos marcan»…), and how the chances moved: {seconds, %} per side. */
+    final List<String> goalLabels = new ArrayList<>();
+    final List<Integer> goalPcts = new ArrayList<>();
+    double[][][] history;
   }
 
   static List<String> words(String name) {
@@ -106,8 +111,15 @@ final class Polymarket {
     }
     Odds o = new Odds();
     o.home = pct[0]; o.draw = pct[1]; o.away = pct[2]; o.volume = volume;
-    o.url = "https://polymarket.com/event/" + event.optString("slug");
+    o.slug = event.optString("slug");
+    o.url = "https://polymarket.com/event/" + o.slug;
+    o.tokens = new String[] {token(homeMarket), token(draw), token(awayMarket)};
     return o;
+  }
+
+  private static String token(JSONObject market) {
+    try { return new JSONArray(market.optString("clobTokenIds")).optString(0); }
+    catch (Exception broken) { return ""; }
   }
 
   private static double yes(JSONObject market) {
@@ -134,7 +146,7 @@ final class Polymarket {
       if (score > bestScore) { bestScore = score; bestEvent = e; swapped = turned > same; }
     }
     Odds o = bestEvent == null ? null : eventOdds(bestEvent);
-    if (o != null && swapped) { int h = o.home; o.home = o.away; o.away = h; }
+    if (o != null && swapped) { int h = o.home; o.home = o.away; o.away = h; String t = o.tokens[0]; o.tokens[0] = o.tokens[2]; o.tokens[2] = t; }
     return o;
   }
 
@@ -169,5 +181,71 @@ final class Polymarket {
       if (events.length() < PAGE_SIZE) return null;
     }
     return null;
+  }
+
+  static final String CLOB = "https://clob.polymarket.com/prices-history";
+  private static final double[] GOAL_LINES = {1.5, 2.5, 3.5};
+  private static final String[] GOAL_NAMES = {"+1,5 goles", "+2,5 goles", "+3,5 goles"};
+
+  /** Over 1.5, 2.5 and 3.5 goals and both teams scoring, in %, from the match's «More Markets» event. */
+  static void goals(JSONObject event, Odds o) {
+    JSONArray markets = event == null ? null : event.optJSONArray("markets");
+    if (markets == null) return;
+    for (int g = 0; g < GOAL_LINES.length; g++) {
+      for (int i = 0; i < markets.length(); i++) {
+        JSONObject m = markets.optJSONObject(i);
+        if (m == null || m.optBoolean("closed") || !"totals".equals(m.optString("sportsMarketType")) || m.optDouble("line", -1) != GOAL_LINES[g]) continue;
+        double p = yes(m);
+        if (p >= 0) { o.goalLabels.add(GOAL_NAMES[g]); o.goalPcts.add((int) Math.round(p * 100)); }
+        break;
+      }
+    }
+    for (int i = 0; i < markets.length(); i++) {
+      JSONObject m = markets.optJSONObject(i);
+      if (m == null || m.optBoolean("closed") || !"both_teams_to_score".equals(m.optString("sportsMarketType"))) continue;
+      double p = yes(m);
+      if (p >= 0) { o.goalLabels.add("Ambos marcan"); o.goalPcts.add((int) Math.round(p * 100)); }
+      break;
+    }
+  }
+
+  /** One side's points from the order book's answer {"history":[{"t":seconds,"p":0.62}]}, as {seconds, %}. */
+  static double[][] series(JSONObject answer) {
+    JSONArray h = answer == null ? null : answer.optJSONArray("history");
+    if (h == null) return new double[0][];
+    List<double[]> out = new ArrayList<>();
+    for (int i = 0; i < h.length(); i++) {
+      JSONObject p = h.optJSONObject(i);
+      if (p != null && p.has("t") && p.has("p")) out.add(new double[] {p.optDouble("t"), Math.round(p.optDouble("p") * 1000) / 10.0});
+    }
+    return out.toArray(new double[0][]);
+  }
+
+  private static String get(String url) throws Exception {
+    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+    c.setConnectTimeout(8000); c.setReadTimeout(15000);
+    try {
+      if (c.getResponseCode() != 200) return null;
+      try (InputStream in = c.getInputStream()) { return new String(MatchCenter.readAll(in), "UTF-8"); }
+    } finally { c.disconnect(); }
+  }
+
+  /** Blocking: adds the goals markets and the last day of the three chances (each one may fail alone). */
+  static void details(Odds o) {
+    try {
+      String body = get(API + "?slug=" + URLEncoder.encode(o.slug + "-more-markets", "UTF-8"));
+      JSONArray events = body == null ? null : new JSONArray(body);
+      if (events != null && events.length() > 0) goals(events.optJSONObject(0), o);
+    } catch (Exception ignored) {}
+    try {
+      double[][][] h = new double[3][][];
+      for (int i = 0; i < 3; i++) {
+        if (!o.tokens[i].matches("\\d{10,90}")) return;
+        String body = get(CLOB + "?market=" + o.tokens[i] + "&interval=1d&fidelity=10");
+        h[i] = body == null ? new double[0][] : series(new JSONObject(body));
+        if (h[i].length < 2) return;
+      }
+      o.history = h;
+    } catch (Exception ignored) {}
   }
 }

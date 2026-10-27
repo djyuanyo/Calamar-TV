@@ -2,7 +2,7 @@ import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
-import { fetchOdds } from './polymarket.js';
+import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
@@ -939,7 +939,10 @@ function loadOdds() {
   if (matchOdds.busy || (matchOdds.key === key && Date.now() - matchOdds.at < 120000)) return;
   if (matchOdds.key !== key) matchOdds.data = null;
   Object.assign(matchOdds, { key, at: Date.now(), busy: true });
-  fetchOdds(m.home.name, m.away.name, m.date).catch(() => null).then((odds) => {
+  fetchOdds(m.home.name, m.away.name, m.date).catch(() => null).then(async (found) => {
+    // The goals markets and how the chances moved come with it (they fail alone, without hiding the rest).
+    const [goals, history] = found ? await Promise.all([fetchGoalMarkets(found.slug).catch(() => []), fetchHistory(found.tokens).catch(() => null)]) : [[], null];
+    const odds = found && { ...found, goals, history };
     matchOdds.busy = false;
     if (matchOdds.key !== key) return;
     const changed = JSON.stringify(odds) !== JSON.stringify(matchOdds.data);
@@ -978,11 +981,17 @@ function vote(pick) {
     paintMatch();
   });
 }
+const PORRA_COLLAPSED = 'calamar-porra-collapsed';
+function porraCollapsed() { try { return localStorage.getItem(PORRA_COLLAPSED) === '1'; } catch { return false; } }
+function togglePorra() {
+  try { localStorage.setItem(PORRA_COLLAPSED, porraCollapsed() ? '0' : '1'); } catch {}
+  paintMatch();
+}
 function pollModel() {
   const key = matchModel ? matchKey(matchModel.home?.name, matchModel.away?.name, matchModel.date) : '';
   if (!key || matchPoll.key !== key) return null;
   return { open: votingOpen(matchModel), pick: myPick(key), tally: matchPoll.totals ? tally(matchPoll.totals) : null,
-    busy: matchPoll.sending, error: matchPoll.error, choose: vote };
+    busy: matchPoll.sending, error: matchPoll.error, choose: vote, collapsed: porraCollapsed(), toggle: togglePorra };
 }
 function paintMatch() {
   if (!matchModel) return;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { teamScore, eventOdds, pickEvent, fetchOdds } from '../web/polymarket.js';
+import { goalMarkets, fetchHistory } from '../web/polymarket.js';
 
 const market = (title, price, type = 'moneyline') => ({ groupItemTitle: title, question: title, sportsMarketType: type, outcomePrices: JSON.stringify([String(price), String(1 - price)]), volume: '1000', closed: false });
 const event = (home, away, prices = [0.31, 0.305, 0.455], extra = {}) => ({
@@ -51,4 +52,22 @@ test('on a busy hour the following pages are read until the match appears', asyn
   const odds = await fetchOdds('Rayo Vallecano', 'Celta Vigo', '2026-10-31T15:15:00Z', fetcher);
   assert.deepEqual(offsets, [0, 100]);
   assert.ok(odds);
+});
+
+test('goals markets: over 1.5, 2.5 and 3.5 and both teams scoring, in %', () => {
+  const m = (type, line, yes, extra = {}) => ({ sportsMarketType: type, line, outcomePrices: JSON.stringify([String(yes), String(1 - yes)]), ...extra });
+  const event = { markets: [m('totals', 0.5, 0.865), m('totals', 1.5, 0.84), m('totals', 2.5, 0.635), m('totals', 3.5, 0.415, { closed: true }), m('both_teams_to_score', null, 0.57)] };
+  assert.deepEqual(goalMarkets(event), [{ label: '+1,5 goles', pct: 84 }, { label: '+2,5 goles', pct: 64 }, { label: 'Ambos marcan', pct: 57 }]);
+  assert.deepEqual(goalMarkets(null), []);
+});
+
+test('history: three series from the order book, or nothing when one is missing', async () => {
+  const urls = [];
+  const fetcher = async (url) => { urls.push(url); return { ok: true, json: async () => ({ history: [{ t: 1, p: 0.6 }, { t: 2, p: 0.655 }] }) }; };
+  const h = await fetchHistory(['1111111111', '2222222222', '3333333333'], fetcher);
+  assert.deepEqual(h.home, [[1, 60], [2, 65.5]]);
+  assert.match(urls[0], /^https:\/\/clob\.polymarket\.com\/prices-history\?market=1111111111&interval=1d&fidelity=10$/);
+  assert.equal(await fetchHistory(['1', 'x', '3'], fetcher), null);
+  const empty = async () => ({ ok: true, json: async () => ({ history: [] }) });
+  assert.equal(await fetchHistory(['1111111111', '2222222222', '3333333333'], empty), null);
 });

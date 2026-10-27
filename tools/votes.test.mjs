@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_ENDPOINT } from '../web/votes.js';
-import { votesCard } from '../web/match-center.js';
+import { porraCard } from '../web/match-center.js';
 
 const memory = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
 
@@ -48,20 +48,38 @@ test('the voter id and picks are kept in the browser', () => {
 
 const el = (tag, attrs = {}, ...children) => ({ tag, attrs, children: children.flat().filter((c) => c != null) });
 const texts = (node) => typeof node === 'string' ? [node] : node.children.flatMap(texts);
-const base = { home: { name: 'Villarreal' }, away: { name: 'Espanyol' } };
+const find = (node, test) => typeof node === 'string' ? [] : [...(test(node) ? [node] : []), ...node.children.flatMap((c) => find(c, test))];
+const base = { home: { name: 'Villarreal' }, away: { name: 'Espanyol' }, state: 'scheduled' };
+const odds = { home: 68, draw: 19, away: 13, url: 'https://polymarket.com/event/x', goals: [{ label: '+1,5 goles', pct: 84 }, { label: 'Ambos marcan', pct: 57 }],
+  history: { home: [[1, 60], [2, 68]], draw: [[1, 25], [2, 19]], away: [[1, 15], [2, 13]] } };
 
-test('the poll shows buttons before kick-off and results once voted or closed', () => {
+test('the porra shows Polymarket as the big number and the votes as the bar, and a tap votes', () => {
   const picked = [];
-  const open = votesCard(el, { ...base, votes: { open: true, pick: '', tally: { home: 50, draw: 0, away: 50, total: 2 }, choose: (p) => picked.push(p) } });
-  const buttons = open.children[1].children;
-  assert.deepEqual(buttons.map((b) => b.attrs['aria-pressed']), ['false', 'false', 'false']);
-  buttons[2].attrs.onclick();
+  const card = porraCard(el, { ...base, odds, votes: { open: true, pick: '', tally: tally({ h: 1, d: 0, a: 3 }), choose: (p) => picked.push(p) } });
+  const all = texts(card).join(' ');
+  assert.match(all, /Porra · ¿Quién gana\?/);
+  assert.match(all, /Favorito: +Villarreal 68%/);
+  const tiles = find(card, (n) => n.tag === 'button' && /mc-porra-tile/.test(n.attrs.class || ''));
+  assert.deepEqual(tiles.map((t) => texts(t).join(' ')), ['Villarreal 68% 25%', 'Empate 19% 0%', 'Espanyol 13% 75%']);
+  tiles[2].attrs.onclick();
   assert.deepEqual(picked, ['2']);
-  assert.ok(!texts(open).includes('50%'), 'results stay hidden until voting');
-  const voted = votesCard(el, { ...base, votes: { open: true, pick: '1', tally: { home: 50, draw: 0, away: 50, total: 2 }, choose() {} } });
-  assert.equal(voted.children[1].children[0].attrs['aria-pressed'], 'true');
-  assert.ok(texts(voted).includes('50%'));
-  const closed = votesCard(el, { ...base, votes: { open: false, pick: '', tally: { home: 0, draw: 100, away: 0, total: 1 }, choose() {} } });
-  assert.ok(texts(closed).join(' ').includes('Votación cerrada'));
-  assert.equal(votesCard(el, { ...base, votes: { open: false, pick: '', tally: { home: 0, draw: 0, away: 0, total: 0 } } }), null);
+  assert.match(all, /Evolución en Polymarket/);
+  assert.match(all, /\+1,5 goles 84%/);
+  assert.match(all, /Número: probabilidad en Polymarket · barra: votos de la porra \(4 votos\)/);
+  assert.match(all, /Toca un equipo para votar\./);
+});
+
+test('without Polymarket the votes are the number, a closed porra has no buttons, and it can be folded', () => {
+  const card = porraCard(el, { ...base, state: 'finished', odds, votes: { open: false, pick: '1', tally: tally({ h: 2, d: 2, a: 0 }), choose() {} } });
+  assert.equal(find(card, (n) => n.tag === 'button' && /mc-porra-tile/.test(n.attrs.class || '')).length, 0);
+  const all = texts(card).join(' ');
+  assert.match(all, /Villarreal 50% 50%/);
+  assert.match(all, /Votación cerrada\./);
+  assert.doesNotMatch(all, /Polymarket/);
+  let toggled = 0;
+  const folded = porraCard(el, { ...base, odds, votes: { open: true, pick: '', tally: null, choose() {}, collapsed: true, toggle: () => toggled++ } });
+  assert.equal(find(folded, (n) => /mc-porra-tile/.test(n.attrs?.class || '')).length, 0);
+  find(folded, (n) => n.tag === 'button')[0].attrs.onclick();
+  assert.equal(toggled, 1);
+  assert.equal(porraCard(el, { ...base }), null);
 });

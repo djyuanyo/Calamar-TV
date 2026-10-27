@@ -200,38 +200,76 @@ const madrid = (iso, opts) => new Date(iso).toLocaleString('es-ES', { timeZone: 
 
 /** The tabs; `tab` is the open one ('general', 'stats', 'lineups' or 'h2h') and `choose` changes it. */
 /** What Polymarket's market expects (m.odds from polymarket.js): three bars, only before the match ends. */
-export function oddsCard(el, m) {
-  const o = m.odds;
-  if (!o || m.state === 'finished') return null;
-  const row = (label, pct, cls) => el('div', { class: `mc-odd ${cls}` },
-    el('span', { class: 'mc-odd-label' }, label), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${pct}%` })), el('b', {}, `${pct}%`));
-  const volume = o.volume >= 1e6 ? `${(o.volume / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 })} M$` : o.volume >= 1e3 ? `${Math.round(o.volume / 1e3).toLocaleString('es-ES')} mil $` : `${Math.round(o.volume)} $`;
-  return el('section', { class: 'mc-odds', 'aria-label': 'Pronóstico de Polymarket' },
-    el('h3', {}, 'Pronóstico de Polymarket'),
-    row(m.home.name, o.home, 'home'), row('Empate', o.draw, 'draw'), row(m.away.name, o.away, 'away'),
-    el('p', { class: 'mc-odds-source' }, `Probabilidades del mercado de predicción Polymarket · ${volume} en juego · `,
-      el('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver en Polymarket')));
+const PORRA_SIDES = [['1', 'home', 'home'], ['X', 'draw', 'draw'], ['2', 'away', 'away']];
+
+/** The line chart of how Polymarket's three chances moved: { home, draw, away } as [[seconds, %]]. */
+function porraChart(el, history) {
+  // SVG needs its namespace in the page; the tests build plain objects with el.
+  const svg = (tag, attrs = {}, ...children) => {
+    if (!globalThis.document?.createElementNS) return el(tag, attrs, ...children);
+    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, value] of Object.entries(attrs)) node.setAttribute(k, value);
+    for (const child of children.flat()) if (child) node.append(child);
+    return node;
+  };
+  const all = [...history.home, ...history.draw, ...history.away];
+  const from = Math.min(...all.map((p) => p[0])), to = Math.max(...all.map((p) => p[0]));
+  const top = Math.min(100, Math.max(80, Math.ceil(Math.max(...all.map((p) => p[1])) / 20) * 20));
+  const W = 300, H = 100;
+  const x = (t) => (to > from ? ((t - from) / (to - from)) * W : 0).toFixed(1), y = (p) => (H - (p / top) * H).toFixed(1);
+  const line = (points, cls) => svg('polyline', { class: `mc-porra-line ${cls}`, points: points.map(([t, p]) => `${x(t)},${y(p)}`).join(' '), fill: 'none', 'vector-effect': 'non-scaling-stroke' });
+  const grid = [top, top / 2, 0].map((v) => svg('line', { class: 'mc-porra-grid', x1: 0, x2: W, y1: y(v), y2: y(v), 'vector-effect': 'non-scaling-stroke' }));
+  const start = new Date(from * 1000);
+  const label = Date.now() - start.getTime() > 20 * 3600e3
+    ? start.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' }) + ' ' + start.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
+    : start.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' });
+  return el('div', { class: 'mc-porra-chart' },
+    el('p', { class: 'mc-porra-sub' }, 'Evolución en Polymarket'),
+    el('div', { class: 'mc-porra-plot' },
+      el('div', { class: 'mc-porra-axis', 'aria-hidden': 'true' }, el('span', {}, `${top}%`), el('span', {}, `${top / 2}%`), el('span', {}, '0%')),
+      svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Evolución de las probabilidades en Polymarket' },
+        ...grid, line(history.home, 'home'), line(history.draw, 'draw'), line(history.away, 'away'))),
+    el('div', { class: 'mc-porra-time', 'aria-hidden': 'true' }, el('span', {}, label), el('span', {}, 'Ahora')));
 }
 
-/** The visitors' own 1X2 poll: buttons until the match ends, and what everyone picked once voted or closed. */
-export function votesCard(el, m) {
-  const v = m.votes;
-  if (!v) return null;
-  const t = v.tally;
-  const shown = t && t.total > 0 && (v.pick || !v.open);
-  if (!v.open && !shown) return null;
-  const options = [['1', m.home.name, 'home', 'home'], ['X', 'Empate', 'draw', 'draw'], ['2', m.away.name, 'away', 'away']];
-  const children = [el('h3', {}, v.open ? '¿Quién ganará? Vota' : 'Lo que votaron los usuarios')];
-  if (v.open) children.push(el('div', { class: 'mc-vote-buttons', role: 'group', 'aria-label': 'Tu voto' }, options.map(([pick, label, cls]) =>
-    el('button', { class: `mc-vote ${cls}`, type: 'button', id: `mc-vote-${pick}`, 'aria-pressed': String(v.pick === pick), disabled: v.busy ? '' : null,
-      onclick: () => v.choose(pick) }, el('b', {}, pick), el('span', {}, label)))));
-  if (shown) for (const [pick, label, cls, key] of options) children.push(el('div', { class: `mc-odd ${cls}${v.pick === pick ? ' mine' : ''}` },
-    el('span', { class: 'mc-odd-label' }, `${pick} · ${label}`), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${t[key]}%` })), el('b', {}, `${t[key]}%`)));
-  const total = t?.total ? `${t.total.toLocaleString('es-ES')} ${t.total === 1 ? 'voto' : 'votos'}` : '';
-  children.push(el('p', { class: 'mc-odds-source' }, v.error ? v.error
-    : v.open ? (v.pick ? `Has votado ${v.pick}. ${total ? total + ' · ' : ''}Puedes cambiarlo hasta el final del partido.` : 'Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el final del partido.')
-    : `${total} · Votación cerrada al terminar el partido.`));
-  return el('section', { class: 'mc-odds mc-votes', 'aria-label': 'Votación de los usuarios' }, ...children);
+/**
+ * The match's «porra»: the visitors' own 1X2 poll and Polymarket's forecast in one card, as on the event
+ * pages people know. Each side shows Polymarket's chance (the big number) and the share of the visitors'
+ * votes (the bar); a tap votes until the match ends. Below, how Polymarket moved and its goals markets.
+ */
+export function porraCard(el, m) {
+  const o = m.state === 'finished' ? null : m.odds, v = m.votes;
+  if (!o && !v) return null;
+  const t = v?.tally || { home: 0, draw: 0, away: 0, total: 0 };
+  const names = { home: m.home.name, draw: 'Empate', away: m.away.name };
+  const big = (key) => (o ? o[key] : t.total ? t[key] : null);
+  const favourite = ['home', 'draw', 'away'].filter((k) => big(k) !== null).sort((a, b) => big(b) - big(a))[0];
+  const open = !!v?.open;
+  const header = el('div', { class: 'mc-porra-head' },
+    el('h3', {}, 'Porra · ¿Quién gana?'),
+    favourite ? el('span', { class: 'mc-porra-fav' }, 'Favorito: ', el('b', {}, `${names[favourite]} ${big(favourite)}%`)) : null,
+    v?.toggle ? el('button', { class: 'mc-porra-toggle', type: 'button', 'aria-expanded': String(!v.collapsed), 'aria-label': v.collapsed ? 'Mostrar la porra' : 'Ocultar la porra', onclick: () => v.toggle() },
+      el('span', { 'aria-hidden': 'true' }, v.collapsed ? '⌄' : '⌃')) : null);
+  if (v?.collapsed) return el('section', { class: 'mc-porra collapsed', 'aria-label': 'Porra del partido' }, header);
+  const tiles = el('div', { class: 'mc-porra-tiles', role: 'group', 'aria-label': open ? 'Vota quién gana' : 'Quién gana' }, PORRA_SIDES.map(([pick, key, cls]) => {
+    const value = big(key);
+    const children = [el('span', { class: 'mc-porra-name' }, el('i', { class: `mc-porra-dot ${cls}`, 'aria-hidden': 'true' }), el('span', {}, names[key])),
+      el('strong', {}, value === null ? '–' : `${value}%`),
+      el('span', { class: 'mc-porra-votes' }, el('span', { class: 'mc-porra-bar', 'aria-hidden': 'true' }, el('i', { class: cls, style: `width:${t[key]}%` })), el('small', {}, `${t[key]}%`))];
+    const label = `${names[key]}${o ? `, ${o[key]}% en Polymarket` : ''}, ${t[key]}% de los votos${v?.pick === pick ? ', tu voto' : ''}`;
+    return open
+      ? el('button', { class: `mc-porra-tile ${cls}`, type: 'button', id: `mc-vote-${pick}`, 'aria-pressed': String(v.pick === pick), 'aria-label': `Votar ${label}`, disabled: v.busy ? '' : null, onclick: () => v.choose(pick) }, ...children)
+      : el('div', { class: `mc-porra-tile ${cls}${v?.pick === pick ? ' mine' : ''}`, 'aria-label': label }, ...children);
+  }));
+  const parts = [header, tiles];
+  if (o?.history) parts.push(porraChart(el, o.history));
+  if (o?.goals?.length) parts.push(el('div', { class: 'mc-porra-goals' }, o.goals.map((g) => el('div', { class: 'mc-porra-goal' }, el('span', {}, g.label), el('b', {}, `${g.pct}%`)))));
+  const votes = `${t.total.toLocaleString('es-ES')} ${t.total === 1 ? 'voto' : 'votos'}`;
+  const how = o ? `Número: probabilidad en Polymarket · barra: votos de la porra (${votes})` : `Votos de la porra (${votes})`;
+  const state = v?.error ? v.error : !v ? '' : open ? (v.pick ? `Has votado ${v.pick}. Puedes cambiarlo hasta el final del partido.` : 'Toca un equipo para votar.') : 'Votación cerrada.';
+  parts.push(el('p', { class: 'mc-porra-note' }, how, o ? [' · ', el('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver en Polymarket')] : null));
+  if (state) parts.push(el('p', { class: `mc-porra-note${v?.error ? ' error' : ''}` }, state));
+  return el('section', { class: 'mc-porra', 'aria-label': 'Porra del partido' }, ...parts);
 }
 
 export function renderMatchCenter(el, m, tab, choose) {
@@ -303,7 +341,7 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty('No hay enfrentamientos anteriores registrados.')];
   } else {
     // General: timeline, key figures, incidents, form and details.
-    const parts = [noLink, votesCard(el, m), oddsCard(el, m)];
+    const parts = [noLink, porraCard(el, m)];
     const maxMinute = Math.max(90, ...m.events.map((e) => minuteOf(e.minute)), m.live ? minuteOf(m.clock) : 0);
     if (m.events.length || m.live || m.state === 'finished' || m.state === 'halftime') {
       const at = (minute) => `${Math.min(100, (minute / maxMinute) * 100).toFixed(2)}%`;
