@@ -96,8 +96,8 @@ function luluCurl($url, $timeout) {
     ));
     return $ch;
 }
-function luluGet($url, $limit = 2097152) {
-    $ch = luluCurl($url, 15);
+function luluGet($url, $limit = 2097152, $timeout = 15) {
+    $ch = luluCurl($url, $timeout);
     curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_ENCODING => ''));
     $body = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
@@ -166,7 +166,9 @@ function luluMain() {
         $api = $_POST['api'] ?? ''; $key = $_POST['key'] ?? ''; $folder = $_POST['fld_id'] ?? '0';
         if ($api !== 'folder/list' || !is_string($key) || !preg_match('/^[A-Za-z0-9]{10,64}$/', $key) || !is_string($folder) || !preg_match('/^\d{1,12}$/', $folder))
             answer(array('error' => 'Consulta de LuluStream no válida.'), 400);
-        list(, $body) = luluGet('https://api.lulustream.com/api/folder/list?' . http_build_query(array('key' => $key, 'fld_id' => $folder, 'files' => '1')), 4194304);
+        // A folder with many videos can take LuluStream a while to list.
+        @set_time_limit(45);
+        list(, $body) = luluGet('https://api.lulustream.com/api/folder/list?' . http_build_query(array('key' => $key, 'fld_id' => $folder, 'files' => '1')), 4194304, 35);
         $data = $body !== null ? json_decode($body, true) : null;
         if (!is_array($data)) answer(array('error' => 'LuluStream no ha respondido.'), 502);
         answer($data);
