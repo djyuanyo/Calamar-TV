@@ -1,0 +1,579 @@
+{
+ "sports": {
+  "status": 200,
+  "cors": "*",
+  "sample": [
+   {
+    "sport": "ufl",
+    "tags": "1,100639,1186,105925",
+    "series": "12553",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/ufl.png"
+   },
+   {
+    "sport": "lmp",
+    "tags": "1,100639,678,105936",
+    "series": "12565",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/lmp.png"
+   },
+   {
+    "sport": "cricpakt20cup",
+    "tags": "1,100639,517,104074",
+    "series": "11278",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricpakt20cup.png"
+   },
+   {
+    "sport": "cricps",
+    "tags": "1,100639,517,104073",
+    "series": "11279",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricps.png"
+   },
+   {
+    "sport": "cricpsl",
+    "tags": "1,100639,517,103805",
+    "series": "11214",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricpsl.png"
+   },
+   {
+    "sport": "cricsa20",
+    "tags": "1,100639,517,103811",
+    "series": "10450",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricsa20.png"
+   },
+   {
+    "sport": "cricsm",
+    "tags": "1,100639,517,103810",
+    "series": "11218",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricsm.png"
+   },
+   {
+    "sport": "cricss",
+    "tags": "1,100639,517,102817",
+    "series": "10453",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricss.png"
+   },
+   {
+    "sport": "liiga",
+    "tags": "1,100639,100088,105937",
+    "series": "12566",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/liiga.png"
+   },
+   {
+    "sport": "hbehfcl",
+    "tags": "1,100639,102897,105926",
+    "series": "12554",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbehfcl.png"
+   },
+   {
+    "sport": "hockeychl",
+    "tags": "1,100639,100088,105938",
+    "series": "12567",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hockeychl.png"
+   },
+   {
+    "sport": "ncaalax",
+    "tags": "1,100639,102393,105939",
+    "series": "12568",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/ncaalax.png"
+   },
+   {
+    "sport": "ncaawlax",
+    "tags": "1,100639,102393,105940",
+    "series": "12569",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/ncaawlax.png"
+   },
+   {
+    "sport": "rueuchall",
+    "tags": "1,100639,102193,105941",
+    "series": "12570",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/rueuchall.png"
+   },
+   {
+    "sport": "ruprod2",
+    "tags": "1,100639,102193,105942",
+    "series": "12571",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/ruprod2.png"
+   },
+   {
+    "sport": "cricdhakadpl",
+    "tags": "1,100639,517,105943",
+    "series": "12572",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/cricket-ball-a0b0bf2dc9.png"
+   },
+   {
+    "sport": "hbhandbold",
+    "tags": "1,100639,102897,105927",
+    "series": "12555",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbhandbold.png"
+   },
+   {
+    "sport": "hblnh",
+    "tags": "1,100639,102897,105928",
+    "series": "12556",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hblnh.png"
+   },
+   {
+    "sport": "hbbundesliga",
+    "tags": "1,100639,102897,105929",
+    "series": "12557",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbbundesliga.png"
+   },
+   {
+    "sport": "hbnbi",
+    "tags": "1,100639,102897,105930",
+    "series": "12558",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbnbi.png"
+   },
+   {
+    "sport": "hbeliteserien",
+    "tags": "1,100639,102897,105931",
+    "series": "12559",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbeliteserien.png"
+   },
+   {
+    "sport": "hbsuperliga",
+    "tags": "1,100639,102897,105932",
+    "series": "12560",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbsuperliga.png"
+   },
+   {
+    "sport": "hbasobal",
+    "tags": "1,100639,102897,105933",
+    "series": "12561",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbasobal.png"
+   },
+   {
+    "sport": "hbhandboll",
+    "tags": "1,100639,102897,105934",
+    "series": "12562",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/hbhandboll.png"
+   },
+   {
+    "sport": "crict20blast",
+    "tags": "1,100639,517,103807",
+    "series": "11215",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/crict20blast-44c392b2.png"
+   },
+   {
+    "sport": "kor",
+    "tags": "1,100639,100350,102771",
+    "series": "10444",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/kor-594af508.png"
+   },
+   {
+    "sport": "lal",
+    "tags": "1,780,100639,100350",
+    "series": "10193",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/lal-33aa3578.png"
+   },
+   {
+    "sport": "liv",
+    "tags": "1,100219,102254",
+    "series": "12421",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/liv-4ab9915a.png"
+   },
+   {
+    "sport": "lol",
+    "tags": "1,64,65,100639",
+    "series": "10311",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/lol-cf27b4a0.png"
+   },
+   {
+    "sport": "cricadt10",
+    "tags": "1,100639,517,105945",
+    "series": "12574",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/cricket-ball-a0b0bf2dc9.png"
+   },
+   {
+    "sport": "rurgr",
+    "tags": "1,100639,102193,106121",
+    "series": "12691",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/rurgr.png"
+   },
+   {
+    "sport": "gsc",
+    "tags": "1,100639,100350,106112",
+    "series": "12683",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/soccer ball-bba4025f77.png"
+   },
+   {
+    "sport": "wjc",
+    "tags": "1,100639,100088,105458",
+    "series": "11975",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/hockey-wjc-c1aab48338.png"
+   },
+   {
+    "sport": "crictopend",
+    "tags": "1,100639,517,106134",
+    "series": "12743",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/cricket-ball-a0b0bf2dc9.png"
+   },
+   {
+    "sport": "weuq",
+    "tags": "1,100639,100350,105214",
+    "series": "11845",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/soccer-leagues/weuq.png"
+   },
+   {
+    "sport": "cof",
+    "tags": "1,100639,100350,101280",
+    "series": "10244",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cof-3215dd65.png"
+   },
+   {
+    "sport": "col",
+    "tags": "1,100639,100350,102763",
+    "series": "10437",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/col-b7b27511.png"
+   },
+   {
+    "sport": "conl",
+    "tags": "1,100639,100350,102867",
+    "series": "10673",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/conl-0ec6bb0c.png"
+   },
+   {
+    "sport": "cricilt20",
+    "tags": "1,100639,517,103812",
+    "series": "11219",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricilt20-4695496a.png"
+   },
+   {
+    "sport": "cricipl",
+    "tags": "1,100639,517,101988",
+    "series": "11213",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/league-icons/cricipl-a905c278.png"
+   }
+  ]
+ },
+ "search": {
+  "status": 200,
+  "cors": "*",
+  "events": [
+   {
+    "title": "Next Real Madrid manager?",
+    "slug": "next-real-madrid-manager",
+    "startDate": "2026-02-17T22:43:15.161427Z",
+    "endDate": "2026-12-31T23:55:00Z",
+    "closed": true,
+    "tags": [
+     {
+      "id": "1",
+      "label": "Sports",
+      "slug": "sports",
+      "forceShow": false,
+      "publishedAt": "2023-10-24 22:37:50.296+00",
+      "updatedBy": 15,
+      "createdAt": "2023-10-24T22:37:50.31Z",
+      "updatedAt": "2026-04-17T20:47:16.461062Z",
+      "forceHide": true
+     },
+     {
+      "id": "100350",
+      "label": "Soccer",
+      "slug": "soccer",
+      "forceShow": false,
+      "createdAt": "2024-08-21T16:31:18.953213Z",
+      "updatedAt": "2026-04-17T20:33:09.955379Z"
+     },
+     {
+      "id": "780",
+      "label": "La Liga",
+      "slug": "la-liga",
+      "forceShow": false,
+      "publishedAt": "2023-12-21 19:28:09.258+00",
+      "createdAt": "2023-12-21T19:28:09.265Z",
+      "updatedAt": "2026-09-14T20:00:02.848469Z"
+     },
+     {
+      "id": "1243",
+      "label": "real madrid",
+      "slug": "real-madrid",
+      "publishedAt": "2024-02-06 20:05:41.894+00",
+      "createdAt": "2024-02-06T20:05:41.917Z",
+      "updatedAt": "2026-04-17T20:16:23.082174Z"
+     }
+    ]
+   },
+   {
+    "title": "Copa del Rey Final: Real Madrid vs. Barcelona",
+    "slug": "copa-del-rey-final-real-madrid-vs-barcelona",
+    "startDate": "2025-04-24T21:20:31.126412Z",
+    "endDate": "2025-04-27T12:00:00Z",
+    "closed": true,
+    "tags": [
+     {
+      "id": "100350",
+      "label": "Soccer",
+      "slug": "soccer",
+      "forceShow": false,
+      "createdAt": "2024-08-21T16:31:18.953213Z",
+      "updatedAt": "2026-04-17T20:33:09.955379Z"
+     },
+     {
+      "id": "100639",
+      "label": "Games",
+      "slug": "games",
+      "forceShow": false,
+      "createdAt": "2024-09-23T22:41:37.670714Z",
+      "updatedAt": "2026-03-09T22:28:03.358133Z"
+     },
+     {
+      "id": "1243",
+      "label": "real madrid",
+      "slug": "real-madrid",
+      "publishedAt": "2024-02-06 20:05:41.894+00",
+      "createdAt": "2024-02-06T20:05:41.917Z",
+      "updatedAt": "2026-04-17T20:16:23.082174Z"
+     },
+     {
+      "id": "780",
+      "label": "La Liga",
+      "slug": "la-liga",
+      "forceShow": false,
+      "publishedAt": "2023-12-21 19:28:09.258+00",
+      "createdAt": "2023-12-21T19:28:09.265Z",
+      "updatedAt": "2026-09-14T20:00:02.848469Z"
+     },
+     {
+      "id": "1249",
+      "label": "barcelona",
+      "slug": "barcelona",
+      "publishedAt": "2024-02-06 20:06:37.768+00",
+      "createdAt": "2024-02-06T20:06:37.782Z",
+      "updatedAt": "2026-04-17T20:43:53.783805Z"
+     }
+    ]
+   },
+   {
+    "title": "UCL: Atalanta vs. Real Madrid",
+    "slug": "ucl-atalanta-vs-real-madrid",
+    "startDate": "2024-12-09T23:27:23.587477Z",
+    "endDate": "2024-12-11T12:00:00Z",
+    "closed": true,
+    "tags": [
+     {
+      "id": "100991",
+      "label": "Atalanta",
+      "slug": "atalanta",
+      "createdAt": "2024-10-21T22:10:47.329589Z",
+      "updatedAt": "2026-04-17T17:20:20.241433Z"
+     },
+     {
+      "id": "100639",
+      "label": "Games",
+      "slug": "games",
+      "forceShow": false,
+      "createdAt": "2024-09-23T22:41:37.670714Z",
+      "updatedAt": "2026-03-09T22:28:03.358133Z"
+     },
+     {
+      "id": "100350",
+      "label": "Soccer",
+      "slug": "soccer",
+      "forceShow": false,
+      "createdAt": "2024-08-21T16:31:18.953213Z",
+      "updatedAt": "2026-04-17T20:33:09.955379Z"
+     },
+     {
+      "id": "1",
+      "label": "Sports",
+      "slug": "sports",
+      "forceShow": false,
+      "publishedAt": "2023-10-24 22:37:50.296+00",
+      "updatedBy": 15,
+      "createdAt": "2023-10-24T22:37:50.31Z",
+      "updatedAt": "2026-04-17T20:47:16.461062Z",
+      "forceHide": true
+     },
+     {
+      "id": "1234",
+      "label": "Champions League",
+      "slug": "champions-league",
+      "forceShow": false,
+      "publishedAt": "2024-02-06 20:04:23.286+00",
+      "createdAt": "2024-02-06T20:04:23.293Z",
+      "updatedAt": "2026-04-17T20:15:31.35869Z"
+     },
+     {
+      "id": "1243",
+      "label": "real madrid",
+      "slug": "real-madrid",
+      "publishedAt": "2024-02-06 20:05:41.894+00",
+      "createdAt": "2024-02-06T20:05:41.917Z",
+      "updatedAt": "2026-04-17T20:16:23.082174Z"
+     }
+    ]
+   },
+   {
+    "title": "UCL: Liverpool vs. Real Madrid",
+    "slug": "ucl-liverpool-vs-real-madrid-nov-27",
+    "startDate": "2024-11-26T22:30:08.603234Z",
+    "endDate": "2024-11-27T12:00:00Z",
+    "closed": true,
+    "tags": [
+     {
+      "id": "100993",
+      "label": "Liverpool",
+      "slug": "liverpool",
+      "createdAt": "2024-10-21T22:13:44.575221Z",
+      "updatedAt": "2026-04-17T21:12:06.178174Z"
+     },
+     {
+      "id": "1243",
+      "label": "real madrid",
+      "slug": "real-madrid",
+      "publishedAt": "2024-02-06 20:05:41.894+00",
+      "createdAt": "2024-02-06T20:05:41.917Z",
+      "updatedAt": "2026-04-17T20:16:23.082174Z"
+     },
+     {
+      "id": "100639",
+      "label": "Games",
+      "slug": "games",
+      "forceShow": false,
+      "createdAt": "2024-09-23T22:41:37.670714Z",
+      "updatedAt": "2026-03-09T22:28:03.358133Z"
+     },
+     {
+      "id": "100350",
+      "label": "Soccer",
+      "slug": "soccer",
+      "forceShow": false,
+      "createdAt": "2024-08-21T16:31:18.953213Z",
+      "updatedAt": "2026-04-17T20:33:09.955379Z"
+     },
+     {
+      "id": "1",
+      "label": "Sports",
+      "slug": "sports",
+      "forceShow": false,
+      "publishedAt": "2023-10-24 22:37:50.296+00",
+      "updatedBy": 15,
+      "createdAt": "2023-10-24T22:37:50.31Z",
+      "updatedAt": "2026-04-17T20:47:16.461062Z",
+      "forceHide": true
+     },
+     {
+      "id": "1234",
+      "label": "Champions League",
+      "slug": "champions-league",
+      "forceShow": false,
+      "publishedAt": "2024-02-06 20:04:23.286+00",
+      "createdAt": "2024-02-06T20:04:23.293Z",
+      "updatedAt": "2026-04-17T20:15:31.35869Z"
+     }
+    ]
+   },
+   {
+    "title": "Supercopa Final: Real Madrid vs. Barcelona",
+    "slug": "supercopa-final-real-madrid-vs-barcelona",
+    "startDate": "2025-01-10T17:26:59.848742Z",
+    "endDate": "2025-01-12T12:00:00Z",
+    "closed": true,
+    "tags": [
+     {
+      "id": "1",
+      "label": "Sports",
+      "slug": "sports",
+      "forceShow": false,
+      "publishedAt": "2023-10-24 22:37:50.296+00",
+      "updatedBy": 15,
+      "createdAt": "2023-10-24T22:37:50.31Z",
+      "updatedAt": "2026-04-17T20:47:16.461062Z",
+      "forceHide": true
+     },
+     {
+      "id": "100350",
+      "label": "Soccer",
+      "slug": "soccer",
+      "forceShow": false,
+      "createdAt": "2024-08-21T16:31:18.953213Z",
+      "updatedAt": "2026-04-17T20:33:09.955379Z"
+     },
+     {
+      "id": "1243",
+      "label": "real madrid",
+      "slug": "real-madrid",
+      "publishedAt": "2024-02-06 20:05:41.894+00",
+      "createdAt": "2024-02-06T20:05:41.917Z",
+      "updatedAt": "2026-04-17T20:16:23.082174Z"
+     },
+     {
+      "id": "1249",
+      "label": "barcelona",
+      "slug": "barcelona",
+      "publishedAt": "2024-02-06 20:06:37.768+00",
+      "createdAt": "2024-02-06T20:06:37.782Z",
+      "updatedAt": "2026-04-17T20:43:53.783805Z"
+     }
+    ]
+   }
+  ],
+  "raw": null
+ },
+ "laliga": {
+  "status": 200,
+  "cors": "*",
+  "count": 5,
+  "first": {
+   "title": "Florentino Perez out as Real Madrid president by December 31, 2026?",
+   "slug": "florentino-perez-out-as-real-madrid-president-by-december-31-2026",
+   "startDate": "2026-05-12T23:18:17.495307Z",
+   "endDate": "2027-01-01T04:59:00Z",
+   "gameStartTime": null,
+   "eventDate": null,
+   "seriesSlug": null
+  },
+  "markets": [
+   {
+    "question": "Florentino Perez out as Real Madrid president by December 31, 2026?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.0505\", \"0.9495\"]",
+    "groupItemTitle": "",
+    "sportsMarketType": null,
+    "slug": "florentino-perez-out-as-real-madrid-president-by-december-31-2026",
+    "volume": "125404.69475900002"
+   }
+  ],
+  "keys": [
+   "active",
+   "archived",
+   "automaticallyActive",
+   "closed",
+   "commentCount",
+   "competitive",
+   "createdAt",
+   "creationDate",
+   "cyom",
+   "deploying",
+   "description",
+   "enableNegRisk",
+   "enableOrderBook",
+   "endDate",
+   "eventMetadata",
+   "featured",
+   "icon",
+   "id",
+   "image",
+   "liquidity",
+   "liquidityClob",
+   "markets",
+   "negRiskAugmented",
+   "new",
+   "openInterest",
+   "pendingDeployment",
+   "resolutionSource",
+   "restricted",
+   "showAllOutcomes",
+   "showMarketImages",
+   "slug",
+   "startDate",
+   "tags",
+   "ticker",
+   "title",
+   "updatedAt",
+   "version",
+   "volume"
+  ]
+ }
+}
