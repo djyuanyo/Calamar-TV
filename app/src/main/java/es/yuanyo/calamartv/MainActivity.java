@@ -736,10 +736,11 @@ public class MainActivity extends Activity {
   final Runnable scoreRefresh=new Runnable(){public void run(){
     if(!resumed)return;
     if(!scoresBusy){
-      Set<String> ids=new HashSet<>(); for(Catalog.Channel e:Catalog.events(channels,custom))if(!e.matchUrl.isEmpty()&&!e.matchId.isEmpty()&&MatchScores.shouldPoll(e.matchId,System.currentTimeMillis()))ids.add(e.matchId); collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      Set<String> ids=new HashSet<>(); Map<String,String> starts=new HashMap<>(); for(Catalog.Channel e:Catalog.events(channels,custom))if(!e.matchUrl.isEmpty()&&!e.matchId.isEmpty()&&MatchScores.shouldPoll(e.matchId,System.currentTimeMillis())){ids.add(e.matchId);starts.put(e.matchId,e.startAt);} collectScoreIds(root,ids); collectScoreIds(multiPicker,ids);
+      for(String id:ids)if(!starts.containsKey(id))starts.put(id,"");
       if(!ids.isEmpty()) { scoresBusy=true; new Thread(() -> {
-        Map<String,MatchScores.Result> results=new HashMap<>();
-        for(String id:ids)try{results.put(id,MatchScores.fetch(id));}catch(Exception ignored){results.put(id,null);}
+        // One ESPN scoreboard per day for every card, not one whole summary per match.
+        Map<String,MatchScores.Result> results=MatchScores.fetchAll(starts);
         runOnUiThread(() -> {scoresBusy=false;matchResults.putAll(results);if(resumed){updateScores(root);updateScores(multiPicker);pruneFinishedEvents();} });
       }).start(); }
     }

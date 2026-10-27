@@ -1,6 +1,6 @@
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
-import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
+import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
@@ -142,18 +142,26 @@ const pollableEvents = (custom, now = Date.now()) => catalogEvents(custom).filte
 let scoreBusy = false;
 async function refreshScores() {
   if (scoreBusy || document.hidden) return;
-  const ids = [...new Set([...pollableEvents(state.custom).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])].filter(id => shouldPollMatch(id));
+  const starts = new Map();
+  for (const e of pollableEvents(state.custom)) if (e.matchUrl && e.matchId) starts.set(String(e.matchId), e.startAt || '');
+  for (const n of document.querySelectorAll('[data-match-id]')) if (!starts.get(n.dataset.matchId)) starts.set(n.dataset.matchId, n.dataset.matchStart || '');
+  for (const id of [...starts.keys()]) if (!shouldPollMatch(id)) starts.delete(id);
+  if (!starts.size) return;
   scoreBusy = true;
-  try { await Promise.allSettled(ids.map(async id => {
-    let result;
-    try { result = await fetchMatch(id); matchScores.set(id, result); }
-    catch { result = { text: 'Marcador no disponible', live: false }; matchScores.delete(id); }
-    for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
-      const scheduled = result.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
-      node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : result.text;
-      node.classList.toggle('live', result.live); node.classList.toggle('upcoming', scheduled);
+  try {
+    // One ESPN scoreboard per day for all the cards, not one whole summary per match.
+    const results = await fetchScores(starts).catch(() => new Map());
+    for (const id of starts.keys()) {
+      const result = results.get(id);
+      if (result) matchScores.set(id, result); else if (!matchScores.has(id)) continue;
+      const shown = result || matchScores.get(id);
+      for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
+        const scheduled = shown.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
+        node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : shown.text;
+        node.classList.toggle('live', shown.live); node.classList.toggle('upcoming', scheduled);
+      }
     }
-  })); } finally { scoreBusy = false; syncEventExpiry(); }
+  } finally { scoreBusy = false; syncEventExpiry(); }
 }
 let expiryTimer, expiredEvents = '';
 function syncEventExpiry() {

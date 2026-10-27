@@ -301,3 +301,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
   - **Evolución en Polymarket**: gráfica de las tres probabilidades en el último día (`clob.polymarket.com/prices-history`, un punto cada 10 minutos).
   - Mercados de goles de Polymarket: **+1,5**, **+2,5** y **+3,5 goles** y **ambos marcan** (del evento «More Markets» del partido).
   - Pie: «Número: probabilidad en Polymarket · barra: votos de la porra (N votos)» y enlace a Polymarket.
+
+## Marcadores de las tarjetas sin saturar ESPN (2.20.34)
+
+- Con los partidos importados, la web pedía cada 30 segundos el resumen completo de ESPN (unos 440 KB) de **cada** tarjeta. ESPN cortaba las peticiones (sin cabecera CORS) y el partido abierto se quedaba sin estadísticas: «No se pudieron cargar los datos del partido».
+- Ahora los marcadores de las tarjetas salen del **marcador del día** de ESPN (`scoreboard?dates=…`, una petición por día para todos los partidos). Solo los que no aparecen ahí (algunas copas) se piden uno a uno, cuatro por vuelta. El resumen completo solo se pide para el partido abierto. Igual en la web y en la app.
