@@ -1,0 +1,106 @@
+[
+ {
+  "title": "Villarreal CF vs. RCD Espanyol de Barcelona",
+  "kickoff": "2026-10-30T20:00:00Z",
+  "asked": [
+   "Villarreal",
+   "Espanyol"
+  ],
+  "odds": [
+   68,
+   19,
+   13
+  ]
+ },
+ {
+  "title": "Levante UD vs. Club Atlético de Madrid",
+  "kickoff": "2026-10-31T13:00:00Z",
+  "asked": [
+   "Levante",
+   "Atlético Madrid"
+  ],
+  "odds": [
+   19,
+   21,
+   60
+  ]
+ },
+ {
+  "title": "Rayo Vallecano de Madrid vs. RC Celta de Vigo",
+  "kickoff": "2026-10-31T15:15:00Z",
+  "asked": [
+   "Rayo Vallecano",
+   "Celta Vigo"
+  ],
+  "odds": [
+   40,
+   29,
+   31
+  ]
+ },
+ {
+  "title": "Real Betis Balompié vs. Málaga CF",
+  "kickoff": "2026-10-31T17:30:00Z",
+  "asked": [
+   "Real Betis",
+   "Málaga"
+  ],
+  "odds": [
+   71,
+   17,
+   12
+  ]
+ },
+ {
+  "title": "FC Barcelona vs. Deportivo Alavés",
+  "kickoff": "2026-10-31T20:00:00Z",
+  "asked": [
+   "Barcelona",
+   "Alavés"
+  ],
+  "odds": [
+   88,
+   9,
+   3
+  ]
+ },
+ {
+  "title": "Getafe CF vs. Sevilla FC",
+  "kickoff": "2026-11-01T13:00:00Z",
+  "asked": [
+   "Getafe",
+   "Sevilla"
+  ],
+  "odds": [
+   30,
+   32,
+   38
+  ]
+ },
+ {
+  "title": "Real Racing Club vs. Real Madrid CF",
+  "kickoff": "2026-11-01T15:15:00Z",
+  "asked": [
+   "Real Racing Club",
+   "Real Madrid"
+  ],
+  "odds": [
+   7,
+   12,
+   81
+  ]
+ },
+ {
+  "title": "Elche CF vs. Valencia CF",
+  "kickoff": "2026-11-01T17:30:00Z",
+  "asked": [
+   "Elche",
+   "Valencia"
+  ],
+  "odds": [
+   41,
+   28,
+   31
+  ]
+ }
+]
