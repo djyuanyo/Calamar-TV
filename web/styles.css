@@ -1013,3 +1013,4 @@ label[hidden] { display: none; }
 .top-rank { grid-column: 1; justify-self: end; margin-right: -14px; font-size: clamp(90px, 9vw, 130px); line-height: .8; font-weight: 800; color: var(--bg); -webkit-text-stroke: 3px rgba(255,255,255,.55); letter-spacing: -.06em; z-index: 1; }
 .top-card:hover .poster-frame, .top-card:focus-visible .poster-frame { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--accent), 0 16px 34px rgba(0,0,0,.55); }
 @media (max-width: 720px) { .library-hero .hero-overview { -webkit-line-clamp: 2; font-size: 14px; } .top-rail { grid-auto-columns: 150px; } }
+.channel-options .channel-group { grid-column: 1 / -1; margin: 6px 0 0; font-weight: 700; color: var(--fg, #fff); }

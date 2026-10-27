@@ -132,14 +132,23 @@ public final class Catalog {
     Set<String> ids = new HashSet<>();
     List<Category> categories = categories(custom);
     JSONArray own = custom == null ? null : custom.optJSONArray("channels");
+    JSONArray list = tdt == null ? null : tdt.optJSONArray("channels");
+    Set<String> tdtIds = new HashSet<>();
+    if (list != null)
+      for (int i = 0; i < list.length(); i++) {
+        JSONObject o = list.optJSONObject(i);
+        if (o != null) tdtIds.add(o.optString("id"));
+      }
     if (own != null)
       for (int i = 0; i < own.length(); i++) {
         JSONObject o = own.optJSONObject(i);
         if (o == null || o.optBoolean("hidden")) continue;
-        Channel c = new Channel(o, true, categories);
+        // A copy of a TDT channel kept for an event (syncTdtCopies in catalog.js): the TDT list, always current, wins.
+        boolean copy = o.optBoolean("tdt");
+        if (copy && tdtIds.contains(o.optString("id"))) continue;
+        Channel c = new Channel(o, !copy, categories);
         if (!c.id.isEmpty() && c.playable() && ids.add(c.id)) out.add(c);
       }
-    JSONArray list = tdt == null ? null : tdt.optJSONArray("channels");
     if (list != null)
       for (int i = 0; i < list.length(); i++) {
         JSONObject o = list.optJSONObject(i);

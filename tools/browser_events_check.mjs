@@ -88,7 +88,7 @@ try {
   await page.getByLabel('Destacar en portada', { exact: true }).check();
   await page.locator('input[type=file]').setInputFiles({ name: 'portada.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') });
   await page.getByText('Portada preparada.', { exact: true }).waitFor();
-  await page.getByPlaceholder('Buscar entre tus canales creados').fill('One');
+  await page.getByPlaceholder('Buscar entre tus canales y los de TDT').fill('One');
   await page.getByRole('button', { name: 'Sports One', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published?.events.length === 1);
@@ -198,7 +198,7 @@ try {
   await page.locator('.item').filter({ hasText: 'Local vs visitante' }).getByRole('link', { name: 'Editar', exact: true }).click();
   await page.getByRole('heading', { name: 'Editar evento', exact: true }).waitFor();
   await page.getByLabel('Nombre del evento', { exact: true }).fill('Final');
-  await page.getByPlaceholder('Buscar entre tus canales creados').fill('Two');
+  await page.getByPlaceholder('Buscar entre tus canales y los de TDT').fill('Two');
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   console.log('Editar evento', await page.locator('form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent, name: form.querySelector('input[aria-label="Nombre del evento"]')?.value, published: window.__published.events.map(e => ({id:e.id,name:e.name})) })));
