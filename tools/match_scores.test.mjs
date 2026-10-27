@@ -110,3 +110,27 @@ test('the matches of ESPN around the event date can be listed to choose one by h
  assert.deepEqual(list.map(m=>[m.id,m.home,m.away]),[['401882870','Levante','Athletic Club'],['2','Levante','Athletic Club']]);
  assert.equal(googleSearchFor('Celtic','Celta Vigo'),'https://www.google.com/search?q=Celtic%20vs%20Celta%20Vigo');
 });
+
+test('card scores come from one scoreboard per day, and only the missing matches are asked one by one', async () => {
+  const { fetchScores } = await import('../web/match-scores.js');
+  const urls = [];
+  const event = (id, home, away) => ({ id, competitions: [{ id, date: '2026-10-27T20:00Z', status: { type: { state: 'in', name: 'STATUS_FIRST_HALF' }, displayClock: "30'" },
+    competitors: [{ homeAway: 'home', score: '1', team: { displayName: home } }, { homeAway: 'away', score: '0', team: { displayName: away } }] }] });
+  const fetcher = async (url) => {
+    urls.push(url);
+    if (url.includes('scoreboard')) return { ok: true, json: async () => ({ events: [event('11', 'Roma', 'Cagliari'), event('12', 'Torino', 'Como')] }) };
+    return { ok: true, json: async () => ({ header: event('99', 'Arosa', 'Pontevedra') }) };
+  };
+  const out = await fetchScores(new Map([['11', '2026-10-27T20:00:00Z'], ['12', '2026-10-27T20:00:00Z'], ['99', '2026-10-27T20:00:00Z']]), fetcher);
+  assert.equal(out.get('11').text, '1 – 0 · En juego · 30′');
+  assert.equal(out.get('99').home, 'Arosa');
+  assert.equal(urls.filter((u) => u.includes('scoreboard?dates=20261027')).length, 1);
+  assert.deepEqual(urls.filter((u) => u.includes('summary')).map((u) => u.split('event=')[1]), ['99']);
+});
+
+test('a match that cannot be read is reported as unavailable', async () => {
+  const { fetchScores } = await import('../web/match-scores.js');
+  const out = await fetchScores(new Map([['77', '2026-10-27T20:00:00Z']]), async () => { throw new Error('offline'); });
+  assert.equal(out.has('77'), true);
+  assert.equal(out.get('77'), null);
+});

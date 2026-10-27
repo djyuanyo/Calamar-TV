@@ -152,3 +152,40 @@ export async function fetchSummary(id, fetcher = globalThis.fetch) {
 export async function fetchMatch(id, fetcher = globalThis.fetch) {
   return rememberMatch(String(id), matchResult(await fetchSummary(id, fetcher)));
 }
+const boards = new Map();
+/** ESPN's scoreboard of one day (UTC): every match of that day in one answer, kept 30 seconds. */
+async function fetchBoard(day, fetcher) {
+  const old = boards.get(day);
+  if (old && Date.now() - old.at < 30000) return old.promise;
+  const promise = json(`${API}scoreboard?dates=${day}&limit=1000`, fetcher);
+  boards.set(day, { at: Date.now(), promise });
+  try { return await promise; } catch (e) { boards.delete(day); throw e; }
+}
+const SINGLE_LOOKUPS = 4;
+let lookupTurn = 0;
+/**
+ * The scores of many matches: one scoreboard per day instead of one whole summary per match (ESPN cuts a page
+ * that asks for dozens of summaries every 30 seconds, and then the open match loses its statistics too).
+ * Matches missing from the scoreboards (some cups) are asked one by one, a few each round.
+ * starts: Map(id -> kick-off). Returns Map(id -> result, or null when it could not be read).
+ */
+export async function fetchScores(starts, fetcher = globalThis.fetch) {
+  const out = new Map();
+  // ESPN files matches by its own (US Eastern) day: a late European match may be on the previous one.
+  const day = (at, timeZone) => { const d = new Date(Date.parse(at)); return Number.isFinite(d.getTime()) ? d.toLocaleDateString('sv-SE', { timeZone }).replace(/-/g, '') : ''; };
+  const days = [...new Set([...starts.values()].flatMap((at) => [day(at, 'UTC'), day(at, 'America/New_York')]).filter(Boolean))];
+  const wanted = new Set([...starts.keys()].map(String));
+  await Promise.allSettled(days.map(async (d) => {
+    const board = await fetchBoard(d, fetcher);
+    for (const e of board?.events || []) {
+      if (!wanted.has(String(e.id))) continue;
+      try { out.set(String(e.id), rememberMatch(String(e.id), matchResult(e))); } catch {}
+    }
+  }));
+  const all = [...wanted].filter((id) => !out.has(id));
+  const missing = all.length <= SINGLE_LOOKUPS ? all : Array.from({ length: SINGLE_LOOKUPS }, (_, i) => all[(lookupTurn + i) % all.length]);
+  lookupTurn = all.length ? (lookupTurn + SINGLE_LOOKUPS) % all.length : 0;
+  // null: asked now and not available (the card says so); absent: not asked in this round.
+  await Promise.allSettled(missing.map(async (id) => { try { out.set(id, await fetchMatch(id, fetcher)); } catch { out.set(id, null); } }));
+  return out;
+}

@@ -51,4 +51,22 @@ public class PolymarketTest {
     assertEquals(Polymarket.API + "?tag_id=100350&closed=false&limit=100&offset=100&end_date_min=2026-10-10T11%3A15%3A00Z&end_date_max=2026-10-10T12%3A45%3A00Z",
         Polymarket.query(kickoff, 1));
   }
+
+  @Test public void tokensFollowTheTeamsAndGoalsMarketsAreRead() throws Exception {
+    JSONObject e = event("Villarreal CF vs. RCD Espanyol", "Villarreal CF", "RCD Espanyol", "0.31", "0.305", "0.455");
+    for (int i = 0; i < 3; i++) e.getJSONArray("markets").getJSONObject(i).put("clobTokenIds", new JSONArray().put("100000000" + i).put("x").toString());
+    Polymarket.Odds same = Polymarket.pick(new JSONArray().put(e), "Villarreal", "Espanyol");
+    assertEquals("1000000000", same.tokens[0]); assertEquals("1000000002", same.tokens[2]);
+    Polymarket.Odds turned = Polymarket.pick(new JSONArray().put(e), "Espanyol", "Villarreal");
+    assertEquals("1000000002", turned.tokens[0]); assertEquals("1000000000", turned.tokens[2]);
+    JSONArray markets = new JSONArray()
+        .put(new JSONObject().put("sportsMarketType", "totals").put("line", 1.5).put("outcomePrices", "[\"0.84\",\"0.16\"]"))
+        .put(new JSONObject().put("sportsMarketType", "totals").put("line", 2.5).put("closed", true).put("outcomePrices", "[\"0.6\",\"0.4\"]"))
+        .put(new JSONObject().put("sportsMarketType", "both_teams_to_score").put("outcomePrices", "[\"0.57\",\"0.43\"]"));
+    Polymarket.goals(new JSONObject().put("markets", markets), same);
+    assertEquals(java.util.Arrays.asList("+1,5 goles", "Ambos marcan"), same.goalLabels);
+    assertEquals(java.util.Arrays.asList(84, 57), same.goalPcts);
+    double[][] s = Polymarket.series(new JSONObject("{\"history\":[{\"t\":1,\"p\":0.6},{\"t\":2,\"p\":0.655}]}"));
+    assertEquals(2, s.length); assertEquals(65.5, s[1][1], 0.001);
+  }
 }

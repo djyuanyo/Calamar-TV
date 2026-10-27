@@ -689,10 +689,9 @@ final class MatchCenter {
 
   void general(Model m) {
     loadVotes(m, false);
-    View poll = votesCard(m);
-    if (poll != null) add(poll);
     loadOdds(m);
-    if (odds != null && oddsKey.equals(extrasKey(m)) && !m.state.equals("finished")) add(oddsCard(m, odds));
+    View porra = porraCard(m);
+    if (porra != null) add(porra);
     if (!m.events.isEmpty() || m.live || m.state.equals("finished") || m.state.equals("halftime")) {
       LinearLayout box = card();
       box.addView(names(m));
@@ -922,12 +921,13 @@ final class MatchCenter {
     oddsKey = key; oddsAt = System.currentTimeMillis(); oddsBusy = true;
     new Thread(() -> {
       Polymarket.Odds found = null;
-      try { found = Polymarket.fetch(home, away, kickoff); } catch (Exception ignored) {}
+      try { found = Polymarket.fetch(home, away, kickoff); if (found != null) Polymarket.details(found); } catch (Exception ignored) {}
       final Polymarket.Odds result = found;
       handler.post(() -> {
         oddsBusy = false;
         if (!key.equals(oddsKey) || result == null) return;
-        boolean changed = odds == null || odds.home != result.home || odds.draw != result.draw || odds.away != result.away;
+        boolean changed = odds == null || odds.home != result.home || odds.draw != result.draw || odds.away != result.away
+            || !odds.goalPcts.equals(result.goalPcts) || (odds.history == null) != (result.history == null);
         odds = result;
         if (changed && model != null && tab.equals("general")) show(model);
       });
@@ -994,132 +994,206 @@ final class MatchCenter {
     }).start();
   }
 
-  View votesCard(Model m) {
+  static final int[] PORRA_COLORS = {0xff3b82f6, 0xff22c55e, 0xfff97316};
+
+  boolean porraCollapsed() { return votePrefs().getBoolean("porra-collapsed", false); }
+
+  TextView porraNote(String value) {
+    TextView t = text(value, 12, Ui.MUTED, false);
+    t.setPadding(0, dp(8), 0, 0);
+    return t;
+  }
+
+  /**
+   * The match's «porra», as on the web: the visitors' 1X2 poll and Polymarket's forecast in one card. Each
+   * side shows Polymarket's chance (big) and the share of the votes (bar); a tap votes until the match ends.
+   * Below, how Polymarket moved in the last day and its goals markets. Not on TV.
+   */
+  View porraCard(final Model m) {
     if (television()) return null;
     String key = Votes.matchKey(m.home.name, m.away.name, m.date);
-    if (key.isEmpty() || !key.equals(pollKey)) return null;
-    boolean open = Votes.open(m.state);
-    String pick = votePrefs().getString("pick:" + key, "");
-    long[] t = pollTotals == null ? null : Votes.tally(pollTotals[0], pollTotals[1], pollTotals[2]);
-    boolean shown = t != null && t[3] > 0 && (!pick.isEmpty() || !open);
-    if (!open && !shown) return null;
+    boolean poll = !key.isEmpty() && key.equals(pollKey);
+    final Polymarket.Odds o = odds != null && oddsKey.equals(extrasKey(m)) && !m.state.equals("finished") ? odds : null;
+    if (o == null && !poll) return null;
+    boolean open = poll && Votes.open(m.state);
+    String pick = poll ? votePrefs().getString("pick:" + key, "") : "";
+    long[] t = pollTotals == null || !poll ? new long[4] : Votes.tally(pollTotals[0], pollTotals[1], pollTotals[2]);
+    String[] picks = {"1", "X", "2"}, names = {m.home.name, "Empate", m.away.name};
+    long[] big = o != null ? new long[] {o.home, o.draw, o.away} : t[3] > 0 ? new long[] {t[0], t[1], t[2]} : null;
     LinearLayout box = card();
-    box.setContentDescription("Votación de los usuarios");
-    TextView title = text(open ? "¿Quién ganará? Vota" : "Lo que votaron los usuarios", 15, Ui.FG, true);
-    title.setPadding(0, 0, 0, dp(8));
-    box.addView(title);
-    String[] picks = {"1", "X", "2"}, labels = {m.home.name, "Empate", m.away.name};
-    int[] colors = {Ui.ACC, 0xff8a93a0, 0xff6fb7ff};
-    if (open) {
-      LinearLayout buttons = new LinearLayout(context);
-      for (int i = 0; i < 3; i++) {
-        final String p = picks[i];
-        boolean mine = p.equals(pick);
-        LinearLayout b = new LinearLayout(context);
-        b.setOrientation(LinearLayout.VERTICAL);
-        b.setGravity(Gravity.CENTER_HORIZONTAL);
-        b.setPadding(dp(6), dp(10), dp(6), dp(10));
-        b.setClickable(true); b.setFocusable(true);
-        b.setEnabled(!pollSending);
-        b.setAlpha(pollSending ? 0.6f : 1f);
-        b.setBackground(Ui.shape(context, mine ? 0x1fd6ff00 : SURFACE_2, 10, 1, mine ? Ui.ACC : LINE));
-        b.addView(text(p, 18, mine ? Ui.ACC : Ui.FG, true));
-        TextView name = text(labels[i], 12, Ui.MUTED, false);
-        name.setSingleLine(true);
-        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        b.addView(name);
-        b.setContentDescription("Votar " + p + ", " + labels[i] + (mine ? ", tu voto" : ""));
-        b.setOnClickListener(v -> vote(p));
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, -2, 1);
-        bp.setMargins(i == 0 ? 0 : dp(4), 0, i == 2 ? 0 : dp(4), 0);
-        buttons.addView(b, bp);
-      }
-      box.addView(buttons);
+    box.setContentDescription("Porra del partido");
+    LinearLayout head = new LinearLayout(context);
+    head.setGravity(Gravity.CENTER_VERTICAL);
+    TextView title = text("Porra · ¿Quién gana?", 15, Ui.FG, true);
+    title.setSingleLine(true);
+    head.addView(title, new LinearLayout.LayoutParams(-2, -2));
+    TextView fav = text("", 12, Ui.MUTED, false);
+    fav.setSingleLine(true);
+    fav.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    fav.setGravity(Gravity.END);
+    if (big != null) {
+      int top = 0;
+      for (int i = 1; i < 3; i++) if (big[i] > big[top]) top = i;
+      android.text.SpannableStringBuilder f = new android.text.SpannableStringBuilder("Favorito: ");
+      int start = f.length();
+      f.append(names[top]).append(" ").append(String.valueOf(big[top])).append("%");
+      f.setSpan(new android.text.style.StyleSpan(Typeface.BOLD), start, f.length(), 0);
+      f.setSpan(new android.text.style.ForegroundColorSpan(Ui.FG), start, f.length(), 0);
+      fav.setText(f);
     }
-    if (shown) {
-      for (int i = 0; i < 3; i++) {
-        LinearLayout row = new LinearLayout(context);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(i == 0 && open ? 10 : 4), 0, dp(4));
-        TextView label = text(picks[i] + " · " + labels[i], 13, Ui.FG, picks[i].equals(pick));
-        label.setSingleLine(true);
-        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        row.addView(label, new LinearLayout.LayoutParams(0, -2, 1.1f));
-        LinearLayout track = new LinearLayout(context);
-        track.setBackground(Ui.shape(context, SURFACE_2, 4, 0, 0));
-        View fill = new View(context);
-        fill.setBackground(Ui.shape(context, colors[i], 4, 0, 0));
-        track.addView(fill, new LinearLayout.LayoutParams(0, -1, t[i]));
-        track.addView(new View(context), new LinearLayout.LayoutParams(0, -1, 100 - t[i]));
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(8), 1.6f);
-        tp.setMargins(dp(8), 0, dp(8), 0);
-        row.addView(track, tp);
-        TextView value = text(t[i] + "%", 13, Ui.FG, true);
-        value.setGravity(Gravity.END);
-        row.addView(value, new LinearLayout.LayoutParams(dp(42), -2));
-        row.setContentDescription(picks[i] + ", " + labels[i] + ", " + t[i] + " por ciento");
-        box.addView(row);
-      }
-    }
-    String total = t != null && t[3] > 0 ? t[3] + (t[3] == 1 ? " voto" : " votos") : "";
-    String note = !pollError.isEmpty() ? pollError
-        : open ? (pick.isEmpty() ? "Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el final del partido."
-            : "Has votado " + pick + ". " + (total.isEmpty() ? "" : total + " · ") + "Puedes cambiarlo hasta el final del partido.")
-        : total + " · Votación cerrada al terminar el partido.";
-    TextView source = text(note, 11, Ui.MUTED, false);
-    source.setPadding(0, dp(8), 0, 0);
-    box.addView(source);
-    return box;
-  }
+    LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(0, -2, 1);
+    fp.setMargins(dp(8), 0, dp(4), 0);
+    head.addView(fav, fp);
+    final boolean collapsed = porraCollapsed();
+    TextView toggle = text(collapsed ? "⌄" : "⌃", 18, Ui.MUTED, false);
+    toggle.setGravity(Gravity.CENTER);
+    toggle.setClickable(true); toggle.setFocusable(true);
+    toggle.setContentDescription(collapsed ? "Mostrar la porra" : "Ocultar la porra");
+    toggle.setOnClickListener(v -> { votePrefs().edit().putBoolean("porra-collapsed", !collapsed).apply(); show(model); });
+    head.addView(toggle, new LinearLayout.LayoutParams(dp(36), dp(36)));
+    box.addView(head);
+    if (collapsed) return box;
 
-  static String volume(double v) {
-    if (v >= 1e6) return String.format(Locale.forLanguageTag("es-ES"), "%.1f M$", v / 1e6).replace(",0 ", " ");
-    if (v >= 1e3) return Math.round(v / 1e3) + " mil $";
-    return Math.round(v) + " $";
-  }
-
-  View oddsCard(Model m, Polymarket.Odds o) {
-    LinearLayout box = card();
-    box.setContentDescription("Pronóstico de Polymarket");
-    TextView title = text("Pronóstico de Polymarket", 15, Ui.FG, true);
-    title.setPadding(0, 0, 0, dp(6));
-    box.addView(title);
-    String[] labels = {m.home.name, "Empate", m.away.name};
-    int[] pct = {o.home, o.draw, o.away}, colors = {Ui.ACC, 0xff6b7480, HOME};
+    LinearLayout tiles = new LinearLayout(context);
+    tiles.setPadding(0, dp(8), 0, 0);
     for (int i = 0; i < 3; i++) {
-      LinearLayout row = new LinearLayout(context);
-      row.setGravity(Gravity.CENTER_VERTICAL);
-      row.setPadding(0, dp(4), 0, dp(4));
-      TextView label = text(labels[i], 13, Ui.FG, false);
+      final String p = picks[i];
+      boolean mine = p.equals(pick);
+      LinearLayout tile = new LinearLayout(context);
+      tile.setOrientation(LinearLayout.VERTICAL);
+      tile.setPadding(dp(9), dp(10), dp(9), dp(10));
+      tile.setBackground(Ui.shape(context, SURFACE_2, 12, mine ? 2 : 1, mine ? Ui.FG : LINE));
+      LinearLayout name = new LinearLayout(context);
+      name.setGravity(Gravity.CENTER_VERTICAL);
+      View dot = new View(context);
+      dot.setBackground(Ui.shape(context, PORRA_COLORS[i], 5, 0, 0));
+      LinearLayout.LayoutParams dp10 = new LinearLayout.LayoutParams(dp(10), dp(10));
+      dp10.setMargins(0, 0, dp(5), 0);
+      name.addView(dot, dp10);
+      TextView label = text(names[i], 13, Ui.FG, true);
       label.setSingleLine(true);
       label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      row.addView(label, new LinearLayout.LayoutParams(0, -2, 1.1f));
+      name.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+      tile.addView(name);
+      TextView value = text(big == null ? "–" : big[i] + "%", 22, Ui.FG, true);
+      value.setPadding(0, dp(4), 0, dp(4));
+      tile.addView(value);
+      LinearLayout votes = new LinearLayout(context);
+      votes.setGravity(Gravity.CENTER_VERTICAL);
       LinearLayout track = new LinearLayout(context);
-      track.setBackground(Ui.shape(context, SURFACE_2, 4, 0, 0));
+      track.setBackground(Ui.shape(context, 0x1fffffff, 2, 0, 0));
       View fill = new View(context);
-      fill.setBackground(Ui.shape(context, colors[i], 4, 0, 0));
-      track.addView(fill, new LinearLayout.LayoutParams(0, -1, Math.max(pct[i], 0)));
-      track.addView(new View(context), new LinearLayout.LayoutParams(0, -1, Math.max(100 - pct[i], 0)));
-      LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(8), 1.6f);
-      tp.setMargins(dp(8), 0, dp(8), 0);
-      row.addView(track, tp);
-      TextView value = text(pct[i] + "%", 13, Ui.FG, true);
-      value.setGravity(Gravity.END);
-      row.addView(value, new LinearLayout.LayoutParams(dp(42), -2));
-      row.setContentDescription(labels[i] + ", " + pct[i] + " por ciento");
-      box.addView(row);
+      fill.setBackground(Ui.shape(context, PORRA_COLORS[i], 2, 0, 0));
+      track.addView(fill, new LinearLayout.LayoutParams(0, -1, t[i]));
+      track.addView(new View(context), new LinearLayout.LayoutParams(0, -1, 100 - t[i]));
+      votes.addView(track, new LinearLayout.LayoutParams(0, dp(4), 1));
+      TextView share = text(t[i] + "%", 11, Ui.MUTED, false);
+      share.setGravity(Gravity.END);
+      votes.addView(share, new LinearLayout.LayoutParams(dp(34), -2));
+      tile.addView(votes);
+      String spoken = names[i] + (o != null ? ", " + big[i] + " por ciento en Polymarket" : "") + ", " + t[i] + " por ciento de los votos" + (mine ? ", tu voto" : "");
+      if (open) {
+        tile.setClickable(true); tile.setFocusable(true);
+        tile.setEnabled(!pollSending);
+        tile.setAlpha(pollSending ? 0.6f : 1f);
+        tile.setContentDescription("Votar " + spoken);
+        tile.setOnClickListener(v -> vote(p));
+      } else tile.setContentDescription(spoken);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+      lp.setMargins(i == 0 ? 0 : dp(4), 0, i == 2 ? 0 : dp(4), 0);
+      tiles.addView(tile, lp);
     }
-    TextView source = text("Probabilidades del mercado de predicción Polymarket · " + volume(o.volume) + " en juego · Ver en Polymarket", 11, Ui.MUTED, false);
-    source.setPadding(0, dp(8), 0, 0);
-    if (o.url.startsWith("https://polymarket.com/")) {
-      source.setClickable(true);
-      source.setFocusable(true);
-      source.setOnClickListener(v -> {
+    box.addView(tiles);
+
+    if (o != null && o.history != null) {
+      TextView sub = text("Evolución en Polymarket", 12, Ui.MUTED, false);
+      sub.setPadding(0, dp(12), 0, dp(4));
+      box.addView(sub);
+      box.addView(new PorraChart(o.history), new LinearLayout.LayoutParams(-1, dp(128)));
+    }
+    if (o != null && !o.goalLabels.isEmpty()) {
+      LinearLayout goals = new LinearLayout(context);
+      goals.setPadding(0, dp(10), 0, 0);
+      int n = o.goalLabels.size();
+      for (int i = 0; i < n; i++) {
+        LinearLayout g = new LinearLayout(context);
+        g.setOrientation(LinearLayout.VERTICAL);
+        g.setPadding(dp(8), dp(8), dp(8), dp(8));
+        g.setBackground(Ui.shape(context, SURFACE_2, 10, 0, 0));
+        TextView gl = text(o.goalLabels.get(i), 11, Ui.MUTED, false);
+        gl.setMaxLines(2);
+        g.addView(gl);
+        g.addView(text(o.goalPcts.get(i) + "%", 16, Ui.FG, true));
+        g.setContentDescription(o.goalLabels.get(i) + ", " + o.goalPcts.get(i) + " por ciento");
+        LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(0, -1, 1);
+        gp.setMargins(i == 0 ? 0 : dp(3), 0, i == n - 1 ? 0 : dp(3), 0);
+        goals.addView(g, gp);
+      }
+      box.addView(goals);
+    }
+    String votes = t[3] + (t[3] == 1 ? " voto" : " votos");
+    TextView how = porraNote(o != null ? "Número: probabilidad en Polymarket · barra: votos de la porra (" + votes + ") · Ver en Polymarket" : "Votos de la porra (" + votes + ")");
+    if (o != null && o.url.startsWith("https://polymarket.com/")) {
+      how.setClickable(true); how.setFocusable(true);
+      how.setOnClickListener(v -> {
         try { context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(o.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) {}
       });
     }
-    box.addView(source);
+    box.addView(how);
+    if (poll) {
+      String state = !pollError.isEmpty() ? pollError : open ? (pick.isEmpty() ? "Toca un equipo para votar." : "Has votado " + pick + ". Puedes cambiarlo hasta el final del partido.") : "Votación cerrada.";
+      TextView note = porraNote(state);
+      if (!pollError.isEmpty()) note.setTextColor(0xffff8a8a);
+      box.addView(note);
+    }
     return box;
+  }
+
+  /** The three lines of Polymarket's chances over the last day, with 0, half and top marks, as on the web. */
+  final class PorraChart extends View {
+    final double[][][] h;
+    final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    PorraChart(double[][][] h) { super(context); this.h = h; setContentDescription("Evolución de las probabilidades en Polymarket"); }
+
+    @Override protected void onDraw(android.graphics.Canvas c) {
+      double from = Double.MAX_VALUE, to = -Double.MAX_VALUE, max = 0;
+      for (double[][] s : h) for (double[] p : s) { from = Math.min(from, p[0]); to = Math.max(to, p[0]); max = Math.max(max, p[1]); }
+      int top = (int) Math.min(100, Math.max(80, Math.ceil(max / 20) * 20));
+      float left = dp(34), right = getWidth() - dp(2), y0 = dp(6), y1 = getHeight() - dp(22);
+      paint.setTextSize(dp(10));
+      paint.setTextAlign(android.graphics.Paint.Align.RIGHT);
+      paint.setStyle(android.graphics.Paint.Style.FILL);
+      int[] marks = {top, top / 2, 0};
+      for (int mark : marks) {
+        float y = y1 - (y1 - y0) * mark / top;
+        paint.setColor(0x1affffff);
+        c.drawRect(left, y, right, y + 1, paint);
+        paint.setColor(Ui.MUTED);
+        c.drawText(mark + "%", left - dp(6), y + dp(4), paint);
+      }
+      paint.setStyle(android.graphics.Paint.Style.STROKE);
+      paint.setStrokeWidth(dp(2));
+      paint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+      for (int i = 0; i < 3; i++) {
+        android.graphics.Path path = new android.graphics.Path();
+        for (int j = 0; j < h[i].length; j++) {
+          float x = (float) (left + (right - left) * (to > from ? (h[i][j][0] - from) / (to - from) : 0));
+          float y = (float) (y1 - (y1 - y0) * h[i][j][1] / top);
+          if (j == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        }
+        paint.setColor(PORRA_COLORS[i]);
+        c.drawPath(path, paint);
+      }
+      paint.setStyle(android.graphics.Paint.Style.FILL);
+      paint.setColor(Ui.MUTED);
+      paint.setTextSize(dp(11));
+      SimpleDateFormat f = new SimpleDateFormat(System.currentTimeMillis() - from * 1000 > 20 * 3600000L ? "d MMM HH:mm" : "HH:mm", Locale.forLanguageTag("es-ES"));
+      f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+      paint.setTextAlign(android.graphics.Paint.Align.LEFT);
+      c.drawText(f.format(new Date((long) (from * 1000))), left, getHeight() - dp(4), paint);
+      paint.setTextAlign(android.graphics.Paint.Align.RIGHT);
+      c.drawText("Ahora", right, getHeight() - dp(4), paint);
+    }
   }
 
   static byte[] readAll(InputStream in) throws java.io.IOException {

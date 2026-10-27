@@ -1,8 +1,8 @@
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
-import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
+import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
-import { fetchOdds } from './polymarket.js';
+import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
@@ -142,18 +142,27 @@ const pollableEvents = (custom, now = Date.now()) => catalogEvents(custom).filte
 let scoreBusy = false;
 async function refreshScores() {
   if (scoreBusy || document.hidden) return;
-  const ids = [...new Set([...pollableEvents(state.custom).filter(e => e.matchUrl && e.matchId).map(e => e.matchId), ...[...document.querySelectorAll('[data-match-id]')].map(n => n.dataset.matchId)])].filter(id => shouldPollMatch(id));
+  const starts = new Map();
+  for (const e of pollableEvents(state.custom)) if (e.matchUrl && e.matchId) starts.set(String(e.matchId), e.startAt || '');
+  for (const n of document.querySelectorAll('[data-match-id]')) if (!starts.get(n.dataset.matchId)) starts.set(n.dataset.matchId, n.dataset.matchStart || '');
+  for (const id of [...starts.keys()]) if (!shouldPollMatch(id)) starts.delete(id);
+  if (!starts.size) return;
   scoreBusy = true;
-  try { await Promise.allSettled(ids.map(async id => {
-    let result;
-    try { result = await fetchMatch(id); matchScores.set(id, result); }
-    catch { result = { text: 'Marcador no disponible', live: false }; matchScores.delete(id); }
-    for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
-      const scheduled = result.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
-      node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : result.text;
-      node.classList.toggle('live', result.live); node.classList.toggle('upcoming', scheduled);
+  try {
+    // One ESPN scoreboard per day for all the cards, not one whole summary per match.
+    const results = await fetchScores(starts).catch(() => new Map());
+    for (const id of starts.keys()) {
+      if (!results.has(id)) continue;
+      const result = results.get(id);
+      if (result) matchScores.set(id, result); else matchScores.delete(id);
+      const shown = result || { text: 'Marcador no disponible', live: false };
+      for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
+        const scheduled = shown.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
+        node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : shown.text;
+        node.classList.toggle('live', shown.live); node.classList.toggle('upcoming', scheduled);
+      }
     }
-  })); } finally { scoreBusy = false; syncEventExpiry(); }
+  } finally { scoreBusy = false; syncEventExpiry(); }
 }
 let expiryTimer, expiredEvents = '';
 function syncEventExpiry() {
@@ -939,7 +948,10 @@ function loadOdds() {
   if (matchOdds.busy || (matchOdds.key === key && Date.now() - matchOdds.at < 120000)) return;
   if (matchOdds.key !== key) matchOdds.data = null;
   Object.assign(matchOdds, { key, at: Date.now(), busy: true });
-  fetchOdds(m.home.name, m.away.name, m.date).catch(() => null).then((odds) => {
+  fetchOdds(m.home.name, m.away.name, m.date).catch(() => null).then(async (found) => {
+    // The goals markets and how the chances moved come with it (they fail alone, without hiding the rest).
+    const [goals, history] = found ? await Promise.all([fetchGoalMarkets(found.slug).catch(() => []), fetchHistory(found.tokens).catch(() => null)]) : [[], null];
+    const odds = found && { ...found, goals, history };
     matchOdds.busy = false;
     if (matchOdds.key !== key) return;
     const changed = JSON.stringify(odds) !== JSON.stringify(matchOdds.data);
@@ -978,11 +990,17 @@ function vote(pick) {
     paintMatch();
   });
 }
+const PORRA_COLLAPSED = 'calamar-porra-collapsed';
+function porraCollapsed() { try { return localStorage.getItem(PORRA_COLLAPSED) === '1'; } catch { return false; } }
+function togglePorra() {
+  try { localStorage.setItem(PORRA_COLLAPSED, porraCollapsed() ? '0' : '1'); } catch {}
+  paintMatch();
+}
 function pollModel() {
   const key = matchModel ? matchKey(matchModel.home?.name, matchModel.away?.name, matchModel.date) : '';
   if (!key || matchPoll.key !== key) return null;
   return { open: votingOpen(matchModel), pick: myPick(key), tally: matchPoll.totals ? tally(matchPoll.totals) : null,
-    busy: matchPoll.sending, error: matchPoll.error, choose: vote };
+    busy: matchPoll.sending, error: matchPoll.error, choose: vote, collapsed: porraCollapsed(), toggle: togglePorra };
 }
 function paintMatch() {
   if (!matchModel) return;

@@ -292,3 +292,17 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - **Hay que subir el `calamar-lineups.php` nuevo al hosting.**
 
 - 2.20.33: el PHP decide cada cuánto refrescar por la hora de inicio (la lista de partidos del día se guarda 6 horas y su estado podía decir «sin empezar» con el partido en juego), y si API-Football corta por el límite de peticiones por minuto devuelve lo último guardado en vez de un error. Si API-Football no tiene la alineación de un partido (pasa en categorías inferiores), no hay fotos.
+
+## Porra del partido: votos y Polymarket en una sola tarjeta (2.20.34)
+
+- La votación de los usuarios y el pronóstico de Polymarket van juntos en la tarjeta **«Porra · ¿Quién gana?»** (web y app en el móvil, no en Android TV), con el diseño de las páginas de eventos conocidas:
+  - Cabecera con el **favorito** y un botón para plegar la tarjeta (se recuerda en cada dispositivo).
+  - Tres casillas (local, empate, visitante): el número grande es la **probabilidad en Polymarket** y la barra pequeña, el **% de votos de la porra**. Tocar una casilla vota (hasta el final del partido). Sin mercado en Polymarket, el número grande son los votos.
+  - **Evolución en Polymarket**: gráfica de las tres probabilidades en el último día (`clob.polymarket.com/prices-history`, un punto cada 10 minutos).
+  - Mercados de goles de Polymarket: **+1,5**, **+2,5** y **+3,5 goles** y **ambos marcan** (del evento «More Markets» del partido).
+  - Pie: «Número: probabilidad en Polymarket · barra: votos de la porra (N votos)» y enlace a Polymarket.
+
+## Marcadores de las tarjetas sin saturar ESPN (2.20.34)
+
+- Con los partidos importados, la web pedía cada 30 segundos el resumen completo de ESPN (unos 440 KB) de **cada** tarjeta. ESPN cortaba las peticiones (sin cabecera CORS) y el partido abierto se quedaba sin estadísticas: «No se pudieron cargar los datos del partido».
+- Ahora los marcadores de las tarjetas salen del **marcador del día** de ESPN (`scoreboard?dates=…`, una petición por día para todos los partidos). Solo los que no aparecen ahí (algunas copas) se piden uno a uno, cuatro por vuelta. El resumen completo solo se pide para el partido abierto. Igual en la web y en la app.
