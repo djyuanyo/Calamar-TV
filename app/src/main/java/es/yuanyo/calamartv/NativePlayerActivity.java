@@ -228,7 +228,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     LinearLayout.LayoutParams buttonSize = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40));
     buttonSize.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
     String audienceTarget=getIntent().getStringExtra("audience_target");
-    if(AudienceModel.validTarget(audienceTarget)){
+    // Films and series count in the statistics, but their player shows no «people watching».
+    if(AudienceModel.validTarget(audienceTarget)&&audienceTarget.startsWith("l:")){
+      audience=new AudienceSession(this,audienceTarget,null,null);
+    } else if(AudienceModel.validTarget(audienceTarget)){
       viewersBadge=Ui.audienceBadge(this,12);viewersBadge.setContentDescription("Consultando espectadores");
       controls.addView(viewersBadge,new LinearLayout.LayoutParams(-2,-2));
       audience=new AudienceSession(this,audienceTarget,getIntent().getStringExtra("audience_channel"), viewers -> {

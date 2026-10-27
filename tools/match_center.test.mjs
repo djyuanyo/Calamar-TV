@@ -120,17 +120,3 @@ test('photos and ratings go to ESPN players by side and number', async () => {
   assert.equal(withPlayerExtras(m, null), m);
   assert.deepEqual([8.4, 7.3, 6.5, 5.2].map(ratingClass), ['mc-r8', 'mc-r7', 'mc-r6', 'mc-r5']);
 });
-
-test('statistics ESPN leaves at 0 are taken from API-Football', async () => {
-  const { statsMissing, withExtraStats } = await import('../web/match-center.js');
-  const zero = (key, h = 0, a = 0) => ({ key, homeValue: h, awayValue: a });
-  const m = { source: 'espn', state: 'live', stats: [zero('possessionPct'), zero('totalShots'), zero('yellowCards', 1, 2)] };
-  assert.equal(statsMissing(m), true);
-  assert.equal(statsMissing({ ...m, stats: [zero('possessionPct', 55, 45)] }), false);
-  assert.equal(statsMissing({ ...m, state: 'scheduled' }), false);
-  assert.equal(statsMissing({ ...m, source: 'event' }), false);
-  const filled = withExtraStats(m, { home: { possessionPct: '61%', totalShots: '14', yellowCards: '1' }, away: { possessionPct: '39%', totalShots: '6', yellowCards: '2' } });
-  assert.equal(filled.statsSource, 'API-Football');
-  assert.deepEqual(filled.stats.map((s) => [s.label, s.home, s.away]), [['Posesión', '61%', '39%'], ['Tiros', '14', '6'], ['Tarjetas amarillas', '1', '2']]);
-  assert.equal(withExtraStats(m, { home: {}, away: {} }), m);
-});

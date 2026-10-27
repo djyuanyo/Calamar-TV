@@ -6,7 +6,9 @@ import java.util.*;
 /** Firestore audience wire format, identical to web/audience.js. No user identity is recorded. */
 final class AudienceModel {
   private AudienceModel() {}
-  static boolean validTarget(String target){return target!=null&&target.matches("[ce]:[^|/]{1,200}");}
+  static boolean validTarget(String target){return target!=null&&target.matches("[cel]:[^|/]{1,200}");}
+  /** A film or series (all its episodes): «l:<id>», as on the web. */
+  static String libraryTarget(String id){String out="l:"+id;return id==null||id.isEmpty()||!validTarget(out)?null:out;}
   static String target(boolean event,String id){String out=(event?"e:":"c:")+id;return id==null||id.isEmpty()||!validTarget(out)?null:out;}
   static long minute(long now){return now/60000;}
   /** Same window as web/audience.js: viewers beat every 3 minutes, so 4 minutes back and 1 ahead count. */
@@ -20,5 +22,7 @@ final class AudienceModel {
     for(Map<String,Object> data:docs){Object at=data.get("minute"),target=data.get("target");if(!(at instanceof Number)||!(target instanceof String)||!validTarget((String)target))continue;long m=((Number)at).longValue();if(m<minute+FROM||m>minute+TO)continue;String key=(String)target;out.put(key,out.containsKey(key)?out.get(key)+1:1L);}return out;
   }
   static String day(long now){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.ROOT);f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));return f.format(new Date(now));}
-  static String visitKey(boolean event,String id){String clean=id.replaceAll("[^A-Za-z0-9_-]","_");return (event?"e_":"c_")+clean.substring(0,Math.min(140,clean.length()));}
+  static String visitKey(boolean event,String id){return visitKey(event?'e':'c',id);}
+  /** c_ channel, e_ event, l_ film or series: the visit counter of a target («c:…», «e:…», «l:…»). */
+  static String visitKey(char kind,String id){String clean=id.replaceAll("[^A-Za-z0-9_-]","_");return kind+"_"+clean.substring(0,Math.min(140,clean.length()));}
 }

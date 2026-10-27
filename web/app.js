@@ -1,7 +1,7 @@
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
-import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, statsMissing, withExtraStats, LINEUPS_ENDPOINT } from './match-center.js';
+import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
@@ -795,16 +795,20 @@ function startAudience(c, visit = true) {
   stopAudience();
   const session = { target, id: sessionId(), timers: [] };
   watching = session;
+  if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
-  const count = () => shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
+  // Films and series count in the statistics too, but their player shows no «people watching».
+  const count = () => c.vod ? Promise.resolve() : shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
   const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
   beat().then(() => { if (live()) count(); });
-  session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
+  session.timers.push(setInterval(beat, HEARTBEAT_MS));
+  if (!c.vod) session.timers.push(setInterval(count, COUNT_MS));
   // One visit per opening; refreshes of the same player are not new visits. An event also counts
   // as a visit to the channel it plays on. The rules accept one counter per write, so each goes alone.
   if (visit) {
     const day = madridDay();
-    const keys = c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
+    const keys = c.vod ? [visitKey('library', c.libraryId || c.id)]
+      : c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
     shared().then(async (f) => { for (const key of keys) await f.recordVisit(day, key); }).catch(() => {});
   }
 }
@@ -947,25 +951,6 @@ function loadPlayerExtras() {
     if (playerExtras.data) paintMatch();
   });
 }
-// Statistics from API-Football (through the hosting) when ESPN leaves them at 0, as in small cup ties:
-// asked with the General or Statistics tab open, at most every 5 minutes.
-const extraStats = { key: '', at: 0, data: null, busy: false };
-function loadExtraStats() {
-  const m = matchModel;
-  if (!statsMissing(m) || !['general', 'stats'].includes(matchTab) || !m.home?.name || !m.away?.name || !m.date) return;
-  const key = `${m.home.name}|${m.away.name}|${m.date.slice(0, 10)}`;
-  if (extraStats.busy || (extraStats.key === key && Date.now() - extraStats.at < 300000)) return;
-  if (extraStats.key !== key) extraStats.data = null;
-  Object.assign(extraStats, { key, at: Date.now(), busy: true });
-  const url = `${LINEUPS_ENDPOINT}?home=${encodeURIComponent(m.home.name)}&away=${encodeURIComponent(m.away.name)}&date=${m.date.slice(0, 10)}&stats=1`;
-  fetch(url, { cache: 'no-store', referrerPolicy: 'no-referrer' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
-    extraStats.busy = false;
-    if (extraStats.key !== key || !data?.stats) return;
-    const changed = JSON.stringify(data.stats) !== JSON.stringify(extraStats.data);
-    extraStats.data = data.stats;
-    if (changed) paintMatch();
-  });
-}
 // Polymarket's odds of the match (home, draw, away), asked at most every 2 minutes until it ends.
 const matchOdds = { key: '', at: 0, data: null, busy: false };
 function loadOdds() {
@@ -1029,19 +1014,15 @@ function pollModel() {
   return { open: votingOpen(matchModel), pick: myPick(key), tally: matchPoll.totals ? tally(matchPoll.totals) : null,
     busy: matchPoll.sending, error: matchPoll.error, choose: vote, collapsed: porraCollapsed(), toggle: togglePorra };
 }
-function statsWithExtra(m) {
-  return statsMissing(m) && extraStats.key === `${m.home?.name}|${m.away?.name}|${String(m.date || '').slice(0, 10)}` ? withExtraStats(m, extraStats.data) : m;
-}
 function paintMatch() {
   if (!matchModel) return;
   loadPlayerExtras();
-  loadExtraStats();
   loadOdds();
   loadVotes();
   const focused = matchPanel.contains(document.activeElement) ? document.activeElement.id : '';
   const extras = playerExtras.key === `${matchModel.home?.name}|${matchModel.away?.name}|${String(matchModel.date || '').slice(0, 10)}` ? playerExtras.data : null;
   const odds = matchOdds.key === `${matchModel.home?.name}|${matchModel.away?.name}|${matchModel.date}` ? matchOdds.data : null;
-  matchPanel.replaceChildren(...renderMatchCenter(el, { ...withPlayerExtras(statsWithExtra(matchModel), extras), odds, votes: pollModel() }, matchTab, (tab, focus) => {
+  matchPanel.replaceChildren(...renderMatchCenter(el, { ...withPlayerExtras(matchModel, extras), odds, votes: pollModel() }, matchTab, (tab, focus) => {
     matchTab = tab; paintMatch();
     if (focus) document.getElementById(`mc-tab-${tab}`)?.focus();
   }).filter(Boolean));
@@ -1140,18 +1121,19 @@ function syncLibraryNav() {
 }
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);
-  if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
+  // While the library is hidden its lists are not public, but a film's or series' own link still opens it.
+  if (!libraryShown() && !itemId) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
   if (!itemId) view.replaceChildren(el('p', { class: 'status', role: 'status' }, `Cargando ${section.label.toLowerCase()}…`));
   let library;
   try { library = await fetchLibrary(); }
   catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
   if (version !== routeVersion) return;
   // Only the administrator gets here while it is hidden: say so, so it is not mistaken for public.
-  const hiddenNote = libraryVisible(state.custom) ? null
+  const hiddenNote = libraryVisible(state.custom) || !libraryAdmin ? null
     : el('p', { class: 'note library-hidden-note' }, 'Oculto para los usuarios: solo lo ves tú, como administrador. Actívalo en Administración → Pelis y series.');
   if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library)].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
-  if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...libraryPage(el, section, library)); return; }
+  if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
   const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
   const progress = loadProgress();
   const saved = (id) => progress[id] || null;

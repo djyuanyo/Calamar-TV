@@ -311,8 +311,14 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - Primera fila de la portada, justo debajo del carrusel destacado (web y app; los mismos eventos siguen también en la fila de su liga, como copia): los **eventos de hoy** (día de Madrid) que **tienen vídeo** (canal o enlaces), ordenados por hora de inicio. Los que no tienen canal todavía («Canal por confirmar») no salen. Un partido empezado antes de medianoche sigue en la fila mientras puede estar en juego.
 
-## Estadísticas de API-Football cuando ESPN viene a 0 (2.20.36)
+## Estadísticas solo de ESPN (2.20.37)
 
-- En los partidos pequeños (primeras rondas de copa, categorías inferiores) ESPN deja todas las estadísticas a 0 y solo cuenta las tarjetas. Entonces la web y la app las piden a **API-Football** por el hosting (`calamar-lineups.php?…&stats=1`, como las fotos de las alineaciones) y las muestran con los mismos nombres; abajo se indica «Estadísticas: API-Football». Se piden con la pestaña General o Estadísticas abierta, como mucho cada 5 minutos, y el hosting las guarda (5 minutos en juego, un día al terminar).
-- Si API-Football tampoco tiene el partido, se ve lo de ESPN con el aviso «ESPN solo tiene las tarjetas de este partido».
-- **Hay que subir el `calamar-lineups.php` nuevo al hosting.**
+- Se quita la consulta de estadísticas a API-Football (2.20.36): las estadísticas vuelven a salir solo de ESPN, el partido del enlace de la competición, como antes. Si ESPN no tiene las de un partido pequeño, salen como las da (a 0, con las tarjetas).
+- Las alineaciones siguen con las fotos y notas de API-Football (`calamar-lineups.php`).
+
+## Pelis y series: enlaces aunque estén ocultas y estadísticas propias (2.20.37)
+
+- Con la biblioteca oculta a los usuarios, sus listas siguen sin verse, pero **el enlace de una película o serie** (`#/peliculas/<id>`, sus capítulos y `…/ver`) se abre para cualquiera.
+- Las películas, series y documentales tienen **estadísticas propias**: en vivo (`l:<id>`) y visitas por día (`l_<id>`), todos los capítulos de una serie juntos. En Administración → Estadísticas salen en «Pelis y series» y suman al total. Web y app.
+- Su reproductor (web y app) **no muestra** «personas viendo».
+- **Hay que publicar las reglas nuevas** de `firebase/firestore.rules` en Firebase Console → Firestore → Reglas (aceptan `l:` y `l_`); sin ellas no se guardan las estadísticas de pelis y series.

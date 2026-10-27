@@ -28,7 +28,7 @@ final class AudienceSession {
     String session=UUID.randomUUID().toString().replace("-","");
     presence=db.collection("calamarAudience").document(session);
   }
-  void open(){if(opened||target==null)return;opened=true;generation++;handler.post(refresh);handler.post(heartbeat);}
+  void open(){if(opened||target==null)return;opened=true;generation++;if(count!=null)handler.post(refresh);handler.post(heartbeat);}
   void watching(boolean value){
     if(!opened||target==null||playing==value)return;
     playing=value;
@@ -44,13 +44,13 @@ final class AudienceSession {
   }
   private void removePresence(){writes=writes.continueWithTask(ignored -> presence.delete());writes.addOnCompleteListener(done -> {if(opened)readCount();});}
   private void readCount(){
-    if(counting||!opened)return;counting=true;final int version=generation;
+    if(count==null||counting||!opened)return;counting=true;final int version=generation;
     db.collection("calamarAudience").whereIn("beat",AudienceModel.beats(target,System.currentTimeMillis())).count().get(AggregateSource.SERVER)
       .addOnCompleteListener(task -> {counting=false;if(!opened||version!=generation)return;count.update(task.isSuccessful()?task.getResult().getCount():-1);});
   }
   private void recordVisits(){
     final String day=AudienceModel.day(System.currentTimeMillis());boolean event=target.startsWith("e:");
-    List<String> keys=new ArrayList<>();keys.add(AudienceModel.visitKey(event,target.substring(2)));
+    List<String> keys=new ArrayList<>();keys.add(AudienceModel.visitKey(target.charAt(0),target.substring(2)));
     if(event&&channelId!=null&&!channelId.isEmpty())keys.add(AudienceModel.visitKey(false,channelId));
     Task<Void> queue=Tasks.forResult(null);
     for(String key:keys)queue=queue.continueWithTask(ignored -> {

@@ -24,13 +24,13 @@ service cloud.firestore {
       allow delete, list: if false;
     }
     // Live viewers: one document per open player, refreshed every minute and deleted on close.
-    // Only the channel or event being watched is stored, never who is watching.
+    // Only the channel, event or film/series (l:) being watched is stored, never who is watching.
     function validPresence(session) {
       let p = request.resource.data;
       return session.matches('^[A-Za-z0-9]{20,40}$')
         && p.keys().hasAll(['target', 'minute', 'beat', 'updatedAt'])
         && p.keys().hasOnly(['target', 'minute', 'beat', 'updatedAt'])
-        && p.target is string && p.target.matches('^[ce]:[^|/]{1,200}$')
+        && p.target is string && p.target.matches('^[cel]:[^|/]{1,200}$')
         && p.minute is int && math.abs(p.minute * 60000 - request.time.toMillis()) <= 180000
         && p.beat == p.target + '|' + string(p.minute)
         && p.updatedAt == request.time;
@@ -40,14 +40,14 @@ service cloud.firestore {
       allow create, update: if validPresence(session);
       allow delete: if true;
     }
-    // Visits per Madrid day: anyone may add exactly one visit to one channel or event of today.
+    // Visits per Madrid day: anyone may add exactly one visit to one channel, event or film/series of today.
     // `last` names the counter being increased, because rules cannot read a key out of a set.
     function oneVisit(day, before) {
       let p = request.resource.data;
       let date = timestamp.date(int(day[0:4]), int(day[5:7]), int(day[8:10]));
       return day.matches('^20[0-9]{2}-[01][0-9]-[0-3][0-9]$')
         && math.abs(date.toMillis() - request.time.toMillis()) <= 172800000
-        && p.last is string && p.last.matches('^[ce]_[A-Za-z0-9_-]{1,140}$')
+        && p.last is string && p.last.matches('^[cel]_[A-Za-z0-9_-]{1,140}$')
         && p.diff(before).affectedKeys().hasOnly([p.last, 'last'])
         && p[p.last] == before.get(p.last, 0) + 1;
     }

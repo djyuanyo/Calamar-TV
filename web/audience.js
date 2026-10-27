@@ -16,8 +16,9 @@ const WINDOW = [-4, 1];
 
 export const minuteOf = (now = Date.now()) => Math.floor(now / 60000);
 
-/** 'c:la-1' for a channel, 'e:evento-…' for an event. */
+/** 'c:la-1' for a channel, 'e:evento-…' for an event, 'l:<id>' for a film or series (all its episodes). */
 export function audienceTarget(item) {
+  if (item.vod) return `l:${item.libraryId || item.id}`;
   return item.event ? `e:${item.eventId || item.id}` : `c:${item.id}`;
 }
 
@@ -42,7 +43,7 @@ export function sessionId() {
 
 /** Field name of a channel or event inside a daily visits document. */
 export function visitKey(kind, id) {
-  return `${kind === 'event' ? 'e' : 'c'}_${String(id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140)}`;
+  return `${kind === 'event' ? 'e' : kind === 'library' ? 'l' : 'c'}_${String(id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140)}`;
 }
 
 /** Calendar day in Madrid, the same day for every visitor: 2026-10-21. */
@@ -69,7 +70,8 @@ export function summarize(days, by = 'day', only = null) {
   for (const { id, data } of days) {
     const bucket = id.slice(0, size);
     for (const [key, value] of Object.entries(data || {})) {
-      if (!Number.isFinite(value) || value <= 0 || (only && key !== only && !(only.endsWith('_') && key.startsWith(only)))) continue;
+      const wanted = !only || (Array.isArray(only) ? only : [only]).some((o) => key === o || (o.endsWith('_') && key.startsWith(o)));
+      if (!Number.isFinite(value) || value <= 0 || !wanted) continue;
       totals.set(key, (totals.get(key) || 0) + value);
       buckets.set(bucket, (buckets.get(bucket) || 0) + value);
     }

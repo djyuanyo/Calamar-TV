@@ -53,12 +53,13 @@ test('anyone can report and count viewers without personal data', async () => {
   const db = env.unauthenticatedContext().firestore();
   await assertSucceeds(setDoc(doc(db, 'calamarAudience', session), beat()));
   await assertSucceeds(setDoc(doc(db, 'calamarAudience', session), beat({ target: 'e:evento-1' })));
+  await assertSucceeds(setDoc(doc(db, 'calamarAudience', session), beat({ target: 'l:mavatar' })));
   await assertSucceeds(getDocs(query(collection(db, 'calamarAudience'), where('beat', 'in', [`e:evento-1|${minute()}`]))));
   await assertSucceeds(deleteDoc(doc(db, 'calamarAudience', session)));
 });
 test('presence rejects extra fields, bad ids, forged beats and distant minutes', async () => {
   const db = env.unauthenticatedContext().firestore();
-  for (const invalid of [{ email: 'x@example.com' }, { target: 'x:la-1' }, { beat: 'c:other|1' }, { minute: minute() - 10 }, { minute: '1' }, { updatedAt: new Date(0) }]) {
+  for (const invalid of [{ email: 'x@example.com' }, { target: 'x:la-1' }, { target: 'v:la-1' }, { beat: 'c:other|1' }, { minute: minute() - 10 }, { minute: '1' }, { updatedAt: new Date(0) }]) {
     await assertFails(setDoc(doc(db, 'calamarAudience', session), beat(invalid)));
   }
   await assertFails(setDoc(doc(db, 'calamarAudience', 'short'), beat()));
@@ -69,6 +70,7 @@ test('visits add one to one key of today and only the admin reads them', async (
   const visit = (key, extra = {}) => ({ last: key, [key]: increment(1), ...extra });
   await assertSucceeds(setDoc(ref, visit('c_la-1'), { merge: true }));
   await assertSucceeds(setDoc(ref, visit('c_la-1'), { merge: true }));
+  await assertSucceeds(setDoc(ref, visit('l_mavatar'), { merge: true }));
   await assertSucceeds(setDoc(ref, visit('e_evento-1'), { merge: true }));
   await assertFails(setDoc(ref, visit('c_la-1', { 'c_la-1': increment(5) }), { merge: true }));
   await assertFails(setDoc(ref, visit('c_la-1', { 'c_la-2': increment(1) }), { merge: true }));
@@ -80,7 +82,7 @@ test('visits add one to one key of today and only the admin reads them', async (
   await assertFails(getDoc(ref));
   await assertFails(deleteDoc(ref));
   const stats = await assertSucceeds(getDoc(doc(admin(), 'calamarVisits', today())));
-  assert.deepEqual(stats.data(), { last: 'e_evento-1', 'c_la-1': 2, 'e_evento-1': 1 });
+  assert.deepEqual(stats.data(), { last: 'e_evento-1', 'c_la-1': 2, 'l_mavatar': 1, 'e_evento-1': 1 });
 });
 
 test('library parts: public read, admin writes valid parts only; settings are private to the admin', async () => {
