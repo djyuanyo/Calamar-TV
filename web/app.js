@@ -4,7 +4,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -385,6 +385,14 @@ function home() {
   scheduleStartRefresh(matches);
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
+  // «Eventos En Directo»: today's events with something to play, the first row of all.
+  const live = liveEvents(matches);
+  // The same events stay in their league's row too: the cards are copies of the same event.
+  if (live.length) {
+    const liveRail = rail(live, { wide: true, limit: live.length });
+    liveRail.classList.add('live-rail');
+    nodes.push(sectionHead(LIVE_ROW, el('span', {}, live.length === 1 ? '1 evento' : `${live.length} eventos`)), liveRail);
+  }
   // Films and episodes left half watched come right under the featured slider: those of this browser,
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];

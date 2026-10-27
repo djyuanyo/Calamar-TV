@@ -254,6 +254,27 @@ public final class Catalog {
     return out;
   }
 
+  public static final String LIVE_ROW = "Eventos En Directo";
+
+  /**
+   * «Eventos En Directo», the first row of the home page as on the web: today's events (Madrid day) that have
+   * something to play, in kick-off order; one that started before midnight stays while it may be on air.
+   */
+  public static List<Channel> liveEvents(List<Channel> events, long now) {
+    java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
+    f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+    String today = f.format(new Date(now));
+    List<Channel> out = new ArrayList<>();
+    for (Channel e : events) {
+      if (!e.event || !e.playable()) continue;
+      long at = SportsCatalog.instant(e.startAt);
+      if (at == Long.MAX_VALUE) continue;
+      if (f.format(new Date(at)).equals(today) || (at < now && now - at < 4 * 3600000L)) out.add(e);
+    }
+    Collections.sort(out, (a, b) -> Long.compare(SportsCatalog.instant(a.startAt), SportsCatalog.instant(b.startAt)));
+    return out;
+  }
+
   /** A home row: a league with its logo and its events in date order. */
   public static final class EventRow {
     public final String name, logo;

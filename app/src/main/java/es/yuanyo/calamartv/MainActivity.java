@@ -444,6 +444,12 @@ public class MainActivity extends Activity {
       }
       List<Catalog.Channel> events = Catalog.events(channels, custom);
       if (!featured.isEmpty()) hero(featured);
+      // «Eventos En Directo»: today's events with something to play, the first row of all.
+      List<Catalog.Channel> live = Catalog.liveEvents(events, System.currentTimeMillis());
+      if (!live.isEmpty()) {
+        heading(Catalog.LIVE_ROW, live.size() == 1 ? "1 evento" : live.size() + " eventos");
+        carousel(live, live.size());
+      }
       // Films and episodes left half watched come right under the featured slider, then the weekly top.
       if (libraryShown(custom)) {
         continueRow();
@@ -453,6 +459,7 @@ public class MainActivity extends Activity {
         }
       }
       // Only events on the home page: one row per league, each in date order.
+      // The same events stay in their league's row too, as copies of the same card.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
         if (!row.logo.isEmpty()) leagueLogo(row.logo);

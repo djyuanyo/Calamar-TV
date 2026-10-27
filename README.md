@@ -306,3 +306,7 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - Con los partidos importados, la web pedía cada 30 segundos el resumen completo de ESPN (unos 440 KB) de **cada** tarjeta. ESPN cortaba las peticiones (sin cabecera CORS) y el partido abierto se quedaba sin estadísticas: «No se pudieron cargar los datos del partido».
 - Ahora los marcadores de las tarjetas salen del **marcador del día** de ESPN (`scoreboard?dates=…`, una petición por día para todos los partidos). Solo los que no aparecen ahí (algunas copas) se piden uno a uno, cuatro por vuelta. El resumen completo solo se pide para el partido abierto. Igual en la web y en la app.
+
+## Fila «Eventos En Directo» (2.20.35)
+
+- Primera fila de la portada, justo debajo del carrusel destacado (web y app; los mismos eventos siguen también en la fila de su liga, como copia): los **eventos de hoy** (día de Madrid) que **tienen vídeo** (canal o enlaces), ordenados por hora de inicio. Los que no tienen canal todavía («Canal por confirmar») no salen. Un partido empezado antes de medianoche sigue en la fila mientras puede estar en juego.
