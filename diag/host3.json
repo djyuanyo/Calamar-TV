@@ -1,240 +1,477 @@
-[
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928493",
-  "name": "Girona at CD Cuarte",
-  "state": "post",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 14,
-  "rosters": [
-   22,
-   21
+{
+ "count": 100,
+ "main": {
+  "title": "Once Caldas vs. Alianza FC",
+  "slug": "col1-onc-alf-2026-08-16",
+  "endDate": "2026-10-28T23:00:00Z",
+  "startTime": "2026-10-28T23:00:00Z",
+  "keys": [
+   "id",
+   "ticker",
+   "slug",
+   "title",
+   "description",
+   "resolutionSource",
+   "startDate",
+   "creationDate",
+   "endDate",
+   "image",
+   "icon",
+   "active",
+   "closed",
+   "archived",
+   "new",
+   "featured",
+   "restricted",
+   "liquidity",
+   "volume",
+   "openInterest",
+   "createdAt",
+   "updatedAt",
+   "competitive",
+   "volume24hr",
+   "volume1wk",
+   "volume1mo",
+   "volume1yr",
+   "enableOrderBook",
+   "liquidityClob",
+   "negRisk",
+   "negRiskMarketID",
+   "commentCount",
+   "markets",
+   "series",
+   "tags",
+   "cyom",
+   "showAllOutcomes",
+   "showMarketImages",
+   "enableNegRisk",
+   "automaticallyActive",
+   "eventDate",
+   "startTime",
+   "eventWeek",
+   "seriesSlug",
+   "negRiskAugmented",
+   "pendingDeployment",
+   "deploying",
+   "deployingTimestamp",
+   "gameId",
+   "teams",
+   "sport",
+   "eventMetadata",
+   "version"
   ]
  },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928501",
-  "name": "Elche at Atlético Pinatarense",
-  "state": "post",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 30,
-  "rosters": [
-   23,
-   23
+ "related": [
+  {
+   "title": "Once Caldas vs. Alianza FC",
+   "slug": "col1-onc-alf-2026-08-16",
+   "markets": [
+    {
+     "type": "moneyline",
+     "group": "Once Caldas",
+     "q": "Will Once Caldas win on 2026-08-16?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.66\", \"0.34\"]",
+     "tokens": "[\"70324205201912662184103192766972838751254901277291712543644726977356944220746\", \"79658772091980396381777463774814415852330817592572444996179318695753253791065\"]",
+     "closed": false
+    },
+    {
+     "type": "moneyline",
+     "group": "Draw (Once Caldas vs. Alianza FC)",
+     "q": "Will Once Caldas vs. Alianza FC end in a draw?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.21\", \"0.79\"]",
+     "tokens": "[\"12681118224071099559333189916731291739430324940348999348574817225613303021034\", \"56942114833026494160583536039733165472169287635576933387503526402280641645280\"]",
+     "closed": false
+    },
+    {
+     "type": "moneyline",
+     "group": "Alianza FC",
+     "q": "Will Alianza FC win on 2026-08-16?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.12\", \"0.88\"]",
+     "tokens": "[\"93003558403556616578970719064838195727251470028975158460975658288340779882181\", \"105753335115021513183314538826651001215075841079186129513240894092574007101935\"]",
+     "closed": false
+    }
+   ]
+  },
+  {
+   "title": "Once Caldas vs. Alianza FC - Halftime Result",
+   "slug": "col1-onc-alf-2026-08-16-halftime-result",
+   "markets": [
+    {
+     "type": "soccer_halftime_result",
+     "group": "Once Caldas",
+     "q": "Once Caldas leading at halftime?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.475\", \"0.525\"]",
+     "tokens": "[\"80521136083180134781499993099487988697755503519364086910601503963698378428617\", \"11483593894790313807946032588030376467258253297512674662574759941340481692492\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_halftime_result",
+     "group": "Draw",
+     "q": "Once Caldas vs. Alianza FC: Draw at halftime?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.39\", \"0.61\"]",
+     "tokens": "[\"29633465010128121228398259170100821701822201498624310834938190529981154053301\", \"47998144040990570324371504998095820139021705883665522557808895356942543156269\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_halftime_result",
+     "group": "Alianza FC",
+     "q": "Alianza FC leading at halftime?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.245\", \"0.755\"]",
+     "tokens": "[\"57517160645911978807788949085900567316597694142381268040448202855994419402138\", \"1059662349124384242555440500095662951133872200821479073925450577128073321977\"]",
+     "closed": false
+    }
+   ]
+  },
+  {
+   "title": "Once Caldas vs. Alianza FC - Second Half Result",
+   "slug": "col1-onc-alf-2026-08-16-second-half-result",
+   "markets": [
+    {
+     "type": "soccer_second_half_result",
+     "group": "Once Caldas",
+     "q": "Once Caldas to win the second half?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.44\", \"0.56\"]",
+     "tokens": "[\"100316236106012722525158409890253477140723751438093763000207221205737015876311\", \"4956007194044282305166753423620278540346600557260734232896777816806010322709\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_second_half_result",
+     "group": "Draw",
+     "q": "Once Caldas vs. Alianza FC: Second half draw?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.285\", \"0.715\"]",
+     "tokens": "[\"27863379988897834000611911891017990181338267610658118035277322016448525989609\", \"29445081646224688409931064547939486082199470722497656655559654978700569337883\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_second_half_result",
+     "group": "Alianza FC",
+     "q": "Alianza FC to win the second half?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.115\", \"0.885\"]",
+     "tokens": "[\"467610930449734030613020090126349706407574822586030107255429463464020561004\", \"80833661046210912801546165207248545994578726933469601467954997022233333397463\"]",
+     "closed": false
+    }
+   ]
+  },
+  {
+   "title": "Once Caldas vs. Alianza FC - Exact Score",
+   "slug": "col1-onc-alf-2026-08-16-exact-score",
+   "markets": [
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 0 - 0 Alianza FC",
+     "q": "Exact Score: Once Caldas 0 - 0 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.06\", \"0.94\"]",
+     "tokens": "[\"94135806249906335309665086101189866270470057628545716253419925329007228735926\", \"104601208240103765206441843403941751569807183307157716790047611620587332741520\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 0 - 1 Alianza FC",
+     "q": "Exact Score: Once Caldas 0 - 1 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.035\", \"0.965\"]",
+     "tokens": "[\"2390614750793373638783959644062942201836053617178610680607477829831573600424\", \"10364605779434598818249679758009105067396549475122511981092006279181825092200\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 1 - 0 Alianza FC",
+     "q": "Exact Score: Once Caldas 1 - 0 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.13\", \"0.87\"]",
+     "tokens": "[\"87378212534631741618587378946778719847693019303284222791686760937885359208930\", \"110611880291486890014435609820483144641308889543250182600383815704913144632118\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 0 - 2 Alianza FC",
+     "q": "Exact Score: Once Caldas 0 - 2 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.0175\", \"0.9825\"]",
+     "tokens": "[\"34365059238101400790597038166098879908450084170136440923421897270560847685511\", \"38443338933636515820742029099188185903269027991587061986066168653037001914384\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 1 - 1 Alianza FC",
+     "q": "Exact Score: Once Caldas 1 - 1 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.095\", \"0.905\"]",
+     "tokens": "[\"49351564479625119699480584941047857091111369921203001491975115820335894355130\", \"40480854511186880984652517305966995021359516345841743447057676567414444825021\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 2 - 0 Alianza FC",
+     "q": "Exact Score: Once Caldas 2 - 0 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.13\", \"0.87\"]",
+     "tokens": "[\"33390213085143575241237203350026285419901890582964331028861954444323123707443\", \"39948726285976282447745437311905085249397248730206180715545543281726642474554\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 0 - 3 Alianza FC",
+     "q": "Exact Score: Once Caldas 0 - 3 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.245\", \"0.755\"]",
+     "tokens": "[\"11269156352866815562091538970328317678467740594688559955539031797796821796810\", \"33962902532233067414648434892536409700983837495522528730202143229225822445649\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 1 - 2 Alianza FC",
+     "q": "Exact Score: Once Caldas 1 - 2 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.026\", \"0.974\"]",
+     "tokens": "[\"67369342174974781990460068579585823386071576520038358636980527174223337075356\", \"60210794514086622460061455487330031846067149063015422292160194717191047942223\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 2 - 1 Alianza FC",
+     "q": "Exact Score: Once Caldas 2 - 1 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.085\", \"0.915\"]",
+     "tokens": "[\"2459649728890918177279090923453226483397085549886212997982179976575190764116\", \"65760863670901552105080979554811530176703767776692419016366646468321580534136\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 3 - 0 Alianza FC",
+     "q": "Exact Score: Once Caldas 3 - 0 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.075\", \"0.925\"]",
+     "tokens": "[\"113146509585932675149927037654325929762115539590020343075293668932920755959832\", \"69440486027848709791612640560564892505885610434372634293455262449960757164248\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 1 - 3 Alianza FC",
+     "q": "Exact Score: Once Caldas 1 - 3 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.2495\", \"0.7505\"]",
+     "tokens": "[\"62824024751737000194920456486784798966285699261954016224042242688836781553971\", \"8948552104326695750894635598613633410562174984689859815431430739047781591688\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 2 - 2 Alianza FC",
+     "q": "Exact Score: Once Caldas 2 - 2 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.029\", \"0.971\"]",
+     "tokens": "[\"33446206001316629552458404610910899914275198027300536772877817626948284172899\", \"44428646502438861475861948802819162746575284578303402919706077040805071941505\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 3 - 1 Alianza FC",
+     "q": "Exact Score: Once Caldas 3 - 1 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.055\", \"0.945\"]",
+     "tokens": "[\"70394974483003471707074841005856394746507812076800232901354503151750568700661\", \"109692884775530060925010354579418060879731120984232373618226413179243122847015\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 2 - 3 Alianza FC",
+     "q": "Exact Score: Once Caldas 2 - 3 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.2495\", \"0.7505\"]",
+     "tokens": "[\"17352719761354781515539898988693707863901220919733685616669373119721400906150\", \"42092409953349092569601449298343608927765777124532668608576413180299407330147\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 3 - 2 Alianza FC",
+     "q": "Exact Score: Once Caldas 3 - 2 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.021\", \"0.979\"]",
+     "tokens": "[\"8299027469494130291395011965081776264853219394194310039126353749382266274715\", \"36671575288609787876339385918789106077381721266796318217703657072733081714884\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Once Caldas 3 - 3 Alianza FC",
+     "q": "Exact Score: Once Caldas 3 - 3 Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.2375\", \"0.7625\"]",
+     "tokens": "[\"22314663984887279447760275469273558939493919688272753949397782004330154403465\", \"24292691441565772381177318808997283913091268079166734086936212226630953534297\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_exact_score",
+     "group": "Any Other Score",
+     "q": "Exact Score: Any Other Score?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.245\", \"0.755\"]",
+     "tokens": "[\"65573803960154707080421526567679738938295115118178676490440454338136712294340\", \"5824546496298841595212815953988383372151162002336039478315604659571450915766\"]",
+     "closed": false
+    }
+   ]
+  },
+  {
+   "title": "Once Caldas vs. Alianza FC - First Team to Score",
+   "slug": "col1-onc-alf-2026-08-16-first-to-score",
+   "markets": [
+    {
+     "type": "soccer_first_to_score",
+     "group": "Once Caldas",
+     "q": "Once Caldas to score first vs. Alianza FC?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.47\", \"0.53\"]",
+     "tokens": "[\"111707890179847983842787714350813163923474183326457993074303650288581241529925\", \"38491583261072753231708458600038491303584250734344396515716076886579313408676\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_first_to_score",
+     "group": "Alianza FC",
+     "q": "Alianza FC to score first vs. Once Caldas?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.46\", \"0.54\"]",
+     "tokens": "[\"111621113960447658730306716837426355819957377661141483742839069086035982833993\", \"72809330641990053040428888370663284956917388167928136497190585084512949219654\"]",
+     "closed": false
+    },
+    {
+     "type": "soccer_first_to_score",
+     "group": "Neither",
+     "q": "Once Caldas vs. Alianza FC: Neither team to score first?",
+     "outcomes": "[\"Yes\", \"No\"]",
+     "prices": "[\"0.24\", \"0.76\"]",
+     "tokens": "[\"35443815332483321844439540652517798300708164570845111865514148123586241504537\", \"66957817879577641817779952706395453838253453262986000918331431059610923477702\"]",
+     "closed": false
+    }
+   ]
+  }
+ ],
+ "types": [
+  "moneyline",
+  "soccer_halftime_result",
+  "soccer_second_half_result",
+  "soccer_exact_score",
+  "soccer_first_to_score",
+  "total_corners",
+  "soccer_first_half_total_corners",
+  "soccer_second_half_total_corners",
+  "soccer_team_total_corners",
+  "soccer_game_corners_odd_even",
+  "soccer_first_corner",
+  "spreads",
+  "totals",
+  "both_teams_to_score",
+  "both_teams_to_score_first_half",
+  "first_half_totals",
+  "soccer_team_totals",
+  "soccer_first_half_team_totals",
+  "both_teams_to_score_second_half",
+  "second_half_totals",
+  "soccer_second_half_team_totals",
+  "first_half_spreads",
+  "second_half_spreads"
+ ],
+ "suffixes": [
+  "(main)",
+  "Halftime Result",
+  "Second Half Result",
+  "Exact Score",
+  "First Team to Score",
+  "Total Corners",
+  "More Markets"
+ ],
+ "ices-history?market=7032420520191266218410319276697283875125": {
+  "status": 200,
+  "acao": "*",
+  "points": [
+   677,
+   {
+    "t": 1790546419,
+    "p": 0.62
+   },
+   {
+    "t": 1793135425,
+    "p": 0.66
+   }
   ]
  },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928520",
-  "name": "CE Europa at CF Calamocha",
-  "state": "pre",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   0,
-   0
-  ],
-  "keyEvents": 0,
-  "rosters": [
-   3,
-   7
-  ]
- },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928495",
-  "name": "Espanyol at Sestao",
-  "state": "post",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 44,
-  "rosters": [
-   23,
-   22
-  ]
- },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928521",
-  "name": "Almería at UD Castellonense",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 14,
-  "rosters": [
-   21,
-   22
-  ]
- },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928549",
-  "name": "Las Palmas at Alcalá",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 18,
-  "rosters": [
-   20,
-   22
-  ]
- },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928509",
-  "name": "Mirandés at Atlético Tordesillas",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 20,
-  "rosters": [
-   20,
-   20
-  ]
- },
- {
-  "league": "esp.copa_del_rey",
-  "id": "401928534",
-  "name": "Rayo Majadahonda at Ciudad De Lucena",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 13,
-  "rosters": [
-   20,
-   20
-  ]
- },
- {
-  "league": "ita.1",
-  "id": "401874980",
-  "name": "Lazio at Sassuolo",
-  "state": "post",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 45,
-  "rosters": [
-   26,
-   26
-  ]
- },
- {
-  "league": "ita.1",
-  "id": "401874780",
-  "name": "Cagliari at AS Roma",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 9,
-  "rosters": [
-   22,
-   25
-  ]
- },
- {
-  "league": "ita.1",
-  "id": "401874786",
-  "name": "Como at Torino",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 16,
-  "rosters": [
-   24,
-   22
-  ]
- },
- {
-  "league": "eng.league_cup",
-  "id": "401921833",
-  "name": "Peterborough United at Bradford City",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 11,
-  "rosters": [
-   20,
-   20
-  ]
- },
- {
-  "league": "eng.league_cup",
-  "id": "401921835",
-  "name": "Arsenal at Fleetwood Town",
-  "state": "in",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   28,
-   28
-  ],
-  "keyEvents": 7,
-  "rosters": [
-   20,
-   20
-  ]
- },
- {
-  "league": "esp.1",
-  "id": "401882817",
-  "name": "Espanyol at Villarreal",
-  "state": "pre",
-  "http_league": 200,
-  "http_all": 200,
-  "stats": [
-   4,
-   4
-  ],
-  "keyEvents": 0,
-  "rosters": [
-   0,
-   0
-  ]
- }
-]
+ "live": [
+  {
+   "title": "Leicester City FC vs. Wigan Athletic FC",
+   "markets": [
+    [
+     "Leicester City FC",
+     "[\"0.855\", \"0.145\"]",
+     false,
+     true
+    ],
+    [
+     "Draw (Leicester City FC vs. Wigan Athletic FC)",
+     "[\"0.13\", \"0.87\"]",
+     false,
+     true
+    ],
+    [
+     "Wigan Athletic FC",
+     "[\"0.0245\", \"0.9755\"]",
+     false,
+     true
+    ]
+   ]
+  },
+  {
+   "title": "Milton Keynes Dons FC vs. Bromley FC",
+   "markets": [
+    [
+     "Milton Keynes Dons FC",
+     "[\"0.47\", \"0.53\"]",
+     false,
+     true
+    ],
+    [
+     "Draw (Milton Keynes Dons FC vs. Bromley FC)",
+     "[\"0.4\", \"0.6\"]",
+     false,
+     true
+    ],
+    [
+     "Bromley FC",
+     "[\"0.1315\", \"0.8685\"]",
+     false,
+     true
+    ]
+   ]
+  },
+  {
+   "title": "Luton Town FC vs. Doncaster Rovers FC",
+   "markets": [
+    [
+     "Luton Town FC",
+     "[\"0.965\", \"0.035\"]",
+     false,
+     true
+    ],
+    [
+     "Draw (Luton Town FC vs. Doncaster Rovers FC)",
+     "[\"0.035\", \"0.965\"]",
+     false,
+     true
+    ],
+    [
+     "Doncaster Rovers FC",
+     "[\"0.0075\", \"0.9925\"]",
+     false,
+     true
+    ]
+   ]
+  }
+ ]
+}
