@@ -1046,7 +1046,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     status.setText("Comparando la conexión de los motores. Espera unos segundos…");
     new Thread(
         () -> {
-          String report = previous + "\n\nComprobando: " + android.net.Uri.parse(target).getHost() + android.net.Uri.parse(target).getPath() + "\nPrueba sin cambiar la red del dispositivo:\n";
+          String report = previous + "\n\nComprobando: " + android.net.Uri.parse(target).getHost() + (VideoResolver.renewablePage(target) || VideoResolver.eventApi(target) != null ? android.net.Uri.parse(target).getPath() : " · enlace directo") + "\nPrueba sin cambiar la red del dispositivo:\n";
           report += probe("Sistema", target, url -> (java.net.HttpURLConnection) url.openConnection());
           report += "\n" + probe(transport.name(), target, transport);
           try { report += "\n" + probe("Chromium", target, ChromiumNetwork.get(this)); }
@@ -1113,7 +1113,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       try {
         c.setConnectTimeout(10000); c.setReadTimeout(10000);
         c.setRequestProperty("User-Agent", PlayerDocument.BROWSER_USER_AGENT);
-        c.setRequestProperty("Referer", referer);
+        Uri page = Uri.parse(referer);
+        String origin = page.getScheme() + "://" + page.getEncodedAuthority();
+        c.setRequestProperty("Referer", origin + "/");
+        c.setRequestProperty("Origin", origin);
         c.setRequestProperty("Range", "bytes=0-1023");
         int code = c.getResponseCode();
         if (code != 200 && code != 206) return "HTTP " + code;
