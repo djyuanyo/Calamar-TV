@@ -1,0 +1,46 @@
+[
+ {
+  "title": "Villarreal CF vs. RCD Espanyol de Barcelona",
+  "kickoff": "2026-10-30T20:00:00Z",
+  "asked": [
+   "Villarreal",
+   "Espanyol"
+  ],
+  "odds": {
+   "home": 68,
+   "draw": 19,
+   "away": 13,
+   "homeName": "Villarreal CF",
+   "awayName": "RCD Espanyol de Barcelona",
+   "volume": 977.6541500000002,
+   "url": "https://polymarket.com/event/lal-vil-esp-2026-10-30"
+  }
+ },
+ {
+  "title": "Levante UD vs. Club Atlético de Madrid",
+  "kickoff": "2026-10-31T13:00:00Z",
+  "asked": [
+   "Levante",
+   "Atlético"
+  ],
+  "odds": null
+ },
+ {
+  "title": "Rayo Vallecano de Madrid vs. RC Celta de Vigo",
+  "kickoff": "2026-10-31T15:15:00Z",
+  "asked": [
+   "Rayo Vallecano",
+   "Celta"
+  ],
+  "odds": null
+ },
+ {
+  "title": "Real Betis Balompié vs. Málaga CF",
+  "kickoff": "2026-10-31T17:30:00Z",
+  "asked": [
+   "Betis",
+   null
+  ],
+  "odds": null
+ }
+]
