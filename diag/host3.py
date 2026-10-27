@@ -10,7 +10,7 @@ for league in ['esp.copa_del_rey', 'ita.1', 'eng.league_cup', 'esp.1']:
     if s != 200: out.append({'league': league, 'http': s}); continue
     for e in json.loads(b).get('events', [])[:8]:
         s2, b2 = get(f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={e["id"]}')
-        s3, b3 = get(f'https://site.web.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={e["id"]}')
+        s3, b3 = get(f'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={e["id"]}')
         info = {'league': league, 'id': e['id'], 'name': e['name'], 'state': e['status']['type']['state'], 'http_league': s2, 'http_all': s3}
         try:
             j = json.loads(b3 if s3 == 200 else b2)
