@@ -377,11 +377,11 @@ function home() {
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
   if (libraryShown()) refreshProgress();
-  const top = libraryTop(library);
+  const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => [libraryTop(library, key), what]);
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
-  // The weekly top of the library's titles (set from TMDB in the admin page).
-  if (top.length) nodes.push(...topRow(el, top));
+  // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
+  for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // Only events on the home page: one row per league, each in date order (soonest first).
   for (const row of eventRows(matches, state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
@@ -994,7 +994,10 @@ shared().then((f) => f.watchAuth((user) => {
   libraryAdmin = f.administrator(user);
   if (was === libraryAdmin) return;
   syncLibraryNav();
-  if (sectionByPage(decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0])) route();
+  // Also the home page: while the library is hidden only the administrator sees its rows (Continuar viendo,
+  // the titles «En portada» and the tops), and the home page was drawn before knowing who was signed in.
+  const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  if (sectionByPage(page) || !page) route();
 })).catch(() => {});
 const libraryShown = () => libraryVisible(state.custom) || libraryAdmin;
 // Another device of the account changed «Continuar viendo»: the home page shows it at once.

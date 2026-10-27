@@ -28,6 +28,22 @@ public class CatalogTest {
   }
 
   @Test
+  public void aTdtCopyKeptForAnEventGivesWayToTheCurrentTdtChannel() throws Exception {
+    JSONObject tdt = new JSONObject().put("channels", new JSONArray().put(new JSONObject().put("id", "la1").put("name", "La 1")
+        .put("streams", new JSONArray().put("https://example.com/la1-new.m3u8"))));
+    JSONObject custom = new JSONObject().put("featured", new JSONArray()).put("hidden", new JSONArray())
+        .put("channels", new JSONArray().put(new JSONObject().put("id", "la1").put("name", "La 1").put("tdt", true)
+            .put("streams", new JSONArray().put("https://example.com/la1-old.m3u8"))));
+    List<Catalog.Channel> all = Catalog.merge(tdt, custom);
+    assertEquals(1, all.size());
+    assertFalse(all.get(0).own);
+    assertEquals("https://example.com/la1-new.m3u8", all.get(0).streams.get(0));
+    Catalog.Channel alone = Catalog.merge(new JSONObject().put("channels", new JSONArray()), custom).get(0);
+    assertFalse(alone.own);
+    assertEquals("https://example.com/la1-old.m3u8", alone.streams.get(0));
+  }
+
+  @Test
   public void ownChannelsComeFirstAndHiddenTdtChannelsAreRemoved() throws Exception {
     JSONObject custom =
         new JSONObject()

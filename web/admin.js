@@ -1,7 +1,7 @@
 import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
-import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs } from './catalog.js';
+import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
@@ -177,11 +177,12 @@ function channelForm(existing, rerender, state) {
 
 function ownList(rerender) {
   const data = file.data;
-  if (!data.channels.length) return el('p', { class: 'note' }, 'Aún no has añadido canales propios.');
+  const own = data.channels.filter((c) => !c.tdt); // TDT copies kept for events are not channels of yours
+  if (!own.length) return el('p', { class: 'note' }, 'Aún no has añadido canales propios.');
   return el(
     'div',
     { class: 'list' },
-    data.channels.map((c) =>
+    own.map((c) =>
       el(
         'div',
         { class: 'item' },
@@ -423,8 +424,8 @@ export async function render(state) {
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
-        eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender),
-        el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender)
+        eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
+        el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
   ];
@@ -456,7 +457,7 @@ function findEvent(id) {
   return fixture ? fixtureEvent(fixture, file.data) : null;
 }
 
-function eventForm(existing, rerender) {
+function eventForm(existing, rerender, catalogState) {
   const data = file.data;
   // Imported matches may have no cover (the league's background and crests) and no channel yet.
   const imported = !!existing?.imported;
@@ -535,15 +536,23 @@ function eventForm(existing, rerender) {
   } });
   let selected = existing?.channelId || '';
   const chosen = el('p', { class: 'note' });
-  const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales creados' });
+  const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales y los de TDT' });
   const options = el('div', { class: 'channel-options', role: 'group', 'aria-label': 'Elegir canal' });
+  // First the channels created here, then the TDT channels shown in the catalog (not hidden) that play here.
+  const own = data.channels.filter((c) => !c.tdt);
+  const tdt = merge(catalogState?.tdt || { channels: [] }, { ...data, channels: [] }).filter((c) => !c.own && c.playable && !own.some((o) => o.id === c.id));
+  const choices = [...own.map((c) => ({ id: c.id, name: c.name })), ...tdt.map((c) => ({ id: c.id, name: c.name, tdt: true }))];
   const draw = () => {
-    const channel = data.channels.find((c) => c.id === selected);
-    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}` : imported ? 'Sin canal: los usuarios verán «Canal por confirmar».' : 'Selecciona un canal para reproducir el evento.';
+    const channel = choices.find((c) => c.id === selected) || data.channels.find((c) => c.id === selected);
+    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}${channel.tdt ? ' (TDT)' : ''}` : imported ? 'Sin canal: los usuarios verán «Canal por confirmar».' : 'Selecciona un canal para reproducir el evento.';
     const q = query.value.trim().toLocaleLowerCase('es');
-    const found = data.channels.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
-    options.replaceChildren(...(imported ? [el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal (por confirmar)`)] : []), ...found.map((c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`)));
-    if (!found.length) options.append(el('p', { class: 'note' }, data.channels.length ? 'Sin resultados.' : 'Crea primero un canal.'));
+    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
+    const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
+    const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
+    options.replaceChildren(...(imported ? [el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal (por confirmar)`)] : []),
+      ...(mine.length ? [el('p', { class: 'note channel-group' }, 'Tus canales'), ...mine.map(button)] : []),
+      ...(public_.length ? [el('p', { class: 'note channel-group' }, 'Canales de TDT'), ...public_.map(button)] : []));
+    if (!found.length) options.append(el('p', { class: 'note' }, choices.length ? 'Sin resultados.' : 'Crea primero un canal.'));
   };
   query.addEventListener('input', draw); draw();
   return el('form', { class: 'form', onsubmit: async (event) => {
@@ -551,7 +560,7 @@ function eventForm(existing, rerender) {
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
-      if (!(imported && !selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal creado.');
+      if (!(imported && !selected) && !choices.some((c) => c.id === selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal de la lista.');
       const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const link = matchLink.value.trim();
       if (link) {
@@ -575,14 +584,16 @@ function eventForm(existing, rerender) {
         if (!fixture.featured) delete fixture.featured;
         if (fixture.status === 'scheduled') delete fixture.status;
         const fixtures = data.fixtures.map((f) => f.id === existing.id ? fixture : f);
-        validateCatalog({ ...data, fixtures }, { checkSize: false });
-        data.fixtures = fixtures;
+        const channels = syncTdtCopies({ ...data, fixtures }, catalogState?.tdt);
+        validateCatalog({ ...data, channels, fixtures }, { checkSize: false });
+        data.fixtures = fixtures; data.channels = channels;
         status.textContent = 'Publicando…'; await saveFile(); location.hash = '#/admin/evento'; rerender();
         return;
       }
       const updated = existing ? data.events.map((e) => e.id === existing.id ? entry : e) : [...data.events, entry];
-      validateCatalog({ ...data, events: updated }, { checkSize: false });
-      data.events = updated;
+      const channels = syncTdtCopies({ ...data, events: updated }, catalogState?.tdt);
+      validateCatalog({ ...data, channels, events: updated }, { checkSize: false });
+      data.events = updated; data.channels = channels;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
   } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
@@ -590,7 +601,7 @@ function eventForm(existing, rerender) {
 }
 
 
-function eventList(rerender) {
+function eventList(rerender, state) {
   const data = file.data;
   const query = el('input', { type: 'search', placeholder: 'Buscar evento o equipo' });
   const league = selectField(data.leagues, '', 'Todas las ligas');
@@ -600,7 +611,7 @@ function eventList(rerender) {
     const found = [...data.events, ...(data.fixtures || []).map((f) => fixtureEvent(f, data))].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
     output.replaceChildren(...found.map(event => el('div', { class: 'item' },
       el('img', { src: event.cover || data.teams.find((t) => t.id === event.homeTeamId)?.logo || undefined, alt: '', style: event.cover ? 'object-fit:cover' : 'object-fit:contain' }),
-      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || (event.imported ? 'Canal por confirmar · Importado' : 'Canal no disponible'))),
+      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || (state?.channels || []).find((c) => c.id === event.channelId)?.name || (event.imported ? 'Canal por confirmar · Importado' : 'Canal no disponible'))),
       el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath({ ...event, slug: slugs.get(event.id) }) }, 'Abrir evento'),
         el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
           try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink({ ...event, slug: slugs.get(event.id) })); button.textContent = 'Copiado'; }
@@ -609,7 +620,7 @@ function eventList(rerender) {
         el('a', { class: 'btn small secondary', href: `#/admin/editar-evento/${encodeURIComponent(event.id)}` }, 'Editar'),
         el('button', { class: 'btn small danger', type: 'button', onclick: () => {
           if (saving || !confirm(`¿Eliminar el evento ${event.name}?`)) return;
-          data.events = data.events.filter(e => e.id !== event.id); data.fixtures = (data.fixtures || []).filter(f => f.id !== event.id); guarded(() => saveFile(), rerender);
+          data.events = data.events.filter(e => e.id !== event.id); data.fixtures = (data.fixtures || []).filter(f => f.id !== event.id); data.channels = syncTdtCopies(data, state?.tdt); guarded(() => saveFile(), rerender);
         } }, 'Eliminar')))));
     if (!found.length) output.append(el('p', { class: 'note' }, 'No hay eventos para esta búsqueda.'));
   };

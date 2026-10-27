@@ -230,10 +230,10 @@ final class Library {
       return out;
     }
 
-    /** The weekly top (set from TMDB in the admin page), at most 10. */
-    List<Item> top() {
+    /** The weekly top of one section (films or series, set from TMDB in the admin page), at most 10. */
+    List<Item> top(String section) {
       List<Item> out = new ArrayList<>();
-      for (String[] section : SECTIONS) for (Item item : items(section[0])) if (item.trend > 0) out.add(item);
+      for (Item item : items(section)) if (item.trend > 0) out.add(item);
       Collections.sort(out, (a, b) -> Integer.compare(a.trend, b.trend));
       return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
     }

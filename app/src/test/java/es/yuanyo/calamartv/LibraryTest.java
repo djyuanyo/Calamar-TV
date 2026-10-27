@@ -104,7 +104,8 @@ public class LibraryTest {
     assertEquals(2, featured.size());
     assertEquals("m7", featured.get(0).id);
     assertEquals("m3", featured.get(1).id);
-    List<Library.Item> top = data.top();
+    assertTrue(data.top("series").isEmpty());
+    List<Library.Item> top = data.top("movies");
     assertEquals(10, top.size());
     assertEquals("m12", top.get(0).id);
     assertEquals("movies", data.sectionOf(top.get(0)));

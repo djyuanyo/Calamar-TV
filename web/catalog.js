@@ -84,9 +84,12 @@ export function merge(tdt, custom) {
   const hidden = new Set((custom && custom.hidden) || []);
   const out = [];
   const ids = new Set();
+  const tdtIds = new Set(((tdt && tdt.channels) || []).map((o) => o && String(o.id || '')));
   for (const o of (custom && custom.channels) || []) {
     if (!o || o.hidden) continue;
-    const c = channel(o, true);
+    // A copy of a TDT channel kept for an event (syncTdtCopies): the TDT list, always current, wins.
+    if (o.tdt && tdtIds.has(String(o.id || ''))) continue;
+    const c = channel(o, !o.tdt);
     if (c.id && c.playable && !ids.has(c.id)) {
       ids.add(c.id);
       out.push(c);
@@ -330,6 +333,27 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
   });
 }
 export const PENDING = 'Canal por confirmar';
+
+/**
+ * Events may play a TDT channel. App versions before 2.20.22 only accept events whose channel is in the
+ * catalog's own list, so each TDT channel used by an event or an imported match is kept there too, as a
+ * copy marked `tdt: true` (merge() prefers the current TDT list). Copies follow the TDT data at each save
+ * and go away when nothing uses them. Returns the new list of channels.
+ */
+export function syncTdtCopies(data, tdt) {
+  const own = (data.channels || []).filter((c) => !c.tdt);
+  const ownIds = new Set(own.map((c) => c.id));
+  const used = new Set([...(data.events || []), ...(data.fixtures || [])].map((e) => e.channelId).filter((id) => id && !ownIds.has(id)));
+  const source = new Map(((tdt && tdt.channels) || []).filter(Boolean).map((o) => [String(o.id || ''), o]));
+  const before = new Map((data.channels || []).filter((c) => c.tdt).map((c) => [c.id, c]));
+  const copies = [...used].flatMap((id) => {
+    const o = source.get(id);
+    const streams = o ? (Array.isArray(o.streams) ? o.streams : []).map(validUrl).filter(Boolean) : [];
+    if (!o || !streams.length) return before.has(id) ? [before.get(id)] : [];
+    return [{ id, name: String(o.name || 'Canal'), ...(o.logo ? { logo: String(o.logo) } : {}), ...(o.group ? { group: String(o.group) } : {}), streams, tdt: true }];
+  });
+  return [...own, ...copies];
+}
 /** Home rows: one per league (with its logo), ordered by its next event; events without league last. */
 export function eventRows(list, custom) {
   const leagues = new Map((custom?.leagues || []).map((l) => [l.id, l]));

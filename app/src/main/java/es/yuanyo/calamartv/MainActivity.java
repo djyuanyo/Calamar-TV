@@ -447,7 +447,10 @@ public class MainActivity extends Activity {
       // Films and episodes left half watched come right under the featured slider, then the weekly top.
       if (libraryShown(custom)) {
         continueRow();
-        if (library != null) topRow(library.top());
+        if (library != null) {
+          topRow(library.top("movies"), "películas");
+          topRow(library.top("series"), "series");
+        }
       }
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
@@ -1831,10 +1834,10 @@ public class MainActivity extends Activity {
     else libraryDetail(parts[0], item);
   }
 
-  /** «Top 10 de la semana»: big numbers next to the posters, as on Netflix. */
-  void topRow(List<Library.Item> items) {
+  /** «Top 10 películas / series de la semana» (or as many as there are): big numbers next to the posters, as on Netflix. */
+  void topRow(List<Library.Item> items, String what) {
     if (items.isEmpty()) return;
-    heading("Top " + items.size() + " de la semana", "Según TMDB");
+    heading("Top " + items.size() + " " + what + " de la semana", "Según TMDB");
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);
