@@ -15,6 +15,10 @@ await page.waitForTimeout(8000);
 const link = page.locator('a, button').filter({ hasText: /^Liga Campeones$/ }).first();
 const found = await link.count();
 if (found) await link.click();
+await page.waitForTimeout(1500);
+const cards = page.locator('.card');
+log.push('cards ' + await cards.count() + ' first: ' + (await cards.first().textContent()));
+await cards.first().click();
 const samples = [];
 for (let i = 0; i < 12; i++) {
   await page.waitForTimeout(2500);
