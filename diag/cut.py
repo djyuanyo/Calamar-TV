@@ -1,24 +1,25 @@
-# What zicotv answers to an app (no browser): the event API and a player page (only structure, no tokens).
-import json, re, time, urllib.request, urllib.error
-UA = {'Chrome': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36', 'okhttp': 'okhttp/4.12.0'}
-def get(url, ua):
-    t = time.time()
+# Polymarket public data for football matches: endpoints, CORS and shape.
+import json, urllib.request, urllib.error, urllib.parse
+O = {'Origin': 'https://djyuanyo.github.io', 'User-Agent': 'Mozilla/5.0'}
+def get(url):
     try:
-        r = urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': ua, 'Accept': '*/*'}), timeout=20)
-        body = r.read(400000).decode('utf-8', 'replace'); return r.status, body, round(time.time() - t, 2)
+        r = urllib.request.urlopen(urllib.request.Request(url, headers=O), timeout=20)
+        return r.status, r.headers.get('Access-Control-Allow-Origin'), json.loads(r.read(3_000_000))
     except urllib.error.HTTPError as e:
-        return e.code, e.read(3000).decode('utf-8', 'replace'), round(time.time() - t, 2)
+        return e.code, e.headers.get('Access-Control-Allow-Origin'), e.read(300).decode('utf-8', 'replace')
     except Exception as e:
-        return 0, repr(e)[:200], round(time.time() - t, 2)
+        return 0, None, repr(e)[:200]
 out = {}
-for name, ua in UA.items():
-    st, body, s = get('https://bp.zicotv.cc/api/v1/events/97986', ua)
-    srcs = []
-    try:
-        for x in json.loads(body)['data'].get('sources', []): srcs.append({'name': x.get('name'), 'locked': x.get('locked'), 'premium': x.get('is_premium'), 'player': re.sub(r'[?#].*', '', str(x.get('player_url') or x.get('url')))})
-    except Exception as e: srcs = str(e)[:100] + ' ' + body[:200]
-    out[f'event_{name}'] = {'status': st, 'secs': s, 'sources': srcs}
-    st, body, s = get('https://zicotv.cc/api/player/4', ua)
-    m = re.search(r'ZT_SOURCES\s*=\s*\[', body)
-    out[f'player_{name}'] = {'status': st, 'secs': s, 'has_ZT_SOURCES': bool(m), 'm3u8_count': len(re.findall(r'\.m3u8', body)), 'cloudflare': 'cf-chl' in body or 'Just a moment' in body, 'head': body[:160] if not m else ''}
-open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
+st, cors, d = get('https://gamma-api.polymarket.com/sports')
+out['sports'] = {'status': st, 'cors': cors, 'sample': [ {k: x.get(k) for k in ('sport','tags','series','image')} for x in (d if isinstance(d, list) else [])][:40]}
+st, cors, d = get('https://gamma-api.polymarket.com/public-search?q=' + urllib.parse.quote('Real Madrid') + '&limit_per_type=5')
+out['search'] = {'status': st, 'cors': cors, 'events': [{k: e.get(k) for k in ('title','slug','startDate','endDate','closed','tags')} for e in (d.get('events', []) if isinstance(d, dict) else [])][:5], 'raw': d if not isinstance(d, dict) else None}
+st, cors, d = get('https://gamma-api.polymarket.com/events?tag_slug=la-liga&closed=false&limit=5&order=startDate&ascending=true')
+evs = d if isinstance(d, list) else []
+out['laliga'] = {'status': st, 'cors': cors, 'count': len(evs)}
+if evs:
+    e = evs[0]
+    out['laliga']['first'] = {k: e.get(k) for k in ('title','slug','startDate','endDate','gameStartTime','eventDate','seriesSlug')}
+    out['laliga']['markets'] = [{k: m.get(k) for k in ('question','outcomes','outcomePrices','groupItemTitle','sportsMarketType','slug','volume')} for m in e.get('markets', [])][:8]
+    out['laliga']['keys'] = sorted(e.keys())
+open('diag/cut.json', 'w').write(json.dumps(out, indent=1, default=str)[:60000])
