@@ -1,27 +1,25 @@
-import { chromium } from 'playwright';
-import fs from 'node:fs';
-const out = { console: [], failed: [], responses: [] };
-const mask = (u) => { try { const x = new URL(u); return x.host + x.pathname.replace(/\/[^/]*\/[^/]*\/(\d+)$/, '/***/***/$1').slice(0, 80); } catch { return String(u).slice(0, 60); } };
-const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) out.console.push(m.type() + ': ' + m.text().slice(0, 200)); });
-page.on('pageerror', (e) => out.console.push('pageerror: ' + String(e).slice(0, 300)));
-page.on('requestfailed', (r) => out.failed.push(mask(r.url()) + ' ' + (r.failure()?.errorText || '')));
-page.on('response', (r) => { if (/calamarmenciano|firestore|31\.43|zicotv/.test(r.url())) out.responses.push(r.status() + ' ' + mask(r.url())); });
-await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canales', { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => out.console.push('goto ' + e.message));
-await page.waitForTimeout(5000);
-out.cards = await page.locator('.card').count();
-out.firstCards = await page.locator('.card').evaluateAll((cs) => cs.slice(0, 5).map((c) => c.textContent.trim().slice(0, 40)));
-out.tests = {};
-for (const name of ['Movistar Plus', 'DAZN 1', 'La 1']) {
-  await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canales', { waitUntil: 'load', timeout: 60000 }).catch(() => {});
-  await page.waitForTimeout(6000);
-  const card = page.locator('.card', { hasText: new RegExp('^\\d*' + name.replace(/[+]/g, '\\+') + '[A-Z]') }).first();
-  if (!(await card.count())) { out.tests[name] = 'no card'; continue; }
-  await card.click().catch((e) => { out.tests[name] = 'click ' + e.message; });
-  await page.waitForTimeout(25000);
-  out.tests[name] = await page.evaluate(() => { const v = document.querySelector('#video'); return { title: document.querySelector('#player-title')?.textContent, status: document.querySelector('#player-status')?.textContent?.slice(0, 220), ready: v?.readyState, time: Math.round(v?.currentTime || 0), paused: v?.paused, err: v?.error?.code }; });
+// The published web in Google Chrome: open «Liga Campeones» and report what the player does.
+import { createRequire } from 'node:module';
+import { writeFileSync } from 'node:fs';
+const require = createRequire(import.meta.url);
+const { chromium } = require('/tmp/pw/node_modules/playwright');
+const browser = await chromium.launch({ channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const log = [], net = [];
+page.on('console', (m) => log.push(`${m.type()}: ${m.text()}`.slice(0, 300)));
+page.on('pageerror', (e) => log.push(`pageerror: ${e.message}`.slice(0, 300)));
+page.on('response', (r) => { if (r.url().includes('calamar')) net.push(`${r.status()} ${r.request().method()} ${r.url().split('?')[0]}`); });
+page.on('requestfailed', (r) => { if (r.url().includes('calamar')) net.push(`FAILED ${r.url().split('?')[0]} ${r.failure()?.errorText}`); });
+await page.goto('https://djyuanyo.github.io/Calamar-TV/#/canales', { waitUntil: 'networkidle' });
+await page.waitForTimeout(3000);
+const link = page.locator('a, button').filter({ hasText: /^Liga Campeones$/ }).first();
+const found = await link.count();
+if (found) await link.click();
+const samples = [];
+for (let i = 0; i < 12; i++) {
+  await page.waitForTimeout(2500);
+  samples.push(await page.evaluate(() => { const v = document.querySelector('video'); return v ? { t: Math.round(v.currentTime * 10) / 10, rs: v.readyState, paused: v.paused, err: v.error?.code || 0, status: document.getElementById('player-status')?.textContent || '' } : null; }));
 }
 await page.screenshot({ path: 'diag/web.png' });
-fs.writeFileSync('diag/web.json', JSON.stringify(out, null, 1));
+writeFileSync('diag/cut.json', JSON.stringify({ found, samples, net: net.slice(0, 40), log: log.slice(-40) }, null, 1));
 await browser.close();
