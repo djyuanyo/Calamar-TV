@@ -576,14 +576,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (eventApi != null) {
-              PlayerDocument.Result event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                  NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              PlayerDocument.Result event;
+              try {
+                event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              } catch (java.io.IOException blocked) {
+                if (blocked instanceof PlayerDocument.HttpFailure) throw blocked;
+                event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
+                chromiumNetwork = true;
+              }
               List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
                 if (!active || request != generation) return;
                 resolving = false;
-                int at = channelPages.indexOf(requestedPage);
+                int at = Math.max(0, channelPages.indexOf(requestedPage));
                 channelPages.remove(requestedPage);
                 for (VideoResolver.Source source : players) {
                   if (!channelPages.contains(source.url)) channelPages.add(Math.min(Math.max(0, at++), channelPages.size()), source.url);
@@ -625,9 +632,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
-                  // Each phone reads the page and its videos itself, as a viewer of the page. The hosting
-                  // (calamar-player.php) is only the last option: with every viewer behind its single
-                  // address the page refused it, and one server cannot carry a big match for everyone.
+                  // Other channel pages may use the hosting, but Zico always stays on this device.
                   if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
@@ -637,7 +642,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
-                    refreshAutomatically("El proveedor no ha devuelto una fuente vigente. Reintentando…");
+                    if (!tryNextZicoSource()) problem("Zico no ha devuelto fuentes de vídeo para este canal.");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -661,6 +666,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (zicoPage() && switchChannelSource()) {
+                    return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
@@ -830,7 +837,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -876,7 +883,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -887,6 +894,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       }
     };
     handler.postDelayed(bufferingTimeout, 25000);
+  }
+
+  private boolean zicoPage() {
+    return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null);
+  }
+
+  private boolean tryNextZicoSource() {
+    return zicoPage() && switchChannelSource();
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {
@@ -936,6 +951,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       attemptWindow = now;
     }
     if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
+      if (automaticAttempts >= 3) {
+        if (switchChannelSource()) return;
+        problem("No se pudo conectar con esta fuente desde tu red. Prueba otra fuente en Fuentes.");
+        return;
+      }
       if (sources.size() > 1) selection = (selection + 1) % sources.size();
       long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
       status.setText(message);
@@ -1003,9 +1023,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void diagnose() {
+    diagnoseAddress(directUrl != null ? directUrl : pageUrl);
+  }
+
+  private void diagnoseAddress(String address) {
     if (diagnosing) return;
     diagnosing = true;
-    final int request = generation;
+    final String target = address;
     final String previous =
         lastReport
             + "\n"
@@ -1020,18 +1044,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     + player.getTotalBufferedDuration()
                     + " ms");
     status.setText("Comparando la conexión de los motores. Espera unos segundos…");
-    worker.execute(
+    new Thread(
         () -> {
-          String report = previous + "\n\nPrueba sin cambiar la red del dispositivo:\n";
-          report += probe("Sistema", url -> (java.net.HttpURLConnection) url.openConnection());
-          report += "\n" + probe(transport.name(), transport);
-          try { report += "\n" + probe("Chromium", ChromiumNetwork.get(this)); }
+          String report = previous + "\n\nComprobando: " + android.net.Uri.parse(target).getHost() + (VideoResolver.renewablePage(target) || VideoResolver.eventApi(target) != null ? android.net.Uri.parse(target).getPath() : " · enlace directo") + "\nPrueba sin cambiar la red del dispositivo:\n";
+          report += probe("Sistema", target, url -> (java.net.HttpURLConnection) url.openConnection());
+          report += "\n" + probe(transport.name(), target, transport);
+          try { report += "\n" + probe("Chromium", target, ChromiumNetwork.get(this)); }
           catch (java.io.IOException failure) { report += "\nChromium: " + ConnectionReport.describe(failure); }
           final String result = report;
           handler.post(
               () -> {
                 diagnosing = false;
-                if (!active || generation != request) return;
+                if (!active || isFinishing()) return;
                 lastReport = result;
                 status.setText("Diagnóstico disponible · Pulsa Copiar en la ventana.");
                 new AlertDialog.Builder(this)
@@ -1052,14 +1076,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     .setNegativeButton("Cerrar", null)
                     .show();
               });
-        });
+        }, "Calamar-diagnostico").start();
   }
 
-  private String probe(String name, PlayerDocument.ConnectionFactory factory) {
+  private String probe(String name, String target, PlayerDocument.ConnectionFactory factory) {
     long start = android.os.SystemClock.elapsedRealtime();
     try {
-      if (directUrl != null) {
-        java.net.HttpURLConnection connection = factory.open(new java.net.URL(directUrl));
+      if (VideoResolver.isMedia(target) || target.equals(directUrl)) {
+        java.net.HttpURLConnection connection = factory.open(new java.net.URL(target));
         try {
           connection.setConnectTimeout(10000);
           connection.setReadTimeout(10000);
@@ -1069,17 +1093,53 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           connection.disconnect();
         }
       }
-      PlayerDocument.Result result = PlayerDocument.fetch(pageUrl, factory);
-      int count = VideoResolver.parse(result.html, result.url).size();
+      PlayerDocument.Result result = PlayerDocument.fetch(target, factory);
+      java.util.List<VideoResolver.Source> found = VideoResolver.parse(result.html, result.url);
+      int count = found.size();
       return name
           + ": HTTP 200 · "
           + count
           + " fuentes · "
           + (android.os.SystemClock.elapsedRealtime() - start)
-          + " ms";
+          + " ms" + (found.isEmpty() ? "" : "\n  Primer M3U8: " + probeMedia(found.get(0).url, result.url, factory));
     } catch (Exception failure) {
       return name + ": " + ConnectionReport.describe(failure);
     }
+  }
+
+  private String probeMedia(String address, String referer, PlayerDocument.ConnectionFactory factory) {
+    try {
+      java.net.HttpURLConnection c = factory.open(new java.net.URL(address));
+      try {
+        c.setConnectTimeout(10000); c.setReadTimeout(10000);
+        c.setRequestProperty("User-Agent", PlayerDocument.BROWSER_USER_AGENT);
+        Uri page = Uri.parse(referer);
+        String origin = page.getScheme() + "://" + page.getEncodedAuthority();
+        c.setRequestProperty("Referer", origin + "/");
+        c.setRequestProperty("Origin", origin);
+        c.setRequestProperty("Range", "bytes=0-1023");
+        int code = c.getResponseCode();
+        if (code != 200 && code != 206) return "HTTP " + code;
+        try (java.io.InputStream in = c.getInputStream()) {
+          return "HTTP " + code + (in.read() >= 0 ? " · recibe datos" : " · respuesta vacía");
+        }
+      } finally { c.disconnect(); }
+    } catch (Exception failure) { return ConnectionReport.describe(failure); }
+  }
+
+  private void chooseDiagnostic() {
+    List<String> addresses = new ArrayList<>(channelPages);
+    if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
+    if (directUrl != null) addresses.add(directUrl);
+    if (addresses.isEmpty()) return;
+    String[] labels = new String[addresses.size()];
+    for (int i = 0; i < labels.length; i++) {
+      Uri u = Uri.parse(addresses.get(i));
+      labels[i] = u.getHost() + (VideoResolver.renewablePage(addresses.get(i)) || VideoResolver.eventApi(addresses.get(i)) != null ? u.getPath() : " · enlace directo");
+    }
+    new AlertDialog.Builder(this).setTitle("Comprobar conexión")
+        .setItems(labels, (dialog, index) -> diagnoseAddress(addresses.get(index)))
+        .setNegativeButton("Cerrar", null).show();
   }
 
   private void chooseSource() {
@@ -1122,6 +1182,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     sourceDialog = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
+        .setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic())
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
         })
@@ -1187,7 +1248,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             String url = request.getUrl().toString();
             if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
                 new java.io.ByteArrayInputStream(new byte[0]));
-            if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
+            if (!zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
                     if (generation == browserGeneration) detected(url);
@@ -1206,7 +1267,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 value -> {
                   try {
                     String candidate = new org.json.JSONArray("[" + value + "]").optString(0);
-                    if (generation == browserGeneration) detected(candidate);
+                    if (generation == browserGeneration && !zicoPage()) detected(candidate);
                   } catch (Exception ignored) {
                   }
                 });
