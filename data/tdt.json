@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1792532389535,
+ "updated_at": 1793139488517,
  "channels": [
   {
    "id": "la-1",
@@ -4917,6 +4917,16 @@
    "region": "",
    "logo": "https://graph.facebook.com/EurovisionSongContest/picture?width=200&height=200",
    "web": "https://www.eurovision.com",
+   "streams": [],
+   "geo": false
+  },
+  {
+   "id": "junior-eurovision-song-contest",
+   "name": "Junior Eurovision Song Contest",
+   "group": "Música",
+   "region": "",
+   "logo": "https://graph.facebook.com/junioreurovision/picture?width=200&height=200",
+   "web": "https://junior.eurovision.com",
    "streams": [],
    "geo": false
   },
