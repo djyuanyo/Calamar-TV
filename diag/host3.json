@@ -1,98 +1,362 @@
 [
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "esp.copa_del_rey",
+  "id": "401928493",
+  "name": "Girona at CD Cuarte",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "22432",
+    "CD Cuarte"
+   ],
+   [
+    "away",
+    "9812",
+    "Girona"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "22432",
+     "CD Cuarte",
+     "home"
+    ],
+    "stats": "foulsCommitted=0 yellowCards=1 redCards=0 offsides=0 wonCorners=0 saves=0 possessionPct=0 totalShots=0 shotsOnTarget=0 shotPct=0.0 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=0 totalPasses=0 passPct=0.0 accurateCrosses=0 totalCrosses=0 crossPct=0.0 totalLongBalls=0 accurateLongBalls=0 longballPct=0.0 blockedShots=0 effectiveTackles=0 totalTackles=0 tacklePct=0.0 interceptions=0 effectiveClearance=0 totalClearance=0"
+   },
+   {
+    "team": [
+     "9812",
+     "Girona",
+     "away"
+    ],
+    "stats": "foulsCommitted=0 yellowCards=1 redCards=0 offsides=0 wonCorners=0 saves=0 possessionPct=0 totalShots=0 shotsOnTarget=0 shotPct=0.0 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=0 totalPasses=0 passPct=0.0 accurateCrosses=0 totalCrosses=0 crossPct=0.0 totalLongBalls=0 accurateLongBalls=0 longballPct=0.0 blockedShots=0 effectiveTackles=0 totalTackles=0 tacklePct=0.0 interceptions=0 effectiveClearance=0 totalClearance=0"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "esp.copa_del_rey",
+  "id": "401928501",
+  "name": "Elche at Atlético Pinatarense",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "133832",
+    "Atlético Pinatarense"
+   ],
+   [
+    "away",
+    "3751",
+    "Elche"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "133832",
+     "Atlético Pinatarense",
+     "home"
+    ],
+    "stats": "foulsCommitted=12 yellowCards=2 redCards=0 offsides=0 wonCorners=0 saves=4 possessionPct=18.5 totalShots=2 shotsOnTarget=1 shotPct=0.5 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=60 totalPasses=132 passPct=0.5 accurateCrosses=0 totalCrosses=3 crossPct=0.0 totalLongBalls=63 accurateLongBalls=16 longballPct=0.3 blockedShots=1 effectiveTackles=18 totalTackles=30 tacklePct=0.6 interceptions=2 effectiveClearance=34 totalClearance=34"
+   },
+   {
+    "team": [
+     "3751",
+     "Elche",
+     "away"
+    ],
+    "stats": "foulsCommitted=15 yellowCards=2 redCards=0 offsides=2 wonCorners=10 saves=0 possessionPct=81.5 totalShots=28 shotsOnTarget=7 shotPct=0.3 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=533 totalPasses=589 passPct=0.9 accurateCrosses=9 totalCrosses=31 crossPct=0.3 totalLongBalls=56 accurateLongBalls=43 longballPct=0.8 blockedShots=7 effectiveTackles=10 totalTackles=10 tacklePct=1.0 interceptions=3 effectiveClearance=12 totalClearance=12"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "esp.copa_del_rey",
+  "id": "401928520",
+  "name": "CE Europa at CF Calamocha",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "133839",
+    "CF Calamocha"
+   ],
+   [
+    "away",
+    "21290",
+    "CE Europa"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "133839",
+     "CF Calamocha",
+     "home"
+    ],
+    "stats": "foulsCommitted=0 yellowCards=2 redCards=0 offsides=0 wonCorners=0 saves=0 possessionPct=0 totalShots=0 shotsOnTarget=0 shotPct=0.0 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=0 totalPasses=0 passPct=0.0 accurateCrosses=0 totalCrosses=0 crossPct=0.0 totalLongBalls=0 accurateLongBalls=0 longballPct=0.0 blockedShots=0 effectiveTackles=0 totalTackles=0 tacklePct=0.0 interceptions=0 effectiveClearance=0 totalClearance=0"
+   },
+   {
+    "team": [
+     "21290",
+     "CE Europa",
+     "away"
+    ],
+    "stats": "foulsCommitted=0 yellowCards=0 redCards=0 offsides=0 wonCorners=0 saves=0 possessionPct=0 totalShots=0 shotsOnTarget=0 shotPct=0.0 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=0 totalPasses=0 passPct=0.0 accurateCrosses=0 totalCrosses=0 crossPct=0.0 totalLongBalls=0 accurateLongBalls=0 longballPct=0.0 blockedShots=0 effectiveTackles=0 totalTackles=0 tacklePct=0.0 interceptions=0 effectiveClearance=0 totalClearance=0"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "esp.copa_del_rey",
+  "id": "401928495",
+  "name": "Espanyol at Sestao",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "6856",
+    "Sestao"
+   ],
+   [
+    "away",
+    "88",
+    "Espanyol"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "6856",
+     "Sestao",
+     "home"
+    ],
+    "stats": "foulsCommitted=19 yellowCards=2 redCards=0 offsides=1 wonCorners=7 saves=2 possessionPct=38.7 totalShots=17 shotsOnTarget=9 shotPct=0.5 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=140 totalPasses=276 passPct=0.5 accurateCrosses=8 totalCrosses=34 crossPct=0.2 totalLongBalls=103 accurateLongBalls=25 longballPct=0.2 blockedShots=1 effectiveTackles=20 totalTackles=27 tacklePct=0.7 interceptions=10 effectiveClearance=51 totalClearance=51"
+   },
+   {
+    "team": [
+     "88",
+     "Espanyol",
+     "away"
+    ],
+    "stats": "foulsCommitted=24 yellowCards=4 redCards=0 offsides=1 wonCorners=12 saves=5 possessionPct=61.3 totalShots=16 shotsOnTarget=6 shotPct=0.4 penaltyKickGoals=0 penaltyKickShots=2 accuratePasses=321 totalPasses=458 passPct=0.7 accurateCrosses=11 totalCrosses=36 crossPct=0.3 totalLongBalls=118 accurateLongBalls=36 longballPct=0.3 blockedShots=3 effectiveTackles=10 totalTackles=14 tacklePct=0.7 interceptions=5 effectiveClearance=48 totalClearance=48"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.web.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "ita.1",
+  "id": "401874980",
+  "name": "Lazio at Sassuolo",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "3997",
+    "Sassuolo"
+   ],
+   [
+    "away",
+    "112",
+    "Lazio"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "3997",
+     "Sassuolo",
+     "home"
+    ],
+    "stats": "foulsCommitted=7 yellowCards=1 redCards=1 offsides=3 wonCorners=2 saves=2 possessionPct=42.1 totalShots=9 shotsOnTarget=1 shotPct=0.1 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=394 totalPasses=448 passPct=0.9 accurateCrosses=0 totalCrosses=7 crossPct=0.0 totalLongBalls=41 accurateLongBalls=18 longballPct=0.4 blockedShots=2 effectiveTackles=7 totalTackles=14 tacklePct=0.5 interceptions=10 effectiveClearance=16 totalClearance=16"
+   },
+   {
+    "team": [
+     "112",
+     "Lazio",
+     "away"
+    ],
+    "stats": "foulsCommitted=13 yellowCards=1 redCards=0 offsides=1 wonCorners=1 saves=0 possessionPct=57.9 totalShots=16 shotsOnTarget=8 shotPct=0.5 penaltyKickGoals=0 penaltyKickShots=2 accuratePasses=570 totalPasses=622 passPct=0.9 accurateCrosses=2 totalCrosses=9 crossPct=0.2 totalLongBalls=28 accurateLongBalls=16 longballPct=0.6 blockedShots=4 effectiveTackles=3 totalTackles=13 tacklePct=0.2 interceptions=4 effectiveClearance=12 totalClearance=12"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.web.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "ita.1",
+  "id": "401874780",
+  "name": "Cagliari at AS Roma",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "104",
+    "AS Roma"
+   ],
+   [
+    "away",
+    "2925",
+    "Cagliari"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "104",
+     "AS Roma",
+     "home"
+    ],
+    "stats": "foulsCommitted=8 yellowCards=0 redCards=0 offsides=2 wonCorners=7 saves=6 possessionPct=60.7 totalShots=20 shotsOnTarget=8 shotPct=0.4 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=508 totalPasses=586 passPct=0.9 accurateCrosses=5 totalCrosses=18 crossPct=0.3 totalLongBalls=39 accurateLongBalls=22 longballPct=0.6 blockedShots=7 effectiveTackles=7 totalTackles=15 tacklePct=0.5 interceptions=3 effectiveClearance=20 totalClearance=20"
+   },
+   {
+    "team": [
+     "2925",
+     "Cagliari",
+     "away"
+    ],
+    "stats": "foulsCommitted=8 yellowCards=1 redCards=0 offsides=3 wonCorners=8 saves=4 possessionPct=39.3 totalShots=19 shotsOnTarget=8 shotPct=0.4 penaltyKickGoals=0 penaltyKickShots=1 accuratePasses=296 totalPasses=373 passPct=0.8 accurateCrosses=5 totalCrosses=16 crossPct=0.3 totalLongBalls=56 accurateLongBalls=24 longballPct=0.4 blockedShots=4 effectiveTackles=9 totalTackles=14 tacklePct=0.6 interceptions=7 effectiveClearance=31 totalClearance=31"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 1090739,
-  "head": "{\"leagues\":[{\"calendar\":[]}],\"season\":{\"type\":14281,\"year\":2026},\"day\":{\"date\":\""
+  "league": "ita.1",
+  "id": "401874786",
+  "name": "Como at Torino",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "239",
+    "Torino"
+   ],
+   [
+    "away",
+    "2572",
+    "Como"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "239",
+     "Torino",
+     "home"
+    ],
+    "stats": "foulsCommitted=10 yellowCards=1 redCards=0 offsides=3 wonCorners=5 saves=3 possessionPct=28.1 totalShots=11 shotsOnTarget=5 shotPct=0.5 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=204 totalPasses=267 passPct=0.8 accurateCrosses=1 totalCrosses=12 crossPct=0.1 totalLongBalls=39 accurateLongBalls=12 longballPct=0.3 blockedShots=2 effectiveTackles=14 totalTackles=20 tacklePct=0.7 interceptions=10 effectiveClearance=45 totalClearance=45"
+   },
+   {
+    "team": [
+     "2572",
+     "Como",
+     "away"
+    ],
+    "stats": "foulsCommitted=3 yellowCards=0 redCards=0 offsides=3 wonCorners=6 saves=4 possessionPct=71.9 totalShots=18 shotsOnTarget=5 shotPct=0.3 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=627 totalPasses=686 passPct=0.9 accurateCrosses=8 totalCrosses=42 crossPct=0.2 totalLongBalls=35 accurateLongBalls=22 longballPct=0.6 blockedShots=5 effectiveTackles=9 totalTackles=13 tacklePct=0.7 interceptions=3 effectiveClearance=22 totalClearance=22"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 1090739,
-  "head": "{\"leagues\":[{\"calendar\":[]}],\"season\":{\"type\":14281,\"year\":2026},\"day\":{\"date\":\""
+  "league": "eng.league_cup",
+  "id": "401921833",
+  "name": "Peterborough United at Bradford City",
+  "state": "post",
+  "header": [
+   [
+    "home",
+    "387",
+    "Bradford City"
+   ],
+   [
+    "away",
+    "342",
+    "Peterborough United"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "387",
+     "Bradford City",
+     "home"
+    ],
+    "stats": "foulsCommitted=13 yellowCards=6 redCards=0 offsides=5 wonCorners=8 saves=1 possessionPct=50.1 totalShots=15 shotsOnTarget=8 shotPct=0.5 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=246 totalPasses=356 passPct=0.7 accurateCrosses=8 totalCrosses=15 crossPct=0.5 totalLongBalls=78 accurateLongBalls=30 longballPct=0.4 blockedShots=3 effectiveTackles=10 totalTackles=19 tacklePct=0.5 interceptions=13 effectiveClearance=39 totalClearance=39"
+   },
+   {
+    "team": [
+     "342",
+     "Peterborough United",
+     "away"
+    ],
+    "stats": "foulsCommitted=11 yellowCards=2 redCards=0 offsides=1 wonCorners=6 saves=5 possessionPct=49.9 totalShots=16 shotsOnTarget=3 shotPct=0.2 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=232 totalPasses=349 passPct=0.7 accurateCrosses=1 totalCrosses=14 crossPct=0.1 totalLongBalls=88 accurateLongBalls=32 longballPct=0.4 blockedShots=6 effectiveTackles=13 totalTackles=20 tacklePct=0.7 interceptions=10 effectiveClearance=35 totalClearance=35"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  },
  {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 41885,
-  "head": "{\"leagues\":[{\"id\":\"730\",\"uid\":\"s:600~l:730\",\"name\":\"Italian Serie A\",\"abbreviati"
- },
- {
-  "u": "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 41885,
-  "head": "{\"leagues\":[{\"id\":\"730\",\"uid\":\"s:600~l:730\",\"name\":\"Italian Serie A\",\"abbreviati"
- },
- {
-  "u": "https://site.web.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780",
-  "origin": "https://djyuanyo.github.io",
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
- },
- {
-  "u": "https://site.web.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780",
-  "origin": null,
-  "status": 200,
-  "acao": "*",
-  "size": 439800,
-  "head": "{\"boxscore\":{\"teams\":[{\"team\":{\"id\":\"104\",\"uid\":\"s:600~t:104\",\"slug\":\"ita.as_rom"
+  "league": "eng.league_cup",
+  "id": "401921835",
+  "name": "Arsenal at Fleetwood Town",
+  "state": "in",
+  "header": [
+   [
+    "home",
+    "3891",
+    "Fleetwood Town"
+   ],
+   [
+    "away",
+    "359",
+    "Arsenal"
+   ]
+  ],
+  "box": [
+   {
+    "team": [
+     "3891",
+     "Fleetwood Town",
+     "home"
+    ],
+    "stats": "foulsCommitted=13 yellowCards=2 redCards=0 offsides=3 wonCorners=1 saves=3 possessionPct=21.3 totalShots=3 shotsOnTarget=2 shotPct=0.7 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=87 totalPasses=160 passPct=0.5 accurateCrosses=0 totalCrosses=1 crossPct=0.0 totalLongBalls=62 accurateLongBalls=15 longballPct=0.2 blockedShots=1 effectiveTackles=10 totalTackles=15 tacklePct=0.7 interceptions=11 effectiveClearance=27 totalClearance=27"
+   },
+   {
+    "team": [
+     "359",
+     "Arsenal",
+     "away"
+    ],
+    "stats": "foulsCommitted=3 yellowCards=0 redCards=0 offsides=3 wonCorners=4 saves=1 possessionPct=78.7 totalShots=21 shotsOnTarget=5 shotPct=0.2 penaltyKickGoals=0 penaltyKickShots=0 accuratePasses=497 totalPasses=567 passPct=0.9 accurateCrosses=7 totalCrosses=21 crossPct=0.3 totalLongBalls=36 accurateLongBalls=25 longballPct=0.7 blockedShots=8 effectiveTackles=11 totalTackles=12 tacklePct=0.9 interceptions=8 effectiveClearance=19 totalClearance=19"
+   }
+  ],
+  "boxKeys": [
+   "teams"
+  ],
+  "form": false
  }
 ]
