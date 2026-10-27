@@ -6,7 +6,7 @@ const catalog = JSON.parse(doc.fields.json.stringValue);
 const events = (catalog.events || []).filter((e) => e.matchUrl);
 for (const e of events) out.events.push({ id: e.id, name: e.name, matchId: e.matchId, startAt: e.startAt, matchUrl: e.matchUrl });
 const now = Date.now();
-const pick = events.filter((e) => Math.abs(Date.parse(e.startAt || 0) - now) < 4 * 3600e3).slice(0, 3);
+const pick = events.filter((e) => Math.abs(Date.parse(e.startAt || e.start || e.date || 0) - now) < 4 * 3600e3).slice(0, 3); out.sample = events.slice(-2);
 const browser = await chromium.launch();
 for (const e of pick.length ? pick : events.slice(-2)) {
   const page = await browser.newPage({ viewport: { width: 420, height: 1600 } });
