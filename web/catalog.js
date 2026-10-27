@@ -357,6 +357,21 @@ export function syncTdtCopies(data, tdt) {
   });
   return [...own, ...copies];
 }
+/**
+ * «Eventos En Directo», the first row of the home page: today's events (Madrid day) that have something to
+ * play, in kick-off order. Events of earlier days still on air (a match past midnight) stay until they end.
+ */
+export const LIVE_ROW = 'Eventos En Directo';
+export function liveEvents(list, now = Date.now()) {
+  const day = (ms) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+  const today = day(now);
+  return list.filter((e) => {
+    if (!e.event || !e.playable || !(e.streams || []).length) return false;
+    const at = Date.parse(e.startAt || '');
+    if (!Number.isFinite(at)) return false;
+    return day(at) === today || (at < now && now - at < 4 * 3600000);
+  }).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
+}
 /** Home rows: one per league (with its logo), ordered by its next event; events without league last. */
 export function eventRows(list, custom) {
   const leagues = new Map((custom?.leagues || []).map((l) => [l.id, l]));

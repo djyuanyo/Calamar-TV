@@ -43,4 +43,16 @@ public class CatalogEventsTest {
     assertFalse(SharedCatalog.validCover("https://user:pass@example.com/x.jpg"));
     assertFalse(SharedCatalog.validCover("data:image/svg+xml;base64,AAAA"));
   }
+
+  @Test public void liveRowHasOnlyTodaysEventsWithVideoInOrder() throws Exception {
+    JSONObject data = new JSONObject("{\"channels\":[{\"id\":\"sports\",\"name\":\"Deportes\",\"streams\":[\"https://example.com/one.m3u8\"]}],\"featured\":[],\"hidden\":[],\"events\":["
+        + "{\"id\":\"late\",\"name\":\"Tarde\",\"channelId\":\"sports\",\"startAt\":\"2026-10-27T21:00:00.000Z\"},"
+        + "{\"id\":\"early\",\"name\":\"Pronto\",\"channelId\":\"sports\",\"startAt\":\"2026-10-27T18:00:00.000Z\"},"
+        + "{\"id\":\"tomorrow\",\"name\":\"Mañana\",\"channelId\":\"sports\",\"startAt\":\"2026-10-28T19:00:00.000Z\"}]}");
+    long now = SportsCatalog.instant("2026-10-27T20:30:00Z");
+    List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(Catalog.merge(null, data), data, now, false), now);
+    assertEquals(2, live.size());
+    assertEquals("early", live.get(0).id);
+    assertEquals("late", live.get(1).id);
+  }
 }

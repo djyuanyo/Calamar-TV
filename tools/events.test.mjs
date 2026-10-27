@@ -70,3 +70,14 @@ test('manual links combine with the channel, deduplicate, and work without a cha
     assert.throws(() => validateCatalog(data));
   }
 });
+
+test('«Eventos En Directo»: only today\'s events with video, in kick-off order', async () => {
+  const { liveEvents } = await import('../web/catalog.js');
+  const now = Date.parse('2026-10-27T20:30:00Z');
+  const e = (id, startAt, streams = ['https://x/a.m3u8']) => ({ id, event: true, playable: streams.length > 0, streams, startAt });
+  const list = [e('late', '2026-10-27T21:00:00Z'), e('early', '2026-10-27T18:00:00Z'), e('noVideo', '2026-10-27T19:00:00Z', []),
+    e('tomorrow', '2026-10-28T19:00:00Z'), e('yesterday', '2026-10-26T19:00:00Z'), { id: 'channel', playable: true, streams: ['https://x'] }];
+  assert.deepEqual(liveEvents(list, now).map((x) => x.id), ['early', 'late']);
+  // Past midnight in Madrid, a match that started before it is still on air.
+  assert.deepEqual(liveEvents([e('night', '2026-10-27T22:30:00Z')], Date.parse('2026-10-27T23:30:00Z')).map((x) => x.id), ['night']);
+});
