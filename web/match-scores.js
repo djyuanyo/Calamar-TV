@@ -167,7 +167,7 @@ let lookupTurn = 0;
  * The scores of many matches: one scoreboard per day instead of one whole summary per match (ESPN cuts a page
  * that asks for dozens of summaries every 30 seconds, and then the open match loses its statistics too).
  * Matches missing from the scoreboards (some cups) are asked one by one, a few each round.
- * starts: Map(id -> kick-off). Returns Map(id -> result) with what could be read.
+ * starts: Map(id -> kick-off). Returns Map(id -> result, or null when it could not be read).
  */
 export async function fetchScores(starts, fetcher = globalThis.fetch) {
   const out = new Map();
@@ -185,6 +185,7 @@ export async function fetchScores(starts, fetcher = globalThis.fetch) {
   const all = [...wanted].filter((id) => !out.has(id));
   const missing = all.length <= SINGLE_LOOKUPS ? all : Array.from({ length: SINGLE_LOOKUPS }, (_, i) => all[(lookupTurn + i) % all.length]);
   lookupTurn = all.length ? (lookupTurn + SINGLE_LOOKUPS) % all.length : 0;
-  await Promise.allSettled(missing.map(async (id) => out.set(id, await fetchMatch(id, fetcher))));
+  // null: asked now and not available (the card says so); absent: not asked in this round.
+  await Promise.allSettled(missing.map(async (id) => { try { out.set(id, await fetchMatch(id, fetcher)); } catch { out.set(id, null); } }));
   return out;
 }

@@ -152,9 +152,10 @@ async function refreshScores() {
     // One ESPN scoreboard per day for all the cards, not one whole summary per match.
     const results = await fetchScores(starts).catch(() => new Map());
     for (const id of starts.keys()) {
+      if (!results.has(id)) continue;
       const result = results.get(id);
-      if (result) matchScores.set(id, result); else if (!matchScores.has(id)) continue;
-      const shown = result || matchScores.get(id);
+      if (result) matchScores.set(id, result); else matchScores.delete(id);
+      const shown = result || { text: 'Marcador no disponible', live: false };
       for (const node of document.querySelectorAll('[data-match-id]')) if (node.dataset.matchId === id) {
         const scheduled = shown.state === 'scheduled' && Date.parse(node.dataset.matchStart) > Date.now();
         node.textContent = scheduled ? eventLabel({ startAt: node.dataset.matchStart }, Date.now(), EVENT_STATES).text : shown.text;

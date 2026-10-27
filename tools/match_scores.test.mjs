@@ -127,3 +127,10 @@ test('card scores come from one scoreboard per day, and only the missing matches
   assert.equal(urls.filter((u) => u.includes('scoreboard?dates=20261027')).length, 1);
   assert.deepEqual(urls.filter((u) => u.includes('summary')).map((u) => u.split('event=')[1]), ['99']);
 });
+
+test('a match that cannot be read is reported as unavailable', async () => {
+  const { fetchScores } = await import('../web/match-scores.js');
+  const out = await fetchScores(new Map([['77', '2026-10-27T20:00:00Z']]), async () => { throw new Error('offline'); });
+  assert.equal(out.has('77'), true);
+  assert.equal(out.get('77'), null);
+});
