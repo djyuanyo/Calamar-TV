@@ -10,11 +10,10 @@ def ask(url, data=None, headers=None):
     except Exception as e:
         return {'error': type(e).__name__ + ': ' + str(e)[:200], 'secs': round(time.time() - t, 2)}
 o = {'Origin': 'https://djyuanyo.github.io'}
-B = {'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36', **o}
 fake = 'abcdefghij0123456789'
-out = {
-  'api_browser_ua': ask(f'https://api.lulustream.com/api/folder/list?key={fake}&fld_id=0&files=1', headers=B),
-  'hosting_relay_fake_key': ask('https://calamarmenciano.com/calamar-lulu.php', data=urllib.parse.urlencode({'api': 'folder/list', 'fld_id': '0', 'files': '1', 'key': fake}).encode(),
-                       headers={**o, 'Content-Type': 'application/x-www-form-urlencoded'}),
-}
+out = {}
+for n in range(3):
+    out[f'hosting_relay_{n}'] = ask('https://calamarmenciano.com/calamar-lulu.php', data=urllib.parse.urlencode({'api': 'folder/list', 'fld_id': '0', 'files': '1', 'key': fake}).encode(),
+                       headers={**o, 'Content-Type': 'application/x-www-form-urlencoded'})
+out['relay_version'] = ask('https://calamarmenciano.com/calamar-tv-relay.php?version=1')
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
