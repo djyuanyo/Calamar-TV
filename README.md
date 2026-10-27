@@ -285,3 +285,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Un voto por navegador o instalación de la app y partido: cada uno guarda un identificador aleatorio que no identifica a nadie, y el hosting solo guarda su huella (hash). El partido tiene la misma clave en la web y en la app (`2026-10-30-villarreal-espanyol`). Como mucho 60 votos cada 10 minutos desde la misma conexión.
 - Como no hace falta iniciar sesión, quien borre los datos del navegador o reinstale la app puede volver a votar: es una encuesta de opinión, no un recuento exacto.
 - Pruebas: `tools/votes.test.mjs`, `tools/test_votes.py` (el PHP con su servidor), `VotesTest`.
+
+## Fotos de las alineaciones antes del partido
+
+- `hosting/calamar-lineups.php` sacaba las fotos solo de las estadísticas de API-Football, que no existen hasta que empieza el partido (y una respuesta vacía se guardaba 30 minutos). Ahora, desde 75 minutos antes del inicio, si aún no hay estadísticas pide la **alineación publicada** (`/fixtures/lineups`) y toma la foto de cada jugador por su id; se vuelve a preguntar cada 5 minutos hasta que sale y después se guarda 6 horas. Las notas siguen llegando con el partido empezado.
+- **Hay que subir el `calamar-lineups.php` nuevo al hosting.**
