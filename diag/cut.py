@@ -11,11 +11,12 @@ if found:
     t = time.time(); total = 0; marks = []; res = {}
     try:
         r = urllib.request.urlopen(req, timeout=40); res['status'] = r.status; res['ctype'] = r.headers.get('Content-Type')
-        while time.time() - t < 30:
+        body = bytearray()
+        while time.time() - t < 12:
             chunk = r.read(65536)
             if not chunk: res['ended'] = True; break
             if total == 0: res['first_byte_s'] = round(time.time() - t, 2)
-            total += len(chunk)
+            total += len(chunk); body += chunk
             if not marks or time.time() - t - marks[-1][0] >= 3: marks.append((round(time.time() - t, 1), total))
     except urllib.error.HTTPError as e:
         res['status'] = e.code; res['body'] = e.read(400).decode('utf-8', 'replace')
@@ -23,4 +24,7 @@ if found:
         res['error'] = type(e).__name__ + ': ' + str(e)[:200]
     res.update({'secs': round(time.time() - t, 1), 'bytes': total, 'marks': marks})
     out['stream'] = res
+    open('/tmp/s.ts', 'wb').write(body)
+    p = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_name,codec_type,profile,width,height,pix_fmt,field_order', '-of', 'json', '/tmp/s.ts'], capture_output=True, text=True)
+    out['probe'] = p.stdout[-1500:] + p.stderr[-500:]
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
