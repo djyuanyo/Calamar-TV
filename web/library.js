@@ -3,7 +3,7 @@
 // `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey } from './library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbPopularity } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 
@@ -38,6 +38,9 @@ export async function fetchLibrary({ fresh = false, fetcher = globalThis.fetch }
   cachedAt = Date.now();
   return cached;
 }
+
+/** The library as last downloaded (or null): the home page draws with it and asks for it in the background. */
+export const cachedLibrary = () => cached;
 
 export const itemTitle = (item) => item.tmdb?.title || item.title;
 export const itemYear = (item) => item.tmdb?.year || item.year || '';
@@ -241,6 +244,46 @@ export function continueRow(el, entries, { open, remove }) {
       el('button', { class: 'continue-remove', type: 'button', 'aria-label': `Quitar ${entry.name} de Continuar viendo`, title: 'Quitar', onclick: () => remove(entry) }, '✕'))))];
 }
 
+// ---- Portada: destacadas y Top 10 ----------------------------------------------------------------
+// The administrator marks titles «En portada» (item.featured: when it was marked, so they keep that
+// order) and they join the featured slider of the home page. item.trend is the title's place in the
+// weekly top (1 = first), set from TMDB in the admin page; the home page shows its first 10.
+const everyItem = (library) => LIBRARY_SECTIONS.flatMap((section) => (library?.sections?.[section.key] || []).map((item) => ({ section, item })));
+export const libraryFeatured = (library) => everyItem(library).filter(({ item }) => item.featured).sort((a, b) => a.item.featured - b.item.featured);
+export const TOP_SIZE = 10;
+export const libraryTop = (library) => everyItem(library).filter(({ item }) => item.trend > 0).sort((a, b) => a.item.trend - b.item.trend).slice(0, TOP_SIZE);
+/** «Película · 2024 · Drama, Comedia · ★ 7,4» */
+export const itemLine = (section, item) => [section.one[0].toUpperCase() + section.one.slice(1), itemYear(item), (item.tmdb?.genres || []).slice(0, 2).join(', '),
+  item.tmdb?.rating ? `★ ${item.tmdb.rating.toLocaleString('es-ES')}` : ''].filter(Boolean).join(' · ');
+export const itemPath = (section, item) => `#/${section.page}/${encodeURIComponent(item.id)}`;
+
+/**
+ * The weekly top among the library's titles: first those in TMDB's trending of the week (in its order),
+ * then the rest by TMDB popularity. `trending` is [{ id, kind }] and `popularity` maps «movie:123» to a number.
+ */
+export function rankTop(sections, trending, popularity, size = TOP_SIZE) {
+  const place = new Map(trending.map((t, i) => [`${t.kind}:${t.id}`, i]));
+  const keyOf = (item) => item.tmdb?.id && item.status !== 'unmatched' ? `${item.kind === 'tv' ? 'tv' : 'movie'}:${item.tmdb.id}` : null;
+  const ranked = Object.values(sections).flat().filter((item) => keyOf(item))
+    .map((item) => ({ item, trend: place.get(keyOf(item)) ?? Infinity, popularity: popularity[keyOf(item)] || 0 }))
+    .sort((a, b) => a.trend - b.trend || b.popularity - a.popularity)
+    .slice(0, size);
+  const rank = new Map(ranked.map((r, i) => [r.item.id, i + 1]));
+  return Object.fromEntries(Object.entries(sections).map(([key, items]) => [key, items.map((item) => {
+    const { trend, ...rest } = item;
+    return rank.has(item.id) ? { ...rest, trend: rank.get(item.id) } : rest;
+  })]));
+}
+
+/** The home page row of the weekly top: big numbers next to the posters, as on Netflix. */
+export function topRow(el, entries) {
+  return [el('div', { class: 'section-head' }, el('h2', {}, `Top ${entries.length} de la semana`), el('span', {}, 'Según TMDB')),
+    el('div', { class: 'rail top-rail' }, entries.map(({ section, item }, i) => el('a', { class: 'top-card', href: itemPath(section, item), title: itemTitle(item) },
+      el('span', { class: 'top-rank', 'aria-hidden': 'true' }, String(i + 1)),
+      el('span', { class: 'poster-frame' }, poster(el, item)),
+      el('span', { class: 'sr' }, `Número ${i + 1}: ${itemTitle(item)}`))))];
+}
+
 // ---- Public pages -------------------------------------------------------------------------------
 
 function poster(el, item, cls = 'poster-art') {
@@ -379,6 +422,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   };
   const sectionOf = (id) => LIBRARY_SECTIONS.find((s) => (current.sections[s.key] || []).some((item) => item.id === id))?.key || null;
   const upsert = async (section, item) => {
+    // Editing a title keeps it «En portada» and in the top.
+    const before = Object.values(current.sections).flat().find((x) => x.id === item.id);
+    if (before?.featured && item.featured === undefined) item = { ...item, featured: before.featured };
+    if (before?.trend && item.trend === undefined) item = { ...item, trend: before.trend };
     const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
     sections[section] = [...sections[section], item].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
     await store(sections);
@@ -603,6 +650,43 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     search();
   }
 
+  // ---- Portada: a title «En portada» joins the featured slider of the home page ----
+  async function toggleFeatured(sectionKey, item, button) {
+    button.disabled = true;
+    try {
+      const { featured, ...rest } = item;
+      const next = item.featured ? rest : { ...item, featured: Date.now() };
+      await store({ ...current.sections, [sectionKey]: (current.sections[sectionKey] || []).map((x) => (x.id === item.id ? next : x)) });
+      say(item.featured ? `«${itemTitle(item)}» ya no sale en la portada.` : `«${itemTitle(item)}» sale en la portada de inicio (web y app).`);
+    } catch (error) { say(error.message, true); button.disabled = false; }
+  }
+
+  // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
+  const TOP_REFRESHED = 'calamar-top-refreshed';
+  const topNote = el('p', { class: 'note', role: 'status' });
+  async function refreshTop(quiet = false) {
+    const key = tmdbKey();
+    if (!quiet) topNote.textContent = 'Consultando las tendencias de la semana en TMDB…';
+    const trending = await tmdbTrending(key);
+    const titles = Object.values(current.sections).flat().filter((item) => item.tmdb?.id && item.status !== 'unmatched');
+    const popularity = {};
+    for (const [n, item] of titles.entries()) {
+      if (!quiet) topNote.textContent = `Popularidad en TMDB ${n + 1} de ${titles.length}: ${itemTitle(item)}…`;
+      const kind = item.kind === 'tv' ? 'tv' : 'movie';
+      popularity[`${kind}:${item.tmdb.id}`] = await tmdbPopularity(item.tmdb.id, kind, key).catch(() => 0);
+    }
+    const ranked = rankTop(current.sections, trending, popularity);
+    const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
+    if (changed) await store(ranked);
+    try { localStorage.setItem(TOP_REFRESHED, new Date().toISOString().slice(0, 10)); } catch {}
+    const top = libraryTop({ sections: ranked });
+    topNote.textContent = top.length ? `Top actualizado: ${top.map(({ item }, i) => `${i + 1}. ${itemTitle(item)}`).join(' · ')}` : 'Todavía no hay títulos con ficha de TMDB para el top.';
+  }
+  const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    topButton.disabled = true;
+    try { await refreshTop(); } catch (error) { topNote.textContent = error.message; } finally { topButton.disabled = false; }
+  } }, 'Actualizar el top con TMDB');
+
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
   function drawList() {
@@ -613,6 +697,9 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
           item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
           el('span', { class: 'meta' }, el('b', {}, `${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}`),
             el('span', { class: 'note' }, `${item.status === 'unmatched' ? 'Sin ficha de TMDB · ' : ''}${item.kind === 'tv' ? `${new Set(item.episodes.map((e) => e.season)).size} temporadas · ${item.episodes.length} capítulos con enlace` : 'Con enlace'}`)),
+          el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
+            title: item.featured ? 'Quitar de la portada' : 'Mostrar en la portada de inicio', onclick: (event) => toggleFeatured(section.key, item, event.currentTarget) },
+            item.featured ? '★ En portada' : '☆ Destacar'),
           item.status === 'unmatched'
             ? el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')
             : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openEditor(section.key, item.tmdb?.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar')))) : [el('p', { class: 'note' }, 'Todavía no hay ninguno.')])];
@@ -626,6 +713,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       current = await fetchLibrary({ fresh: true });
       drawList();
+      // The top follows TMDB by itself: once a day, when the administrator opens this page.
+      let last = '';
+      try { last = localStorage.getItem(TOP_REFRESHED) || ''; } catch {}
+      if (settings.tmdb && last !== new Date().toISOString().slice(0, 10)) refreshTop(true).catch(() => {});
     } catch (error) { say(error.message, true); list.replaceChildren(); }
   })();
   saveKey.addEventListener('click', async () => {
@@ -660,5 +751,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
     el('div', { class: 'actions' }, scanButton), scanNote, scanReport,
+    el('h3', {}, 'Portada y Top 10'),
+    el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en cualquier título de la lista de abajo para que salga en la portada de inicio, junto a los eventos destacados. El «Top 10 de la semana» de la portada ordena tus títulos por las tendencias de la semana en TMDB y su popularidad; se actualiza solo una vez al día al abrir esta página.'),
+    el('div', { class: 'actions' }, topButton), topNote,
     el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
 }

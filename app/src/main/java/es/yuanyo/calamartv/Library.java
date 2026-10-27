@@ -82,11 +82,16 @@ final class Library {
     final JSONObject skip;
     /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
     final int tmdbId;
+    /** «En portada»: when the administrator marked it (0 when not); and its place in the weekly top (0 outside). */
+    final long featured;
+    final int trend;
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
       if (t == null) t = new JSONObject();
       id = o.optString("id");
+      featured = o.optLong("featured", 0);
+      trend = o.optInt("trend", 0);
       series = "tv".equals(o.optString("kind"));
       JSONObject s = o.optJSONObject("skip");
       skip = s == null ? new JSONObject() : s;
@@ -209,6 +214,33 @@ final class Library {
         sections.put(section[0], items);
       }
       attribution = json.optString("attribution");
+    }
+
+    /** The section key of a title. */
+    String sectionOf(Item item) {
+      for (String[] section : SECTIONS) if (items(section[0]).contains(item)) return section[0];
+      return null;
+    }
+
+    /** Titles «En portada», in the order they were marked. */
+    List<Item> featured() {
+      List<Item> out = new ArrayList<>();
+      for (String[] section : SECTIONS) for (Item item : items(section[0])) if (item.featured > 0) out.add(item);
+      Collections.sort(out, (a, b) -> Long.compare(a.featured, b.featured));
+      return out;
+    }
+
+    /** The weekly top (set from TMDB in the admin page), at most 10. */
+    List<Item> top() {
+      List<Item> out = new ArrayList<>();
+      for (String[] section : SECTIONS) for (Item item : items(section[0])) if (item.trend > 0) out.add(item);
+      Collections.sort(out, (a, b) -> Integer.compare(a.trend, b.trend));
+      return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
+    }
+
+    Item find(String section, String id) {
+      for (Item item : items(section)) if (item.id.equals(id)) return item;
+      return null;
     }
 
     List<Item> items(String section) {

@@ -94,6 +94,24 @@ public class LibraryTest {
     assertFalse(Library.Progress.removals(new JSONObject(), back, gone, now + 5).has("e1"));
   }
 
+  @Test public void featuredTitlesAndTheWeeklyTop() throws Exception {
+    JSONArray movies = new JSONArray();
+    for (int i = 1; i <= 12; i++)
+      movies.put(new JSONObject().put("id", "m" + i).put("kind", "movie").put("url", "https://calamarmenciano.com/m" + i + ".mp4")
+          .put("tmdb", new JSONObject().put("title", "Peli " + i)).put("trend", 13 - i).put("featured", i == 3 ? 200 : i == 7 ? 100 : 0));
+    Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("movies", movies)));
+    List<Library.Item> featured = data.featured();
+    assertEquals(2, featured.size());
+    assertEquals("m7", featured.get(0).id);
+    assertEquals("m3", featured.get(1).id);
+    List<Library.Item> top = data.top();
+    assertEquals(10, top.size());
+    assertEquals("m12", top.get(0).id);
+    assertEquals("movies", data.sectionOf(top.get(0)));
+    assertEquals("m5", data.find("movies", "m5").id);
+    assertNull(data.find("series", "m5"));
+  }
+
   @Test public void visibilityIsAnOptionalBoolean() throws Exception {
     JSONObject catalog = new JSONObject("{\"channels\":[],\"featured\":[],\"hidden\":[]}");
     assertFalse(Library.visible(catalog));

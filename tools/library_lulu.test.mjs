@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan, matchUnmatched, decodeHtml, luluFolder } from '../web/library-lulu.js';
+import { resetLuluRoute, cleanTitle, episodeOf, confident, luluApi, scanLulu, libraryFromScan, matchUnmatched, decodeHtml, luluFolder } from '../web/library-lulu.js';
 
 const json = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
 
@@ -33,6 +33,22 @@ test('the API is called straight, and through the hosting when the browser is no
   assert.deepEqual(await luluApi('folder/list', { fld_id: '7' }, 'clave123456', blocked), { files: [] });
   assert.deepEqual(relayed, [['https://calamarmenciano.com/calamar-lulu.php', 'api=folder%2Flist&fld_id=7&key=clave123456', 'POST']]);
   await assert.rejects(luluApi('folder/list', {}, 'mala', async () => json({ status: 403, msg: 'Wrong auth' })), /no acepta la clave/);
+});
+
+test('once the browser may not call the API, the hosting is used directly and retried once when it does not answer', async () => {
+  resetLuluRoute();
+  const calls = [];
+  let hosting = 0;
+  const flaky = async (url) => {
+    calls.push(url.startsWith('https://api.lulustream.com') ? 'direct' : 'hosting');
+    if (url.startsWith('https://api.lulustream.com')) throw new TypeError('Failed to fetch');
+    if (++hosting === 1) throw Object.assign(new Error('late'), { name: 'TimeoutError' });
+    return json({ status: 200, result: { folders: [] } });
+  };
+  assert.deepEqual(await luluApi('folder/list', { fld_id: '0' }, 'clave123456', flaky), { folders: [] });
+  assert.deepEqual(await luluApi('folder/list', { fld_id: '1' }, 'clave123456', flaky), { folders: [] });
+  assert.deepEqual(calls, ['direct', 'hosting', 'hosting', 'hosting']);
+  resetLuluRoute();
 });
 
 // Peliculas/ (two films, one in a subfolder), Series/Los hombres de Paco/Temporada 1 + 2, Documentales/.

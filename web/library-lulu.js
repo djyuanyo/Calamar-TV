@@ -16,28 +16,47 @@ function luluResult(data) {
 
 // Each call gives up after a while, so a request LuluStream or the hosting never answers shows an
 // error instead of leaving «Leyendo…» on screen forever.
-export const LULU_DIRECT_MS = 12000, LULU_HOSTING_MS = 30000;
+export const LULU_DIRECT_MS = 12000, LULU_HOSTING_MS = 50000;
 const limited = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(ms) } : {});
+// Once the browser is not allowed to call the API itself (CORS), the following calls go straight to the hosting.
+let directBlocked = false;
+export const resetLuluRoute = () => { directBlocked = false; };
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** One API call: straight from the browser, or through the hosting when the browser is not allowed to. */
-export async function luluApi(action, params, key, fetcher = globalThis.fetch) {
-  const query = new URLSearchParams({ ...params, key });
-  let data;
-  try {
-    const response = await fetcher(`${LULU_API}${action}?${query}`, { referrerPolicy: 'no-referrer', ...limited(LULU_DIRECT_MS) });
-    data = await response.json();
-  } catch {
+/** The same call through the hosting (calamar-lulu.php), tried twice when it does not answer. */
+async function viaHosting(action, params, key, fetcher) {
+  for (let attempt = 1; ; attempt++) {
     let response;
     try {
       response = await fetcher(LULU_ENDPOINT, { method: 'POST', body: new URLSearchParams({ api: action, ...params, key }), referrerPolicy: 'no-referrer', ...limited(LULU_HOSTING_MS) });
     } catch (error) {
-      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw new Error('LuluStream no responde (ni directamente ni a través del hosting). Vuelve a intentarlo en un rato.');
+      const late = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      if (attempt < 2) { await pause(2000); continue; }
+      if (late) throw new Error('LuluStream no responde (ni directamente ni a través del hosting). Vuelve a intentarlo en un rato.');
       throw new Error('Sin conexión con LuluStream ni con el hosting. Comprueba la red y que calamar-lulu.php está subido.');
     }
-    data = await response.json().catch(() => null);
+    const data = await response.json().catch(() => null);
+    if (!data && attempt < 2 && response.status >= 500) { await pause(2000); continue; }
     if (!data) throw new Error(`El hosting no ha podido consultar LuluStream (HTTP ${response.status}).`);
-    if (data.error) throw new Error(data.error);
+    if (data.error) {
+      if (attempt < 2 && response.status >= 500) { await pause(2000); continue; }
+      throw new Error(data.error);
+    }
+    return data;
   }
+}
+
+/** One API call: straight from the browser, or through the hosting when the browser is not allowed to. */
+export async function luluApi(action, params, key, fetcher = globalThis.fetch) {
+  const query = new URLSearchParams({ ...params, key });
+  let data = null;
+  if (!directBlocked) {
+    try {
+      const response = await fetcher(`${LULU_API}${action}?${query}`, { referrerPolicy: 'no-referrer', ...limited(LULU_DIRECT_MS) });
+      data = await response.json();
+    } catch { directBlocked = true; }
+  }
+  if (!data) data = await viaHosting(action, params, key, fetcher);
   return luluResult(data);
 }
 
@@ -91,6 +110,7 @@ const link = (code) => `https://lulustream.com/${code}`;
  * Series: every subfolder of Series (or of Documentales), with its season folders.
  */
 export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
+  resetLuluRoute(); // Each reading tries the direct route again first.
   const films = [], series = [], unknown = [];
   const root = await luluFolder(0, key, fetcher);
   const sections = root.folders.map((f) => ({ ...f, section: SECTION_FOLDERS[plain(f.name).replace(/[^a-z]/g, '')] })).filter((f) => f.section);
@@ -98,14 +118,18 @@ export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
   const videos = async (folder, depth = 0) => {
     onFolder(folder.name);
     const content = await luluFolder(folder.id, key, fetcher);
-    const nested = depth < 2 ? await Promise.all(content.folders.map((f) => videos(f, depth + 1))) : [];
+    // One folder at a time: dozens of requests at once filled the hosting and LuluStream stopped answering.
+    const nested = [];
+    if (depth < 2) for (const f of content.folders) nested.push(await videos(f, depth + 1));
     return [...content.files.map((f) => ({ ...f, folder: folder.name })), ...nested.flat()];
   };
   for (const section of sections) {
     onFolder(section.name);
     const content = await luluFolder(section.id, key, fetcher);
     if (section.section === 'movies') {
-      for (const f of [...content.files, ...(await Promise.all(content.folders.map((sub) => videos(sub)))).flat()]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code) });
+      const inside = [];
+      for (const sub of content.folders) inside.push(...await videos(sub));
+      for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code) });
       continue;
     }
     if (section.section === 'documentaries') for (const f of content.files) films.push({ section: 'documentaries', ...cleanTitle(f.title), file: f.title, link: link(f.code) });

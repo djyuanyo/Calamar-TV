@@ -436,11 +436,19 @@ public class MainActivity extends Activity {
     if (mode.equals("Canales")) {
       grid();
     } else {
-      List<Catalog.Channel> featured = Catalog.highlights(channels, custom);
+      List<Catalog.Channel> featured = new ArrayList<>(Catalog.highlights(channels, custom));
+      // Films and series marked «En portada» in the admin page join the featured events and channels.
+      if (libraryShown(custom)) {
+        loadLibrary();
+        if (library != null) for (Library.Item item : library.featured()) featured.add(libraryHero(item));
+      }
       List<Catalog.Channel> events = Catalog.events(channels, custom);
       if (!featured.isEmpty()) hero(featured);
-      // Films and episodes left half watched come right under the featured slider.
-      if (libraryShown(custom)) continueRow();
+      // Films and episodes left half watched come right under the featured slider, then the weekly top.
+      if (libraryShown(custom)) {
+        continueRow();
+        if (library != null) topRow(library.top());
+      }
       // Only events on the home page: one row per league, each in date order.
       for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
@@ -577,7 +585,8 @@ public class MainActivity extends Activity {
     content.setOrientation(LinearLayout.VERTICAL);
     content.setGravity(Gravity.BOTTOM);
     content.setPadding(dp(20), dp(20), dp(20), dp(20));
-    if (c.event) content.addView(eventBadge(c, 11), new LinearLayout.LayoutParams(-2, -2));
+    if (c.event && !isLibraryHero(c)) content.addView(eventBadge(c, 11), new LinearLayout.LayoutParams(-2, -2));
+    if (isLibraryHero(c)) content.addView(Ui.tag(this, c.meta.split(" · ")[0], 11), new LinearLayout.LayoutParams(-2, -2));
     TextView title = new TextView(this);
     title.setText(c.name);
     title.setTextColor(Ui.FG);
@@ -589,7 +598,7 @@ public class MainActivity extends Activity {
     content.addView(title);
     TextView meta = new TextView(this);
     StringBuilder line = new StringBuilder(c.event ? c.meta : c.group);
-    if (!c.region.isEmpty()) line.append(" · ").append(c.region);
+    if (!c.region.isEmpty() && !isLibraryHero(c)) line.append(" · ").append(c.region);
     if (!c.event) line.append(" · ").append(c.own ? "Canal de Calamar TV" : "Emisión oficial en abierto");
     meta.setText(line);
     meta.setTextColor(0xffd6dbe2);
@@ -611,6 +620,14 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, dp(48));
     wp.setMargins(0, 0, dp(10), 0);
     actions.addView(watch, wp);
+    if (isLibraryHero(c)) {
+      // A film plays from «Ver ahora»; its page (and a series' episodes) from here.
+      if (c.region.equals("film")) {
+        Button info = Ui.pill(this, "Más información", Ui.Kind.SURFACE, false);
+        info.setOnClickListener(v -> openLibraryHero(c, true));
+        actions.addView(info, new LinearLayout.LayoutParams(-2, dp(48)));
+      } else watch.setText("Ver episodios");
+    }
     content.addView(actions);
     frame.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
@@ -1047,6 +1064,7 @@ public class MainActivity extends Activity {
   }
 
   void open(Catalog.Channel c) {
+    if (isLibraryHero(c)) { openLibraryHero(c, false); return; }
     if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis())){Toast.makeText(this,"El evento ha finalizado",Toast.LENGTH_SHORT).show();return;}
     if (c.pending) {
       // An imported match without a channel yet: its match page alone, with no video.
@@ -1367,6 +1385,7 @@ public class MainActivity extends Activity {
   void loadLibrary() {
     if (libraryBusy || (library != null && System.currentTimeMillis() - libraryAt < 120000)) return;
     libraryBusy = true;
+    final boolean first = library == null;
     new Thread(() -> {
       Library.Data data = null;
       String error = "";
@@ -1381,7 +1400,8 @@ public class MainActivity extends Activity {
         libraryBusy = false;
         if (result != null) { library = result; libraryAt = System.currentTimeMillis(); }
         libraryError = failure;
-        if (!isFinishing() && Library.section(mode) != null) render();
+        // The home page also draws again the first time, for the titles «En portada» and the top.
+        if (!isFinishing() && (Library.section(mode) != null || (first && result != null && "Inicio".equals(mode)))) render();
       });
     }).start();
   }
@@ -1487,7 +1507,11 @@ public class MainActivity extends Activity {
     sub.setPadding(dp(2), 0, dp(2), 0);
     card.addView(sub);
     card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : ""));
-    card.setOnClickListener(v -> libraryDetail(Library.section(mode), item));
+    card.setOnClickListener(v -> {
+      String section = Library.section(mode);
+      if (section == null && library != null) section = library.sectionOf(item);
+      if (section != null) libraryDetail(section, item);
+    });
     // As tall as the tallest card of its row, so the line under every name sits at the same height.
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -1);
     p.setMargins(dp(4), dp(4), dp(6), dp(6));
@@ -1775,6 +1799,70 @@ public class MainActivity extends Activity {
     startActivityForResult(intent, PLAY_LIBRARY);
   }
 
+  // ---- Films and series «En portada» and the weekly top ----
+
+  /** A film or series «En portada» as an entry of the featured slider (id «lib:<section>/<id>»). */
+  Catalog.Channel libraryHero(Library.Item item) {
+    String section = library.sectionOf(item);
+    String kind = section == null ? "Película" : section.equals("series") ? "Serie" : section.equals("documentaries") ? "Documental" : "Película";
+    StringBuilder line = new StringBuilder(kind);
+    if (item.year > 0) line.append(" · ").append(item.year);
+    if (!item.genres.isEmpty()) line.append(" · ").append(android.text.TextUtils.join(", ", item.genres.subList(0, Math.min(2, item.genres.size()))));
+    if (item.rating > 0) line.append(" · ★ ").append(String.format(new Locale("es", "ES"), "%.1f", item.rating));
+    try {
+      return new Catalog.Channel(new JSONObject().put("id", "lib:" + section + "/" + item.id).put("name", item.title).put("event", true)
+          .put("cover", item.backdrop.isEmpty() ? item.poster : item.backdrop).put("logo", item.poster).put("meta", line.toString())
+          .put("region", item.series ? "series" : "film"), false);
+    } catch (JSONException impossible) {
+      throw new IllegalStateException(impossible);
+    }
+  }
+
+  static boolean isLibraryHero(Catalog.Channel c) {
+    return c != null && c.id.startsWith("lib:");
+  }
+
+  /** «Ver ahora» plays a film; a series (or «Más información») opens its page. */
+  void openLibraryHero(Catalog.Channel c, boolean page) {
+    String[] parts = c.id.substring(4).split("/", 2);
+    Library.Item item = library == null || parts.length < 2 ? null : library.find(parts[0], parts[1]);
+    if (item == null) { Toast.makeText(this, "Este título ya no está en el catálogo.", Toast.LENGTH_SHORT).show(); return; }
+    if (!page && !item.series && !item.url.isEmpty()) playEntry(item.entry(parts[0], null), false);
+    else libraryDetail(parts[0], item);
+  }
+
+  /** «Top 10 de la semana»: big numbers next to the posters, as on Netflix. */
+  void topRow(List<Library.Item> items) {
+    if (items.isEmpty()) return;
+    heading("Top " + items.size() + " de la semana", "Según TMDB");
+    HorizontalScrollView h = new HorizontalScrollView(this);
+    h.setHorizontalScrollBarEnabled(false);
+    h.setClipToPadding(false);
+    LinearLayout r = row();
+    r.setGravity(Gravity.BOTTOM);
+    int width = wide() ? 150 : 110;
+    for (int i = 0; i < items.size(); i++) {
+      LinearLayout pair = row();
+      pair.setGravity(Gravity.BOTTOM);
+      TextView rank = new TextView(this);
+      rank.setText(String.valueOf(i + 1));
+      rank.setTextSize(wide() ? 96 : 72);
+      rank.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      rank.setTextColor(0x99ffffff);
+      rank.setIncludeFontPadding(false);
+      rank.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-2, -2);
+      rp.setMargins(dp(4), 0, dp(-10), dp(32));
+      pair.addView(rank, rp);
+      View card = poster(items.get(i), width);
+      card.setContentDescription("Número " + (i + 1) + ": " + items.get(i).title);
+      pair.addView(card);
+      r.addView(pair);
+    }
+    h.addView(r);
+    list.addView(h);
+  }
+
   /** The library's own entry for a «Continuar viendo» entry (section, item and episode), or null. */
   JSONObject libraryEntry(JSONObject entry) {
     if (library == null) return null;
@@ -1883,6 +1971,7 @@ public class MainActivity extends Activity {
   }
 
   void favoriteAction(View view, Catalog.Channel channel) {
+    if (isLibraryHero(channel)) return; // Films and series are not channels to keep in favourites.
     view.setOnLongClickListener(v -> {
       if (favorites.contains(channel.channelId)) favorites.remove(channel.channelId);
       else favorites.add(channel.channelId);
