@@ -1023,9 +1023,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void diagnose() {
+    diagnoseAddress(directUrl != null ? directUrl : pageUrl);
+  }
+
+  private void diagnoseAddress(String address) {
     if (diagnosing) return;
     diagnosing = true;
-    final int request = generation;
+    final String target = address;
     final String previous =
         lastReport
             + "\n"
@@ -1040,18 +1044,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     + player.getTotalBufferedDuration()
                     + " ms");
     status.setText("Comparando la conexión de los motores. Espera unos segundos…");
-    worker.execute(
+    new Thread(
         () -> {
-          String report = previous + "\n\nPrueba sin cambiar la red del dispositivo:\n";
-          report += probe("Sistema", url -> (java.net.HttpURLConnection) url.openConnection());
-          report += "\n" + probe(transport.name(), transport);
-          try { report += "\n" + probe("Chromium", ChromiumNetwork.get(this)); }
+          String report = previous + "\n\nComprobando: " + android.net.Uri.parse(target).getHost() + android.net.Uri.parse(target).getPath() + "\nPrueba sin cambiar la red del dispositivo:\n";
+          report += probe("Sistema", target, url -> (java.net.HttpURLConnection) url.openConnection());
+          report += "\n" + probe(transport.name(), target, transport);
+          try { report += "\n" + probe("Chromium", target, ChromiumNetwork.get(this)); }
           catch (java.io.IOException failure) { report += "\nChromium: " + ConnectionReport.describe(failure); }
           final String result = report;
           handler.post(
               () -> {
                 diagnosing = false;
-                if (!active || generation != request) return;
+                if (!active || isFinishing()) return;
                 lastReport = result;
                 status.setText("Diagnóstico disponible · Pulsa Copiar en la ventana.");
                 new AlertDialog.Builder(this)
@@ -1072,14 +1076,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     .setNegativeButton("Cerrar", null)
                     .show();
               });
-        });
+        }, "Calamar-diagnostico").start();
   }
 
-  private String probe(String name, PlayerDocument.ConnectionFactory factory) {
+  private String probe(String name, String target, PlayerDocument.ConnectionFactory factory) {
     long start = android.os.SystemClock.elapsedRealtime();
     try {
-      if (directUrl != null) {
-        java.net.HttpURLConnection connection = factory.open(new java.net.URL(directUrl));
+      if (VideoResolver.isMedia(target) || target.equals(directUrl)) {
+        java.net.HttpURLConnection connection = factory.open(new java.net.URL(target));
         try {
           connection.setConnectTimeout(10000);
           connection.setReadTimeout(10000);
@@ -1089,17 +1093,50 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           connection.disconnect();
         }
       }
-      PlayerDocument.Result result = PlayerDocument.fetch(pageUrl, factory);
-      int count = VideoResolver.parse(result.html, result.url).size();
+      PlayerDocument.Result result = PlayerDocument.fetch(target, factory);
+      java.util.List<VideoResolver.Source> found = VideoResolver.parse(result.html, result.url);
+      int count = found.size();
       return name
           + ": HTTP 200 · "
           + count
           + " fuentes · "
           + (android.os.SystemClock.elapsedRealtime() - start)
-          + " ms";
+          + " ms" + (found.isEmpty() ? "" : "\n  Primer M3U8: " + probeMedia(found.get(0).url, result.url, factory));
     } catch (Exception failure) {
       return name + ": " + ConnectionReport.describe(failure);
     }
+  }
+
+  private String probeMedia(String address, String referer, PlayerDocument.ConnectionFactory factory) {
+    try {
+      java.net.HttpURLConnection c = factory.open(new java.net.URL(address));
+      try {
+        c.setConnectTimeout(10000); c.setReadTimeout(10000);
+        c.setRequestProperty("User-Agent", PlayerDocument.BROWSER_USER_AGENT);
+        c.setRequestProperty("Referer", referer);
+        c.setRequestProperty("Range", "bytes=0-1023");
+        int code = c.getResponseCode();
+        if (code != 200 && code != 206) return "HTTP " + code;
+        try (java.io.InputStream in = c.getInputStream()) {
+          return "HTTP " + code + (in.read() >= 0 ? " · recibe datos" : " · respuesta vacía");
+        }
+      } finally { c.disconnect(); }
+    } catch (Exception failure) { return ConnectionReport.describe(failure); }
+  }
+
+  private void chooseDiagnostic() {
+    List<String> addresses = new ArrayList<>(channelPages);
+    if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
+    if (directUrl != null) addresses.add(directUrl);
+    if (addresses.isEmpty()) return;
+    String[] labels = new String[addresses.size()];
+    for (int i = 0; i < labels.length; i++) {
+      Uri u = Uri.parse(addresses.get(i));
+      labels[i] = u.getHost() + (VideoResolver.renewablePage(addresses.get(i)) || VideoResolver.eventApi(addresses.get(i)) != null ? u.getPath() : " · enlace directo");
+    }
+    new AlertDialog.Builder(this).setTitle("Comprobar conexión")
+        .setItems(labels, (dialog, index) -> diagnoseAddress(addresses.get(index)))
+        .setNegativeButton("Cerrar", null).show();
   }
 
   private void chooseSource() {
@@ -1142,6 +1179,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     sourceDialog = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
+        .setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic())
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
         })
