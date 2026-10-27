@@ -387,7 +387,12 @@ function home() {
   if (list.length) nodes.push(highlightSlider(list));
   // «Eventos En Directo»: today's events with something to play, the first row of all.
   const live = liveEvents(matches);
-  if (live.length) nodes.push(sectionHead(LIVE_ROW, el('span', {}, live.length === 1 ? '1 evento' : `${live.length} eventos`)), rail(live, { wide: true, limit: live.length }));
+  // The same events stay in their league's row too: the cards are copies of the same event.
+  if (live.length) {
+    const liveRail = rail(live, { wide: true, limit: live.length });
+    liveRail.classList.add('live-rail');
+    nodes.push(sectionHead(LIVE_ROW, el('span', {}, live.length === 1 ? '1 evento' : `${live.length} eventos`)), liveRail);
+  }
   // Films and episodes left half watched come right under the featured slider: those of this browser,
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
@@ -398,9 +403,7 @@ function home() {
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // Only events on the home page: one row per league, each in date order (soonest first).
-  // The events already in «Eventos En Directo» are not repeated in their league's row.
-  const onAir = new Set(live);
-  for (const row of eventRows(matches.filter((e) => !onAir.has(e)), state.custom)) {
+  for (const row of eventRows(matches, state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }

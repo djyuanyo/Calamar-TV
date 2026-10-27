@@ -99,13 +99,13 @@ try {
   assert.equal(published.events[0].homeTeamId, teamIds[0]);
   assert.match(published.events[0].cover, /^data:image\/jpeg;base64,/);
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
-  await page.locator('.event-card').waitFor();
+  await page.locator('.event-card:not(.live-rail *)').waitFor();
   assert.equal(await page.locator('a[data-route=futbol]').count(), 0);
   // The home page lists only events, in one row per league with its name.
   assert.equal(await page.locator('main .rail .card:not(.event-card)').count(), 0);
   assert.equal(await page.locator('main .section-head h2').first().textContent(), 'Liga de prueba');
   const dimensions = await page.evaluate(() => {
-    const cover = document.querySelector('.event-card .event-cover'), art = cover.parentElement;
+    const cover = document.querySelector('.event-card:not(.live-rail *) .event-cover'), art = cover.parentElement;
     const header = document.querySelector('.brand').getBoundingClientRect(), search = document.querySelector('.search').getBoundingClientRect();
     return { cover: cover.getBoundingClientRect().toJSON(), art: art.getBoundingClientRect().toJSON(), fit: getComputedStyle(cover).objectFit, below: search.top >= header.bottom };
   });
@@ -114,7 +114,7 @@ try {
   assert.ok(Math.abs(dimensions.cover.height - dimensions.art.height) < 1);
   assert.equal(await page.locator('.card:not(.event-card) .badge.live').count(), 0);
   // Until the event starts its badge shows when it starts instead of a live label.
-  assert.equal(await page.locator('.event-card .badge').textContent(), 'mar 1 dic · 21:00');
+  assert.equal(await page.locator('.event-card:not(.live-rail *) .badge').textContent(), 'mar 1 dic · 21:00');
   assert.equal(await page.locator('.highlight-slider .event-state').textContent(), 'mar 1 dic · 21:00');
   const heroTitle = () => page.locator('.highlight-slider .hero h1').textContent();
   assert.equal(await heroTitle(), 'Local vs visitante');
@@ -138,7 +138,7 @@ try {
   assert.equal(await page.locator('#player').isHidden(), true);
   await page.locator('.slider-dots button').nth(1).click();
   assert.equal(await heroTitle(), 'Sports Two');
-  await Promise.all([page.waitForRequest('https://example.com/one.mp4'), page.locator('.event-card').click()]);
+  await Promise.all([page.waitForRequest('https://example.com/one.mp4'), page.locator('.event-card:not(.live-rail *)').click()]);
   await page.locator('#player:not([hidden])').waitFor();
   // Event links use the slug of the event name, like channels.
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
@@ -298,11 +298,11 @@ try {
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.some(e => e.matchId === '401882870'));
   await page.locator('.nav a').filter({hasText:'Inicio'}).click();
-  await page.locator('.event-card [data-match-id]').getByText('2 – 1 · En juego · 74′',{exact:true}).waitFor();
-  await page.locator('.event-card .card-viewers b').getByText('0',{exact:true}).waitFor();
-  const cardPosition=await page.locator('.event-card').evaluate(c => {const a=c.querySelector('.art').getBoundingClientRect(),b=c.querySelector('.card-viewers').getBoundingClientRect();return {right:a.right-b.right,top:b.top-a.top};});
+  await page.locator('.event-card:not(.live-rail *) [data-match-id]').getByText('2 – 1 · En juego · 74′',{exact:true}).waitFor();
+  await page.locator('.event-card:not(.live-rail *) .card-viewers b').getByText('0',{exact:true}).waitFor();
+  const cardPosition=await page.locator('.event-card:not(.live-rail *)').evaluate(c => {const a=c.querySelector('.art').getBoundingClientRect(),b=c.querySelector('.card-viewers').getBoundingClientRect();return {right:a.right-b.right,top:b.top-a.top};});
   assert.ok(Math.abs(cardPosition.right-8)<1.5);assert.ok(Math.abs(cardPosition.top-8)<1.5);
-  await page.locator('.event-card').click();
+  await page.locator('.event-card:not(.live-rail *)').click();
   await page.locator('#player:not([hidden])').waitFor();
   // An event with a match link stays in the page: the match's information, statistics and line-ups under the video.
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), undefined);
@@ -352,29 +352,29 @@ try {
   await page.setViewportSize({width:390,height:844});
   scoreFinished = true;
   await page.clock.fastForward(31000);
-  await page.locator('.event-card [data-match-id]').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
+  await page.locator('.event-card:not(.live-rail *) [data-match-id]').getByText('2 – 1 · Finalizado', { exact: true }).waitFor();
   assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
   // Cards under an open player are not counted again (Firestore quota): they keep their number.
-  assert.equal(await page.locator('.event-card .card-viewers b').first().textContent(),'0');
+  assert.equal(await page.locator('.event-card:not(.live-rail *) .card-viewers b').first().textContent(),'0');
   scoreOffline = true;
   await page.clock.fastForward(31000);
-  await page.locator('.event-card [data-match-id]').getByText('Marcador no disponible', { exact: true }).waitFor();
+  await page.locator('.event-card:not(.live-rail *) [data-match-id]').getByText('Marcador no disponible', { exact: true }).waitFor();
   assert.equal(await page.locator('#player [data-match-id]').count(),0);
   // Grace is kept across a page reload and an API outage. Expiring a card keeps admin data.
   const finishRegistry=await page.evaluate(() => JSON.parse(localStorage.getItem('calamar-match-finished-v1')));
   const graceEnd=finishRegistry['401882870']+300000;
   await page.goto(base + '/?expiry=1#/inicio');
-  await page.locator('.event-card').waitFor();
+  await page.locator('.event-card:not(.live-rail *)').waitFor();
   const remaining=graceEnd-await page.evaluate(() => Date.now());
   assert.ok(remaining>1500);
   await page.clock.fastForward(remaining-1500);
-  assert.equal(await page.locator('.event-card').count(),1);
+  assert.equal(await page.locator('.event-card:not(.live-rail *)').count(),1);
   await page.clock.fastForward(1501);
-  await page.waitForFunction(() => !document.querySelector('.event-card'));
+  await page.waitForFunction(() => !document.querySelector('.event-card:not(.live-rail *)'));
   assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).events.length),1);
   scoreOffline=false;scoreFinished=false;
   await page.clock.fastForward(31000);
-  await page.locator('.event-card').waitFor();
+  await page.locator('.event-card:not(.live-rail *)').waitFor();
   // Every event card opens, including the second item of a rail (map's index is not a picker).
   await page.evaluate(() => {
     const c=JSON.parse(sessionStorage.getItem('catalog'));
@@ -382,7 +382,7 @@ try {
     sessionStorage.setItem('catalog',JSON.stringify(c));
   });
   await page.goto(base + '/?regression=2#/inicio');
-  await page.locator('.event-card').filter({hasText:'Otro partido'}).click();
+  await page.locator('.event-card:not(.live-rail *)').filter({hasText:'Otro partido'}).click();
   assert.equal(await page.locator('#player-title').textContent(),'Otro partido');
   assert.equal(await page.locator('#player-refresh').count(), 0, 'no Refrescar button in the player');
   assert.equal(await page.locator('#player-share svg').count(), 1, 'sharing is an icon');
@@ -662,7 +662,7 @@ try {
   assert.equal(savedFixture.name, undefined, 'the name keeps following the teams');
   assert.equal(savedFixture.matchUrl, undefined, 'the Google link keeps following the teams');
   await page.goto(base + '/#/');
-  const weekRow = page.locator('.event-card');
+  const weekRow = page.locator('.event-card:not(.live-rail *)');
   await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).waitFor();
   await weekRow.filter({ hasText: 'Atlético Madrid vs Sevilla' }).waitFor();
   assert.equal(await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).count(), 0, 'next week stays hidden');
