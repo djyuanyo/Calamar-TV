@@ -576,8 +576,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (eventApi != null) {
-              PlayerDocument.Result event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                  NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              PlayerDocument.Result event;
+              try {
+                event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              } catch (java.io.IOException blocked) {
+                if (blocked instanceof PlayerDocument.HttpFailure) throw blocked;
+                event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
+                chromiumNetwork = true;
+              }
               List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
@@ -635,7 +642,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
-                    tryZicoBrowser();
+                    if (!tryNextZicoSource()) problem("Zico no ha devuelto fuentes de vídeo para este canal.");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -659,7 +666,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (zicoPage() && tryZicoBrowser()) {
+                  } else if (zicoPage() && switchChannelSource()) {
                     return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
@@ -830,7 +837,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoBrowser()) return;
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -876,7 +883,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoBrowser()) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -893,11 +900,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null);
   }
 
-  private boolean tryZicoBrowser() {
-    if (!zicoPage() || webMode) return false;
-    openWeb();
-    status.setText("Probando el reproductor de la página en la app…");
-    return true;
+  private boolean tryNextZicoSource() {
+    return zicoPage() && switchChannelSource();
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {
@@ -947,6 +951,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       attemptWindow = now;
     }
     if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
+      if (automaticAttempts >= 3) {
+        if (switchChannelSource()) return;
+        problem("No se pudo conectar con esta fuente desde tu red. Prueba otra fuente en Fuentes.");
+        return;
+      }
       if (sources.size() > 1) selection = (selection + 1) % sources.size();
       long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
       status.setText(message);
