@@ -1,30 +1,20 @@
-# The hosting relay v4 for 30 s, as one more viewer of the shared connection: what it answers.
-import base64, json, time, urllib.request, urllib.error
-CAT = 'https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom'
-data = json.loads(json.load(urllib.request.urlopen(CAT, timeout=20))['fields']['json']['stringValue'])
-out = {}
-try:
-    out['version'] = urllib.request.urlopen(urllib.request.Request('https://calamarmenciano.com/calamar-tv-relay.php?version=1'), timeout=20).read().decode()
-except Exception as e:
-    out['version'] = repr(e)[:200]
-chan = next(c for c in data['channels'] if c['id'] == 'mio-movistar-mvhqvujf')
-src = next(s for s in chan['streams'] if s.startswith('http://'))
-req = urllib.request.Request('https://calamarmenciano.com/calamar-tv-relay.php?stream=1', headers={
-    'Origin': 'https://djyuanyo.github.io', 'X-Calamar-Source': base64.b64encode(src.encode()).decode()})
-t = time.time(); total = 0; marks = []; res = {}
-try:
-    r = urllib.request.urlopen(req, timeout=40); res['status'] = r.status; res['headers'] = dict(r.headers)
-    while time.time() - t < 30:
-        chunk = r.read(65536)
-        if not chunk: res['ended'] = True; break
-        if total == 0: res['first_byte_s'] = round(time.time() - t, 2); res['first_bytes'] = chunk[:8].hex()
-        total += len(chunk)
-        if not marks or time.time() - t - marks[-1][0] >= 3: marks.append((round(time.time() - t, 1), total))
-except urllib.error.HTTPError as e:
-    res['status'] = e.code; res['body'] = e.read(400).decode('utf-8', 'replace')
-except Exception as e:
-    res['error'] = type(e).__name__ + ': ' + str(e)[:200]
-res.update({'secs': round(time.time() - t, 1), 'bytes': total, 'marks': marks})
-out['stream'] = res
+# LuluStream API (with an invalid key): does it answer, how fast, with CORS? And the hosting relay.
+import json, time, urllib.request, urllib.error, urllib.parse
+def ask(url, data=None, headers=None):
+    t = time.time()
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers or {}), timeout=40)
+        return {'status': r.status, 'secs': round(time.time() - t, 2), 'cors': r.headers.get('Access-Control-Allow-Origin'), 'body': r.read(300).decode('utf-8', 'replace')}
+    except urllib.error.HTTPError as e:
+        return {'status': e.code, 'secs': round(time.time() - t, 2), 'cors': e.headers.get('Access-Control-Allow-Origin'), 'body': e.read(300).decode('utf-8', 'replace')}
+    except Exception as e:
+        return {'error': type(e).__name__ + ': ' + str(e)[:200], 'secs': round(time.time() - t, 2)}
+o = {'Origin': 'https://djyuanyo.github.io'}
+out = {
+  'api_direct': ask('https://api.lulustream.com/api/folder/list?key=invalid&fld_id=0&files=1', headers=o),
+  'api_account': ask('https://api.lulustream.com/api/account/info?key=invalid', headers=o),
+  'hosting_relay': ask('https://calamarmenciano.com/calamar-lulu.php', data=urllib.parse.urlencode({'api': 'folder/list', 'fld_id': '0', 'files': '1', 'key': 'invalid'}).encode(),
+                       headers={**o, 'Content-Type': 'application/x-www-form-urlencoded'}),
+  'hosting_preflight': ask('https://calamarmenciano.com/calamar-lulu.php', headers=o),
+}
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1))
-# run 10
