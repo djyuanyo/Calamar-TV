@@ -1003,3 +1003,13 @@ label[hidden] { display: none; }
 .mc-man { padding-bottom: 2px; }
 .mc-man .mc-shirt + .mc-man-name { margin-top: 6px; }
 @media (max-width: 480px) { .mc-shirt.photo img { width: 42px; height: 42px; } }
+
+/* Films and series «En portada» in the featured slider, and the weekly top row. */
+.library-hero .tag { justify-self: start; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.library-hero .hero-overview { margin: 0; max-width: 56ch; color: #c9ced6; font-size: 15px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.top-rail { grid-auto-columns: clamp(170px, 17vw, 230px); }
+.top-card { position: relative; display: grid; grid-template-columns: 38% 1fr; align-items: end; text-decoration: none; color: inherit; min-width: 0; }
+.top-card .poster-frame { grid-column: 2; }
+.top-rank { grid-column: 1; justify-self: end; margin-right: -14px; font-size: clamp(90px, 9vw, 130px); line-height: .8; font-weight: 800; color: var(--bg); -webkit-text-stroke: 3px rgba(255,255,255,.55); letter-spacing: -.06em; z-index: 1; }
+.top-card:hover .poster-frame, .top-card:focus-visible .poster-frame { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--accent), 0 16px 34px rgba(0,0,0,.55); }
+@media (max-width: 720px) { .library-hero .hero-overview { -webkit-line-clamp: 2; font-size: 14px; } .top-rail { grid-auto-columns: 150px; } }

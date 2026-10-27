@@ -8,6 +8,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
+  cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
@@ -307,11 +308,27 @@ function heroSection(list, index = 0) {
                   showHighlight(i, true);
                 },
               },
-              p.event ? eventCover(p, 'pick-cover') : logo(p),
+              p.event || p.libraryHero ? eventCover(p, 'pick-cover') : logo(p),
             ),
           ),
         )
       : null;
+  if (c.libraryHero) {
+    // A film or series «En portada»: its TMDB backdrop, and play (films) or its page (series).
+    const film = c.item.kind !== 'tv' && c.item.url;
+    return el('section', { class: 'hero event-hero library-hero', style: `--h:${hue(c.name)}`, 'aria-label': `${c.section.one} destacada` },
+      el('div', { class: 'hero-bg' }),
+      c.cover ? eventCover(c, 'event-hero-cover') : null,
+      el('div', { class: 'hero-body' },
+        el('span', { class: 'tag' }, c.section.label),
+        el('h1', {}, c.name),
+        el('p', { class: 'hero-meta' }, itemLine(c.section, c.item)),
+        c.item.tmdb?.overview ? el('p', { class: 'hero-overview' }, c.item.tmdb.overview) : null,
+        el('div', { class: 'hero-actions' },
+          film ? el('button', { class: 'btn lg', type: 'button', onclick: () => open(playable(c.section, c.item)) }, icon('play'), 'Ver ahora') : null,
+          el('a', { class: `btn lg ${film ? 'secondary' : ''}`, href: itemPath(c.section, c.item) }, film ? 'Más información' : 'Ver episodios'))),
+      picks);
+  }
   let section = el(
     'section',
     { class: c.event ? 'hero event-hero' : 'hero', style: `--h:${hue(c.name)}`, 'aria-label': 'Canal destacado' },
@@ -334,9 +351,25 @@ function heroSection(list, index = 0) {
   return section;
 }
 
+/** The library for the home page: what is already here, downloaded in the background the first time. */
+let homeLibraryAsked = false;
+function homeLibrary() {
+  if (!libraryShown()) return null;
+  const library = cachedLibrary();
+  if (!library && !homeLibraryAsked) {
+    homeLibraryAsked = true;
+    fetchLibrary().then(() => { if (!location.hash.replace(/^#\/?/, '') && !search.value.trim()) route(); }).catch(() => {});
+  }
+  return library;
+}
+/** A film or series «En portada», as an entry of the featured slider. */
+const libraryHero = ({ section, item }) => ({ name: itemTitle(item), libraryHero: true, section, item, cover: item.tmdb?.backdrop || item.tmdb?.poster || '' });
+
 function home() {
   const matches = events(state.channels, state.custom);
-  const list = homeHighlights(state.channels, state.custom);
+  const library = homeLibrary();
+  // Films and series marked «En portada» join the featured events and channels.
+  const list = [...homeHighlights(state.channels, state.custom), ...libraryFeatured(library).map(libraryHero)];
   scheduleStartRefresh(matches);
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
@@ -344,8 +377,11 @@ function home() {
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
   if (libraryShown()) refreshProgress();
+  const top = libraryTop(library);
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
+  // The weekly top of the library's titles (set from TMDB in the admin page).
+  if (top.length) nodes.push(...topRow(el, top));
   // Only events on the home page: one row per league, each in date order (soonest first).
   for (const row of eventRows(matches, state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),

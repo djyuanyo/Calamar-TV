@@ -45,6 +45,22 @@ export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
   return { info, seasons };
 }
 
+/** TMDB's trending films and series of the week, most trending first: [{ id, kind }] (up to 100). */
+export async function tmdbTrending(key, fetcher = globalThis.fetch, pages = 5) {
+  const out = [];
+  for (let page = 1; page <= pages; page++) {
+    const data = await tmdb('/trending/all/week', { page: String(page) }, key, fetcher);
+    for (const r of data.results || []) if (r.media_type === 'movie' || r.media_type === 'tv') out.push({ id: r.id, kind: r.media_type });
+    if (page >= (data.total_pages || 1)) break;
+  }
+  return out;
+}
+
+/** How popular a film or series is on TMDB today (its `popularity`). */
+export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) {
+  return Number((await tmdb(`/${kind}/${Number(id)}`, {}, key, fetcher)).popularity) || 0;
+}
+
 /** The episodes of one season: [{ episode, name, overview, still }]. */
 export async function seasonEpisodes(id, season, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/tv/${Number(id)}/season/${Number(season)}`, {}, key, fetcher);
