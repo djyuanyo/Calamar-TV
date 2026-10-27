@@ -1,0 +1,210 @@
+{
+ "votes_get": [
+  200,
+  "{\"h\":0,\"d\":0,\"a\":0}",
+  "https://djyuanyo.github.io",
+  "application/json; charset=utf-8"
+ ],
+ "votes_post_invalid": [
+  400,
+  "{\"error\":\"Voto no válido.\"}"
+ ],
+ "pages_votes.js": [
+  200,
+  4097,
+  false,
+  false,
+  true,
+  "Tue, 27 Oct 2026 20:37:14 GMT",
+  "max-age=600"
+ ],
+ "pages_app.js": [
+  200,
+  68914,
+  true,
+  false,
+  true,
+  "Tue, 27 Oct 2026 20:37:14 GMT",
+  "max-age=600"
+ ],
+ "pages_match-center.js": [
+  200,
+  29684,
+  false,
+  true,
+  false,
+  "Tue, 27 Oct 2026 20:37:14 GMT",
+  "max-age=600"
+ ],
+ "pages_polymarket.js": [
+  200,
+  5586,
+  false,
+  false,
+  false,
+  "Tue, 27 Oct 2026 20:37:14 GMT",
+  "max-age=600"
+ ],
+ "lineups": [
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "Arosa",
+   "away": "Pontevedra",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "Atlético Paso",
+   "away": "Córdoba",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "CD Tudelano",
+   "away": "Real Zaragoza",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     20,
+     17
+    ],
+    "away": [
+     23,
+     21
+    ]
+   }
+  },
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "Manacor",
+   "away": "Villarreal",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "Recreativo Huelva",
+   "away": "Rayo Vallecano",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     20,
+     14
+    ],
+    "away": [
+     23,
+     23
+    ]
+   }
+  },
+  {
+   "league": "esp.copa_del_rey",
+   "date": "2026-10-27T20:00Z",
+   "home": "Sporting de Alcázar",
+   "away": "Málaga",
+   "state": "in",
+   "http": 200,
+   "answer": {
+    "status": "NS",
+    "error": null,
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "league": "eng.league_cup",
+   "date": "2026-10-27T20:00Z",
+   "home": "Fleetwood Town",
+   "away": "Arsenal",
+   "state": "in",
+   "http": 502,
+   "answer": {
+    "status": null,
+    "error": "API-Football: Too many requests. You have reached your per-minute request limit. Please wait a few seconds before retrying or upgrade your plan for higher limits.",
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "league": "ita.1",
+   "date": "2026-10-27T19:45Z",
+   "home": "AS Roma",
+   "away": "Cagliari",
+   "state": "in",
+   "http": 502,
+   "answer": {
+    "status": null,
+    "error": "API-Football: Too many requests. You have reached your per-minute request limit. Please wait a few seconds before retrying or upgrade your plan for higher limits.",
+    "home": [
+     0,
+     0
+    ],
+    "away": [
+     0,
+     0
+    ]
+   }
+  }
+ ]
+}
