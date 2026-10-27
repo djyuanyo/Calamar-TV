@@ -153,12 +153,12 @@ function playerAllowedPage($page, $catalogStreams, $get = null) {
     if (isset($catalogStreams[$page])) return true;
     $parts = parse_url($page);
     $host = strtolower($parts['host'] ?? '');
-    if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -11) !== '.zicotv.cc')
+    if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -strlen('.zicotv.cc')) !== '.zicotv.cc')
         || !preg_match('#^/api/player/[0-9]+/?$#', $parts['path'] ?? '')) return false;
     foreach ($catalogStreams as $event => $_) {
         $eventParts = parse_url($event);
         $eventHost = strtolower($eventParts['host'] ?? '');
-        if (($eventParts['scheme'] ?? '') !== 'https' || ($eventHost !== 'zicotv.cc' && substr($eventHost, -11) !== '.zicotv.cc')
+        if (($eventParts['scheme'] ?? '') !== 'https' || ($eventHost !== 'zicotv.cc' && substr($eventHost, -strlen('.zicotv.cc')) !== '.zicotv.cc')
             || !preg_match('#^/events/([0-9]+)/?$#', $eventParts['path'] ?? '', $match)) continue;
         $api = 'https://' . $eventHost . '/api/v1/events/' . $match[1];
         list($status, $body) = $get ? $get($api) : playerGet($api, '');
