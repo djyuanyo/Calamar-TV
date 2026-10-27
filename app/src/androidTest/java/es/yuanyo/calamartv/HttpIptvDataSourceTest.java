@@ -17,7 +17,7 @@ public class HttpIptvDataSourceTest {
     public void addTransferListener(TransferListener l){}
     public long open(DataSpec s) throws java.io.IOException {
       requests.add(s);reads=0;
-      if(blocked && !s.uri.equals(HttpIptvDataSource.ENDPOINT))throw new java.io.IOException("blocked by the operator");
+      if(blocked)throw new java.io.IOException("blocked by the operator");
       return 188;
     }
     public int read(byte[] b,int o,int n){if(reads++>0)return C.RESULT_END_OF_INPUT;b[o]=71;return 1;}
@@ -32,8 +32,7 @@ public class HttpIptvDataSourceTest {
     assertTrue(transport.mediaFactory(null,false,"http://cdn.example/user/password/244").createDataSource() instanceof HttpIptvDataSource);
   }
   @Test public void iptvPlaysStraightFromTheProviderAsInVlc() throws Exception {
-    HttpIptvDataSource.RELAYED.clear();
-    Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
+    Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream);
     String original="http://31.43.191.125:8080/user/password/244";
     assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original),5000,C.LENGTH_UNSET)));
     byte[] bytes=new byte[188];assertEquals(1,source.read(bytes,0,188));
@@ -41,30 +40,26 @@ public class HttpIptvDataSourceTest {
     assertEquals(1,source.read(bytes,0,188));
     assertEquals(2,upstream.requests.size());
     for(DataSpec request:upstream.requests){assertEquals(original,request.uri.toString());assertEquals(0,request.position);}
-    assertTrue(HttpIptvDataSource.RELAYED.isEmpty());
     source.close();
   }
-  @Test public void finiteHostingConnectionsRenewWithoutEndingLivePlayback() throws Exception {
-    HttpIptvDataSource.RELAYED.clear();
-    Fake upstream=new Fake();upstream.blocked=true;HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
-    String original="http://31.43.191.125:8080/user/password/244";
-    assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original))));
-    byte[] bytes=new byte[188];assertEquals(1,source.read(bytes,0,188));assertEquals(1,source.read(bytes,0,188));
-    // The direct try failed (blocked), then the hosting, renewed once.
-    assertEquals(3,upstream.requests.size());assertEquals(2,upstream.closes);
-    assertEquals(original,upstream.requests.remove(0).uri.toString());
-    assertTrue(HttpIptvDataSource.RELAYED.contains("31.43.191.125:8080"));
-    assertEquals(original,source.getUri().toString());
-    for(DataSpec request:upstream.requests){assertEquals(HttpIptvDataSource.ENDPOINT,request.uri);assertEquals(0,request.position);assertEquals(C.LENGTH_UNSET,request.length);assertFalse(request.uri.toString().contains("password"));}
-    source.close();assertEquals(3,upstream.closes);
-    // The next connection to that provider goes straight to the hosting.
-    Fake next=new Fake();next.blocked=true;HttpIptvDataSource again=new HttpIptvDataSource(next,HttpIptvDataSource.ENDPOINT);
-    again.open(new DataSpec(Uri.parse(original)));assertEquals(1,next.requests.size());assertEquals(HttpIptvDataSource.ENDPOINT,next.requests.get(0).uri);
-    HttpIptvDataSource.RELAYED.clear();
+  @Test public void failuresNeverRedirectCredentialsToHostingAndNextOpenRetriesDirect() throws Exception {
+    Fake upstream = new Fake(); upstream.blocked = true;
+    HttpIptvDataSource source = new HttpIptvDataSource(upstream);
+    Uri original = Uri.parse("http://provider.example:8080/user/password/265");
+    try { source.open(new DataSpec(original)); fail("Failure should reach the player"); }
+    catch (java.io.IOException expected) {}
+    source.close(); upstream.blocked = false;
+    source.open(new DataSpec(original));
+    assertEquals(2, upstream.requests.size());
+    for (DataSpec request : upstream.requests) {
+      assertEquals(original, request.uri);
+      assertFalse(request.httpRequestHeaders.containsKey("X-Calamar-Source"));
+    }
+    source.close();
   }
   @Test public void tdtHttpsAndLocalHttpRemainDirectAndKeepTheirEndOfInput() throws Exception {
     for(String address:new String[]{"https://tdt.example/live.m3u8","http://127.0.0.1/local.ts"}){
-      Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
+      Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream);
       assertEquals(188,source.open(new DataSpec(Uri.parse(address))));byte[] bytes=new byte[188];source.read(bytes,0,188);
       assertEquals(C.RESULT_END_OF_INPUT,source.read(bytes,0,188));assertEquals(address,upstream.requests.get(0).uri.toString());assertEquals(1,upstream.requests.size());source.close();
     }

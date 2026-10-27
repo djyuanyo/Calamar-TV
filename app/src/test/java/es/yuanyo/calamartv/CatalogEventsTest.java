@@ -24,7 +24,7 @@ public class CatalogEventsTest {
     SharedCatalog.validate(data);
     Catalog.Channel card = Catalog.events(Catalog.merge(null, data), data).get(0);
     assertEquals(3, card.streams.size());
-    assertEquals(2, AppSources.forAndroid(card.streams).size());
+    assertEquals(3, AppSources.forAndroid(card.streams).size());
     event.put("channelId", "");
     SharedCatalog.validate(data);
     assertEquals(3, Catalog.events(Collections.emptyList(), data).get(0).streams.size());

@@ -574,6 +574,26 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         () -> {
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
+            String eventApi = VideoResolver.eventApi(requestedPage);
+            if (eventApi != null) {
+              PlayerDocument.Result event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                  NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
+              if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
+              handler.post(() -> {
+                if (!active || request != generation) return;
+                resolving = false;
+                int at = channelPages.indexOf(requestedPage);
+                channelPages.remove(requestedPage);
+                for (VideoResolver.Source source : players) {
+                  if (!channelPages.contains(source.url)) channelPages.add(Math.min(Math.max(0, at++), channelPages.size()), source.url);
+                  eventSourceNames.put(source.url, source.label);
+                }
+                pageUrl = players.get(0).url; pageIndex = channelPages.indexOf(pageUrl); selection = 0;
+                documentUrl = pageUrl; updateSourceButton(); resolveFresh();
+              });
+              return;
+            }
             boolean usedChromium = chromiumNetwork;
             PlayerDocument.Result fetched;
             if (usedChromium) fetched = PlayerDocument.fetch(requestedPage, ChromiumNetwork.get(this));
@@ -641,7 +661,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (VideoResolver.renewablePage(pageUrl)) {
+                  } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
                     // The page cannot be reached from this phone (blocked by the operator): the hosting.
@@ -681,6 +701,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     updateSourceButton();
     playSource(sources.get(0));
   }
+
+  private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
   private void playSource(VideoResolver.Source source) {
     if (!active) return;
@@ -1073,7 +1095,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     int number = 0, checked = -1;
     for (String address : pages) {
       if (directUrl == null && address.equals(pageUrl)) checked = names.size();
-      names.add("Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
       actions.add(() -> selectChannelAddress(address, true));
     }
     for (String address : directUrls) {

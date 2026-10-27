@@ -33,6 +33,35 @@ public final class VideoResolver {
     } catch (Exception invalid) { return false; }
   }
 
+  public static String eventApi(String address) {
+    try {
+      URI u = URI.create(address);
+      String host = u.getHost();
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null || host == null
+          || !(host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))) return null;
+      Matcher match = Pattern.compile("/(?:api/v1/)?events/([0-9]+)/?").matcher(u.getPath());
+      return match.matches() ? "https://" + u.getRawAuthority() + "/api/v1/events/" + match.group(1) : null;
+    } catch (Exception invalid) { return null; }
+  }
+
+  public static List<Source> eventPlayers(String json) throws Exception {
+    List<Source> out = new ArrayList<>();
+    JSONArray entries = new JSONObject(json).getJSONObject("data").optJSONArray("sources");
+    if (entries == null) return out;
+    for (int i = 0; i < entries.length(); i++) {
+      JSONObject entry = entries.optJSONObject(i);
+      if (entry == null || entry.optBoolean("locked") || entry.optBoolean("is_premium")) continue;
+      String url = entry.optString("player_url", entry.optString("url"));
+      try {
+        URI u = URI.create(url);
+        if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) continue;
+        boolean duplicate = false; for (Source source : out) if (source.url.equals(url)) duplicate = true;
+        if (!duplicate) out.add(new Source(entry.optString("name", "Fuente del evento"), url));
+      } catch (Exception invalid) { /* Ignore invalid public entries. */ }
+    }
+    return out;
+  }
+
   public static boolean isMedia(String address) {
     try {
       URI u = URI.create(address);

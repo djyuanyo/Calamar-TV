@@ -41,9 +41,11 @@ public class ResolvedPlaybackTest {
 
   @Test public void sourcePickerOffersCatalogAlternativeWhilePageIsStalled() throws Exception { playback(false, true); }
 
-  private void playback(boolean rejectFirst, boolean manualDirect) throws Exception {
-    HeldCertificate certificate = new HeldCertificate.Builder().commonName("player.example")
-        .addSubjectAlternativeName("player.example").build();
+  @Test public void zicoEventApiResolvesAndActuallyPlays() throws Exception { playback(false, false, true); }
+  private void playback(boolean rejectFirst, boolean manualDirect) throws Exception { playback(rejectFirst, manualDirect, false); }
+  private void playback(boolean rejectFirst, boolean manualDirect, boolean eventPage) throws Exception {
+    HeldCertificate certificate = new HeldCertificate.Builder().commonName("bp.zicotv.cc")
+        .addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(certificate).build();
     HandshakeCertificates clientTls = new HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate()).build();
     Buffer video = new Buffer();
@@ -58,11 +60,13 @@ public class ResolvedPlaybackTest {
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false);
       server.start();
-      String origin = server.url("/").newBuilder().host("player.example").build().toString();
+      String origin = server.url("/").newBuilder().host("bp.zicotv.cc").build().toString();
       server.setDispatcher(new Dispatcher() {
         @Override public MockResponse dispatch(RecordedRequest request) {
           String path = request.getPath();
           if (!manualDirect && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
+          if (path.startsWith("/api/v1/events/98019")) return new MockResponse().setHeader("Content-Type", "application/json")
+              .setBody("{\"data\":{\"sources\":[{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}");
           if (path.startsWith("/api/player/28")) {
             int n = pages.incrementAndGet();
             if (manualDirect) {
@@ -91,7 +95,7 @@ public class ResolvedPlaybackTest {
       clientField.set(network, local);
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", origin + "api/player/28").putExtra("title", "Prueba de canal resuelto");
+          .putExtra("page_url", origin + (eventPage ? "events/98019" : "api/player/28")).putExtra("title", "Prueba de canal resuelto");
       if (manualDirect) intent.putStringArrayListExtra("channel_streams", new java.util.ArrayList<>(
           java.util.Arrays.asList(origin + "api/player/28", origin + "live.m3u8?token=direct")));
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
@@ -117,7 +121,7 @@ public class ResolvedPlaybackTest {
               ((Button) button.get(activity)).performClick();
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
-          onView(withText("Enlace 1 · player.example")).inRoot(isDialog()).check(matches(isChecked()));
+          onView(withText("Enlace 1 · bp.zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
           onView(withText("Enlace 2 · Vídeo directo")).inRoot(isDialog()).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
