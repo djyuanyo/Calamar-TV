@@ -14,18 +14,26 @@ function luluResult(data) {
   return data.result ?? {};
 }
 
+// Each call gives up after a while, so a request LuluStream or the hosting never answers shows an
+// error instead of leaving «Leyendo…» on screen forever.
+export const LULU_DIRECT_MS = 12000, LULU_HOSTING_MS = 30000;
+const limited = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(ms) } : {});
+
 /** One API call: straight from the browser, or through the hosting when the browser is not allowed to. */
 export async function luluApi(action, params, key, fetcher = globalThis.fetch) {
   const query = new URLSearchParams({ ...params, key });
   let data;
   try {
-    const response = await fetcher(`${LULU_API}${action}?${query}`, { referrerPolicy: 'no-referrer' });
+    const response = await fetcher(`${LULU_API}${action}?${query}`, { referrerPolicy: 'no-referrer', ...limited(LULU_DIRECT_MS) });
     data = await response.json();
   } catch {
     let response;
     try {
-      response = await fetcher(LULU_ENDPOINT, { method: 'POST', body: new URLSearchParams({ api: action, ...params, key }), referrerPolicy: 'no-referrer' });
-    } catch { throw new Error('Sin conexión con LuluStream ni con el hosting. Comprueba la red y que calamar-lulu.php está subido.'); }
+      response = await fetcher(LULU_ENDPOINT, { method: 'POST', body: new URLSearchParams({ api: action, ...params, key }), referrerPolicy: 'no-referrer', ...limited(LULU_HOSTING_MS) });
+    } catch (error) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw new Error('LuluStream no responde (ni directamente ni a través del hosting). Vuelve a intentarlo en un rato.');
+      throw new Error('Sin conexión con LuluStream ni con el hosting. Comprueba la red y que calamar-lulu.php está subido.');
+    }
     data = await response.json().catch(() => null);
     if (!data) throw new Error(`El hosting no ha podido consultar LuluStream (HTTP ${response.status}).`);
     if (data.error) throw new Error(data.error);

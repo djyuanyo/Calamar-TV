@@ -66,6 +66,34 @@ public class LibraryTest {
     assertEquals("1:15", Library.clock(75000));
   }
 
+  @Test public void progressFromTheWebAndTheAppJoinsByTheLatestChange() throws Exception {
+    long now = 1800000000000L;
+    JSONObject app = new JSONObject().put("e1", new JSONObject().put("key", "e1").put("section", "series").put("item", "paco").put("episode", "e1")
+        .put("name", "Paco").put("url", "https://calamarmenciano.com/S/1.mkv").put("intro_start", 5).put("position", 600000).put("duration", 1500000).put("at", now - 9000));
+    JSONObject shared = Library.Progress.toCloud(app, new JSONObject());
+    assertEquals(600, shared.getJSONObject("entries").getJSONObject("e1").getLong("position"));
+    assertFalse(shared.getJSONObject("entries").getJSONObject("e1").has("url"));
+    // The web watched the next episode later and removed a film: both win over this device.
+    JSONObject web = new JSONObject("{\"entries\":{\"e2\":{\"key\":\"e2\",\"section\":\"series\",\"item\":\"paco\",\"episode\":\"e2\",\"name\":\"Paco\",\"position\":30,\"duration\":1500,\"at\":"
+        + (now - 1000) + "}},\"removed\":{\"f1\":" + (now - 500) + "}}");
+    app.put("f1", new JSONObject().put("key", "f1").put("section", "movies").put("item", "film").put("position", 90000).put("at", now - 2000));
+    JSONObject merged = Library.Progress.merge(Library.Progress.toCloud(app, new JSONObject()), web, now);
+    JSONObject store = Library.Progress.fromCloud(merged, app);
+    assertFalse(store.has("e1"));
+    assertFalse(store.has("f1"));
+    assertEquals(30000, store.getJSONObject("e2").getLong("position"));
+    assertEquals(now - 500, merged.getJSONObject("removed").getLong("f1"));
+    // Watching the same episode again here keeps what only the app stores (link, marks).
+    JSONObject again = Library.Progress.fromCloud(Library.Progress.merge(shared, new JSONObject(), now), app);
+    assertEquals("https://calamarmenciano.com/S/1.mkv", again.getJSONObject("e1").getString("url"));
+    assertEquals(5, again.getJSONObject("e1").getInt("intro_start"));
+    // Removed here: noted, and cleared when it is watched again later.
+    JSONObject gone = Library.Progress.removals(app, new JSONObject(), new JSONObject(), now);
+    assertEquals(now, gone.getLong("e1"));
+    JSONObject back = new JSONObject().put("e1", new JSONObject(app.getJSONObject("e1").toString()).put("at", now + 5));
+    assertFalse(Library.Progress.removals(new JSONObject(), back, gone, now + 5).has("e1"));
+  }
+
   @Test public void visibilityIsAnOptionalBoolean() throws Exception {
     JSONObject catalog = new JSONObject("{\"channels\":[],\"featured\":[],\"hidden\":[]}");
     assertFalse(Library.visible(catalog));

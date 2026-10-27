@@ -10,6 +10,7 @@ import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
+import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
 import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, HEARTBEAT_MS, COUNT_MS, CARDS_MS, CARD_TARGETS } from './audience.js';
 
@@ -339,8 +340,10 @@ function home() {
   scheduleStartRefresh(matches);
   const nodes = [];
   if (list.length) nodes.push(highlightSlider(list));
-  // Films and episodes left half watched in this browser come right under the featured slider.
+  // Films and episodes left half watched come right under the featured slider: those of this browser,
+  // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
+  if (libraryShown()) refreshProgress();
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // Only events on the home page: one row per league, each in date order (soonest first).
@@ -958,6 +961,8 @@ shared().then((f) => f.watchAuth((user) => {
   if (sectionByPage(decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0])) route();
 })).catch(() => {});
 const libraryShown = () => libraryVisible(state.custom) || libraryAdmin;
+// Another device of the account changed «Continuar viendo»: the home page shows it at once.
+startProgressSync(shared, () => { if (!location.hash.replace(/^#\/?/, '')) route(); });
 function syncLibraryNav() {
   for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryShown();
 }

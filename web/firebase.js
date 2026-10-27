@@ -14,6 +14,20 @@ const catalog = doc(db, CATALOG_PATH);
 export const ready = auth.authStateReady();
 export const administrator = (user = auth.currentUser) => !!user && user.email === ADMIN_EMAIL && user.emailVerified && user.providerData.some((p) => p.providerId === 'google.com');
 export const watchAuth = (changed) => onAuthStateChanged(auth, changed);
+// «Continuar viendo» of the signed-in account (calamarProgress/<uid>), the same document the app uses.
+export const PROGRESS_PATH = 'calamarProgress';
+export async function readCloudProgress() {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const snapshot = await getDocFromServer(doc(db, PROGRESS_PATH, user.uid));
+  if (!snapshot.exists()) return { entries: {}, removed: {} };
+  try { return JSON.parse(snapshot.data().json); } catch { return { entries: {}, removed: {} }; }
+}
+export async function writeCloudProgress(data) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await setDoc(doc(db, PROGRESS_PATH, user.uid), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
+}
 export const logout = () => signOut(auth);
 /**
  * Signs in with Google again to hand the session to an app: the Google ID token goes to

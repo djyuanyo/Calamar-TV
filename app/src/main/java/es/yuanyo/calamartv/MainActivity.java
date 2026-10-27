@@ -1129,6 +1129,8 @@ public class MainActivity extends Activity {
     handler.removeCallbacks(refresh);
     handler.post(refresh);
     observeSharedCatalog();
+    // «Continuar viendo» of the signed-in account: what its other devices left half watched.
+    ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
 
   AppUpdater createUpdater() { return new AppUpdater(this); }
@@ -1748,6 +1750,16 @@ public class MainActivity extends Activity {
    * count in the channel audience. When one ends the player says so and the next episode starts.
    */
   void playEntry(JSONObject entry, boolean restart) {
+    if (entry.optString("url").isEmpty()) {
+      // Left half watched on another device: the link and the marks come from the library.
+      JSONObject full = libraryEntry(entry);
+      if (full == null) {
+        loadLibrary();
+        Toast.makeText(this, library == null ? "Cargando el catálogo de vídeos…" : "Este título ya no está en el catálogo.", Toast.LENGTH_SHORT).show();
+        return;
+      }
+      entry = full;
+    }
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
@@ -1761,6 +1773,19 @@ public class MainActivity extends Activity {
     intent.putExtra("progress_entry", entry.toString());
     intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));
     startActivityForResult(intent, PLAY_LIBRARY);
+  }
+
+  /** The library's own entry for a «Continuar viendo» entry (section, item and episode), or null. */
+  JSONObject libraryEntry(JSONObject entry) {
+    if (library == null) return null;
+    for (Library.Item item : library.items(entry.optString("section"))) {
+      if (!item.id.equals(entry.optString("item"))) continue;
+      String episode = entry.optString("episode");
+      Library.Episode e = episode.isEmpty() ? null : item.episode(episode);
+      if (!episode.isEmpty() && e == null) return null;
+      return item.entry(entry.optString("section"), e);
+    }
+    return null;
   }
 
   @Override

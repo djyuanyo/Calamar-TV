@@ -290,8 +290,144 @@ final class Library {
       }
     }
 
+    static JSONObject loadRemoved(android.content.Context context) {
+      try {
+        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString("progress_removed", "{}"));
+      } catch (JSONException broken) {
+        return new JSONObject();
+      }
+    }
+
+    /** Saves the row; what disappeared from it is noted as removed now, and the account's copy follows. */
     static void save(android.content.Context context, JSONObject store) {
-      context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).edit().putString("progress", store.toString()).apply();
+      JSONObject removed = removals(load(context), store, loadRemoved(context), System.currentTimeMillis());
+      write(context, store, removed);
+      ProgressSync.pushSoon(context);
+    }
+
+    static void write(android.content.Context context, JSONObject store, JSONObject removed) {
+      context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).edit()
+          .putString("progress", store.toString()).putString("progress_removed", removed.toString()).apply();
+    }
+
+    /** The removals after going from `before` to `after`: what left the row now, minus what came back later. */
+    static JSONObject removals(JSONObject before, JSONObject after, JSONObject removed, long now) {
+      JSONObject gone = copy(removed);
+      try {
+        java.util.Iterator<String> keys = before.keys();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          if (!after.has(key)) gone.put(key, now);
+        }
+        keys = after.keys();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          JSONObject entry = after.optJSONObject(key);
+          if (entry != null && gone.optLong(key, Long.MAX_VALUE) < entry.optLong("at")) gone.remove(key);
+        }
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+      return gone;
+    }
+
+    // The account's copy in Firestore (calamarProgress/<uid>), the same the web writes (library.js):
+    // sections by key, positions in seconds, `at` in milliseconds and `removed` {key: when}.
+    static final long REMOVED_DAYS = 60;
+    static final int REMOVED_LIMIT = 200;
+    private static final String[] SHARED = {"key", "section", "item", "episode", "name", "sub", "image"};
+
+    static JSONObject toCloud(JSONObject store, JSONObject removed) {
+      JSONObject entries = new JSONObject();
+      try {
+        for (JSONObject e : list(store)) {
+          if (e.optString("key").isEmpty() || !knownSection(e.optString("section"))) continue;
+          JSONObject o = new JSONObject();
+          for (String field : SHARED) o.put(field, e.optString(field));
+          o.put("position", e.optLong("position") / 1000).put("duration", e.optLong("duration") / 1000).put("at", e.optLong("at"));
+          entries.put(e.optString("key"), o);
+        }
+        return new JSONObject().put("entries", entries).put("removed", copy(removed));
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+    }
+
+    /**
+     * The shared copy as this device keeps it. An entry this device already had keeps what only the app
+     * stores (link, intro and credits marks); one from another device gets them from the library when played.
+     */
+    static JSONObject fromCloud(JSONObject cloud, JSONObject local) {
+      JSONObject store = new JSONObject();
+      JSONObject entries = cloud.optJSONObject("entries");
+      if (entries == null) return store;
+      try {
+        java.util.Iterator<String> keys = entries.keys();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          JSONObject e = entries.optJSONObject(key);
+          if (e == null || !knownSection(e.optString("section")) || e.optString("item").isEmpty()) continue;
+          JSONObject mine = local.optJSONObject(key);
+          JSONObject o = mine != null ? new JSONObject(mine.toString()) : new JSONObject();
+          for (String field : SHARED) o.put(field, e.optString(field));
+          if (!o.has("title")) o.put("title", e.optString("name"));
+          o.put("position", e.optLong("position") * 1000).put("duration", e.optLong("duration") * 1000).put("at", e.optLong("at"));
+          store.put(key, o);
+        }
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+      return store;
+    }
+
+    /**
+     * Two shared copies joined: for each title the latest thing done on any device wins (watching it
+     * again, or removing it); one entry per series and the 20 most recent. As mergeProgress in library.js.
+     */
+    static JSONObject merge(JSONObject a, JSONObject b, long now) {
+      JSONObject entries = new JSONObject(), removed = new JSONObject();
+      java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+      for (JSONObject side : new JSONObject[] {a, b})
+        for (String part : new String[] {"entries", "removed"}) {
+          JSONObject o = side.optJSONObject(part);
+          if (o == null) continue;
+          java.util.Iterator<String> it = o.keys();
+          while (it.hasNext()) keys.add(it.next());
+        }
+      try {
+        for (String key : keys) {
+          JSONObject x = part(a, "entries").optJSONObject(key), y = part(b, "entries").optJSONObject(key);
+          JSONObject entry = x == null ? y : y == null ? x : y.optLong("at") > x.optLong("at") ? y : x;
+          long gone = Math.max(part(a, "removed").optLong(key), part(b, "removed").optLong(key));
+          if (entry != null && entry.optLong("at") > gone) entries.put(key, entry);
+          else if (gone > 0 && now - gone < REMOVED_DAYS * 86400000L) removed.put(key, gone);
+        }
+        java.util.Set<String> titles = new java.util.HashSet<>();
+        for (JSONObject entry : list(entries)) {
+          String title = entry.optString("section") + "/" + entry.optString("item");
+          if (titles.contains(title) || titles.size() >= LIMIT) entries.remove(entry.optString("key"));
+          else titles.add(title);
+        }
+        List<String> names = new ArrayList<>();
+        java.util.Iterator<String> it = removed.keys();
+        while (it.hasNext()) names.add(it.next());
+        final JSONObject all = removed;
+        Collections.sort(names, (p, q) -> Long.compare(all.optLong(q), all.optLong(p)));
+        for (int i = REMOVED_LIMIT; i < names.size(); i++) removed.remove(names.get(i));
+        return new JSONObject().put("entries", entries).put("removed", removed);
+      } catch (JSONException impossible) {
+        throw new IllegalStateException(impossible);
+      }
+    }
+
+    static boolean knownSection(String key) {
+      for (String[] s : SECTIONS) if (s[0].equals(key)) return true;
+      return false;
+    }
+
+    private static JSONObject part(JSONObject side, String name) {
+      JSONObject o = side.optJSONObject(name);
+      return o == null ? new JSONObject() : o;
     }
   }
 

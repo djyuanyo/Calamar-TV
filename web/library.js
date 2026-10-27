@@ -131,9 +131,13 @@ export function playable(section, item, episode = null) {
 }
 
 // ---- Continuar viendo --------------------------------------------------------------------------
-// Kept in this browser only (localStorage): where each film or episode was left. One entry per
-// series (the last episode watched), the 20 most recent, and gone once it has been watched.
+// Kept in this browser (localStorage): where each film or episode was left. One entry per series (the
+// last episode watched), the 20 most recent, and gone once it has been watched. With a signed-in
+// account it is also kept in Firestore (progress-sync.js), so every device of that account shows the
+// same row: what this browser removes is remembered for a while (PROGRESS_REMOVED), so another
+// device does not bring it back.
 export const PROGRESS_STORAGE = 'calamar-progress-v1';
+export const PROGRESS_REMOVED = 'calamar-progress-removed-v1';
 export const PROGRESS_LIMIT = 20;
 export const finished = (position, duration) => Number.isFinite(duration) && duration >= 300 && position / duration >= 0.95;
 
@@ -153,7 +157,72 @@ export function loadProgress() {
   try { const data = JSON.parse(localStorage.getItem(PROGRESS_STORAGE) || '{}'); return data && typeof data === 'object' ? data : {}; }
   catch { return {}; }
 }
-export function saveProgress(store) { try { localStorage.setItem(PROGRESS_STORAGE, JSON.stringify(store)); } catch {} }
+export function loadRemoved() {
+  try { const data = JSON.parse(localStorage.getItem(PROGRESS_REMOVED) || '{}'); return data && typeof data === 'object' ? data : {}; }
+  catch { return {}; }
+}
+const progressListeners = new Set();
+/** Called after every change of «Continuar viendo» in this browser (the cloud copy follows). */
+export const onProgressSaved = (listener) => { progressListeners.add(listener); return () => progressListeners.delete(listener); };
+/** Saves the row; what disappeared from it (removed, watched, replaced by a later episode) is noted as removed now. */
+export function saveProgress(store, { now = Date.now(), quiet = false, removed = null } = {}) {
+  const before = loadProgress(), gone = removed || loadRemoved();
+  if (!removed) for (const key of Object.keys(before)) if (!store[key]) gone[key] = now;
+  for (const key of Object.keys(store)) if (gone[key] && gone[key] < (store[key].at || 0)) delete gone[key];
+  try { localStorage.setItem(PROGRESS_STORAGE, JSON.stringify(store)); localStorage.setItem(PROGRESS_REMOVED, JSON.stringify(gone)); } catch {}
+  if (!quiet) for (const listener of progressListeners) listener();
+}
+
+// The copy in the cloud, shared with the app (Library.java writes the same): sections by key
+// («movies»…), positions in seconds, `at` in milliseconds and `removed` {key: when}.
+const REMOVED_DAYS = 60, REMOVED_LIMIT = 200;
+/** This browser's row and removals in the shared form. */
+export function progressToCloud(store, removed) {
+  const entries = {};
+  for (const e of Object.values(store || {})) {
+    const section = sectionByPage(e.page);
+    if (!section || !e.key) continue;
+    entries[e.key] = { key: e.key, section: section.key, item: e.item, episode: e.episode || '', name: e.name || '', sub: e.sub || '',
+      image: e.image || '', position: Math.floor(e.position || 0), duration: Math.floor(e.duration || 0), at: e.at || 0 };
+  }
+  return { entries, removed: { ...(removed || {}) } };
+}
+/** The shared form as this browser keeps it. */
+export function progressFromCloud(cloud) {
+  const store = {};
+  for (const e of Object.values(cloud?.entries || {})) {
+    const section = LIBRARY_SECTIONS.find((s) => s.key === e.section);
+    if (!section || !e.key || !e.item) continue;
+    store[e.key] = { key: e.key, page: section.page, item: e.item, episode: e.episode || '', name: e.name || '', sub: e.sub || '',
+      image: e.image || '', position: e.position || 0, duration: e.duration || 0, at: e.at || 0 };
+  }
+  return { store, removed: { ...(cloud?.removed || {}) } };
+}
+/**
+ * Two copies of the row in the shared form, joined: for each title the latest thing done on any device
+ * wins (watching it again, or removing it); one entry per series and the 20 most recent, as on each device.
+ */
+export function mergeProgress(a, b, now = Date.now()) {
+  const entries = {}, removed = {};
+  const keys = new Set([...Object.keys(a?.entries || {}), ...Object.keys(b?.entries || {}), ...Object.keys(a?.removed || {}), ...Object.keys(b?.removed || {})]);
+  for (const key of keys) {
+    const x = a?.entries?.[key], y = b?.entries?.[key];
+    const entry = !x ? y : !y ? x : (y.at || 0) > (x.at || 0) ? y : x;
+    const gone = Math.max(a?.removed?.[key] || 0, b?.removed?.[key] || 0);
+    if (entry && (entry.at || 0) > gone) entries[key] = entry;
+    else if (gone && now - gone < REMOVED_DAYS * 86400000) removed[key] = gone;
+  }
+  const kept = Object.values(entries).sort((p, q) => (q.at || 0) - (p.at || 0));
+  const series = new Set();
+  for (const entry of kept) {
+    const title = `${entry.section}/${entry.item}`;
+    if (series.has(title) || series.size >= PROGRESS_LIMIT) { delete entries[entry.key]; continue; }
+    series.add(title);
+  }
+  const oldest = Object.entries(removed).sort((p, q) => q[1] - p[1]).slice(REMOVED_LIMIT);
+  for (const [key] of oldest) delete removed[key];
+  return { entries, removed };
+}
 export const clock = (seconds) => {
   const s = Math.max(0, Math.floor(seconds)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, r = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
