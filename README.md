@@ -259,3 +259,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - En Administración → Pelis y series, cada título tiene «☆ Destacar». Los títulos «En portada» se suman a los eventos y canales destacados del carrusel de inicio (web y app), con su imagen de fondo de TMDB, año, géneros, nota y sinopsis. «Ver ahora» reproduce la película; en las series lleva a sus episodios.
 - «Top 10 de la semana» en la portada: tus títulos ordenados primero por las tendencias de la semana en TMDB (`/trending/all/week`) y después por su popularidad en TMDB. Se recalcula solo una vez al día al abrir esa página del administrador, o con «Actualizar el top con TMDB». TMDB no ofrece el top de una plataforma concreta; lo que mide es lo más visto y comentado en general esa semana, y aquí solo cuentan los títulos que tienes en el catálogo.
+
+## Top de películas y top de series por separado (2.20.21)
+
+- La portada muestra dos filas: «Top N películas de la semana» y «Top N series de la semana», con hasta 10 títulos cada una (o los que haya). Cada sección se ordena por su cuenta, con las tendencias de TMDB y la popularidad. Los documentales no tienen top.
+- Web: mientras la biblioteca está oculta al público, la portada del administrador vuelve a dibujarse al confirmarse la sesión, para que aparezcan «Continuar viendo», los títulos «En portada» y los tops (antes solo se veían al recargar en una página de la biblioteca).
