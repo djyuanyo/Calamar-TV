@@ -15,6 +15,35 @@ const STATS = [
   ['interceptions', 'Intercepciones'], ['totalClearance', 'Despejes'],
 ];
 
+/** The statistics rows from each side's values by ESPN name ({ possessionPct: '55', … }), in STATS order. */
+function buildStats(homeBox, awayBox) {
+  const number = (v) => Number.parseFloat(String(v ?? '').replace(',', '.')) || 0;
+  return STATS.map(([key, label, unit = '']) => {
+    const h = homeBox[key], a = awayBox[key];
+    if (h == null && a == null) return null;
+    const hv = number(h), av = number(a), total = hv + av;
+    return { key, label, home: `${h ?? '0'}${unit && !String(h ?? '').includes('%') ? unit : ''}`, away: `${a ?? '0'}${unit && !String(a ?? '').includes('%') ? unit : ''}`,
+      homeValue: hv, awayValue: av, share: total > 0 ? hv / total : 0.5 };
+  }).filter(Boolean);
+}
+
+/**
+ * ESPN leaves the statistics of small matches (early cup rounds) at 0 and only counts the cards: then they
+ * are asked to API-Football through the hosting.
+ */
+export function statsMissing(m) {
+  if (m?.source !== 'espn' || m.state === 'scheduled') return false;
+  if (!m.stats?.length) return true;
+  return m.stats.filter((s) => s.key !== 'yellowCards' && s.key !== 'redCards').every((s) => !s.homeValue && !s.awayValue);
+}
+
+/** The match with API-Football's statistics ({ home: {name: value}, away: {…} }) in place of ESPN's zeros. */
+export function withExtraStats(m, extra) {
+  const home = extra?.home || {}, away = extra?.away || {};
+  if (!Object.keys(home).length && !Object.keys(away).length) return m;
+  return { ...m, stats: buildStats(home, away), statsSource: 'API-Football' };
+}
+
 function eventKind(e) {
   const t = `${e.type?.type || ''} ${e.type?.text || ''}`.toLowerCase();
   if (/own.?goal|propia/.test(t)) return 'own-goal';
@@ -96,14 +125,8 @@ export function parseMatchCenter(data) {
   const boxTeams = data.boxscore?.teams || [];
   const homeBox = byName(boxTeams.find((t) => sideOf(t.team) === 'home') || boxTeams[0]);
   const awayBox = byName(boxTeams.find((t) => sideOf(t.team) === 'away') || boxTeams[1]);
-  const number = (v) => Number.parseFloat(String(v ?? '').replace(',', '.')) || 0;
-  const stats = STATS.map(([key, label, unit = '']) => {
-    const h = homeBox[key]?.displayValue, a = awayBox[key]?.displayValue;
-    if (h == null && a == null) return null;
-    const hv = number(h), av = number(a), total = hv + av;
-    return { key, label, home: `${h ?? '0'}${unit && !String(h ?? '').includes('%') ? unit : ''}`, away: `${a ?? '0'}${unit && !String(a ?? '').includes('%') ? unit : ''}`,
-      homeValue: hv, awayValue: av, share: total > 0 ? hv / total : 0.5 };
-  }).filter(Boolean);
+  const value = (box) => Object.fromEntries(Object.entries(box).map(([k, v]) => [k, v?.displayValue]));
+  const stats = buildStats(value(homeBox), value(awayBox));
   const lineups = ['home', 'away'].map((side) => {
     const r = (data.rosters || []).find((x) => x.homeAway === side);
     if (!r?.roster?.length) return null;
@@ -300,7 +323,9 @@ export function renderMatchCenter(el, m, tab, choose) {
     body = m.stats.length ? el('div', { class: 'mc-stats' }, names,
       m.stats.map((s) => el('div', { class: 'mc-stat' },
         el('div', { class: 'mc-stat-row' }, el('b', { class: s.share > 0.5 ? 'lead' : '' }, s.home), el('span', {}, s.label), el('b', { class: s.share < 0.5 ? 'lead' : '' }, s.away)),
-        el('div', { class: 'mc-bars', 'aria-hidden': 'true' }, el('span', { class: 'home', style: `--w:${Math.round(s.share * 100)}%` }), el('span', { class: 'away', style: `--w:${Math.round((1 - s.share) * 100)}%` })))))
+        el('div', { class: 'mc-bars', 'aria-hidden': 'true' }, el('span', { class: 'home', style: `--w:${Math.round(s.share * 100)}%` }), el('span', { class: 'away', style: `--w:${Math.round((1 - s.share) * 100)}%` })))),
+      m.statsSource ? el('p', { class: 'mc-odds-source' }, `Estadísticas: ${m.statsSource} (ESPN no tiene las de este partido).`)
+        : statsMissing(m) ? el('p', { class: 'mc-odds-source' }, 'ESPN solo tiene las tarjetas de este partido. Se buscan las demás estadísticas en API-Football.') : null)
       : [noLink, empty(m.state === 'scheduled' ? 'Las estadísticas aparecen cuando empieza el partido.' : 'No hay estadísticas de este partido.')];
   } else if (tab === 'lineups') {
     const list = (players) => el('ol', { class: 'mc-players' }, players.map((p) => el('li', {},

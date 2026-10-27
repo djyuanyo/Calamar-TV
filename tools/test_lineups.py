@@ -75,6 +75,11 @@ class LineupsTest(unittest.TestCase):
                 'echo json_encode($again["response"][0]["team"]["id"]);')
         self.assertEqual(php(code), '1')
 
+    def test_statistics_get_espn_names(self):
+        team = {'team': {'id': 10}, 'statistics': [{'type': 'Ball Possession', 'value': '61%'}, {'type': 'Total Shots', 'value': 14},
+                {'type': 'Shots on Goal', 'value': 5}, {'type': 'Corner Kicks', 'value': None}, {'type': 'expected_goals', 'value': '1.2'}]}
+        self.assertEqual(json.loads(php(f'echo json_encode(lineupsStats({lit(team)}));')), {'possessionPct': '61%', 'totalShots': '14', 'shotsOnTarget': '5'})
+
     def test_api_errors_are_told_in_its_own_words(self):
         out = subprocess.run(['php', '-r', f'require {json.dumps(PHP)}; lineupsApi("/fixtures?date=2099-01-01", 0, "k", function () {{ return json_encode(["errors" => ["plan" => "Free plans do not have access to this season."]]); }});'],
                              capture_output=True, text=True)
