@@ -120,3 +120,16 @@ test('phone sign-in for the app: only the admin hands it over; read with key and
   await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'calamarDeviceLogins/K7Q2OLD2'), { idToken: 't', createdAt: new Date(Date.now() - 6 * 60000) }));
   await assertFails(getDoc(doc(anyone, 'calamarDeviceLogins/K7Q2OLD2')));
 });
+test('each account reads and writes only its own «Continuar viendo»', async () => {
+  const mine = env.authenticatedContext('user-a', claims({ email: 'a@example.com' })).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const progress = (overrides = {}) => ({ json: '{"entries":{},"removed":{}}', updatedAt: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(mine, 'calamarProgress/user-a'), progress()));
+  await assertSucceeds(getDoc(doc(mine, 'calamarProgress/user-a')));
+  await assertFails(getDoc(doc(other, 'calamarProgress/user-a')));
+  await assertFails(setDoc(doc(other, 'calamarProgress/user-a'), progress()));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'calamarProgress/user-a')));
+  await assertFails(setDoc(doc(mine, 'calamarProgress/user-a'), progress({ extra: 1 })));
+  await assertFails(setDoc(doc(mine, 'calamarProgress/user-a'), progress({ json: 'x'.repeat(200001) })));
+  await assertFails(getDocs(collection(mine, 'calamarProgress')));
+});

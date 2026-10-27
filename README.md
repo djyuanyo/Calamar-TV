@@ -246,3 +246,11 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Se comprueban nuevas versiones al abrir la app (máximo una vez cada seis horas por sesión), además del botón «Actualizaciones» (↓). El aviso permite descargar mediante Android y abrir su instalador. La primera instalación puede requerir autorizar a Calamar TV como fuente de instalación. El usuario confirma cada descarga e instalación; no se instala en silencio.
 - El workflow publica `Calamar-TV-update.json` después de la APK firmada, con versión, tamaño y SHA-256. La app verifica el archivo y su identificador/versión antes del instalador. Esta primera versión con actualizador debe instalarse manualmente.
 - Verificación: pruebas del filtrado por host sin modificar el catálogo web, integridad del manifiesto/descarga, vídeo real con fuentes Zico excluidas y catálogo de 500 canales con carga y liberación de filas. Las pruebas de emulador no sustituyen una comprobación en el modelo de TV afectado.
+
+## «Continuar viendo» en todos los dispositivos (2.20.19)
+
+- Con una cuenta iniciada, las películas y capítulos a medias se guardan también en Firestore (`calamarProgress/<uid>`). La web y la app (Android y Android TV) muestran la misma fila «Continuar viendo» en cualquier dispositivo con esa cuenta. Sin cuenta, todo sigue guardándose solo en el dispositivo.
+- Para cada título gana lo último que se hizo en cualquier dispositivo: verlo otra vez o quitarlo. Lo quitado o terminado se recuerda 60 días, para que otro dispositivo no lo traiga de vuelta. Se mantiene una entrada por serie y las 20 más recientes.
+- Cuándo se sincroniza: la web al iniciar sesión y al mostrar la portada (como mucho cada 30 s), y 15 s después de cada cambio; la app al volver a la pantalla principal y 3 s después de cada cambio. Un capítulo empezado en otro dispositivo toma el enlace y las marcas de intro y créditos del catálogo de vídeos.
+- Reglas: cada cuenta solo lee y escribe su propio documento (`firebase/firestore.rules`). **Hay que publicar las reglas nuevas en la consola de Firebase.**
+- LuluStream en el administrador: cada consulta tiene un tiempo máximo (12 s directa, 30 s por el hosting) y avisa si no hay respuesta, en lugar de quedarse en «Leyendo…».

@@ -124,3 +124,41 @@ test('user pause survives a bounded connection renewal', () => {
   assert.equal(f.players[1].plays || 0, 0);
   f.stop();
 });
+
+test('once the channel played, network cuts keep reconnecting until the viewer leaves', () => {
+  const f = fixture();
+  f.events.get('playing')();
+  const watchdog = [...f.tasks.keys()];
+  for (let i = 0; i < 6; i++) {
+    f.players.at(-1).handlers.error('NetworkError', 'error', { code: 502 });
+    const [id, retry] = [...f.tasks.entries()].find(([key]) => !watchdog.includes(key));
+    f.tasks.delete(id); retry();
+  }
+  assert.equal(f.failures.length, 0);
+  assert.equal(f.players.length, 7);
+  f.stop();
+});
+
+test('a dead link that never played still gives up after two tries', () => {
+  const f = fixture();
+  for (let i = 0; i < 3; i++) {
+    f.players.at(-1).handlers.error('NetworkError', 'error', { code: 502 });
+    const [id, retry] = [...f.tasks.entries()][0] || [];
+    if (retry) { f.tasks.delete(id); retry(); }
+  }
+  assert.equal(f.failures.length, 1);
+  f.stop();
+});
+
+test('a picture frozen 20 seconds without errors reconnects by itself', () => {
+  const f = fixture();
+  f.events.get('playing')();
+  for (let i = 0; i < 5; i++) {
+    const [id, check] = [...f.tasks.entries()].at(-1);
+    f.tasks.delete(id); check();
+  }
+  assert.equal(f.players.length, 2);
+  assert.equal(f.failures.length, 0);
+  f.stop();
+  assert.equal(f.tasks.size, 0);
+});

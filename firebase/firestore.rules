@@ -92,6 +92,18 @@ service cloud.firestore {
       allow delete: if true;
       allow update, list: if false;
     }
+    // «Continuar viendo» of each signed-in account, shared by its web and app sessions: only that
+    // account reads or writes its own document.
+    match /calamarProgress/{uid} {
+      allow get, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['json', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['json', 'updatedAt'])
+        && request.resource.data.json is string
+        && request.resource.data.json.size() <= 200000
+        && request.resource.data.updatedAt == request.time;
+      allow list: if false;
+    }
     match /{document=**} {
       allow read, write: if false;
     }

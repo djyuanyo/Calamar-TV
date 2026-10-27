@@ -4,6 +4,11 @@ Subir `calamar-http-source.php` y `calamar-tv-relay.php` al `public_html` de `ca
 La web publicada solicita `https://calamarmenciano.com/calamar-tv-relay.php?stream=1`.
 El navegador transmite la URL original en `X-Calamar-Source`, nunca en la URL del puente.
 
+Abre **una sola conexión al proveedor por canal**, compartida por todos los que lo ven en la web
+(las cuentas IPTV admiten muy pocas a la vez). Guarda los últimos ~24 MB del canal en la carpeta
+temporal del hosting y cierra la conexión 15 s después de que se vaya el último espectador.
+Comprobar la versión instalada: `https://calamarmenciano.com/calamar-tv-relay.php?version=1`.
+
 Admite flujos HTTP MPEG-TS (`.ts`) y rutas IPTV `/usuario/clave/id`,
 `/usuario/clave/id.ts` o `/live/usuario/clave/id.ts`, en distintos servidores públicos
 sin añadir cada dominio por separado. Conserva las consultas y tokens tal como llegan.

@@ -23,6 +23,9 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     return () => {};
   }
   let current = null, timer = null, active = true, serial = 0, retries = 0, wantsPlay = true;
+  // Once the channel has played, a cut is never final: it reconnects (1.5 s, 3 s, 6 s, then every 10 s)
+  // until the viewer leaves. Before that, two tries, so a dead link moves on to the next one.
+  let played = false, watch = null, lastTime = -1, still = 0;
   const clear = () => {
     timers.clearTimeout(timer);
     timer = null;
@@ -33,10 +36,11 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
   };
   const fail = (request, network, data) => {
     if (!active || request !== serial || !current) return;
-    if (network && retries++ < 2) {
+    if (network && (played || retries < 2)) {
+      const wait = Math.min(10000, 1500 * 2 ** Math.min(retries++, 3));
       clear();
       onRecovering?.();
-      timer = timers.setTimeout(start, 1500);
+      timer = timers.setTimeout(start, wait);
       return;
     }
     clear();
@@ -73,7 +77,21 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
       }
     }
   };
-  const playing = () => { if (active) { retries = 0; wantsPlay = true; onPlaying?.(); } };
+  // A picture frozen 20 s with no error (the connection hangs open) also reconnects.
+  const check = () => {
+    if (!active) return;
+    if (wantsPlay && current && !video.paused && video.currentTime === lastTime) still++;
+    else still = 0;
+    lastTime = video.currentTime;
+    if (still >= 4) { still = 0; onRecovering?.(); start(); }
+    watch = timers.setTimeout(check, 5000);
+  };
+  const playing = () => {
+    if (!active) return;
+    retries = 0; wantsPlay = true;
+    if (!played) { played = true; watch = timers.setTimeout(check, 5000); }
+    onPlaying?.();
+  };
   const play = () => { if (active) wantsPlay = true; };
   const pause = () => {
     if (active && current && !video.ended && !video.error && video.readyState >= 2) wantsPlay = false;
@@ -92,6 +110,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
   start();
   return () => {
     active = false;
+    timers.clearTimeout(watch);
     clear();
     for (const [name, listener] of [['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]]) {
       video.removeEventListener(name, listener);
