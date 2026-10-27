@@ -1,0 +1,135 @@
+{
+ "found": 1,
+ "samples": [
+  {
+   "t": 0,
+   "rs": 1,
+   "paused": false,
+   "err": 0,
+   "status": "Conectando…"
+  },
+  {
+   "t": 1.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 4.4,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 6.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 9.4,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 11.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 14.4,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 16.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 19.4,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 21.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 24.4,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  },
+  {
+   "t": 26.9,
+   "rs": 4,
+   "paused": false,
+   "err": 0,
+   "status": ""
+  }
+ ],
+ "net": [
+  "200 GET https://djyuanyo.github.io/Calamar-TV/assets/calamar-menciano-tv.png",
+  "200 GET https://calamarmenciano.com/calamar-tv-relay.php"
+ ],
+ "log": [
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928504' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928548' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928526' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928491' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928488' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928511' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928496' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928498' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928531' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928513' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928507' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928489' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928552' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928535' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928523' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928512' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928530' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928529' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928487' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED",
+  "error: Access to fetch at 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401928492' from origin 'https://djyuanyo.github.io' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+  "error: Failed to load resource: net::ERR_FAILED"
+ ]
+}
