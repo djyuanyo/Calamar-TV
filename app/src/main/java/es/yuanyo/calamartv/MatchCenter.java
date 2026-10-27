@@ -56,6 +56,7 @@ final class MatchCenter {
     final Team home = new Team(), away = new Team();
     final List<Event> events = new ArrayList<>();
     final List<Stat> stats = new ArrayList<>();
+    String statsSource = "";
     final List<Lineup> lineups = new ArrayList<>();
     final List<Form> homeForm = new ArrayList<>(), awayForm = new ArrayList<>();
     final List<Meeting> h2h = new ArrayList<>();
@@ -140,18 +141,7 @@ final class MatchCenter {
       JSONArray list = t.optJSONArray("statistics");
       if (list != null) for (int j = 0; j < list.length(); j++) target.put(list.getJSONObject(j).optString("name"), list.getJSONObject(j).optString("displayValue"));
     }
-    for (String[] def : STATS) {
-      String h = homeStats.get(def[0]), a = awayStats.get(def[0]);
-      if (h == null && a == null) continue;
-      Stat st = new Stat();
-      st.key = def[0];
-      st.label = def[1];
-      st.home = (h == null ? "0" : h) + (h != null && !h.contains("%") ? def[2] : "");
-      st.away = (a == null ? "0" : a) + (a != null && !a.contains("%") ? def[2] : "");
-      double hv = number(h), av = number(a);
-      st.share = hv + av > 0 ? hv / (hv + av) : 0.5;
-      m.stats.add(st);
-    }
+    m.stats.addAll(buildStats(homeStats, awayStats));
     JSONArray rosters = data.optJSONArray("rosters");
     for (String s : new String[] {"home", "away"}) {
       if (rosters == null) break;
@@ -465,6 +455,7 @@ final class MatchCenter {
       add(box);
     }
     if (tab.equals("lineups")) { playerExtras(m); applyExtras(m, extrasKey.equals(extrasKey(m)) ? extras : null); }
+    if (tab.equals("stats") || tab.equals("general")) { loadExtraStats(m); applyExtraStats(m); }
     if (tab.equals("stats")) stats(m); else if (tab.equals("lineups")) lineups(m); else if (tab.equals("h2h")) h2h(m); else general(m);
     LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
     cp.setMargins(0, dp(12), 0, 0);
@@ -830,6 +821,9 @@ final class MatchCenter {
     if (m.stats.isEmpty()) { empty(m.state.equals("scheduled") ? "Las estadísticas aparecen cuando empieza el partido." : "No hay estadísticas de este partido."); return; }
     LinearLayout box = card();
     box.addView(names(m));
+    String note = !m.statsSource.isEmpty() ? "Estadísticas: " + m.statsSource + " (ESPN no tiene las de este partido)."
+        : statsMissing(m) ? "ESPN solo tiene las tarjetas de este partido. Se buscan las demás estadísticas en API-Football." : "";
+    if (!note.isEmpty()) { TextView t = text(note, 11, Ui.MUTED, false); t.setPadding(0, dp(8), 0, 0); box.addView(t); }
     for (Stat s : m.stats) {
       LinearLayout row = new LinearLayout(context);
       row.setPadding(0, dp(12), 0, dp(4));
@@ -1194,6 +1188,83 @@ final class MatchCenter {
       paint.setTextAlign(android.graphics.Paint.Align.RIGHT);
       c.drawText("Ahora", right, getHeight() - dp(4), paint);
     }
+  }
+
+  /** The statistics rows from each side's values by ESPN name, in STATS order. */
+  static List<Stat> buildStats(Map<String, String> homeStats, Map<String, String> awayStats) {
+    List<Stat> out = new ArrayList<>();
+    for (String[] def : STATS) {
+      String h = homeStats.get(def[0]), a = awayStats.get(def[0]);
+      if (h == null && a == null) continue;
+      Stat st = new Stat();
+      st.key = def[0];
+      st.label = def[1];
+      st.home = (h == null ? "0" : h) + (h != null && !h.contains("%") ? def[2] : "");
+      st.away = (a == null ? "0" : a) + (a != null && !a.contains("%") ? def[2] : "");
+      double hv = number(h), av = number(a);
+      st.share = hv + av > 0 ? hv / (hv + av) : 0.5;
+      out.add(st);
+    }
+    return out;
+  }
+
+  /** ESPN leaves the statistics of small matches at 0 and only counts the cards (as on the web). */
+  static boolean statsMissing(Model m) {
+    if (!"espn".equals(m.source) || "scheduled".equals(m.state) || !m.statsSource.isEmpty()) return false;
+    for (Stat s : m.stats) {
+      if (s.key.equals("yellowCards") || s.key.equals("redCards")) continue;
+      if (number(s.home) != 0 || number(s.away) != 0) return false;
+    }
+    return true;
+  }
+
+  // Statistics from API-Football (through the hosting) when ESPN leaves them at 0, at most every 5 minutes.
+  String extraKey = ""; long extraAt; Map<String, String> extraHome, extraAway; boolean extraBusy;
+
+  void loadExtraStats(Model m) {
+    if (!statsMissing(m) || m.home.name.isEmpty() || m.away.name.isEmpty() || !m.date.matches("\\d{4}-\\d{2}-\\d{2}.*")) return;
+    final String key = extrasKey(m);
+    if (extraBusy || (key.equals(extraKey) && System.currentTimeMillis() - extraAt < 300000)) return;
+    if (!key.equals(extraKey)) { extraHome = null; extraAway = null; }
+    extraKey = key; extraAt = System.currentTimeMillis(); extraBusy = true;
+    final String url = LINEUPS + "?home=" + Uri.encode(m.home.name) + "&away=" + Uri.encode(m.away.name) + "&date=" + m.date.substring(0, 10) + "&stats=1";
+    new Thread(() -> {
+      Map<String, String> home = null, away = null;
+      try {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(8000); c.setReadTimeout(15000);
+        try {
+          if (c.getResponseCode() == 200) {
+            try (InputStream in = c.getInputStream()) {
+              JSONObject stats = new JSONObject(new String(readAll(in), "UTF-8")).optJSONObject("stats");
+              if (stats != null) { home = values(stats.optJSONObject("home")); away = values(stats.optJSONObject("away")); }
+            }
+          }
+        } finally { c.disconnect(); }
+      } catch (Exception ignored) {}
+      final Map<String, String> h = home, a = away;
+      handler.post(() -> {
+        extraBusy = false;
+        if (!key.equals(extraKey) || h == null || a == null || (h.isEmpty() && a.isEmpty())) return;
+        boolean changed = !h.equals(extraHome) || !a.equals(extraAway);
+        extraHome = h; extraAway = a;
+        if (changed && model != null && (tab.equals("stats") || tab.equals("general"))) show(model);
+      });
+    }).start();
+  }
+
+  static Map<String, String> values(JSONObject o) {
+    Map<String, String> out = new HashMap<>();
+    if (o == null) return out;
+    for (java.util.Iterator<String> k = o.keys(); k.hasNext();) { String name = k.next(); out.put(name, o.optString(name)); }
+    return out;
+  }
+
+  void applyExtraStats(Model m) {
+    if (!statsMissing(m) || extraHome == null || !extraKey.equals(extrasKey(m))) return;
+    m.stats.clear();
+    m.stats.addAll(buildStats(extraHome, extraAway));
+    m.statsSource = "API-Football";
   }
 
   static byte[] readAll(InputStream in) throws java.io.IOException {

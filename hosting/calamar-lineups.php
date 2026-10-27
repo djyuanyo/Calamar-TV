@@ -3,6 +3,8 @@
 // API-Football (api-sports.io). The key stays on the hosting: calamar-apifootball-key.php next to this
 // file (or one folder above it) with <?php return 'YOUR_KEY'; or the CALAMAR_APIFOOTBALL_KEY variable.
 //  - GET home=…&away=…&date=YYYY-MM-DD: {"teams":{"home":[{number,name,photo,rating}],"away":[…]}}.
+//  - GET …&stats=1: the match statistics with ESPN's names, for matches ESPN leaves at 0 (small cup ties):
+//    {"stats":{"home":{"possessionPct":"55%","totalShots":"12",…},"away":{…}}}.
 // Answers are kept in the hosting's temporary folder, so every viewer of a match spends one request:
 // the day's fixtures 6 hours, the players 5 minutes during the match, a day once it ended. Before
 // kick-off API-Football has no player statistics yet: the photos then come from the published line-up
@@ -135,6 +137,23 @@ function lineupsFill($out, $lineups, $homeId) {
     return $out;
 }
 
+// API-Football's statistic names and ESPN's, so the pages show them as they show ESPN's.
+const LINEUPS_STATS = ['Ball Possession' => 'possessionPct', 'Total Shots' => 'totalShots', 'Shots on Goal' => 'shotsOnTarget',
+    'Corner Kicks' => 'wonCorners', 'Fouls' => 'foulsCommitted', 'Offsides' => 'offsides', 'Yellow Cards' => 'yellowCards',
+    'Red Cards' => 'redCards', 'Goalkeeper Saves' => 'saves', 'Total passes' => 'totalPasses', 'Passes accurate' => 'accuratePasses',
+    'Passes %' => 'passPct', 'Blocked Shots' => 'blockedShots'];
+
+/** One team's statistics from /fixtures/statistics with ESPN's names; empty when it has none. */
+function lineupsStats($team) {
+    $out = [];
+    foreach (($team['statistics'] ?? []) as $s) {
+        $key = LINEUPS_STATS[$s['type'] ?? ''] ?? null;
+        if (!$key || $s['value'] === null || $s['value'] === '') continue;
+        $out[$key] = (string)$s['value'];
+    }
+    return $out;
+}
+
 function lineupsMain() {
     ini_set('display_errors', '0');
     header('Cache-Control: no-store');
@@ -163,6 +182,13 @@ function lineupsMain() {
     $ttl = $ended ? 86400 : ($soon ? 300 : 1800);
     $id = (int)($fixture['fixture']['id'] ?? 0);
     $homeId = $fixture['teams']['home']['id'] ?? false;
+    if (($_GET['stats'] ?? '') === '1') {
+        $stats = ['home' => [], 'away' => []];
+        foreach (lineupsApi('/fixtures/statistics?fixture=' . $id, $ttl, $key, null, 300)['response'] ?? [] as $t) {
+            $stats[($t['team']['id'] ?? null) === $homeId ? 'home' : 'away'] = lineupsStats($t);
+        }
+        lineupsAnswer(['fixture' => $id, 'status' => $status, 'stats' => $stats]);
+    }
     // Statistics (photos and ratings) appear once the match starts: an empty answer is asked again in 5 minutes.
     $teams = lineupsApi('/fixtures/players?fixture=' . $id, $ttl, $key, null, 300)['response'] ?? [];
     $out = ['home' => [], 'away' => []];
