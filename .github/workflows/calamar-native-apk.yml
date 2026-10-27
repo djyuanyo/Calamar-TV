@@ -46,10 +46,8 @@ jobs:
             cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt 2>/dev/null || true
             exit 1
           }
-      - name: Preparar vídeo de prueba MPEG-TS
-        run: |
-          mkdir -p app/src/androidTest/assets
-          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=160x90:rate=15 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -g 15 -c:a aac -f mpegts app/src/androidTest/assets/live.ts
+      - name: Verificar vídeo de prueba MPEG-TS
+        run: test -s app/src/androidTest/assets/live.ts
       - name: Habilitar aceleración del emulador
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
