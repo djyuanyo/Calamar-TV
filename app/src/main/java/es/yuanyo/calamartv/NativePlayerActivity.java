@@ -576,16 +576,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (eventApi != null) {
-              PlayerDocument.Result event;
-              try {
-                event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
-              } catch (java.io.IOException blocked) {
-                handler.post(() -> { if (active && request == generation)
-                    status.setText("La red cortó la consulta. Buscando fuentes por tu hosting…"); });
-                event = PlayerDocument.fetch(Library.eventRelay(requestedPage),
-                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
-              }
+              PlayerDocument.Result event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                  NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
               List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
@@ -633,9 +625,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
                   sources.addAll(found);
-                  // Each phone reads the page and its videos itself, as a viewer of the page. The hosting
-                  // (calamar-player.php) is only the last option: with every viewer behind its single
-                  // address the page refused it, and one server cannot carry a big match for everyone.
+                  // Other channel pages may use the hosting, but Zico always stays on this device.
                   if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
@@ -645,7 +635,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
-                    refreshAutomatically("El proveedor no ha devuelto una fuente vigente. Reintentando…");
+                    tryZicoBrowser();
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -669,9 +659,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (VideoResolver.renewablePage(pageUrl) && tryZicoHosting()) {
-                    return;
-                  } else if (VideoResolver.eventApi(pageUrl) != null && switchChannelSource()) {
+                  } else if (zicoPage() && tryZicoBrowser()) {
                     return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
@@ -714,7 +702,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playSource(sources.get(0));
   }
 
-  private boolean zicoHostingTried;
   private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
   private void playSource(VideoResolver.Source source) {
@@ -843,7 +830,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoHosting()) return;
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoBrowser()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -889,7 +876,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoHosting()) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoBrowser()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -902,15 +889,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.postDelayed(bufferingTimeout, 25000);
   }
 
-  private boolean tryZicoHosting() {
-    if (zicoHostingTried || directUrl != null || !VideoResolver.renewablePage(pageUrl)) return false;
-    zicoHostingTried = true;
-    sources.clear();
-    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
-    selection = 0;
-    updateSourceButton();
-    status.setText("La conexión directa fue cortada. Probando tu hosting…");
-    playSource(sources.get(0));
+  private boolean zicoPage() {
+    return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null);
+  }
+
+  private boolean tryZicoBrowser() {
+    if (!zicoPage() || webMode) return false;
+    openWeb();
+    status.setText("Probando el reproductor de la página en la app…");
     return true;
   }
 
@@ -961,7 +947,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       attemptWindow = now;
     }
     if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
-      if (zicoHostingTried && automaticAttempts >= 2 && switchChannelSource()) return;
       if (sources.size() > 1) selection = (selection + 1) % sources.size();
       long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
       status.setText(message);
@@ -1213,7 +1198,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             String url = request.getUrl().toString();
             if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
                 new java.io.ByteArrayInputStream(new byte[0]));
-            if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
+            if (!zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
                     if (generation == browserGeneration) detected(url);
@@ -1232,7 +1217,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 value -> {
                   try {
                     String candidate = new org.json.JSONArray("[" + value + "]").optString(0);
-                    if (generation == browserGeneration) detected(candidate);
+                    if (generation == browserGeneration && !zicoPage()) detected(candidate);
                   } catch (Exception ignored) {
                   }
                 });
