@@ -62,6 +62,23 @@ class PlayerRelayTest(unittest.TestCase):
                                           text=True, env={**os.environ, 'TMPDIR': tmp, 'CALAMAR_PLAYER_SECRET': SECRET})
         self.assertEqual(json.loads(out), ['https://zicotv.cc/canal/x'])
 
+    def test_event_player_is_allowed_only_when_public_event_lists_it(self):
+        event = 'https://bp.zicotv.cc/events/98019'
+        player = 'https://bp.zicotv.cc/api/player/22'
+        catalog = json.dumps({'channels': [], 'events': [{'id': 'match', 'streams': [event]}]})
+        with tempfile.TemporaryDirectory() as tmp:
+            code = (f'require {json.dumps(PHP)};'
+                    f'$streams=playerCatalogStreams(function () {{ return {json.dumps(catalog)}; }});'
+                    '$get=function ($url) { return [200, json_encode(["data"=>["sources"=>'
+                    '[ ["name"=>"Canal", "player_url"=>"https://bp.zicotv.cc/api/player/22"] ] ]])]; };'
+                    'echo json_encode([isset($streams["https://bp.zicotv.cc/events/98019"]),'
+                    'playerAllowedPage("https://bp.zicotv.cc/api/player/22",$streams,$get),'
+                    'playerAllowedPage("https://bp.zicotv.cc/api/player/23",$streams,$get),'
+                    'playerAllowedPage("https://evil.example/api/player/22",$streams,$get)]);')
+            out = subprocess.check_output(['php', '-d', f'sys_temp_dir={tmp}', '-r', code],
+                text=True, env={**os.environ, 'TMPDIR': tmp, 'CALAMAR_PLAYER_SECRET': SECRET})
+        self.assertEqual(json.loads(out), [True, True, False, False])
+
     def test_unsigned_addresses_other_sites_and_unknown_pages_are_refused(self):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]

@@ -583,7 +583,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               handler.post(() -> {
                 if (!active || request != generation) return;
                 resolving = false;
-                int at = channelPages.indexOf(requestedPage);
+                int at = Math.max(0, channelPages.indexOf(requestedPage));
                 channelPages.remove(requestedPage);
                 for (VideoResolver.Source source : players) {
                   if (!channelPages.contains(source.url)) channelPages.add(Math.min(Math.max(0, at++), channelPages.size()), source.url);
@@ -661,6 +661,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (VideoResolver.renewablePage(pageUrl) && tryZicoHosting()) {
+                    return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
@@ -702,6 +704,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playSource(sources.get(0));
   }
 
+  private boolean zicoHostingTried;
   private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
   private void playSource(VideoResolver.Source source) {
@@ -830,7 +833,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoHosting()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -876,7 +879,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryZicoHosting()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -887,6 +890,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       }
     };
     handler.postDelayed(bufferingTimeout, 25000);
+  }
+
+  private boolean tryZicoHosting() {
+    if (zicoHostingTried || directUrl != null || !VideoResolver.renewablePage(pageUrl)) return false;
+    zicoHostingTried = true;
+    sources.clear();
+    sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
+    selection = 0;
+    updateSourceButton();
+    status.setText("La conexión directa fue cortada. Probando tu hosting…");
+    playSource(sources.get(0));
+    return true;
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {

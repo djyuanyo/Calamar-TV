@@ -141,9 +141,34 @@ function playerCatalogStreams($fetch = null) {
     }
     $catalog = is_string($json) ? json_decode($json, true) : null;
     $streams = array();
-    foreach (($catalog['channels'] ?? array()) as $c)
-        foreach ((is_array($c) ? ($c['streams'] ?? array()) : array()) as $s) if (is_string($s)) $streams[trim($s)] = true;
+    foreach (array('channels', 'events', 'fixtures') as $kind)
+        foreach (($catalog[$kind] ?? array()) as $entry)
+            foreach ((is_array($entry) ? ($entry['streams'] ?? array()) : array()) as $url)
+                if (is_string($url)) $streams[trim($url)] = true;
     return $streams;
+}
+
+/** A player mentioned by the public Zico API for a catalog event is an authorized source too. */
+function playerAllowedPage($page, $catalogStreams, $get = null) {
+    if (isset($catalogStreams[$page])) return true;
+    $parts = parse_url($page);
+    $host = strtolower($parts['host'] ?? '');
+    if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -11) !== '.zicotv.cc')
+        || !preg_match('#^/api/player/[0-9]+/?$#', $parts['path'] ?? '')) return false;
+    foreach ($catalogStreams as $event => $_) {
+        $eventParts = parse_url($event);
+        $eventHost = strtolower($eventParts['host'] ?? '');
+        if (($eventParts['scheme'] ?? '') !== 'https' || ($eventHost !== 'zicotv.cc' && substr($eventHost, -11) !== '.zicotv.cc')
+            || !preg_match('#^/events/([0-9]+)/?$#', $eventParts['path'] ?? '', $match)) continue;
+        $api = 'https://' . $eventHost . '/api/v1/events/' . $match[1];
+        list($status, $body) = $get ? $get($api) : playerGet($api, '');
+        if ($status !== 200 || !is_string($body)) continue;
+        $json = json_decode($body, true);
+        foreach (($json['data']['sources'] ?? array()) as $source)
+            if (is_array($source) && empty($source['is_premium']) && empty($source['locked'])
+                && ($source['player_url'] ?? $source['url'] ?? '') === $page) return true;
+    }
+    return false;
 }
 
 /** cURL for an address on a public server only (never the hosting's own network), as a browser on that page. */
@@ -251,7 +276,7 @@ function playerMain() {
     $page = trim((string)($_GET['page'] ?? ''));
     if (!preg_match('#^https://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
     // Only channels of the catalog: the hosting is not a relay for any page on the internet.
-    if (!isset(playerCatalogStreams()[$page])) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
+    if (!playerAllowedPage($page, playerCatalogStreams())) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
     // cast=1: the signed address of the list instead of the list, for Chromecast (it cannot send the page).
     $cast = isset($_GET['cast']);
     list($status, $html, $final) = playerGet($page, '');
