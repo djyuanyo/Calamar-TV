@@ -1,8 +1,11 @@
 import fs from 'node:fs';
-const out = {};
-for (const slug of ['lal-vil-esp-2026-10-30-more-markets', 'lal-vil-esp-2026-10-30']) {
-  const r = await fetch('https://gamma-api.polymarket.com/events?slug=' + slug);
-  const ev = await r.json();
-  out[slug] = ev.map((e) => ({ title: e.title, slug: e.slug, markets: (e.markets || []).map((m) => ({ type: m.sportsMarketType, group: m.groupItemTitle, q: m.question, outcomes: m.outcomes, prices: m.outcomePrices, line: m.line, closed: m.closed, keys: Object.keys(m).join(',') })) }));
+const out = [];
+const urls = ['https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780', 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780',
+  'https://site.web.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=401874780', 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard',
+  'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard', 'https://site.web.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401874780'];
+for (const u of urls) for (const origin of ['https://djyuanyo.github.io', null]) {
+  const r = await fetch(u, { headers: origin ? { Origin: origin } : {} });
+  const b = await r.text();
+  out.push({ u, origin, status: r.status, acao: r.headers.get('access-control-allow-origin'), size: b.length, head: b.slice(0, 80) });
 }
 fs.writeFileSync('diag/host3.json', JSON.stringify(out, null, 1));
