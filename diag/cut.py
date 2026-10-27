@@ -1,25 +1,18 @@
-# Polymarket public data for football matches: endpoints, CORS and shape.
-import json, urllib.request, urllib.error, urllib.parse
+import json, urllib.request, urllib.error, datetime
 O = {'Origin': 'https://djyuanyo.github.io', 'User-Agent': 'Mozilla/5.0'}
 def get(url):
     try:
-        r = urllib.request.urlopen(urllib.request.Request(url, headers=O), timeout=20)
-        return r.status, r.headers.get('Access-Control-Allow-Origin'), json.loads(r.read(3_000_000))
-    except urllib.error.HTTPError as e:
-        return e.code, e.headers.get('Access-Control-Allow-Origin'), e.read(300).decode('utf-8', 'replace')
-    except Exception as e:
-        return 0, None, repr(e)[:200]
+        r = urllib.request.urlopen(urllib.request.Request(url, headers=O), timeout=20); return r.status, json.loads(r.read(5_000_000))
+    except urllib.error.HTTPError as e: return e.code, e.read(300).decode('utf-8', 'replace')
 out = {}
-st, cors, d = get('https://gamma-api.polymarket.com/sports')
-out['sports'] = {'status': st, 'cors': cors, 'sample': [ {k: x.get(k) for k in ('sport','tags','series','image')} for x in (d if isinstance(d, list) else [])][:40]}
-st, cors, d = get('https://gamma-api.polymarket.com/public-search?q=' + urllib.parse.quote('Real Madrid') + '&limit_per_type=5')
-out['search'] = {'status': st, 'cors': cors, 'events': [{k: e.get(k) for k in ('title','slug','startDate','endDate','closed','tags')} for e in (d.get('events', []) if isinstance(d, dict) else [])][:5], 'raw': d if not isinstance(d, dict) else None}
-st, cors, d = get('https://gamma-api.polymarket.com/events?tag_slug=la-liga&closed=false&limit=5&order=startDate&ascending=true')
+st, d = get('https://gamma-api.polymarket.com/events?series_id=10193&closed=false&limit=4&order=startDate&ascending=true')
 evs = d if isinstance(d, list) else []
-out['laliga'] = {'status': st, 'cors': cors, 'count': len(evs)}
-if evs:
-    e = evs[0]
-    out['laliga']['first'] = {k: e.get(k) for k in ('title','slug','startDate','endDate','gameStartTime','eventDate','seriesSlug')}
-    out['laliga']['markets'] = [{k: m.get(k) for k in ('question','outcomes','outcomePrices','groupItemTitle','sportsMarketType','slug','volume')} for m in e.get('markets', [])][:8]
-    out['laliga']['keys'] = sorted(e.keys())
+out['lal'] = []
+for e in evs[:3]:
+    out['lal'].append({'title': e.get('title'), 'slug': e.get('slug'), 'startDate': e.get('startDate'), 'endDate': e.get('endDate'), 'gameStartTime': e.get('gameStartTime'),
+        'eventMetadata': e.get('eventMetadata'), 'teams': e.get('teams'), 'url': 'https://polymarket.com/event/' + str(e.get('slug')),
+        'markets': [{k: m.get(k) for k in ('question','outcomes','outcomePrices','groupItemTitle','sportsMarketType','gameStartTime','volume','closed','active')} for m in e.get('markets', [])][:6]})
+day = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+st, d = get(f'https://gamma-api.polymarket.com/events?tag_id=100350&closed=false&limit=200&end_date_min={day}T00:00:00Z&end_date_max={day}T23:59:59Z')
+out['soccer_tomorrow'] = {'status': st, 'count': len(d) if isinstance(d, list) else d, 'titles': [ (e.get('title'), e.get('seriesSlug'), e.get('endDate')) for e in (d if isinstance(d, list) else [])][:40]}
 open('diag/cut.json', 'w').write(json.dumps(out, indent=1, default=str)[:60000])
