@@ -2,7 +2,7 @@ name: Calamar TV · Web y catálogo
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
+    paths: ['web/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
   schedule:
     - cron: '17 */6 * * *'
     # Event preview pages (evento/<slug>/) follow the catalog edited in the admin within ~15 minutes.
