@@ -3,6 +3,7 @@
 // The match is found by its kick-off (Polymarket's football events end at kick-off) and its teams.
 export const POLYMARKET_API = 'https://gamma-api.polymarket.com';
 const SOCCER_TAG = 100350;
+const WINDOW_MS = 45 * 60000, PAGE_SIZE = 100, PAGES = 4;
 
 /** Lower case, without accents or punctuation, without «FC», «CF», «de»…: names from ESPN and Polymarket compare. */
 export function teamWords(name) {
@@ -68,12 +69,18 @@ export async function fetchOdds(home, away, kickoff, fetcher = globalThis.fetch)
   const at = Date.parse(kickoff);
   if (!home || !away || !Number.isFinite(at)) return null;
   const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const query = new URLSearchParams({ tag_id: String(SOCCER_TAG), closed: 'false', limit: '100',
-    end_date_min: iso(at - 3 * 3600000), end_date_max: iso(at + 3 * 3600000) });
-  const response = await fetcher(`${POLYMARKET_API}/events?${query}`, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
-  if (!response.ok) return null;
-  const found = pickEvent(await response.json(), home, away);
-  const odds = found && eventOdds(found.event);
-  if (!odds) return null;
-  return found.swapped ? { ...odds, home: odds.away, away: odds.home, homeName: odds.awayName, awayName: odds.homeName } : odds;
+  // Polymarket's football events end at kick-off; on a Saturday there are hundreds around the same hour,
+  // so the window is tight and a few pages are read.
+  for (let page = 0; page < PAGES; page++) {
+    const query = new URLSearchParams({ tag_id: String(SOCCER_TAG), closed: 'false', limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE),
+      end_date_min: iso(at - WINDOW_MS), end_date_max: iso(at + WINDOW_MS) });
+    const response = await fetcher(`${POLYMARKET_API}/events?${query}`, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+    if (!response.ok) return null;
+    const events = await response.json();
+    const found = pickEvent(events, home, away);
+    const odds = found && eventOdds(found.event);
+    if (odds) return found.swapped ? { ...odds, home: odds.away, away: odds.home, homeName: odds.awayName, awayName: odds.homeName } : odds;
+    if (!Array.isArray(events) || events.length < PAGE_SIZE) return null;
+  }
+  return null;
 }
