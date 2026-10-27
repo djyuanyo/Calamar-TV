@@ -1,0 +1,26 @@
+{
+ "api_direct": {
+  "status": 403,
+  "secs": 0.15,
+  "cors": null,
+  "body": "error code: 1010\n"
+ },
+ "api_account": {
+  "status": 403,
+  "secs": 0.06,
+  "cors": null,
+  "body": "error code: 1010\n"
+ },
+ "hosting_relay": {
+  "status": 400,
+  "secs": 0.61,
+  "cors": "https://djyuanyo.github.io",
+  "body": "{\"error\":\"Consulta de LuluStream no v\\u00e1lida.\"}"
+ },
+ "hosting_preflight": {
+  "status": 400,
+  "secs": 0.56,
+  "cors": "https://djyuanyo.github.io",
+  "body": "{\"error\":\"C\\u00f3digo de v\\u00eddeo no v\\u00e1lido.\"}"
+ }
+}
