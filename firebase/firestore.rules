@@ -104,28 +104,6 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow list: if false;
     }
-    // The visitors' 1X2 poll: one document per browser or app install and match (<voter>_<match>), with
-    // only the match and the pick (h, d or a set to 1). Anyone counts them, nobody reads who voted.
-    function validVote(id) {
-      let v = request.resource.data;
-      let voter = id.split('_')[0];
-      let day = v.match[0:10];
-      let date = timestamp.date(int(day[0:4]), int(day[5:7]), int(day[8:10]));
-      return v.keys().hasAll(['match', 'h', 'd', 'a', 'updatedAt'])
-        && v.keys().hasOnly(['match', 'h', 'd', 'a', 'updatedAt'])
-        && v.match is string && v.match.size() <= 140
-        && v.match.matches('^20[0-9]{2}-[01][0-9]-[0-3][0-9](-[a-z0-9]+)+$')
-        && voter.matches('^[A-Za-z0-9]{20,40}$') && id == voter + '_' + v.match
-        && date.toMillis() > request.time.toMillis() - 172800000
-        && date.toMillis() < request.time.toMillis() + 5184000000
-        && v.h in [0, 1] && v.d in [0, 1] && v.a in [0, 1] && v.h + v.d + v.a == 1
-        && v.updatedAt == request.time;
-    }
-    match /calamarVotes/{id} {
-      allow list: if true;
-      allow create, update: if validVote(id);
-      allow get, delete: if false;
-    }
     match /{document=**} {
       allow read, write: if false;
     }

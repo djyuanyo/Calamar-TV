@@ -934,8 +934,8 @@ final class MatchCenter {
     }).start();
   }
 
-  // The visitors' 1X2 poll (Firestore), on the phone only: the totals are asked every 2 minutes with the
-  // General tab open; one vote per install and match, which can be changed until kick-off.
+  // The visitors' 1X2 poll (kept on the hosting), on the phone only: the totals are asked every 2 minutes
+  // with the General tab open; one vote per install and match, which can be changed until kick-off.
   String pollKey = ""; long pollAt; long[] pollTotals; boolean pollBusy, pollSending; String pollError = "";
 
   android.content.SharedPreferences votePrefs() { return context.getSharedPreferences("votes", Context.MODE_PRIVATE); }
@@ -947,10 +947,6 @@ final class MatchCenter {
     return id;
   }
 
-  com.google.firebase.firestore.FirebaseFirestore votesDb() {
-    return com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(context));
-  }
-
   void loadVotes(Model m, boolean force) {
     if (television()) return;
     final String key = Votes.matchKey(m.home.name, m.away.name, m.date);
@@ -958,22 +954,19 @@ final class MatchCenter {
     if (!key.equals(pollKey)) { pollKey = key; pollAt = 0; pollTotals = null; pollError = ""; }
     if (pollBusy || (!force && System.currentTimeMillis() - pollAt < Votes.REFRESH_MS)) return;
     pollAt = System.currentTimeMillis(); pollBusy = true;
-    com.google.firebase.firestore.AggregateField h = com.google.firebase.firestore.AggregateField.sum("h"),
-        d = com.google.firebase.firestore.AggregateField.sum("d"), a = com.google.firebase.firestore.AggregateField.sum("a");
-    try {
-      votesDb().collection(Votes.PATH).whereEqualTo("match", key).aggregate(h, d, a).get(com.google.firebase.firestore.AggregateSource.SERVER)
-          .addOnCompleteListener(task -> {
-            pollBusy = false;
-            if (!key.equals(pollKey) || !task.isSuccessful() || task.getResult() == null) return;
-            long[] totals = {number(task.getResult().get(h)), number(task.getResult().get(d)), number(task.getResult().get(a))};
-            boolean changed = pollTotals == null || !Arrays.equals(pollTotals, totals);
-            pollTotals = totals;
-            if (changed && model != null && tab.equals("general")) show(model);
-          });
-    } catch (RuntimeException failed) { pollBusy = false; }
+    new Thread(() -> {
+      long[] found = null;
+      try { found = Votes.totals(Votes.request(Votes.ENDPOINT + "?match=" + Uri.encode(key), null)); } catch (Exception ignored) {}
+      final long[] totals = found;
+      handler.post(() -> {
+        pollBusy = false;
+        if (!key.equals(pollKey) || totals == null) return;
+        boolean changed = pollTotals == null || !Arrays.equals(pollTotals, totals);
+        pollTotals = totals;
+        if (changed && model != null && tab.equals("general")) show(model);
+      });
+    }).start();
   }
-
-  static long number(Object value) { return value instanceof Number ? Math.round(((Number) value).doubleValue()) : 0; }
 
   void vote(final String pick) {
     final Model m = model;
@@ -981,18 +974,24 @@ final class MatchCenter {
     if (m == null || key.isEmpty() || pollSending || !Votes.open(m.state, SportsCatalog.instant(MatchScores.iso(m.date)), System.currentTimeMillis())) return;
     pollSending = true; pollError = "";
     show(m);
-    Map<String, Object> data = new HashMap<>();
-    data.put("match", key);
-    data.put("h", pick.equals("1") ? 1 : 0); data.put("d", pick.equals("X") ? 1 : 0); data.put("a", pick.equals("2") ? 1 : 0);
-    data.put("updatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
-    try {
-      votesDb().collection(Votes.PATH).document(Votes.id(voter(), key)).set(data).addOnCompleteListener(task -> {
+    final String voter = voter();
+    new Thread(() -> {
+      long[] found = null;
+      String error = "No se ha podido guardar el voto. Inténtalo de nuevo.";
+      try { found = Votes.totals(Votes.request(Votes.ENDPOINT, Votes.body(key, voter, pick))); }
+      catch (Votes.Refused refused) { error = refused.getMessage(); }
+      catch (Exception ignored) {}
+      final long[] totals = found;
+      final String message = error;
+      handler.post(() -> {
         pollSending = false;
-        if (task.isSuccessful()) { votePrefs().edit().putString("pick:" + key, pick).apply(); loadVotes(m, true); }
-        else pollError = "No se ha podido guardar el voto. Inténtalo de nuevo.";
+        if (totals != null) {
+          votePrefs().edit().putString("pick:" + key, pick).apply();
+          if (key.equals(pollKey)) { pollTotals = totals; pollAt = System.currentTimeMillis(); }
+        } else pollError = message;
         if (model != null) show(model);
       });
-    } catch (RuntimeException failed) { pollSending = false; pollError = "No se ha podido guardar el voto. Inténtalo de nuevo."; show(m); }
+    }).start();
   }
 
   View votesCard(Model m) {

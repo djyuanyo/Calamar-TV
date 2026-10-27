@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp, increment, query, where, getAggregateFromServer, sum } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp, increment, query, where } from 'firebase/firestore';
 let env;
 const path = 'calamarCatalog/custom';
 const data = { json: '{"channels":[],"featured":[],"hidden":[]}', revision: 1 };
@@ -132,25 +132,4 @@ test('each account reads and writes only its own «Continuar viendo»', async ()
   await assertFails(setDoc(doc(mine, 'calamarProgress/user-a'), progress({ extra: 1 })));
   await assertFails(setDoc(doc(mine, 'calamarProgress/user-a'), progress({ json: 'x'.repeat(200001) })));
   await assertFails(getDocs(collection(mine, 'calamarProgress')));
-});
-test('anyone votes 1X2 once per match and install, can change it, and only totals are read', async () => {
-  const db = env.unauthenticatedContext().firestore();
-  const day = new Date(Date.now() + 86400000).toISOString().slice(0, 10), match = `${day}-villarreal-espanyol`;
-  const voter = 'A'.repeat(24), other = 'B'.repeat(24);
-  const vote = (overrides = {}) => ({ match, h: 1, d: 0, a: 0, updatedAt: serverTimestamp(), ...overrides });
-  await assertSucceeds(setDoc(doc(db, 'calamarVotes', `${voter}_${match}`), vote()));
-  await assertSucceeds(setDoc(doc(db, 'calamarVotes', `${voter}_${match}`), vote({ h: 0, a: 1 })));
-  await assertSucceeds(setDoc(doc(db, 'calamarVotes', `${other}_${match}`), vote({ h: 0, d: 1 })));
-  const totals = await assertSucceeds(getAggregateFromServer(query(collection(db, 'calamarVotes'), where('match', '==', match)), { h: sum('h'), d: sum('d'), a: sum('a') }));
-  assert.deepEqual(totals.data(), { h: 0, d: 1, a: 1 });
-  await assertFails(getDoc(doc(db, 'calamarVotes', `${voter}_${match}`)));
-  await assertFails(deleteDoc(doc(db, 'calamarVotes', `${voter}_${match}`)));
-  for (const invalid of [{ h: 1, a: 1 }, { h: 0 }, { h: 2 }, { extra: 1 }, { updatedAt: new Date() }])
-    await assertFails(setDoc(doc(db, 'calamarVotes', `${voter}_${match}`), vote(invalid)));
-  await assertFails(setDoc(doc(db, 'calamarVotes', `${voter}_${match}-x`), vote()));
-  await assertFails(setDoc(doc(db, 'calamarVotes', `short_${match}`), vote()));
-  const old = `2020-01-01-villarreal-espanyol`;
-  await assertFails(setDoc(doc(db, 'calamarVotes', `${voter}_${old}`), vote({ match: old })));
-  const bad = `${day}-Villarreal`;
-  await assertFails(setDoc(doc(db, 'calamarVotes', `${voter}_${bad}`), vote({ match: bad })));
 });

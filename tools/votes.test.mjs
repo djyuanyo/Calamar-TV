@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchKey, votingOpen, voteData, voteId, tally, voterId, myPick, rememberPick } from '../web/votes.js';
+import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_ENDPOINT } from '../web/votes.js';
 import { votesCard } from '../web/match-center.js';
 
 const memory = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
@@ -19,10 +19,21 @@ test('voting is open only before kick-off', () => {
   assert.equal(votingOpen({ state: 'live', date: '2026-10-30T20:00Z' }, at - 1000), false);
 });
 
-test('a vote stores only the match and the pick as 1/0, and totals add up to 100', () => {
-  assert.deepEqual(voteData('2026-10-30-a-b', 'X'), { match: '2026-10-30-a-b', h: 0, d: 1, a: 0 });
-  assert.throws(() => voteData('2026-10-30-a-b', '3'));
-  assert.equal(voteId('A'.repeat(24), '2026-10-30-a-b'), `${'A'.repeat(24)}_2026-10-30-a-b`);
+test('votes go to the hosting as plain text and come back as totals', async () => {
+  const calls = [];
+  const fetcher = async (url, options = {}) => { calls.push([url, options]); return { ok: true, json: async () => ({ h: 2, d: 1, a: 0 }) }; };
+  assert.deepEqual(await fetchVotes('2026-10-30-a-b', fetcher), { h: 2, d: 1, a: 0 });
+  assert.equal(calls[0][0], `${VOTES_ENDPOINT}?match=2026-10-30-a-b`);
+  await sendVote('A'.repeat(24), '2026-10-30-a-b', 'X', fetcher);
+  assert.equal(calls[1][1].method, 'POST');
+  assert.equal(calls[1][1].headers['Content-Type'], 'text/plain');
+  assert.deepEqual(JSON.parse(calls[1][1].body), { match: '2026-10-30-a-b', voter: 'A'.repeat(24), pick: 'X' });
+  await assert.rejects(sendVote('A'.repeat(24), '2026-10-30-a-b', '3', fetcher));
+  const refused = async () => ({ ok: false, json: async () => ({ error: 'Demasiados votos desde esta conexión. Espera unos minutos.' }) });
+  await assert.rejects(sendVote('A'.repeat(24), '2026-10-30-a-b', '1', refused), /Demasiados votos/);
+});
+
+test('totals add up to 100', () => {
   assert.deepEqual(tally({ h: 1, d: 1, a: 1 }), { home: 34, draw: 33, away: 33, total: 3 });
   assert.deepEqual(tally({ h: 0, d: 0, a: 0 }), { home: 0, draw: 0, away: 0, total: 0 });
 });

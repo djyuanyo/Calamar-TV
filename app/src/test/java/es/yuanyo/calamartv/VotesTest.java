@@ -32,6 +32,12 @@ public class VotesTest {
   @Test public void voterIdsLookLikeTheWebOnes() {
     String voter = Votes.newVoter(new SecureRandom());
     assertTrue(voter.matches("[A-Za-z0-9]{24}"));
-    assertEquals(voter + "_2026-10-30-a-b", Votes.id(voter, "2026-10-30-a-b"));
+  }
+
+  @Test public void bodyAndTotalsMatchTheHosting() throws Exception {
+    org.json.JSONObject body = new org.json.JSONObject(Votes.body("2026-10-30-a-b", "v", "X"));
+    assertEquals("X", body.getString("pick"));
+    assertArrayEquals(new long[] {2, 1, 0}, Votes.totals(new org.json.JSONObject("{\"h\":2,\"d\":1,\"a\":0}")));
+    assertArrayEquals(new long[] {0, 0, 0}, Votes.totals(new org.json.JSONObject("{}")));
   }
 }

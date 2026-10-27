@@ -1,17 +1,22 @@
 package es.yuanyo.calamartv;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.List;
+import org.json.JSONObject;
 
 /**
  * The visitors' own 1X2 poll of a match, as web/votes.js: one vote per install and match, which can be
- * changed until kick-off. Firestore keeps only the match and the pick (calamarVotes, see
- * firebase/firestore.rules).
+ * changed until kick-off. The hosting keeps only the match and the pick (hosting/calamar-votes.php).
  */
 final class Votes {
   private Votes() {}
 
-  static final String PATH = "calamarVotes";
+  static final String ENDPOINT = "https://calamarmenciano.com/calamar-votes.php";
   static final long REFRESH_MS = 120000;
 
   /** The same match on the web and the app: «2026-10-30-villarreal-espanyol». */
@@ -33,7 +38,36 @@ final class Votes {
     return "scheduled".equals(state) && (kickoff == Long.MAX_VALUE || now < kickoff);
   }
 
-  static String id(String voter, String match) { return voter + "_" + match; }
+  /** The hosting said no (too many votes, a closed match…), with its reason in Spanish. */
+  static final class Refused extends Exception { Refused(String message) { super(message); } }
+
+  static String body(String match, String voter, String pick) throws Exception {
+    return new JSONObject().put("match", match).put("voter", voter).put("pick", pick).toString();
+  }
+
+  /** The votes of a match as {1, X, 2} from the hosting's answer {"h":…,"d":…,"a":…}. */
+  static long[] totals(JSONObject answer) {
+    return new long[] {Math.max(0, answer.optLong("h")), Math.max(0, answer.optLong("d")), Math.max(0, answer.optLong("a"))};
+  }
+
+  /** Blocking: a GET, or a POST of the vote when body is not null. */
+  static JSONObject request(String url, String body) throws Exception {
+    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+    c.setConnectTimeout(8000); c.setReadTimeout(15000);
+    try {
+      if (body != null) {
+        c.setRequestMethod("POST");
+        c.setDoOutput(true);
+        c.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
+        try (OutputStream out = c.getOutputStream()) { out.write(body.getBytes(StandardCharsets.UTF_8)); }
+      }
+      int code = c.getResponseCode();
+      InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+      JSONObject answer = new JSONObject(in == null ? "{}" : new String(MatchCenter.readAll(in), StandardCharsets.UTF_8));
+      if (code != 200) throw new Refused(answer.optString("error", "No se ha podido guardar el voto. Inténtalo de nuevo."));
+      return answer;
+    } finally { c.disconnect(); }
+  }
 
   /** Percentages of 1, X and 2 adding up to 100 (largest remainder), then the number of votes. */
   static long[] tally(long h, long d, long a) {

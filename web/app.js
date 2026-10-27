@@ -3,7 +3,7 @@ import { mountRenewable } from './renewable-player.js';
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds } from './polymarket.js';
-import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, VOTES_MS } from './votes.js';
+import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -947,7 +947,7 @@ function loadOdds() {
     if (changed && matchTab === 'general') paintMatch();
   });
 }
-// The visitors' 1X2 poll (Firestore): the totals are asked every 2 minutes with the General tab open.
+// The visitors' 1X2 poll (kept on the hosting): the totals are asked every 2 minutes with the General tab open.
 const matchPoll = { key: '', at: 0, totals: null, busy: false, sending: false, error: '' };
 function loadVotes(force = false) {
   const key = matchModel ? matchKey(matchModel.home?.name, matchModel.away?.name, matchModel.date) : '';
@@ -955,7 +955,7 @@ function loadVotes(force = false) {
   if (matchPoll.key !== key) Object.assign(matchPoll, { key, at: 0, totals: null, error: '' });
   if (matchPoll.busy || (!force && Date.now() - matchPoll.at < VOTES_MS)) return;
   Object.assign(matchPoll, { at: Date.now(), busy: true });
-  shared().then((f) => f.matchVotes(key)).catch(() => null).then((totals) => {
+  fetchVotes(key).catch(() => null).then((totals) => {
     matchPoll.busy = false;
     if (matchPoll.key !== key || !totals) return;
     const changed = JSON.stringify(totals) !== JSON.stringify(matchPoll.totals);
@@ -968,14 +968,13 @@ function vote(pick) {
   if (!key || matchPoll.sending || !votingOpen(matchModel)) return;
   Object.assign(matchPoll, { sending: true, error: '' });
   paintMatch();
-  shared().then((f) => f.castVote(voterId(), key, pick)).then(() => {
+  sendVote(voterId(), key, pick).then((totals) => {
     rememberPick(key, pick);
-    matchPoll.sending = false;
-    loadVotes(true);
+    Object.assign(matchPoll, { sending: false, at: Date.now(), totals: matchPoll.key === key ? totals : matchPoll.totals });
     paintMatch();
     document.getElementById(`mc-vote-${pick}`)?.focus();
-  }, () => {
-    Object.assign(matchPoll, { sending: false, error: 'No se ha podido guardar el voto. Inténtalo de nuevo.' });
+  }, (error) => {
+    Object.assign(matchPoll, { sending: false, error: error.message || 'No se ha podido guardar el voto. Inténtalo de nuevo.' });
     paintMatch();
   });
 }

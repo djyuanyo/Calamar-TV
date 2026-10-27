@@ -1,9 +1,9 @@
 // The visitors' own 1X2 poll of a match: one vote per browser or app install and match, which can be
-// changed until kick-off. Votes are stored in Firestore (calamarVotes, see firebase/firestore.rules) with
-// no personal data, only the match and the pick; firebase.js reads the totals in one aggregation.
+// changed until kick-off. Votes are kept on the hosting (hosting/calamar-votes.php) with no personal
+// data, only the match and the pick.
 import { teamWords } from './polymarket.js';
 
-export const VOTES_PATH = 'calamarVotes';
+export const VOTES_ENDPOINT = 'https://calamarmenciano.com/calamar-votes.php';
 export const VOTES_MS = 120000;
 export const PICKS = ['1', 'X', '2'];
 const VOTER_KEY = 'calamar-voter', PICKS_KEY = 'calamar-votes';
@@ -22,13 +22,22 @@ export function votingOpen(m, now = Date.now()) {
   return m?.state === 'scheduled' && (!Number.isFinite(at) || now < at);
 }
 
-/** The document of one vote: h, d and a are 1 for the pick and 0 otherwise, so the totals are sums. */
-export function voteData(match, pick) {
-  if (!match || !PICKS.includes(pick)) throw new Error('Voto no válido.');
-  return { match, h: pick === '1' ? 1 : 0, d: pick === 'X' ? 1 : 0, a: pick === '2' ? 1 : 0 };
+/** The votes of a match: { h, d, a }. */
+export async function fetchVotes(match, fetcher = globalThis.fetch) {
+  const response = await fetcher(`${VOTES_ENDPOINT}?match=${encodeURIComponent(match)}`, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  if (!response.ok) throw new Error('No se pudieron leer los votos.');
+  return response.json();
 }
 
-export const voteId = (voter, match) => `${voter}_${match}`;
+/** Counts or changes this visitor's vote and returns the new totals. Plain text, so there is no preflight. */
+export async function sendVote(voter, match, pick, fetcher = globalThis.fetch) {
+  if (!match || !PICKS.includes(pick)) throw new Error('Voto no válido.');
+  const response = await fetcher(VOTES_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ match, voter, pick }),
+    cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'No se ha podido guardar el voto. Inténtalo de nuevo.');
+  return data;
+}
 
 /** Totals as percentages adding up to 100 (largest remainder), or null without votes. */
 export function tally({ h = 0, d = 0, a = 0 } = {}) {
