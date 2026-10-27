@@ -1014,3 +1014,16 @@ label[hidden] { display: none; }
 .top-card:hover .poster-frame, .top-card:focus-visible .poster-frame { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--accent), 0 16px 34px rgba(0,0,0,.55); }
 @media (max-width: 720px) { .library-hero .hero-overview { -webkit-line-clamp: 2; font-size: 14px; } .top-rail { grid-auto-columns: 150px; } }
 .channel-options .channel-group { grid-column: 1 / -1; margin: 6px 0 0; font-weight: 700; color: var(--fg, #fff); }
+
+/* Polymarket's odds of the match, in the General tab. */
+.mc-odds { display: grid; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--surface, #15181d); margin: 0 0 14px; }
+.mc-odds h3 { margin: 0 0 2px; font-size: 15px; }
+.mc-odd { display: grid; grid-template-columns: minmax(80px, 34%) 1fr 44px; align-items: center; gap: 10px; font-size: 14px; }
+.mc-odd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-odd-bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+.mc-odd-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent, #d4ff00); }
+.mc-odd.draw .mc-odd-bar i { background: #8a93a0; }
+.mc-odd.away .mc-odd-bar i { background: #6fb7ff; }
+.mc-odd b { text-align: right; }
+.mc-odds-source { margin: 2px 0 0; color: var(--muted, #9aa3ad); font-size: 12px; }
+.mc-odds-source a { color: inherit; text-decoration: underline; }

@@ -270,3 +270,10 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Al crear o editar un evento en la web de administración, la lista de canales muestra primero «Tus canales» y después «Canales de TDT»: los de TDTChannels que se ven en el catálogo (los ocultos no salen) y que se pueden reproducir.
 - Las versiones de la app anteriores a la 2.20.22 solo aceptan eventos cuyo canal esté entre los creados. Para no romperlas, cada canal de TDT usado por un evento o un partido importado se guarda también como copia en `channels`, marcada con `tdt: true`. La web y la app nuevas usan siempre el canal de la lista de TDT, con sus enlaces actualizados; la copia solo sirve si TDT deja de tenerlo. Las copias no aparecen en «Canales creados», se actualizan en cada guardado y desaparecen cuando ya no las usa ningún evento.
 - Si se oculta un canal de TDT, sus eventos dejan de mostrarse, igual que el canal.
+
+## Pronóstico de Polymarket en los partidos (2.20.26)
+
+- En la pestaña **General** del centro del partido (web y app Android en el móvil) aparece «¿Quién ganará?» con la probabilidad de victoria local, empate y victoria visitante según el mercado de predicción de Polymarket, el volumen en juego y un enlace a su página.
+- Se lee de la API pública `gamma-api.polymarket.com` (solo lectura, sin cuenta ni claves): se buscan los partidos de fútbol que empiezan 45 minutos antes o después del inicio y se elige el de los mismos equipos, aunque vengan en orden inverso. Se actualiza como mucho cada 2 minutos y deja de mostrarse al terminar el partido.
+- Los porcentajes se redondean para que sumen exactamente 100. Si Polymarket no tiene mercado abierto para el partido, no se muestra nada.
+- No aparece en Android TV ni en los eventos sin enlace del partido.

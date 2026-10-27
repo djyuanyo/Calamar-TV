@@ -2,6 +2,7 @@ import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
+import { fetchOdds } from './polymarket.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
@@ -928,12 +929,31 @@ function loadPlayerExtras() {
     if (playerExtras.data) paintMatch();
   });
 }
+// Polymarket's odds of the match (home, draw, away), asked at most every 2 minutes until it ends.
+const matchOdds = { key: '', at: 0, data: null, busy: false };
+function loadOdds() {
+  const m = matchModel;
+  if (!m?.home?.name || !m.away?.name || !m.date || m.state === 'finished' || m.source === 'event') return;
+  const key = `${m.home.name}|${m.away.name}|${m.date}`;
+  if (matchOdds.busy || (matchOdds.key === key && Date.now() - matchOdds.at < 120000)) return;
+  if (matchOdds.key !== key) matchOdds.data = null;
+  Object.assign(matchOdds, { key, at: Date.now(), busy: true });
+  fetchOdds(m.home.name, m.away.name, m.date).catch(() => null).then((odds) => {
+    matchOdds.busy = false;
+    if (matchOdds.key !== key) return;
+    const changed = JSON.stringify(odds) !== JSON.stringify(matchOdds.data);
+    matchOdds.data = odds;
+    if (changed && matchTab === 'general') paintMatch();
+  });
+}
 function paintMatch() {
   if (!matchModel) return;
   loadPlayerExtras();
+  loadOdds();
   const focused = matchPanel.contains(document.activeElement) ? document.activeElement.id : '';
   const extras = playerExtras.key === `${matchModel.home?.name}|${matchModel.away?.name}|${String(matchModel.date || '').slice(0, 10)}` ? playerExtras.data : null;
-  matchPanel.replaceChildren(...renderMatchCenter(el, withPlayerExtras(matchModel, extras), matchTab, (tab, focus) => {
+  const odds = matchOdds.key === `${matchModel.home?.name}|${matchModel.away?.name}|${matchModel.date}` ? matchOdds.data : null;
+  matchPanel.replaceChildren(...renderMatchCenter(el, { ...withPlayerExtras(matchModel, extras), odds }, matchTab, (tab, focus) => {
     matchTab = tab; paintMatch();
     if (focus) document.getElementById(`mc-tab-${tab}`)?.focus();
   }).filter(Boolean));

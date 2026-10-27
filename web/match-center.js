@@ -199,6 +199,20 @@ const ICON = { goal: '⚽', penalty: '⚽', 'own-goal': '⚽', 'penalty-missed':
 const madrid = (iso, opts) => new Date(iso).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', ...opts });
 
 /** The tabs; `tab` is the open one ('general', 'stats', 'lineups' or 'h2h') and `choose` changes it. */
+/** What Polymarket's market expects (m.odds from polymarket.js): three bars, only before the match ends. */
+export function oddsCard(el, m) {
+  const o = m.odds;
+  if (!o || m.state === 'finished') return null;
+  const row = (label, pct, cls) => el('div', { class: `mc-odd ${cls}` },
+    el('span', { class: 'mc-odd-label' }, label), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${pct}%` })), el('b', {}, `${pct}%`));
+  const volume = o.volume >= 1e6 ? `${(o.volume / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 })} M$` : o.volume >= 1e3 ? `${Math.round(o.volume / 1e3).toLocaleString('es-ES')} mil $` : `${Math.round(o.volume)} $`;
+  return el('section', { class: 'mc-odds', 'aria-label': 'Pronóstico de Polymarket' },
+    el('h3', {}, '¿Quién ganará?'),
+    row(m.home.name, o.home, 'home'), row('Empate', o.draw, 'draw'), row(m.away.name, o.away, 'away'),
+    el('p', { class: 'mc-odds-source' }, `Probabilidades del mercado de predicción Polymarket · ${volume} en juego · `,
+      el('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver en Polymarket')));
+}
+
 export function renderMatchCenter(el, m, tab, choose) {
   const crest = (t, cls = 'mc-crest') => t.logo ? el('img', { class: cls, src: t.logo, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' })
     : el('span', { class: `${cls} mc-crest-empty`, 'aria-hidden': 'true' }, (t.short || t.name || '?').slice(0, 3));
@@ -268,7 +282,7 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty('No hay enfrentamientos anteriores registrados.')];
   } else {
     // General: timeline, key figures, incidents, form and details.
-    const parts = [noLink];
+    const parts = [noLink, oddsCard(el, m)];
     const maxMinute = Math.max(90, ...m.events.map((e) => minuteOf(e.minute)), m.live ? minuteOf(m.clock) : 0);
     if (m.events.length || m.live || m.state === 'finished' || m.state === 'halftime') {
       const at = (minute) => `${Math.min(100, (minute / maxMinute) * 100).toFixed(2)}%`;
