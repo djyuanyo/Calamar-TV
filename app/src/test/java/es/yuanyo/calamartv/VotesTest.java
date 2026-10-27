@@ -16,11 +16,12 @@ public class VotesTest {
     assertEquals("", Votes.matchKey("Villarreal", "Espanyol", ""));
   }
 
-  @Test public void openUntilKickOff() {
-    assertTrue(Votes.open("scheduled", 2000, 1000));
-    assertFalse(Votes.open("scheduled", 2000, 3000));
-    assertFalse(Votes.open("live", 2000, 1000));
-    assertTrue(Votes.open("scheduled", Long.MAX_VALUE, 3000));
+  @Test public void openUntilTheMatchEnds() {
+    assertTrue(Votes.open("scheduled"));
+    assertTrue(Votes.open("live"));
+    assertTrue(Votes.open("halftime"));
+    assertFalse(Votes.open("finished"));
+    assertFalse(Votes.open("postponed"));
   }
 
   @Test public void totalsAddUpToOneHundred() {

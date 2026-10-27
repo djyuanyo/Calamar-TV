@@ -213,7 +213,7 @@ export function oddsCard(el, m) {
       el('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver en Polymarket')));
 }
 
-/** The visitors' own 1X2 poll: buttons until kick-off, then (or once voted) what everyone picked. */
+/** The visitors' own 1X2 poll: buttons until the match ends, and what everyone picked once voted or closed. */
 export function votesCard(el, m) {
   const v = m.votes;
   if (!v) return null;
@@ -229,8 +229,8 @@ export function votesCard(el, m) {
     el('span', { class: 'mc-odd-label' }, `${pick} · ${label}`), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${t[key]}%` })), el('b', {}, `${t[key]}%`)));
   const total = t?.total ? `${t.total.toLocaleString('es-ES')} ${t.total === 1 ? 'voto' : 'votos'}` : '';
   children.push(el('p', { class: 'mc-odds-source' }, v.error ? v.error
-    : v.open ? (v.pick ? `Has votado ${v.pick}. ${total ? total + ' · ' : ''}Puedes cambiarlo hasta el inicio del partido.` : 'Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el inicio del partido.')
-    : `${total} · Votación cerrada al empezar el partido.`));
+    : v.open ? (v.pick ? `Has votado ${v.pick}. ${total ? total + ' · ' : ''}Puedes cambiarlo hasta el final del partido.` : 'Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el final del partido.')
+    : `${total} · Votación cerrada al terminar el partido.`));
   return el('section', { class: 'mc-odds mc-votes', 'aria-label': 'Votación de los usuarios' }, ...children);
 }
 

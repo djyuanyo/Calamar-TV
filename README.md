@@ -280,7 +280,7 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 ## Votación 1X2 de los usuarios (2.20.32)
 
-- En la pestaña **General** del partido (web y app Android en el móvil, no en Android TV) aparece «¿Quién ganará? Vota» con tres botones: **1** (local), **X** (empate) y **2** (visitante). Al votar se ven los porcentajes de todos los votos y el total; el voto se puede cambiar hasta el inicio del partido. Después, la tarjeta muestra el resultado de la votación cerrada.
+- En la pestaña **General** del partido (web y app Android en el móvil, no en Android TV) aparece «¿Quién ganará? Vota» con tres botones: **1** (local), **X** (empate) y **2** (visitante). Al votar se ven los porcentajes de todos los votos y el total; se puede votar y cambiar el voto antes y durante el partido (2.20.33: antes se cerraba al empezar y la tarjeta no salía en los partidos en directo). Al terminar, la tarjeta muestra el resultado de la votación cerrada.
 - Los votos se guardan **en el hosting**, no en Firebase: `hosting/calamar-votes.php`, subido a `calamarmenciano.com/calamar-votes.php`. Guarda un archivo JSON pequeño por partido (unos 30 bytes por voto) una carpeta por encima de la web (`calamar-votes/`) o, si no se puede, en `calamar-votes-data/` junto al PHP, cerrada con su `.htaccess`. Los partidos de hace más de 120 días se borran solos.
 - Un voto por navegador o instalación de la app y partido: cada uno guarda un identificador aleatorio que no identifica a nadie, y el hosting solo guarda su huella (hash). El partido tiene la misma clave en la web y en la app (`2026-10-30-villarreal-espanyol`). Como mucho 60 votos cada 10 minutos desde la misma conexión.
 - Como no hace falta iniciar sesión, quien borre los datos del navegador o reinstale la app puede volver a votar: es una encuesta de opinión, no un recuento exacto.
@@ -290,3 +290,5 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - `hosting/calamar-lineups.php` sacaba las fotos solo de las estadísticas de API-Football, que no existen hasta que empieza el partido (y una respuesta vacía se guardaba 30 minutos). Ahora, desde 75 minutos antes del inicio, si aún no hay estadísticas pide la **alineación publicada** (`/fixtures/lineups`) y toma la foto de cada jugador por su id; se vuelve a preguntar cada 5 minutos hasta que sale y después se guarda 6 horas. Las notas siguen llegando con el partido empezado.
 - **Hay que subir el `calamar-lineups.php` nuevo al hosting.**
+
+- 2.20.33: el PHP decide cada cuánto refrescar por la hora de inicio (la lista de partidos del día se guarda 6 horas y su estado podía decir «sin empezar» con el partido en juego), y si API-Football corta por el límite de peticiones por minuto devuelve lo último guardado en vez de un error. Si API-Football no tiene la alineación de un partido (pasa en categorías inferiores), no hay fotos.

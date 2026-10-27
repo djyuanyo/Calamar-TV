@@ -1,5 +1,5 @@
 // The visitors' own 1X2 poll of a match: one vote per browser or app install and match, which can be
-// changed until kick-off. Votes are kept on the hosting (hosting/calamar-votes.php) with no personal
+// changed until the match ends. Votes are kept on the hosting (hosting/calamar-votes.php) with no personal
 // data, only the match and the pick.
 import { teamWords } from './polymarket.js';
 
@@ -16,10 +16,9 @@ export function matchKey(home, away, date) {
   return `${day}-${team(home)}-${team(away)}`;
 }
 
-/** Voting closes at kick-off: before it the match is still «scheduled». */
-export function votingOpen(m, now = Date.now()) {
-  const at = Date.parse(m?.date || '');
-  return m?.state === 'scheduled' && (!Number.isFinite(at) || now < at);
+/** Voting stays open before and during the match, and closes when it ends (or is called off). */
+export function votingOpen(m) {
+  return ['scheduled', 'live', 'halftime'].includes(m?.state);
 }
 
 /** The votes of a match: { h, d, a }. */
