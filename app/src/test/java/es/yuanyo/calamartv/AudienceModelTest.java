@@ -20,4 +20,12 @@ public class AudienceModelTest {
     docs.add(AudienceModel.presence("e:game",6000000));
     Map<String,Long> counts=AudienceModel.counts(docs,6000000);assertEquals(Long.valueOf(3),counts.get("c:tv"));assertEquals(Long.valueOf(1),counts.get("e:game"));
   }
+
+  @Test public void filmsAndSeriesHaveTheirOwnTargetAndVisits(){
+    assertEquals("l:sbreaking",AudienceModel.libraryTarget("sbreaking"));
+    assertTrue(AudienceModel.validTarget("l:sbreaking"));
+    assertFalse(AudienceModel.validTarget("x:sbreaking"));
+    assertNull(AudienceModel.libraryTarget(""));
+    assertEquals("l_m_avatar",AudienceModel.visitKey('l',"m avatar"));
+  }
 }

@@ -121,7 +121,7 @@ export function formatClock(seconds) {
 /** What the player needs to play a film or an episode (the same player as the channels). */
 export function playable(section, item, episode = null) {
   const target = episode || item, info = item.tmdb || {};
-  return { id: target.id, name: episode ? `${itemTitle(item)} · T${episode.season} · ${episodeTitle(episode)}` : itemTitle(item),
+  return { id: target.id, libraryId: item.id, name: episode ? `${itemTitle(item)} · T${episode.season} · ${episodeTitle(episode)}` : itemTitle(item),
     streams: [target.url], playable: true, vod: true, logo: '', group: section.label, region: '',
     path: `#/${section.page}/${encodeURIComponent(item.id)}/ver${episode ? `/${encodeURIComponent(episode.id)}` : ''}`,
     // Saved in «Continuar viendo»: enough to draw its card and come back without the library.

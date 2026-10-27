@@ -315,3 +315,10 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - Se quita la consulta de estadísticas a API-Football (2.20.36): las estadísticas vuelven a salir solo de ESPN, el partido del enlace de la competición, como antes. Si ESPN no tiene las de un partido pequeño, salen como las da (a 0, con las tarjetas).
 - Las alineaciones siguen con las fotos y notas de API-Football (`calamar-lineups.php`).
+
+## Pelis y series: enlaces aunque estén ocultas y estadísticas propias (2.20.37)
+
+- Con la biblioteca oculta a los usuarios, sus listas siguen sin verse, pero **el enlace de una película o serie** (`#/peliculas/<id>`, sus capítulos y `…/ver`) se abre para cualquiera.
+- Las películas, series y documentales tienen **estadísticas propias**: en vivo (`l:<id>`) y visitas por día (`l_<id>`), todos los capítulos de una serie juntos. En Administración → Estadísticas salen en «Pelis y series» y suman al total. Web y app.
+- Su reproductor (web y app) **no muestra** «personas viendo».
+- **Hay que publicar las reglas nuevas** de `firebase/firestore.rules` en Firebase Console → Firestore → Reglas (aceptan `l:` y `l_`); sin ellas no se guardan las estadísticas de pelis y series.

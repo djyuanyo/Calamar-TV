@@ -1806,6 +1806,9 @@ public class MainActivity extends Activity {
     } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
     intent.putExtra("title", entry.optString("title"));
     intent.putExtra("progress_entry", entry.toString());
+    // Its own statistics (l:<id>, all the episodes of a series together), without «people watching».
+    String audienceTarget = AudienceModel.libraryTarget(entry.optString("item"));
+    if (audienceTarget != null) intent.putExtra("audience_target", audienceTarget);
     intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));
     startActivityForResult(intent, PLAY_LIBRARY);
   }

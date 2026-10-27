@@ -44,3 +44,13 @@ test('events show their date and time until they start', () => {
   assert.equal(nextStart([event, { startAt: '' }, { startAt: '2026-01-01T00:00:00Z' }], now), 29 * 60000 + 40000);
   assert.equal(nextStart([], now), null);
 });
+
+test('films and series have their own statistics keys and count in the totals', async () => {
+  const { audienceTarget, visitKey, summarize } = await import('../web/audience.js');
+  assert.equal(audienceTarget({ vod: true, id: 'ep-3', libraryId: 'sbreaking' }), 'l:sbreaking');
+  assert.equal(audienceTarget({ id: 'la-1' }), 'c:la-1');
+  assert.equal(visitKey('library', 'm avatar'), 'l_m_avatar');
+  const days = [{ id: '2026-10-27', data: { 'c_la-1': 3, 'e_final': 2, 'l_mavatar': 4 } }];
+  assert.equal([...summarize(days, 'day', ['c_', 'l_']).buckets.values()][0], 7);
+  assert.equal([...summarize(days, 'day', 'l_mavatar').buckets.values()][0], 4);
+});

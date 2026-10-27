@@ -5,7 +5,7 @@ import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlu
 import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
-import { libraryAdmin } from './library.js';
+import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
@@ -741,6 +741,17 @@ function statsNames(state) {
   }
   return names;
 }
+/** Films, series and documentaries by their statistics keys (l:<id> live, l_<id> visits), with their section. */
+async function libraryNames(names) {
+  try {
+    const library = await fetchLibrary();
+    for (const section of LIBRARY_SECTIONS) for (const item of library.sections?.[section.key] || []) {
+      const label = `${itemTitle(item)} · ${section.label}`;
+      names.set(`l:${item.id}`, label); names.set(visitKey('library', item.id), label);
+    }
+  } catch {}
+  return names;
+}
 
 const plural = (n, one, many) => `${n.toLocaleString('es-ES')} ${n === 1 ? one : many}`;
 const shiftDay = (day, delta) => new Date(Date.parse(`${day}T12:00:00Z`) + delta * 86400000).toISOString().slice(0, 10);
@@ -754,6 +765,8 @@ function liveTile() {
 
 function statsPanel(state) {
   const names = statsNames(state);
+  // The library's titles arrive a moment later; the live lists and the visits are drawn again with them.
+  libraryNames(names).then(() => { if (liveBody.isConnected) { drawLive(); load(); } });
   const today = madridDay();
   statsView.day ||= today; statsView.month ||= today.slice(0, 7); statsView.year ||= today.slice(0, 4);
 
@@ -764,14 +777,15 @@ function statsPanel(state) {
   const drawLive = async () => {
     try {
       const counts = liveCounts(await audience());
-      const lists = { c: [], e: [] };
+      const lists = { c: [], e: [], l: [] };
       for (const [target, viewers] of counts) lists[target[0]]?.push({ name: names.get(target) || target.slice(2), viewers });
       liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
       updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
       const column = (title, list, empty) => el('div', { class: 'stats-card' }, el('h3', {}, title),
         list.length ? el('ol', { class: 'stats-rank' }, list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es'))
           .map((item) => el('li', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))))) : el('p', { class: 'note' }, empty));
-      liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'));
+      liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'),
+        column('Pelis y series', lists.l, 'Nadie está viendo pelis ni series ahora.'));
     } catch (error) { liveBody.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer los espectadores: ${explain(error)}`)); }
   };
   // Stops by itself once the panel leaves the page; a redrawn panel starts its own timer.
@@ -816,7 +830,7 @@ function statsPanel(state) {
     el('p', { class: 'stats-total' }, liveTotal, ' personas viendo en este momento'),
     liveBody,
     el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
-    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal o un evento cuenta como una visita; la visita a un evento también suma a su canal (días según el horario de Madrid).'),
+    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal, un evento, una película o una serie cuenta como una visita; la visita a un evento también suma a su canal, y todos los capítulos de una serie suman a la serie (días según el horario de Madrid).'),
     el('div', { class: 'stats-controls' }, modeButtons, picker),
     history,
   ];
@@ -834,7 +848,7 @@ function visitReport(days, names, from, to) {
     const rows = [...totals].filter(([k]) => k.startsWith(prefix)).sort((a, b) => b[1] - a[1]);
     const top = rows[0]?.[1] || 1;
     return el('div', { class: 'stats-card' }, el('h3', {}, `${title} · ${plural(sum(prefix), 'visita', 'visitas')}`),
-      rows.length ? el('table', { class: 'stats-table' }, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, prefix === 'c_' ? 'Canal' : 'Evento'), el('th', { scope: 'col' }, 'Visitas'))),
+      rows.length ? el('table', { class: 'stats-table' }, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, prefix === 'c_' ? 'Canal' : prefix === 'l_' ? 'Título' : 'Evento'), el('th', { scope: 'col' }, 'Visitas'))),
         el('tbody', {}, rows.map(([key, value]) => el('tr', { 'aria-selected': String(key === only) },
           el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver su evolución en la gráfica', onclick: () => { statsView.only = key === only ? null : key; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } },
             el('span', { class: 'share', style: `--w:${Math.max(2, Math.round(value / top * 100))}%`, 'aria-hidden': 'true' }), names.get(key) || `${key.slice(2)} (eliminado)`)),
@@ -842,8 +856,8 @@ function visitReport(days, names, from, to) {
         : el('p', { class: 'note' }, `Sin visitas a ${title.toLowerCase()} en este periodo.`));
   };
   // Chart: day by day (30 days or one month), month by month, or year by year.
-  // Every opening adds to a channel (events also add to theirs), so the channel counters are the total.
-  const { buckets } = summarize(days, mode === 'year' ? 'month' : mode === 'all' ? 'year' : 'day', only || 'c_');
+  // Every opening adds to a channel (events also add to theirs) or to a film or series: those are the total.
+  const { buckets } = summarize(days, mode === 'year' ? 'month' : mode === 'all' ? 'year' : 'day', only || ['c_', 'l_']);
   let keys;
   if (mode === 'year') keys = Array.from({ length: 12 }, (_, i) => `${statsView.year}-${String(i + 1).padStart(2, '0')}`);
   else if (mode === 'all') { const years = days.map((d) => Number(d.id.slice(0, 4))); keys = years.length ? Array.from({ length: Math.max(...years) - Math.min(...years) + 1 }, (_, i) => String(Math.min(...years) + i)) : []; }
@@ -856,11 +870,11 @@ function visitReport(days, names, from, to) {
       el('span', { class: 'value' }, value ? value.toLocaleString('es-ES') : ''), el('span', { class: 'fill', style: `--h:${value / max * 100}%` }), el('span', { class: 'tick' }, label(key))); }))
     : el('p', { class: 'note' }, 'Todavía no hay visitas registradas.');
   return [
-    el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_'), 'visita', 'visitas')), ` · ${period}`),
+    el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_') + sum('l_'), 'visita', 'visitas')), ` · ${period}`),
     el('div', { class: 'stats-card stats-chart-card' },
       el('h3', {}, `${only ? `Evolución de ${names.get(only) || only.slice(2)}` : 'Evolución de todas las visitas'} · ${mode === 'day' ? 'últimos 30 días' : mode === 'month' ? 'día a día' : mode === 'year' ? 'mes a mes' : 'año a año'}`),
       only ? el('button', { type: 'button', class: 'ghost', onclick: () => { statsView.only = null; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } }, 'Ver todas') : null,
       chart),
-    el('div', { class: 'stats-live' }, table('Canales', 'c_'), table('Eventos', 'e_')),
+    el('div', { class: 'stats-live' }, table('Canales', 'c_'), table('Eventos', 'e_'), table('Pelis y series', 'l_')),
   ];
 }

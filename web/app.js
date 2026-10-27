@@ -795,16 +795,20 @@ function startAudience(c, visit = true) {
   stopAudience();
   const session = { target, id: sessionId(), timers: [] };
   watching = session;
+  if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
-  const count = () => shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
+  // Films and series count in the statistics too, but their player shows no «people watching».
+  const count = () => c.vod ? Promise.resolve() : shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
   const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
   beat().then(() => { if (live()) count(); });
-  session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
+  session.timers.push(setInterval(beat, HEARTBEAT_MS));
+  if (!c.vod) session.timers.push(setInterval(count, COUNT_MS));
   // One visit per opening; refreshes of the same player are not new visits. An event also counts
   // as a visit to the channel it plays on. The rules accept one counter per write, so each goes alone.
   if (visit) {
     const day = madridDay();
-    const keys = c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
+    const keys = c.vod ? [visitKey('library', c.libraryId || c.id)]
+      : c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
     shared().then(async (f) => { for (const key of keys) await f.recordVisit(day, key); }).catch(() => {});
   }
 }
@@ -1117,18 +1121,19 @@ function syncLibraryNav() {
 }
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);
-  if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
+  // While the library is hidden its lists are not public, but a film's or series' own link still opens it.
+  if (!libraryShown() && !itemId) { view.replaceChildren(el('p', { class: 'status' }, `${section.label} no está disponible ahora.`)); return; }
   if (!itemId) view.replaceChildren(el('p', { class: 'status', role: 'status' }, `Cargando ${section.label.toLowerCase()}…`));
   let library;
   try { library = await fetchLibrary(); }
   catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
   if (version !== routeVersion) return;
   // Only the administrator gets here while it is hidden: say so, so it is not mistaken for public.
-  const hiddenNote = libraryVisible(state.custom) ? null
+  const hiddenNote = libraryVisible(state.custom) || !libraryAdmin ? null
     : el('p', { class: 'note library-hidden-note' }, 'Oculto para los usuarios: solo lo ves tú, como administrador. Actívalo en Administración → Pelis y series.');
   if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library)].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
-  if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...libraryPage(el, section, library)); return; }
+  if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
   const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
   const progress = loadProgress();
   const saved = (id) => progress[id] || null;
