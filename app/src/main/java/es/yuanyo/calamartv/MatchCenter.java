@@ -1,6 +1,8 @@
 package es.yuanyo.calamartv;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
@@ -473,7 +475,7 @@ final class MatchCenter {
   String when(String iso, String pattern) {
     long at = SportsCatalog.instant(MatchScores.iso(iso));
     if (at == Long.MAX_VALUE) return "";
-    SimpleDateFormat f = new SimpleDateFormat(pattern, new Locale("es", "ES"));
+    SimpleDateFormat f = new SimpleDateFormat(pattern, Locale.forLanguageTag("es-ES"));
     f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
     return f.format(new Date(at));
   }
@@ -686,6 +688,8 @@ final class MatchCenter {
   }
 
   void general(Model m) {
+    loadOdds(m);
+    if (odds != null && oddsKey.equals(extrasKey(m)) && !m.state.equals("finished")) add(oddsCard(m, odds));
     if (!m.events.isEmpty() || m.live || m.state.equals("finished") || m.state.equals("halftime")) {
       LinearLayout box = card();
       box.addView(names(m));
@@ -759,7 +763,7 @@ final class MatchCenter {
     List<String[]> facts = new ArrayList<>();
     String round = m.round.isEmpty() ? m.league : m.league.isEmpty() ? m.round : m.league + " · " + m.round;
     for (String[] fact : Arrays.asList(new String[] {"Competición", round}, new String[] {"Fecha", when(m.date, "EEEE d 'de' MMMM, HH:mm")}, new String[] {"Estadio", m.venue},
-        new String[] {"Ciudad", m.city}, new String[] {"Asistencia", m.attendance > 0 ? String.format(new Locale("es", "ES"), "%,d", m.attendance) : ""},
+        new String[] {"Ciudad", m.city}, new String[] {"Asistencia", m.attendance > 0 ? String.format(Locale.forLanguageTag("es-ES"), "%,d", m.attendance) : ""},
         new String[] {"Árbitro", m.referee})) if (!fact[1].isEmpty()) facts.add(fact);
     if (!facts.isEmpty()) {
       LinearLayout box = card();
@@ -895,6 +899,86 @@ final class MatchCenter {
         if (model != null && tab.equals("lineups")) show(model);
       });
     }).start();
+  }
+
+  // Polymarket's forecast (home win, draw, away win), on the phone only (not on TV): asked with the
+  // General tab open, at most every 2 minutes.
+  String oddsKey = ""; long oddsAt; Polymarket.Odds odds; boolean oddsBusy;
+
+  boolean television() {
+    return (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION;
+  }
+
+  void loadOdds(Model m) {
+    if (television() || m.source.equals("event") || m.state.equals("finished") || m.home.name.isEmpty() || m.away.name.isEmpty()) return;
+    final long kickoff = SportsCatalog.instant(MatchScores.iso(m.date));
+    if (kickoff == Long.MAX_VALUE) return;
+    final String key = extrasKey(m), home = m.home.name, away = m.away.name;
+    if (oddsBusy || (key.equals(oddsKey) && System.currentTimeMillis() - oddsAt < 120000)) return;
+    if (!key.equals(oddsKey)) odds = null;
+    oddsKey = key; oddsAt = System.currentTimeMillis(); oddsBusy = true;
+    new Thread(() -> {
+      Polymarket.Odds found = null;
+      try { found = Polymarket.fetch(home, away, kickoff); } catch (Exception ignored) {}
+      final Polymarket.Odds result = found;
+      handler.post(() -> {
+        oddsBusy = false;
+        if (!key.equals(oddsKey) || result == null) return;
+        boolean changed = odds == null || odds.home != result.home || odds.draw != result.draw || odds.away != result.away;
+        odds = result;
+        if (changed && model != null && tab.equals("general")) show(model);
+      });
+    }).start();
+  }
+
+  static String volume(double v) {
+    if (v >= 1e6) return String.format(Locale.forLanguageTag("es-ES"), "%.1f M$", v / 1e6).replace(",0 ", " ");
+    if (v >= 1e3) return Math.round(v / 1e3) + " mil $";
+    return Math.round(v) + " $";
+  }
+
+  View oddsCard(Model m, Polymarket.Odds o) {
+    LinearLayout box = card();
+    box.setContentDescription("Pronóstico de Polymarket");
+    TextView title = text("¿Quién ganará?", 15, Ui.FG, true);
+    title.setPadding(0, 0, 0, dp(6));
+    box.addView(title);
+    String[] labels = {m.home.name, "Empate", m.away.name};
+    int[] pct = {o.home, o.draw, o.away}, colors = {Ui.ACC, 0xff6b7480, HOME};
+    for (int i = 0; i < 3; i++) {
+      LinearLayout row = new LinearLayout(context);
+      row.setGravity(Gravity.CENTER_VERTICAL);
+      row.setPadding(0, dp(4), 0, dp(4));
+      TextView label = text(labels[i], 13, Ui.FG, false);
+      label.setSingleLine(true);
+      label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      row.addView(label, new LinearLayout.LayoutParams(0, -2, 1.1f));
+      LinearLayout track = new LinearLayout(context);
+      track.setBackground(Ui.shape(context, SURFACE_2, 4, 0, 0));
+      View fill = new View(context);
+      fill.setBackground(Ui.shape(context, colors[i], 4, 0, 0));
+      track.addView(fill, new LinearLayout.LayoutParams(0, -1, Math.max(pct[i], 0)));
+      track.addView(new View(context), new LinearLayout.LayoutParams(0, -1, Math.max(100 - pct[i], 0)));
+      LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(8), 1.6f);
+      tp.setMargins(dp(8), 0, dp(8), 0);
+      row.addView(track, tp);
+      TextView value = text(pct[i] + "%", 13, Ui.FG, true);
+      value.setGravity(Gravity.END);
+      row.addView(value, new LinearLayout.LayoutParams(dp(42), -2));
+      row.setContentDescription(labels[i] + ", " + pct[i] + " por ciento");
+      box.addView(row);
+    }
+    TextView source = text("Probabilidades del mercado de predicción Polymarket · " + volume(o.volume) + " en juego · Ver en Polymarket", 11, Ui.MUTED, false);
+    source.setPadding(0, dp(8), 0, 0);
+    if (o.url.startsWith("https://polymarket.com/")) {
+      source.setClickable(true);
+      source.setFocusable(true);
+      source.setOnClickListener(v -> {
+        try { context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(o.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) {}
+      });
+    }
+    box.addView(source);
+    return box;
   }
 
   static byte[] readAll(InputStream in) throws java.io.IOException {
