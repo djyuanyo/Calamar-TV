@@ -671,6 +671,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     playThroughHosting();
                   } else if (VideoResolver.renewablePage(pageUrl) && tryZicoHosting()) {
                     return;
+                  } else if (VideoResolver.eventApi(pageUrl) != null && switchChannelSource()) {
+                    return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
@@ -959,6 +961,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       attemptWindow = now;
     }
     if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
+      if (zicoHostingTried && automaticAttempts >= 2 && switchChannelSource()) return;
       if (sources.size() > 1) selection = (selection + 1) % sources.size();
       long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
       status.setText(message);
