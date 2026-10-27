@@ -4,7 +4,9 @@
 // file (or one folder above it) with <?php return 'YOUR_KEY'; or the CALAMAR_APIFOOTBALL_KEY variable.
 //  - GET home=…&away=…&date=YYYY-MM-DD: {"teams":{"home":[{number,name,photo,rating}],"away":[…]}}.
 // Answers are kept in the hosting's temporary folder, so every viewer of a match spends one request:
-// the day's fixtures 6 hours, the players 5 minutes during the match, a day once it ended.
+// the day's fixtures 6 hours, the players 5 minutes during the match, a day once it ended. Before
+// kick-off API-Football has no player statistics yet: the photos then come from the published line-up
+// (asked from 75 minutes before kick-off, every 5 minutes until it is out, then kept 6 hours).
 
 const LINEUPS_API = 'https://v3.football.api-sports.io';
 
@@ -62,12 +64,13 @@ function lineupsCache() {
     return $dir;
 }
 
-/** An API-Football answer, from the cache while it is fresh. */
-function lineupsApi($path, $ttl, $key, $fetch = null) {
+/** An API-Football answer, from the cache while it is fresh ($emptyTtl for an answer with nothing yet). */
+function lineupsApi($path, $ttl, $key, $fetch = null, $emptyTtl = null) {
     $file = lineupsCache() . '/' . hash('sha256', $path) . '.json';
-    if (is_file($file) && time() - filemtime($file) < $ttl) {
+    if (is_file($file)) {
         $saved = json_decode((string)file_get_contents($file), true);
-        if (is_array($saved)) return $saved;
+        $fresh = $emptyTtl !== null && is_array($saved) && empty($saved['response']) ? min($ttl, $emptyTtl) : $ttl;
+        if (is_array($saved) && time() - filemtime($file) < $fresh) return $saved;
     }
     if ($fetch) $body = $fetch(LINEUPS_API . $path);
     else {
@@ -103,6 +106,33 @@ function lineupsPlayers($team) {
     return $out;
 }
 
+/** The players of one team from its published line-up: number, name and photo (by player id), no rating yet. */
+function lineupsFromLineup($team) {
+    $out = [];
+    foreach (array_merge($team['startXI'] ?? [], $team['substitutes'] ?? []) as $p) {
+        $player = $p['player'] ?? [];
+        $id = (int)($player['id'] ?? 0);
+        $out[] = ['number' => isset($player['number']) ? (string)$player['number'] : '', 'name' => (string)($player['name'] ?? ''),
+            'photo' => $id > 0 ? 'https://media.api-sports.io/football/players/' . $id . '.png' : '', 'rating' => null];
+    }
+    return $out;
+}
+
+/** Players' photos from the line-up for the sides the statistics left empty or without photos. */
+function lineupsFill($out, $lineups, $homeId) {
+    foreach ($lineups as $t) {
+        $side = ($t['team']['id'] ?? null) === $homeId ? 'home' : 'away';
+        $known = $out[$side] ?? [];
+        $photos = count(array_filter($known, fn($p) => $p['photo'] !== ''));
+        if (!$known) { $out[$side] = lineupsFromLineup($t); continue; }
+        if ($photos === count($known)) continue;
+        $byNumber = [];
+        foreach (lineupsFromLineup($t) as $p) if ($p['number'] !== '') $byNumber[$p['number']] = $p['photo'];
+        foreach ($known as $i => $p) if ($p['photo'] === '' && isset($byNumber[$p['number']])) $out[$side][$i]['photo'] = $byNumber[$p['number']];
+    }
+    return $out;
+}
+
 function lineupsMain() {
     ini_set('display_errors', '0');
     header('Cache-Control: no-store');
@@ -126,11 +156,18 @@ function lineupsMain() {
     $status = $fixture['fixture']['status']['short'] ?? '';
     $ttl = in_array($status, ['FT', 'AET', 'PEN', 'AWD', 'WO'], true) ? 86400 : (in_array($status, ['NS', 'TBD', 'PST'], true) ? 1800 : 300);
     $id = (int)($fixture['fixture']['id'] ?? 0);
-    $teams = lineupsApi('/fixtures/players?fixture=' . $id, $ttl, $key)['response'] ?? [];
+    $homeId = $fixture['teams']['home']['id'] ?? false;
+    // Statistics (photos and ratings) appear once the match starts: an empty answer is asked again in 5 minutes.
+    $teams = lineupsApi('/fixtures/players?fixture=' . $id, $ttl, $key, null, 300)['response'] ?? [];
     $out = ['home' => [], 'away' => []];
     foreach ($teams as $t) {
-        $side = ($t['team']['id'] ?? null) === ($fixture['teams']['home']['id'] ?? false) ? 'home' : 'away';
+        $side = ($t['team']['id'] ?? null) === $homeId ? 'home' : 'away';
         $out[$side] = lineupsPlayers($t);
+    }
+    $kickoff = (int)($fixture['fixture']['timestamp'] ?? 0);
+    $missing = !$out['home'] || !$out['away'] || in_array('', array_column(array_merge($out['home'], $out['away']), 'photo'), true);
+    if ($missing && $kickoff > 0 && time() >= $kickoff - 75 * 60) {
+        $out = lineupsFill($out, lineupsApi('/fixtures/lineups?fixture=' . $id, 6 * 3600, $key, null, 300)['response'] ?? [], $homeId);
     }
     lineupsAnswer(['fixture' => $id, 'status' => $status, 'teams' => $out]);
 }

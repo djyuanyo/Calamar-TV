@@ -44,6 +44,30 @@ class LineupsTest(unittest.TestCase):
             {'number': '22', 'name': 'Suplente', 'photo': '', 'rating': None},
             {'number': '12', 'name': 'Sin jugar', 'photo': '', 'rating': None}])
 
+    def test_before_kick_off_photos_come_from_the_published_line_up(self):
+        lineups = [
+            {'team': {'id': 10}, 'startXI': [{'player': {'id': 47, 'name': 'Unai Simón', 'number': 1}}], 'substitutes': [{'player': {'id': 0, 'name': 'Sin ficha', 'number': 13}}]},
+            {'team': {'id': 11}, 'startXI': [{'player': {'id': 99, 'name': 'Courtois', 'number': 1}}], 'substitutes': []},
+        ]
+        empty = {'home': [], 'away': []}
+        self.assertEqual(json.loads(php(f'echo json_encode(lineupsFill({lit(empty)}, {lit(lineups)}, 10));')), {
+            'home': [{'number': '1', 'name': 'Unai Simón', 'photo': 'https://media.api-sports.io/football/players/47.png', 'rating': None},
+                     {'number': '13', 'name': 'Sin ficha', 'photo': '', 'rating': None}],
+            'away': [{'number': '1', 'name': 'Courtois', 'photo': 'https://media.api-sports.io/football/players/99.png', 'rating': None}]})
+        # With statistics, ratings stay and only missing photos are taken from the line-up.
+        known = {'home': [{'number': '1', 'name': 'Unai Simón', 'photo': '', 'rating': 7.4}], 'away': [{'number': '1', 'name': 'Courtois', 'photo': 'https://x/1.png', 'rating': 6.8}]}
+        filled = json.loads(php(f'echo json_encode(lineupsFill({lit(known)}, {lit(lineups)}, 10));'))
+        self.assertEqual(filled['home'], [{'number': '1', 'name': 'Unai Simón', 'photo': 'https://media.api-sports.io/football/players/47.png', 'rating': 7.4}])
+        self.assertEqual(filled['away'], known['away'])
+
+    def test_an_empty_answer_is_asked_again_sooner(self):
+        code = ('$n = 0; $f = function () use (&$n) { $n++; return json_encode(["response" => []]); };'
+                'lineupsApi("/fixtures/players?fixture=1&t=" . getmypid(), 1800, "k", $f, 0); lineupsApi("/fixtures/players?fixture=1&t=" . getmypid(), 1800, "k", $f, 0); echo $n;')
+        self.assertEqual(php(code), '2')
+        code = ('$n = 0; $f = function () use (&$n) { $n++; return json_encode(["response" => [1]]); };'
+                'lineupsApi("/fixtures/players?fixture=2&t=" . getmypid(), 1800, "k", $f, 0); lineupsApi("/fixtures/players?fixture=2&t=" . getmypid(), 1800, "k", $f, 0); echo $n;')
+        self.assertEqual(php(code), '1')
+
     def test_api_errors_are_told_in_its_own_words(self):
         out = subprocess.run(['php', '-r', f'require {json.dumps(PHP)}; lineupsApi("/fixtures?date=2099-01-01", 0, "k", function () {{ return json_encode(["errors" => ["plan" => "Free plans do not have access to this season."]]); }});'],
                              capture_output=True, text=True)
