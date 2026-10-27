@@ -310,9 +310,3 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 ## Fila «Eventos En Directo» (2.20.35)
 
 - Primera fila de la portada, justo debajo del carrusel destacado (web y app; los mismos eventos siguen también en la fila de su liga, como copia): los **eventos de hoy** (día de Madrid) que **tienen vídeo** (canal o enlaces), ordenados por hora de inicio. Los que no tienen canal todavía («Canal por confirmar») no salen. Un partido empezado antes de medianoche sigue en la fila mientras puede estar en juego.
-
-## Estadísticas de API-Football cuando ESPN viene a 0 (2.20.36)
-
-- En los partidos pequeños (primeras rondas de copa, categorías inferiores) ESPN deja todas las estadísticas a 0 y solo cuenta las tarjetas. Entonces la web y la app las piden a **API-Football** por el hosting (`calamar-lineups.php?…&stats=1`, como las fotos de las alineaciones) y las muestran con los mismos nombres; abajo se indica «Estadísticas: API-Football». Se piden con la pestaña General o Estadísticas abierta, como mucho cada 5 minutos, y el hosting las guarda (5 minutos en juego, un día al terminar).
-- Si API-Football tampoco tiene el partido, se ve lo de ESPN con el aviso «ESPN solo tiene las tarjetas de este partido».
-- **Hay que subir el `calamar-lineups.php` nuevo al hosting.**
