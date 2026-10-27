@@ -270,3 +270,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Al crear o editar un evento en la web de administración, la lista de canales muestra primero «Tus canales» y después «Canales de TDT»: los de TDTChannels que se ven en el catálogo (los ocultos no salen) y que se pueden reproducir.
 - Las versiones de la app anteriores a la 2.20.22 solo aceptan eventos cuyo canal esté entre los creados. Para no romperlas, cada canal de TDT usado por un evento o un partido importado se guarda también como copia en `channels`, marcada con `tdt: true`. La web y la app nuevas usan siempre el canal de la lista de TDT, con sus enlaces actualizados; la copia solo sirve si TDT deja de tenerlo. Las copias no aparecen en «Canales creados», se actualizan en cada guardado y desaparecen cuando ya no las usa ningún evento.
 - Si se oculta un canal de TDT, sus eventos dejan de mostrarse, igual que el canal.
+
+## IPTV en la app sin trozos repetidos (2.20.23)
+
+- Los proveedores IPTV cierran cada conexión al cabo de un rato, y cada conexión nueva vuelve a empezar con los últimos ~40 s que guardan. La app reabría la conexión y reproducía ese tramo repetido, así que la imagen volvía atrás y se veía a trozos. Ahora `TsSplicer` (el mismo método que usa el puente del hosting) solo deja pasar lo que viene después del último instante reproducido, según el reloj PCR del MPEG-TS, y retoma en un fotograma clave, con cada pista de audio desde el inicio de su bloque.
+- Pruebas: `TsSplicerTest` (tramo repetido, pistas que se incorporan, conexión sin nada nuevo, reloj reiniciado) y `HttpIptvDataSourceTest` con paquetes MPEG-TS reales.

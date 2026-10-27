@@ -36,6 +36,11 @@ final class HttpIptvDataSource implements DataSource {
   private Uri original;
   private boolean iptv, relay, received;
   private volatile boolean opened;
+  /** Joins the provider's connections without going back in time (each new one repeats the last ~40 s). */
+  private TsSplicer splicer;
+  private final byte[] raw = new byte[64 * 1024];
+  private byte[] pending = new byte[0];
+  private int pendingAt;
   HttpIptvDataSource(DataSource upstream, Uri endpoint) { this.upstream=upstream; this.endpoint=endpoint; }
   @Override public void addTransferListener(TransferListener listener) { upstream.addTransferListener(listener); }
   private static String provider(Uri uri) { return uri.getHost() + ":" + uri.getPort(); }
@@ -51,6 +56,7 @@ final class HttpIptvDataSource implements DataSource {
     iptv=CastSource.needsBridge(original.toString());
     relay=iptv && RELAYED.contains(provider(original));
     received=false;
+    splicer=new TsSplicer(); pending=new byte[0]; pendingAt=0;
     request=relay ? relayed(source) : iptv ? source.buildUpon().setPosition(0).setLength(C.LENGTH_UNSET).build() : source;
     opened=true;
     if(iptv && !relay) {
@@ -70,25 +76,38 @@ final class HttpIptvDataSource implements DataSource {
   }
   @Override public int read(byte[] buffer,int offset,int length) throws IOException {
     if(length==0)return 0;
-    int bytes;
-    try { bytes=upstream.read(buffer,offset,length); }
-    catch(IOException failure) {
-      // Connected but no video came: next time this provider goes through the hosting.
-      if(iptv && !relay && !received) RELAYED.add(provider(original));
-      throw failure;
+    if(!iptv)return upstream.read(buffer,offset,length);
+    // A live channel never ends: these providers close each connection after a while, and the hosting
+    // may end a request. Keep the TS extractor alive and open a fresh live connection, passing on only
+    // what comes after the last moment already played (TsSplicer), so the picture never goes back.
+    long quietSince=System.currentTimeMillis();
+    int empty=0;
+    while(pendingAt>=pending.length) {
+      int bytes;
+      try { bytes=upstream.read(raw,0,raw.length); }
+      catch(IOException failure) {
+        // Connected but no video came: next time this provider goes through the hosting.
+        if(!relay && !received) RELAYED.add(provider(original));
+        throw failure;
+      }
+      if(bytes==C.RESULT_END_OF_INPUT) {
+        if(!opened)return C.RESULT_END_OF_INPUT;
+        // Connections that bring nothing new for 30 s (or 6 in a row that bring no data at all): the channel stopped.
+        if(System.currentTimeMillis()-quietSince>30000 || ++empty>6)
+          throw new IOException(relay ? "El puente HTTPS no está recibiendo vídeo del canal" : "El proveedor IPTV ha dejado de enviar vídeo");
+        upstream.close();
+        splicer.nextConnection();
+        upstream.open(request);
+        continue;
+      }
+      if(bytes>0) { received=true; empty=0; }
+      pending=splicer.feed(raw,0,bytes);
+      pendingAt=0;
     }
-    if(bytes>0)received=true;
-    if(!iptv || bytes!=C.RESULT_END_OF_INPUT || !opened)return bytes;
-    // A live channel never ends: the hosting ends a request after 15 minutes / 512 MiB on purpose, and a
-    // provider may close a connection. Keep the TS extractor alive and open a fresh live connection,
-    // without seeking into the old stream.
-    for(int attempt=0;attempt<2 && opened;attempt++) {
-      upstream.close();
-      upstream.open(request);
-      bytes=upstream.read(buffer,offset,length);
-      if(bytes!=C.RESULT_END_OF_INPUT)return bytes;
-    }
-    throw new IOException(relay ? "El puente HTTPS no está recibiendo vídeo del canal" : "El proveedor IPTV ha dejado de enviar vídeo");
+    int n=Math.min(length,pending.length-pendingAt);
+    System.arraycopy(pending,pendingAt,buffer,offset,n);
+    pendingAt+=n;
+    return n;
   }
   @Override public Uri getUri() { return iptv ? original : upstream.getUri(); }
   @Override public Map<String,List<String>> getResponseHeaders() { return upstream.getResponseHeaders(); }
