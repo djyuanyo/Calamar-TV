@@ -68,6 +68,13 @@ class LineupsTest(unittest.TestCase):
                 'lineupsApi("/fixtures/players?fixture=2&t=" . getmypid(), 1800, "k", $f, 0); lineupsApi("/fixtures/players?fixture=2&t=" . getmypid(), 1800, "k", $f, 0); echo $n;')
         self.assertEqual(php(code), '1')
 
+    def test_a_limited_api_answers_with_the_last_data_kept(self):
+        code = ('$path = "/fixtures/players?fixture=3&t=" . getmypid();'
+                'lineupsApi($path, 1800, "k", function () { return json_encode(["response" => [["team" => ["id" => 1]]]]); });'
+                '$again = lineupsApi($path, 0, "k", function () { return json_encode(["errors" => ["rateLimit" => "Too many requests."]]); });'
+                'echo json_encode($again["response"][0]["team"]["id"]);')
+        self.assertEqual(php(code), '1')
+
     def test_api_errors_are_told_in_its_own_words(self):
         out = subprocess.run(['php', '-r', f'require {json.dumps(PHP)}; lineupsApi("/fixtures?date=2099-01-01", 0, "k", function () {{ return json_encode(["errors" => ["plan" => "Free plans do not have access to this season."]]); }});'],
                              capture_output=True, text=True)

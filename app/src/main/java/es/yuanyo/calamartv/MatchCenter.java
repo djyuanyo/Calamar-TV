@@ -935,7 +935,7 @@ final class MatchCenter {
   }
 
   // The visitors' 1X2 poll (kept on the hosting), on the phone only: the totals are asked every 2 minutes
-  // with the General tab open; one vote per install and match, which can be changed until kick-off.
+  // with the General tab open; one vote per install and match, which can be changed until the match ends.
   String pollKey = ""; long pollAt; long[] pollTotals; boolean pollBusy, pollSending; String pollError = "";
 
   android.content.SharedPreferences votePrefs() { return context.getSharedPreferences("votes", Context.MODE_PRIVATE); }
@@ -971,7 +971,7 @@ final class MatchCenter {
   void vote(final String pick) {
     final Model m = model;
     final String key = pollKey;
-    if (m == null || key.isEmpty() || pollSending || !Votes.open(m.state, SportsCatalog.instant(MatchScores.iso(m.date)), System.currentTimeMillis())) return;
+    if (m == null || key.isEmpty() || pollSending || !Votes.open(m.state)) return;
     pollSending = true; pollError = "";
     show(m);
     final String voter = voter();
@@ -998,7 +998,7 @@ final class MatchCenter {
     if (television()) return null;
     String key = Votes.matchKey(m.home.name, m.away.name, m.date);
     if (key.isEmpty() || !key.equals(pollKey)) return null;
-    boolean open = Votes.open(m.state, SportsCatalog.instant(MatchScores.iso(m.date)), System.currentTimeMillis());
+    boolean open = Votes.open(m.state);
     String pick = votePrefs().getString("pick:" + key, "");
     long[] t = pollTotals == null ? null : Votes.tally(pollTotals[0], pollTotals[1], pollTotals[2]);
     boolean shown = t != null && t[3] > 0 && (!pick.isEmpty() || !open);
@@ -1063,9 +1063,9 @@ final class MatchCenter {
     }
     String total = t != null && t[3] > 0 ? t[3] + (t[3] == 1 ? " voto" : " votos") : "";
     String note = !pollError.isEmpty() ? pollError
-        : open ? (pick.isEmpty() ? "Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el inicio del partido."
-            : "Has votado " + pick + ". " + (total.isEmpty() ? "" : total + " · ") + "Puedes cambiarlo hasta el inicio del partido.")
-        : total + " · Votación cerrada al empezar el partido.";
+        : open ? (pick.isEmpty() ? "Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el final del partido."
+            : "Has votado " + pick + ". " + (total.isEmpty() ? "" : total + " · ") + "Puedes cambiarlo hasta el final del partido.")
+        : total + " · Votación cerrada al terminar el partido.";
     TextView source = text(note, 11, Ui.MUTED, false);
     source.setPadding(0, dp(8), 0, 0);
     box.addView(source);

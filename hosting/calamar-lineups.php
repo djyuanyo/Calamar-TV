@@ -67,10 +67,10 @@ function lineupsCache() {
 /** An API-Football answer, from the cache while it is fresh ($emptyTtl for an answer with nothing yet). */
 function lineupsApi($path, $ttl, $key, $fetch = null, $emptyTtl = null) {
     $file = lineupsCache() . '/' . hash('sha256', $path) . '.json';
-    if (is_file($file)) {
-        $saved = json_decode((string)file_get_contents($file), true);
-        $fresh = $emptyTtl !== null && is_array($saved) && empty($saved['response']) ? min($ttl, $emptyTtl) : $ttl;
-        if (is_array($saved) && time() - filemtime($file) < $fresh) return $saved;
+    $saved = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+    if (is_array($saved)) {
+        $fresh = $emptyTtl !== null && empty($saved['response']) ? min($ttl, $emptyTtl) : $ttl;
+        if (time() - filemtime($file) < $fresh) return $saved;
     }
     if ($fetch) $body = $fetch(LINEUPS_API . $path);
     else {
@@ -81,6 +81,8 @@ function lineupsApi($path, $ttl, $key, $fetch = null, $emptyTtl = null) {
         $body = curl_exec($ch); curl_close($ch);
     }
     $data = is_string($body) ? json_decode($body, true) : null;
+    // When API-Football fails or limits the requests of the minute, the last answer kept is better than nothing.
+    if ((!is_array($data) || !empty($data['errors'])) && is_array($saved)) return $saved;
     if (!is_array($data)) lineupsAnswer(['error' => 'API-Football no responde.'], 502);
     $errors = $data['errors'] ?? [];
     if ($errors) {
@@ -154,7 +156,11 @@ function lineupsMain() {
     }
     if (!$fixture) lineupsAnswer(['error' => 'API-Football no tiene este partido.'], 404);
     $status = $fixture['fixture']['status']['short'] ?? '';
-    $ttl = in_array($status, ['FT', 'AET', 'PEN', 'AWD', 'WO'], true) ? 86400 : (in_array($status, ['NS', 'TBD', 'PST'], true) ? 1800 : 300);
+    // The day's fixtures are kept 6 hours, so their status may be old: the kick-off time decides too.
+    $kickoff = (int)($fixture['fixture']['timestamp'] ?? 0);
+    $ended = in_array($status, ['FT', 'AET', 'PEN', 'AWD', 'WO'], true) || ($kickoff > 0 && time() > $kickoff + 3 * 3600);
+    $soon = $kickoff > 0 && time() >= $kickoff - 75 * 60;
+    $ttl = $ended ? 86400 : ($soon ? 300 : 1800);
     $id = (int)($fixture['fixture']['id'] ?? 0);
     $homeId = $fixture['teams']['home']['id'] ?? false;
     // Statistics (photos and ratings) appear once the match starts: an empty answer is asked again in 5 minutes.
@@ -164,9 +170,8 @@ function lineupsMain() {
         $side = ($t['team']['id'] ?? null) === $homeId ? 'home' : 'away';
         $out[$side] = lineupsPlayers($t);
     }
-    $kickoff = (int)($fixture['fixture']['timestamp'] ?? 0);
     $missing = !$out['home'] || !$out['away'] || in_array('', array_column(array_merge($out['home'], $out['away']), 'photo'), true);
-    if ($missing && $kickoff > 0 && time() >= $kickoff - 75 * 60) {
+    if ($missing && $soon) {
         $out = lineupsFill($out, lineupsApi('/fixtures/lineups?fixture=' . $id, 6 * 3600, $key, null, 300)['response'] ?? [], $homeId);
     }
     lineupsAnswer(['fixture' => $id, 'status' => $status, 'teams' => $out]);

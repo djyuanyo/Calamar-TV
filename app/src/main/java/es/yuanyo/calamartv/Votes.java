@@ -11,7 +11,7 @@ import org.json.JSONObject;
 
 /**
  * The visitors' own 1X2 poll of a match, as web/votes.js: one vote per install and match, which can be
- * changed until kick-off. The hosting keeps only the match and the pick (hosting/calamar-votes.php).
+ * changed until the match ends. The hosting keeps only the match and the pick (hosting/calamar-votes.php).
  */
 final class Votes {
   private Votes() {}
@@ -33,9 +33,9 @@ final class Votes {
     return joined.length() > 60 ? joined.substring(0, 60) : joined;
   }
 
-  /** Voting closes at kick-off: before it the match is still «scheduled». */
-  static boolean open(String state, long kickoff, long now) {
-    return "scheduled".equals(state) && (kickoff == Long.MAX_VALUE || now < kickoff);
+  /** Voting stays open before and during the match, and closes when it ends (or is called off). */
+  static boolean open(String state) {
+    return "scheduled".equals(state) || "live".equals(state) || "halftime".equals(state);
   }
 
   /** The hosting said no (too many votes, a closed match…), with its reason in Spanish. */

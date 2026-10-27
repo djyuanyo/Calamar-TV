@@ -12,11 +12,9 @@ test('the same match gets the same key on the web and the app, from ESPN or even
   assert.equal(matchKey('Villarreal', 'Espanyol', ''), '');
 });
 
-test('voting is open only before kick-off', () => {
-  const at = Date.parse('2026-10-30T20:00:00Z');
-  assert.equal(votingOpen({ state: 'scheduled', date: '2026-10-30T20:00Z' }, at - 1000), true);
-  assert.equal(votingOpen({ state: 'scheduled', date: '2026-10-30T20:00Z' }, at + 1000), false);
-  assert.equal(votingOpen({ state: 'live', date: '2026-10-30T20:00Z' }, at - 1000), false);
+test('voting is open before and during the match, and closes when it ends', () => {
+  for (const state of ['scheduled', 'live', 'halftime']) assert.equal(votingOpen({ state }), true, state);
+  for (const state of ['finished', 'postponed', 'cancelled', 'suspended']) assert.equal(votingOpen({ state }), false, state);
 });
 
 test('votes go to the hosting as plain text and come back as totals', async () => {
