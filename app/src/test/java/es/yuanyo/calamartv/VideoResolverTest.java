@@ -96,4 +96,11 @@ public class VideoResolverTest {
     assertTrue(VideoResolver.parse(page, "https://lulustream.com/e/abcd1234efgh").isEmpty());
     assertFalse(VideoResolver.processing("<script>p.setup({sources:[{file:'https://cdn.example.net/v.m3u8'}]})</script>"));
   }
+  @Test public void renewablePagesAreOnlyPublicPlayerEndpoints() {
+    assertTrue(VideoResolver.renewablePage("https://zicotv.cc/api/player/28"));
+    assertTrue(VideoResolver.renewablePage("https://bp.zicotv.cc/api/player/1?token=abc"));
+    for (String address : new String[] {"http://zicotv.cc/api/player/28", "https://zicotv.cc.evil.example/api/player/28",
+        "https://zicotv.cc/channels/1", "https://user:pass@zicotv.cc/api/player/28", "https://cdn.zicotv.cc/a.m3u8"})
+      assertFalse(VideoResolver.renewablePage(address));
+  }
 }

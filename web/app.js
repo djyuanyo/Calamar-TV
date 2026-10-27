@@ -1,3 +1,4 @@
+import { mountRenewable } from './renewable-player.js';
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
@@ -473,8 +474,10 @@ initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
+let stopRenewable = null;
 function stop() {
   playbackGeneration++;
+  if (stopRenewable) { stopRenewable(); stopRenewable = null; }
   video.onerror = null;
   video.onplaying = null;
   if (stopTs) { stopTs(); stopTs = null; }
@@ -590,7 +593,7 @@ function playSource(c, index) {
     }
   };
   playerStatus.textContent = 'Conectando…';
-  if (source.how.kind === 'frame') {
+  const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.url, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
@@ -598,8 +601,16 @@ function playSource(c, index) {
     player.classList.add('framed');
     controls.attach(null);
     playerStatus.textContent = '';
+  };
+  if (source.how.renewable) {
+    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
+      onAttach: (instance) => { hls = instance; controls.attach(instance); },
+      onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
+      onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
+    });
     return;
   }
+  if (source.how.kind === 'frame') { showFrame(); return; }
   if (source.how.kind === 'ts') {
     controls.attach(null);
     // The hosting's adapted HLS of the channel (calamar-cast.php): one continuous connection to the

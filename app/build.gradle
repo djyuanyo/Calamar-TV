@@ -8,8 +8,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 24
         targetSdk 35
-        versionCode 68
-        versionName '2.20.13'
+        versionCode 73
+        versionName '2.20.18'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {
@@ -47,6 +47,10 @@ dependencies {
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'androidx.media3:media3-datasource-okhttp:1.8.0'
+    implementation 'androidx.media3:media3-datasource-cronet:1.8.0'
+    implementation 'org.chromium.net:cronet-bundled:500.1.0'
+    // Media3's optional Play Services integration requests the legacy API artifact.
+    constraints { implementation 'org.chromium.net:cronet-api:500.1.0' }
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
@@ -58,7 +62,9 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test:core:1.6.1'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
     androidTestImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    androidTestImplementation 'com.squareup.okhttp3:okhttp-tls:4.12.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
 }

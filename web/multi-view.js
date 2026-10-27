@@ -3,6 +3,7 @@
 // viewer picks by tapping it. The app applies the same layout (MultiScreen.java).
 import { sourceOptions } from './player-sources.js';
 import { mountTs } from './ts-player.js';
+import { mountRenewable } from './renewable-player.js';
 
 export const MULTI_MAX = 6;
 
@@ -20,10 +21,11 @@ export const multiPlayable = (c) => c.playable && sourceOptions(c.streams).some(
 /** Plays a channel in one tile, trying its sources in order; returns a function that stops it. */
 export function playTile(video, channel, onStatus) {
   const sources = sourceOptions(channel.streams).filter((s) => s.how.ok && (!s.expiry || s.expiry > Date.now()));
-  let next = 0, hls = null, stopTs = null, stopped = false, attempt = 0;
+  let next = 0, hls = null, stopTs = null, stopRenewable = null, stopped = false, attempt = 0;
   const clear = () => {
     attempt++;
     video.onplaying = video.onerror = null;
+    if (stopRenewable) { stopRenewable(); stopRenewable = null; }
     if (stopTs) { stopTs(); stopTs = null; }
     if (hls) { hls.destroy(); hls = null; }
     video.removeAttribute('src');
@@ -41,6 +43,15 @@ export function playTile(video, channel, onStatus) {
     onStatus('Conectando…');
     video.onplaying = () => { if (current()) onStatus(''); };
     video.onerror = () => { if (current()) tryNext(); };
+    if (source.how.renewable) {
+      video.onplaying = video.onerror = null;
+      stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
+        onAttach: (instance) => { hls = instance; },
+        onStatus: (message) => { if (current()) onStatus(message); },
+        onFallback: () => { if (current()) tryNext(); },
+      });
+      return;
+    }
     if (source.how.kind === 'ts') {
       stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
         onFailure: () => { if (current()) tryNext(); }, onRecovering: () => {}, onPlaying: () => { if (current()) onStatus(''); } });

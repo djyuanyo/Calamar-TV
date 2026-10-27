@@ -89,6 +89,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
   private boolean mediaHttp1;
+  private boolean chromiumNetwork;
+  private AlertDialog sourceDialog;
   private boolean mediaSystemRetry;
   private Runnable bufferingTimeout;
   private String mediaProgress = "Sin descargas de vídeo registradas.";
@@ -143,6 +145,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onCreate(state);
     MatchScores.initialize(this);
     pageUrl = getIntent().getStringExtra("page_url");
+    if (AppSources.webOnly(pageUrl)) pageUrl = null;
     title = getIntent().getStringExtra("title");
     shareUrl = getIntent().getStringExtra("share_url");
     footballFallback = getIntent().getBooleanExtra("football_fallback", false);
@@ -157,7 +160,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     urls.add(0, getIntent().getStringExtra("media_url"));
     for (String candidate : urls) {
       String url = UserChannels.normalize(candidate);
-      if (url != null && !directUrls.contains(url)) directUrls.add(url);
+      if (url != null && !AppSources.webOnly(url) && !directUrls.contains(url)) directUrls.add(url);
     }
     // Channels: player pages among their links are read as pages (one after another), not played as
     // videos. Films keep their single link as it is (a Drive link has no extension either).
@@ -166,13 +169,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (pageUrl != null && UserChannels.isPage(pageUrl)) channelPages.add(pageUrl);
       for (String candidate : everything) {
         String url = UserChannels.normalize(candidate);
-        if (url == null) continue;
+        if (url == null || AppSources.webOnly(url)) continue;
         if (UserChannels.isPage(url)) { if (!channelPages.contains(url)) channelPages.add(url); }
         else if (!directUrls.contains(url)) directUrls.add(url);
       }
       directUrls.removeIf(UserChannels::isPage);
     }
     // A channel whose first link is a page starts with that page; its direct links wait their turn.
+    if (pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
     boolean startWithPage = everything != null && pageUrl != null;
     directUrl = startWithPage || directUrls.isEmpty() ? null : directUrls.get(0);
     if (directUrl == null && pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
@@ -180,6 +184,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     directTried = directUrl != null;
     if (directUrl != null) pageUrl = null;
     else if (pageUrl == null || !pageUrl.startsWith("https://")) {
+      Toast.makeText(this, "No hay fuentes disponibles para Android", Toast.LENGTH_LONG).show();
       finish();
       return;
     }
@@ -232,7 +237,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       });
     }
     sourceButton = button(controls, "Fuentes", this::chooseSource);
-    sourceButton.setVisibility(directUrls.size() > 1 ? View.VISIBLE : View.GONE);
+    sourceButton.setVisibility(View.VISIBLE);
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
     if (shareUrl != null) {
       ImageButton shareButton = new ImageButton(this);
@@ -296,7 +301,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
     playerView.setKeepScreenOn(true);
     playerView.setControllerAutoShow(true);
-    playerView.setControllerShowTimeoutMs(4000);
+    playerView.setControllerShowTimeoutMs(0);
+    playerView.setControllerHideOnTouch(false);
     // The controller's own full screen button: it hides the panel and the system bars.
     playerView.setFullscreenButtonClickListener(on -> setFullscreen(on));
     // In full screen the panel lies over the video and comes and goes with the controls, as on the web.
@@ -339,8 +345,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     return b;
   }
 
+  private void keepControlsVisible(boolean loading) {
+    if (playerView == null || (sourceDialog != null && sourceDialog.isShowing())) return;
+    playerView.setControllerShowTimeoutMs(loading ? 0 : 4000);
+    playerView.setControllerHideOnTouch(!loading);
+    if (loading) {
+      playerView.showController();
+      if (fullscreen && panel != null) panel.setVisibility(View.VISIBLE);
+    }
+  }
+
   private void updateSourceButton() {
-    if (sourceButton != null) sourceButton.setVisibility(sources.size() > 1 ? View.VISIBLE : View.GONE);
+    if (sourceButton != null) sourceButton.setVisibility(View.VISIBLE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -457,6 +473,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** Something the viewer has to read: the panel is hidden in full screen, so leave it first. */
   private void problem(String text) {
+    keepControlsVisible(true);
     status.setText(text);
     setFullscreen(false);
   }
@@ -465,7 +482,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   public void onWindowFocusChanged(boolean hasFocus) {
     super.onWindowFocusChanged(hasFocus);
     // The system shows its bars again when another app was in front; hide them once more.
-    if (hasFocus && fullscreen) applySystemBars(true);
+    if (hasFocus && fullscreen && (sourceDialog == null || !sourceDialog.isShowing())) applySystemBars(true);
   }
 
   private void chooseDns() {
@@ -481,6 +498,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               NetworkTransport.select(this, providers[index]);
               transport = NetworkTransport.get(this);
               mediaHttp1 = false;
+              mediaSystemRetry = false;
+              chromiumNetwork = false;
               generation++;
               resolving = false;
               automaticAttempts = 0;
@@ -531,6 +550,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void resolveFresh() {
     if (!active || resolving) return;
+    keepControlsVisible(true);
     if (directUrl != null) {
       playDirect();
       return;
@@ -549,16 +569,38 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playSource(sources.get(0));
       return;
     }
+    final String requestedPage = pageUrl;
     worker.execute(
         () -> {
           try {
-            PlayerDocument.Result document = PlayerDocument.fetch(pageUrl, transport);
+            NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
+            boolean usedChromium = chromiumNetwork;
+            PlayerDocument.Result fetched;
+            if (usedChromium) fetched = PlayerDocument.fetch(requestedPage, ChromiumNetwork.get(this));
+            else {
+              try {
+                fetched = PlayerDocument.fetch(requestedPage, pageTransport.pageFactory(mediaHttp1),
+                    mediaHttp1 ? null : pageTransport.pageFactory(true),
+                    pageTransport.provider == DnsProvider.SYSTEM ? null : NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              } catch (java.io.IOException failure) {
+                if (failure instanceof PlayerDocument.HttpFailure || !VideoResolver.renewablePage(requestedPage)) throw failure;
+                handler.post(() -> { if (active && generation == request) { chromiumNetwork = true; status.setText("Probando la conexión Chromium…"); } });
+                fetched = PlayerDocument.fetch(requestedPage, ChromiumNetwork.get(this));
+                usedChromium = true;
+              }
+            }
+            final PlayerDocument.Result document = fetched;
+            final boolean documentChromium = usedChromium;
             List<VideoResolver.Source> found = VideoResolver.parse(document.html, document.url);
+            found.removeIf(source -> AppSources.webOnly(source.url));
             handler.post(
                 () -> {
                   if (!active || request != generation) return;
                   resolving = false;
                   documentUrl = document.url;
+                  chromiumNetwork = documentChromium;
+                  if (document.usedFallback) mediaSystemRetry = true;
+                  if (document.usedHttp1) mediaHttp1 = true;
                   lastReport =
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
                   sources.clear();
@@ -566,7 +608,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   // Each phone reads the page and its videos itself, as a viewer of the page. The hosting
                   // (calamar-player.php) is only the last option: with every viewer behind its single
                   // address the page refused it, and one server cannot carry a big match for everyone.
-                  if (channelPage() && !sources.isEmpty())
+                  if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
@@ -574,6 +616,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
+                  } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
+                    refreshAutomatically("El proveedor no ha devuelto una fuente vigente. Reintentando…");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -591,10 +635,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   lastReport = reportHeader() + "\nConsulta de página: " + reason;
                   if (player != null && player.isPlaying()) {
                     status.setText(
-                        "No se pudo renovar. La emisión actual continúa; puedes pulsar Renovar.");
+                        "No se pudo renovar. La emisión actual continúa; reintentando…");
+                    handler.removeCallbacks(renewal);
+                    handler.postDelayed(renewal, 15000L);
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
+                  } else if (VideoResolver.renewablePage(pageUrl)) {
+                    refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
                   } else if (channelPage()) {
                     // The page cannot be reached from this phone (blocked by the operator): the hosting.
                     sources.clear();
@@ -639,7 +687,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     castPlayback = false;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {
-      problem("El proveedor devolvió una fuente caducada. Pulsa Renovar o Modo web.");
+      refreshAutomatically("El proveedor devolvió un enlace caducado. Solicitando uno nuevo…");
       return;
     }
     clearWeb();
@@ -650,10 +698,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     releasePlayer();
-    DataSource.Factory http =
-        (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
+    DataSource.Factory http;
+    try {
+      if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || source.url.startsWith(Library.PLAYER_ENDPOINT)
+          || source.url.startsWith(Library.LULU_ENDPOINT))) http = ChromiumNetwork.get(this).mediaFactory(directUrl != null ? null : mediaReferer());
+      else {
+        http =
+            (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
             .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
-                directUrl == null && pageUrl != null && Library.Media.embed(pageUrl) != null && !source.url.startsWith(Library.LULU_ENDPOINT));
+                directUrl == null && pageUrl != null
+                    && !source.url.startsWith(Library.LULU_ENDPOINT) && !source.url.startsWith(Library.PLAYER_ENDPOINT));
+      }
+    } catch (java.io.IOException failure) {
+      problem("No se pudo iniciar la conexión Chromium. " + ConnectionReport.describe(failure));
+      return;
+    }
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
@@ -663,7 +722,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             // server stopped the picture.
             .setLoadControl(new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(12000, 30000, 2500, 5000)
-                .setPrioritizeTimeOverSizeThresholds(true).build())
+                .setTargetBufferBytes(isTelevision() ? 16 * 1024 * 1024 : 32 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false).build())
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(http))
             .build();
     player.setAudioAttributes(
@@ -715,8 +775,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (instance != player || !active) return;
             if (state == Player.STATE_READY) {
               cancelBufferingTimeout();
+              keepControlsVisible(false);
+              automaticAttempts = 0;
               status.setText("");
             } else if (state == Player.STATE_BUFFERING) {
+              keepControlsVisible(true);
               status.setText("Cargando vídeo…");
               armBufferingTimeout(instance, source);
             } else if (state == Player.STATE_ENDED && progressEntry != null) {
@@ -743,9 +806,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
             lastReport += "\n" + mediaProgress;
             cancelBufferingTimeout();
-            if ((error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-                    || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
-                && retrySystemNetwork(source)) return;
+            if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
+            }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
                 && !mediaHttp1
@@ -790,7 +854,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retrySystemNetwork(source)) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source)) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -803,6 +867,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.postDelayed(bufferingTimeout, 25000);
   }
 
+  private boolean retryChromiumNetwork(VideoResolver.Source source) {
+    if (chromiumNetwork || !VideoResolver.renewablePage(pageUrl)) return false;
+    chromiumNetwork = true;
+    status.setText("Reconectando con el motor de red Chromium…");
+    lastReport += "\nReintento: Chromium (conexión del dispositivo)";
+    releasePlayer();
+    resolveFresh();
+    return true;
+  }
+
   /** A failed private DNS must not leave working device connections waiting indefinitely. */
   private boolean retrySystemNetwork(VideoResolver.Source source) {
     if (mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
@@ -812,7 +886,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     lastReport += "\nReintento: DNS del sistema · HTTP/1.1";
     // Release first: a previously playing instance must not short-circuit the retry.
     releasePlayer();
-    playSource(source);
+    // A page-issued URL belongs to the connection that obtained it. Read it again after changing networks.
+    if (directUrl == null && VideoResolver.renewablePage(pageUrl)) resolveFresh();
+    else playSource(source);
     return true;
   }
 
@@ -836,6 +912,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (now - attemptWindow > 120000) {
       automaticAttempts = 0;
       attemptWindow = now;
+    }
+    if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
+      if (sources.size() > 1) selection = (selection + 1) % sources.size();
+      long delay = Math.min(30000L, 1500L << Math.min(5, automaticAttempts++));
+      status.setText(message);
+      handler.removeCallbacks(renewalRequest);
+      handler.postDelayed(renewalRequest, delay);
+      return;
     }
     // Direct channels with alternatives try each source before giving up; a player page with several
     // videos (CDN 1, CDN 2…) moves on to its next video, as the page is read again.
@@ -893,7 +977,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         + page.getHost()
         + (directUrl != null ? "" : page.getPath())
         + "\nMotor: "
-        + transport.name();
+        + (chromiumNetwork ? "Chromium · conexión del dispositivo" : transport.name());
   }
 
   private void diagnose() {
@@ -919,6 +1003,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           String report = previous + "\n\nPrueba sin cambiar la red del dispositivo:\n";
           report += probe("Sistema", url -> (java.net.HttpURLConnection) url.openConnection());
           report += "\n" + probe(transport.name(), transport);
+          try { report += "\n" + probe("Chromium", ChromiumNetwork.get(this)); }
+          catch (java.io.IOException failure) { report += "\nChromium: " + ConnectionReport.describe(failure); }
           final String result = report;
           handler.post(
               () -> {
@@ -975,27 +1061,76 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseSource() {
-    if (sources.isEmpty()) {
-      Toast.makeText(this, "Aún no se ha detectado una fuente", Toast.LENGTH_SHORT).show();
-      return;
+    if (sourceDialog != null && sourceDialog.isShowing()) return;
+    final boolean restoreFullscreen = fullscreen;
+    // Give the modal its own normal input window rather than competing with the video surface.
+    if (restoreFullscreen) setFullscreen(false);
+    List<String> names = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    // Catalog links remain selectable before the remote page responds.
+    List<String> pages = new ArrayList<>(channelPages);
+    if (pageUrl != null && !pages.contains(pageUrl)) pages.add(pageUrl);
+    int number = 0, checked = -1;
+    for (String address : pages) {
+      if (directUrl == null && address.equals(pageUrl)) checked = names.size();
+      names.add("Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      actions.add(() -> selectChannelAddress(address, true));
     }
-    String[] names = new String[sources.size()];
-    // Numbered options, whatever the provider calls them (CDN 4, Vídeo 1…).
-    for (int i = 0; i < names.length; i++) names[i] = "Opción " + (i + 1);
-    new AlertDialog.Builder(this)
+    for (String address : directUrls) {
+      if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
+      names.add("Enlace " + (++number) + " · Vídeo directo");
+      actions.add(() -> selectChannelAddress(address, false));
+    }
+    if (directUrl == null) {
+      for (int i = 0; i < sources.size(); i++) {
+        final VideoResolver.Source source = sources.get(i);
+        final int selected = i;
+        if (source.url.equals(currentUrl)) checked = names.size();
+        names.add("CDN · " + source.label);
+        actions.add(() -> {
+          generation++; resolving = false;
+          handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+          selection = selected; automaticAttempts = 0; playSource(source);
+        });
+      }
+    }
+    if (names.isEmpty()) {
+      names.add("Volver a buscar fuentes");
+      actions.add(() -> { if (!resolving) resolveFresh(); });
+    }
+    sourceDialog = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
-        .setSingleChoiceItems(
-            names,
-            selection,
-            (dialog, index) -> {
-              selection = index;
-              automaticAttempts = 0;
-              if (directUrl != null && webMode) openDirectWeb();
-              else playSource(sources.get(index));
-              dialog.dismiss();
-            })
+        .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
+          actions.get(index).run(); dialog.dismiss();
+        })
         .setNegativeButton("Cerrar", null)
-        .show();
+        .create();
+    sourceDialog.setOnDismissListener(dialog -> {
+      sourceDialog = null;
+      if (active) {
+        if (restoreFullscreen) setFullscreen(true);
+        playerView.showController();
+        keepControlsVisible(player == null || player.getPlaybackState() != Player.STATE_READY);
+      }
+    });
+    sourceDialog.show();
+    sourceDialog.getListView().requestFocus();
+  }
+
+  private void selectChannelAddress(String address, boolean page) {
+    generation++; resolving = false; webMode = false;
+    handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+    automaticAttempts = 0; selection = 0;
+    keepControlsVisible(true);
+    clearWeb(); releasePlayer(); sources.clear();
+    if (page) {
+      directUrl = null; pageUrl = address; documentUrl = address; directTried = false;
+      pageIndex = channelPages.indexOf(address);
+    } else {
+      directUrl = address; pageUrl = null; documentUrl = address;
+      selection = Math.max(0, directUrls.indexOf(address)); directTried = true;
+    }
+    resolveFresh();
   }
 
   private void openWeb() {
@@ -1021,13 +1156,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new WebViewClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return !url.startsWith("https://");
+            return !url.startsWith("https://") || AppSources.webOnly(url);
           }
 
           @Override
           public WebResourceResponse shouldInterceptRequest(
               WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
+            if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
+                new java.io.ByteArrayInputStream(new byte[0]));
             if ("GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
@@ -1117,7 +1254,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void detected(String address) {
-    if (!active || !webMode || !VideoResolver.isMedia(address)) return;
+    if (!active || !webMode || !VideoResolver.isMedia(address) || AppSources.webOnly(address)) return;
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);
@@ -1175,6 +1312,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override
   protected void onStop() {
     active = false;
+    if (sourceDialog != null) { sourceDialog.dismiss(); sourceDialog = null; }
     generation++;
     resolving = false;
     diagnosing = false;

@@ -56,11 +56,12 @@ test('player pages of channels play through the hosting; elsewhere they still ne
   assert.equal(webPlayback(page).ok, false);
   assert.equal(sourceOptions(['https://cdn.example/live.m3u8'])[0].how.address, undefined);
 });
-test('zicotv pages are shown as they are, never through the hosting', () => {
+test('zicotv player endpoints resolve on the viewer device; other pages remain embedded', () => {
   for (const page of ['https://zicotv.cc/api/player/1', 'https://bp.zicotv.cc/channels/42898']) {
     const [source] = sourceOptions([page]);
     assert.equal(source.available, true);
-    assert.equal(source.how.kind, 'frame');
+    assert.equal(source.how.kind, page.includes('/api/player/') ? 'hls' : 'frame');
+    assert.equal(!!source.how.renewable, page.includes('/api/player/'));
     assert.equal(source.how.address, undefined);
   }
   assert.notEqual(sourceOptions(['http://zicotv.cc/api/player/1'])[0].how.kind, 'frame');

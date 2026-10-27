@@ -22,6 +22,17 @@ public final class VideoResolver {
     }
   }
 
+  /** Fixed public player pages can always be re-read for current sources. */
+  public static boolean renewablePage(String address) {
+    try {
+      URI u = URI.create(address);
+      String host = u.getHost();
+      return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && host != null
+          && (host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))
+          && u.getPath() != null && u.getPath().matches("/api/player/[0-9]+/?");
+    } catch (Exception invalid) { return false; }
+  }
+
   public static boolean isMedia(String address) {
     try {
       URI u = URI.create(address);

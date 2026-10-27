@@ -201,3 +201,48 @@ Varios canales o eventos a la vez, en la web (menú **Multipantalla**, `#/multip
 En la app (2.9.2), a pantalla completa, al tocar el vídeo aparecen arriba —sobre el vídeo, como en la web— el título y los botones (pantalla completa, fuentes, refrescar, compartir y enviar a la TV); se ocultan junto con los controles del reproductor. En los eventos, **Compartir** abre el menú de compartir de Android con el enlace de vista previa del evento.
 
 En la web, al pulsar un canal o evento (tarjeta o «Ver ahora») el reproductor se abre a pantalla completa, como en la app (en móviles, en horizontal). Un enlace abierto directamente empieza en el reproductor normal, porque los navegadores solo permiten la pantalla completa tras un toque.
+
+
+## Enlaces de canal con token temporal (2.20.14)
+
+En el canal se guarda el enlace fijo `https://zicotv.cc/api/player/28`, en lugar del M3U8 con token. La web lee desde el dispositivo las fuentes públicas de ese reproductor, reproduce HLS en Calamar TV y vuelve a consultar la misma página 30 segundos antes de la caducidad indicada. Si devuelve el mismo token, espera al menos 15 segundos; si no hay fecha reconocible, consulta cada cinco minutos. Los errores 401/403, fallos fatales y bloqueos de carga provocan una nueva consulta con reintentos espaciados y cambio de CDN. Al cerrar o cambiar de canal se cancelan consultas, temporizadores y reproducción. Los tokens quedan solo en memoria.
+
+Se necesita que el proveedor permita consultar la página y reproducir sus fuentes desde el navegador (CORS y las restricciones de la señal siguen aplicándose). Si no expone fuentes públicas, bloquea la consulta o falla repetidamente el vídeo, se conserva el reproductor de Calamar, se muestra el fallo y se sigue consultando con esperas de hasta 30 segundos. No cambia automáticamente al reproductor incrustado. No se envía ZicoTV al hosting. Android ya resuelve las páginas y programa la renovación desde el dispositivo; ahora reintenta también si falla una renovación mientras sigue reproduciendo y cuando la página devuelve un enlace caducado.
+
+Pruebas: `node --test tools/renewable_player.test.mjs tools/player_sources.test.mjs` y `node tools/browser_events_check.mjs`.
+
+
+## Reproducción de canales resueltos en Android (2.20.15)
+
+La consulta de la página del canal usa también la conexión del dispositivo si el DNS seleccionado falla por un error de red; una respuesta HTTP de rechazo no cambia de conexión. El vídeo y las renovaciones continúan usando la conexión que obtuvo la fuente. Al cambiar manualmente de DNS se restablece esa elección. Si se cambia de red durante un fallo de vídeo, se vuelve a leer la página para obtener una fuente nueva.
+
+El botón Fuentes permanece visible, incluso con una sola opción o mientras se buscan fuentes. Si no hay ninguna todavía permite volver a consultar el canal; las opciones muestran también el nombre del CDN. Los canales ZicoTV con enlace fijo siguen reintentando en el reproductor nativo, sin enviarlos automáticamente al hosting ni a una página incrustada.
+
+Pruebas: `PlayerDocumentTest`, `VideoResolverTest` y `ResolvedPlaybackTest` (página HTTPS y vídeo reales servidos por un servidor local TLS en el emulador; reproducción nativa y recuperación después de un 403). La respuesta del proveedor desde el dispositivo sigue determinando si una señal externa puede reproducirse.
+
+
+## RESET al consultar fuentes y selector de enlaces (2.20.16)
+
+La consulta de documentos públicos ZicoTV y los M3U8 extraídos usan un perfil de navegador coherente. Ante un error de conexión, la consulta reintenta HTTP/1.1 con el mismo DNS antes de probar la conexión del dispositivo. Las respuestas HTTP de rechazo se conservan y no desencadenan cambios de protocolo o DNS.
+
+Fuentes abre siempre un selector de los enlaces guardados del canal, incluso si todavía no se ha recibido ningún CDN. Después de consultar la página también muestra sus CDN disponibles. Elegir un vídeo directo funciona aunque la consulta de la página haya fallado. No se inventan direcciones CDN cuando el proveedor aún no las ha devuelto.
+
+Pruebas: casos unitarios de RESET/HTTP1 y rechazo HTTP; ResolvedPlaybackTest verifica reproducción HTTPS nativa, coherencia del perfil de consulta/vídeo, recuperación del token y elección del enlace alternativo cuando la página devuelve un error.
+
+
+## Conexión Chromium y controles visibles (2.20.17)
+
+Si ZicoTV funciona en Chrome pero la consulta de la app falla por conexión, la app prueba Cronet (motor de red Chromium) para leer la página y después reproducir su HLS en el mismo ExoPlayer de Calamar. Incluye la biblioteca nativa para Android y Android TV sin requerir Google Play ni una VPN instalada. Los rechazos HTTP y la validación TLS siguen aplicándose. No se envía la señal a un proxy ni se muestra el reproductor de ZicoTV. Este cambio requiere comprobar su resultado en la conexión concreta del usuario: una prueba local no demuestra que una señal externa vaya a estar disponible.
+
+Los controles permanecen visibles mientras no hay vídeo o está cargando. Fuentes usa selección única y marca la URL seleccionada: el CDN actual, si ya se ha obtenido, o el enlace del canal mientras se consulta. El diagnóstico compara también Chromium con los otros motores sin incluir tokens.
+
+Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y la fuente marcada, además de la reproducción/resolución existentes. ChromiumPlaybackTest verifica conexiones reales con Cronet y decodificación HLS nativa de un vídeo local.
+
+## Fuentes Android, rendimiento TV y actualizaciones (2.20.18)
+
+- Android y Android TV excluyen los enlaces cuyo host es `zicotv.cc` o uno de sus subdominios, tanto páginas como CDN. Se usan las demás fuentes en su orden; el catálogo compartido y la web conservan ZicoTV. Si no hay alternativa, la app informa de que el canal está disponible en la web.
+- En TV las filas de canales, eventos y vídeos se crean al acercarse a la pantalla y liberan sus vistas al alejarse. El carrusel destacado deja de reconstruirse automáticamente cada cinco segundos. Las imágenes se reducen antes de decodificarlas, incluidas las portadas base64, con dos descargas simultáneas y solicitudes compartidas por URL.
+- La carga de GitHub y la recepción del catálogo compartido trabajan en ejecutores independientes. Al abrir o actualizar se consulta explícitamente el servidor de Firestore; su caché se diferencia de una respuesta actual y se ignoran revisiones anteriores. No se reconstruye la pantalla si el contenido no cambia. La versión instalada aparece en el estado del catálogo.
+- Se comprueban nuevas versiones al abrir la app (máximo una vez cada seis horas por sesión), además del botón «Actualizaciones» (↓). El aviso permite descargar mediante Android y abrir su instalador. La primera instalación puede requerir autorizar a Calamar TV como fuente de instalación. El usuario confirma cada descarga e instalación; no se instala en silencio.
+- El workflow publica `Calamar-TV-update.json` después de la APK firmada, con versión, tamaño y SHA-256. La app verifica el archivo y su identificador/versión antes del instalador. Esta primera versión con actualizador debe instalarse manualmente.
+- Verificación: pruebas del filtrado por host sin modificar el catálogo web, integridad del manifiesto/descarga, vídeo real con fuentes Zico excluidas y catálogo de 500 canales con carga y liberación de filas. Las pruebas de emulador no sustituyen una comprobación en el modelo de TV afectado.

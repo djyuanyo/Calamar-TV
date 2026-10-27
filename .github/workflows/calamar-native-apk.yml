@@ -23,21 +23,21 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Verificar adaptación real de HEVC a HLS para Chromecast
-        timeout-minutes: 15
         run: |
-          # The Ubuntu mirrors sometimes hang apt-get forever: install only what is missing, with a
-          # time limit per try and up to three tries.
-          missing=""
-          command -v php >/dev/null || missing="$missing php-cli"
-          command -v ffmpeg >/dev/null || missing="$missing ffmpeg"
-          if [ -n "$missing" ]; then
-            apt="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-            for try in 1 2 3; do
-              if timeout 120 sudo apt-get $apt update -qq && timeout 300 sudo apt-get $apt install -y -qq $missing; then break; fi
-              [ "$try" = 3 ] && exit 1
-              echo "::warning::apt-get no respondió (intento $try); se reintenta"
-              sleep 10
-            done
+          # Hosted runners often include both tools; avoid a mirror update on every APK build.
+          calamar_packages=()
+          command -v php >/dev/null || calamar_packages+=(php-cli)
+          command -v ffmpeg >/dev/null || calamar_packages+=(ffmpeg)
+          if [ ${#calamar_packages[@]} -gt 0 ]; then
+            # Try the image's cached package lists before contacting every configured repository.
+            if ! timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y -qq "${calamar_packages[@]}"; then
+              calamar_sources=()
+              if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+                calamar_sources=(-o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=-)
+              fi
+              timeout 180 sudo apt-get "${calamar_sources[@]}" -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update -qq
+              timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y -qq "${calamar_packages[@]}"
+            fi
           fi
           php -l hosting/calamar-match.php
           php -l hosting/calamar-http-source.php
@@ -69,6 +69,17 @@ jobs:
           target: google_apis
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Mostrar errores del reproductor en el emulador
+        if: failure()
+        run: |
+          python - <<'PYCODE'
+          import pathlib, re, html
+          root = pathlib.Path('app/build/reports/androidTests/connected')
+          for name in ('ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
+              for path in root.rglob('*' + name + '.html'):
+                  print('Informe:', path)
+                  print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])
+          PYCODE
       - name: Guardar informe de reproducción Android
         if: always()
         uses: actions/upload-artifact@v4
@@ -131,7 +142,26 @@ jobs:
           (cd dist && zip "Calamar-TV-$version-compilada.zip" *.apk)
           (cd hosting && zip ../dist/Calamar-Chromecast-hosting.zip calamar-cast.php calamar-cast-install.php calamar-http-source.php calamar-tv-relay.php README-Chromecast.txt)
           (cd hosting && zip ../dist/Calamar-Marcadores-hosting.zip calamar-match.php calamar-http-source.php README-Marcadores.txt)
+          # The in-app updater accepts only a signed release APK and verifies this checksum/size.
+          if [ -n "$CALAMAR_KEYSTORE_PATH" ]; then
+            python - <<'PYUPDATE'
+          import hashlib, json, pathlib, re
+          gradle = pathlib.Path('app/build.gradle').read_text()
+          version = re.search(r"versionName '([^']+)'", gradle)[1]
+          code = int(re.search(r"versionCode (\d+)", gradle)[1])
+          apk = pathlib.Path(f'dist/Calamar-TV-{version}.apk')
+          manifest = {'applicationId': 'es.yuanyo.calamartv', 'versionName': version,
+                      'versionCode': code, 'bytes': apk.stat().st_size,
+                      'sha256': hashlib.file_digest(apk.open('rb'), 'sha256').hexdigest(),
+                      'apkUrl': f'https://github.com/djyuanyo/Calamar-TV/releases/download/v{version}/Calamar-TV-{version}.apk'}
+          pathlib.Path('dist/Calamar-TV-update.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PYUPDATE
+          fi
           gh release upload "v$version" dist/*.apk dist/*.zip --clobber
+          # Publish metadata last, so a checker can never see a version without its APK.
+          if [ -f dist/Calamar-TV-update.json ]; then
+            gh release upload "v$version" dist/Calamar-TV-update.json --clobber
+          fi
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
         continue-on-error: true
