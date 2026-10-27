@@ -459,7 +459,10 @@ public class MainActivity extends Activity {
         }
       }
       // Only events on the home page: one row per league, each in date order.
-      for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
+      // The events already in «Eventos En Directo» are not repeated in their league's row.
+      List<Catalog.Channel> rest = new ArrayList<>(events);
+      rest.removeAll(live);
+      for (Catalog.EventRow row : Catalog.eventRows(rest, custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
         if (!row.logo.isEmpty()) leagueLogo(row.logo);
         carousel(row.events, row.events.size());

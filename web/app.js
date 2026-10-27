@@ -398,7 +398,9 @@ function home() {
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // Only events on the home page: one row per league, each in date order (soonest first).
-  for (const row of eventRows(matches, state.custom)) {
+  // The events already in «Eventos En Directo» are not repeated in their league's row.
+  const onAir = new Set(live);
+  for (const row of eventRows(matches.filter((e) => !onAir.has(e)), state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }

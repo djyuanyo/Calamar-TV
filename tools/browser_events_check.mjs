@@ -584,13 +584,16 @@ try {
   assert.ok(page.url().endsWith('#/series/spaco/ver/e1002'));
   await page.waitForFunction(() => document.getElementById('video').src === 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
-  // «Continuar viendo» heads the home page and opens the film where it was left.
+  // «Continuar viendo» heads the home page (after «Eventos En Directo», the first row of all when there are
+  // events today) and opens the film where it was left.
   await page.evaluate(() => localStorage.setItem('calamar-progress-v1', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',
     name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
   await page.goto(base + '/#/inicio');
   await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();
   assert.equal(await page.locator('#search').isVisible(), true, 'the channels and events search is back outside the library');
-  assert.equal(await page.locator('main h2').first().textContent(), 'Continuar viendo');
+  const heads = await page.locator('main h2').allTextContents();
+  assert.equal(heads.filter((h) => h !== 'Eventos En Directo')[0], 'Continuar viendo');
+  if (heads.includes('Eventos En Directo')) assert.equal(heads[0], 'Eventos En Directo', '«Eventos En Directo» is the first row of all');
   assert.ok(await page.evaluate(() => { const slider = document.querySelector('.highlight-slider'), row = document.querySelector('.continue-rail');
     return !!slider && !!(slider.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Continuar viendo comes under the featured slider');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
