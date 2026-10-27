@@ -1,3 +1,4 @@
+import { zicoEventApi } from './event-sources.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures } from './competitions.js';
@@ -271,6 +272,7 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
   if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
   if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };

@@ -733,6 +733,34 @@ try {
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
   assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
+  // Event page URLs expand into named public players, never an iframe of /events/.
+  let eventReady = true;
+  await page.route('https://bp.zicotv.cc/api/v1/events/98019', route => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ data: { sources: eventReady ? [
+    {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
+    {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'}
+  ] : [] } }) }));
+  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'var ZT_SOURCES = ' + JSON.stringify([{url:`https://cdn.example/event-${route.request().url().split('/').pop()}.m3u8`}]) + ';' }));
+  await page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.events.push({id:'manual-zico',name:'Evento Zico Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  });
+  await page.goto(base + '/?event-zico=1#/evento/evento-zico-manual');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Canal A','Canal B']);
+  await page.getByLabel('Cambiar fuente').selectOption('1');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-23')));
+  assert.equal(await page.locator('#player-source-select').inputValue(), '1');
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  await page.locator('#player-close').click();
+  eventReady = false;
+  await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
+  await page.getByText('Zico TV todavía no publica fuentes disponibles para este evento.', {exact:false}).waitFor();
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  eventReady = true;
+  await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  await page.locator('#player-close').click();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
