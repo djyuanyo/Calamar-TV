@@ -324,8 +324,9 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
   return all.filter((e) => !e.imported || allWeeks || imported.has(e)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
-    if (target) return [{ ...target, ...shared, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
-      streams: target.streams, playable: target.playable }];
+    const streams = [...new Set([...(target?.streams || []), ...(event.streams || [])])];
+    if (streams.length) return [{ logo: '', group: '', region: '', web: '', own: true, ...target, ...shared, channelId: target?.id || '', channelName: target?.name || 'Fuentes del evento', meta: eventMeta(event, custom),
+      streams, playable: true }];
     if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
       channelName: FINISHED, meta: [eventMeta(event, custom), FINISHED].filter(Boolean).join(' · ') }];
     return event.imported ? [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,

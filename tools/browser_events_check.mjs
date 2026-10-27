@@ -651,7 +651,7 @@ try {
   await page.waitForFunction(() => window.__published.leagues.some(l => l.background === 'https://example.com/fondo.jpg'));
   const atleti = imported.fixtures.find(f => f.matchId === '902');
   await page.goto(base + `/#/admin/editar-evento/${encodeURIComponent(atleti.id)}`);
-  await page.getByText('Sin canal: los usuarios verán «Canal por confirmar».').waitFor();
+  await page.getByText('Añade enlaces manuales o selecciona un canal.').waitFor();
   await page.locator('.channel-options button').filter({ hasText: 'Sports One' }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction((id) => window.__published.fixtures.find(f => f.id === id)?.channelId === 'sport-one', atleti.id);

@@ -177,7 +177,7 @@ const used = (data) => new Set([...(data.leagues || []), ...(data.teams || [])].
  */
 export const FIXTURE_WINDOW_MS = 35 * DAY;
 /** A fixture with a channel, a cover or set as featured by hand stays even beyond the window. */
-const chosen = (f) => !!(f?.channelId || f?.cover || f?.featured);
+const chosen = (f) => !!(f?.channelId || f?.streams?.length || f?.cover || f?.featured);
 /**
  * Adds or refreshes an imported competition in the catalog (a copy is returned). Existing teams are
  * reused by their ESPN number or name; fixtures keep the channel, cover and anything set by hand, and
@@ -222,7 +222,7 @@ export function applySeason(data, season, now = Date.now()) {
     else next.fixtures.push(fixture);
   }
   // Played matches of this league go; so do those ESPN no longer lists, unless a channel was set.
-  next.fixtures = next.fixtures.filter((f) => f.leagueId !== league.id || fresh.has(f.matchId) || (f.channelId && Date.parse(f.startAt) > now - 6 * 3600000));
+  next.fixtures = next.fixtures.filter((f) => f.leagueId !== league.id || fresh.has(f.matchId) || ((f.channelId || f.streams?.length) && Date.parse(f.startAt) > now - 6 * 3600000));
   return { data: next, league, count: fresh.size };
 }
 

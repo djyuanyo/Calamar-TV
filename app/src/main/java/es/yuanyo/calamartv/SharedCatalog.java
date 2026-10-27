@@ -70,6 +70,23 @@ final class SharedCatalog {
         if (UserChannels.normalize(streams.getString(j)) == null)
           throw new JSONException("Enlace no válido");
     }
+    for (String list : new String[]{"events", "fixtures"}) {
+      JSONArray entries = data.optJSONArray(list);
+      if (entries == null) continue;
+      for (int i = 0; i < entries.length(); i++) {
+        JSONObject entry = entries.getJSONObject(i);
+        if (!entry.has("streams")) continue;
+        JSONArray links = entry.getJSONArray("streams");
+        if (links.length() > 50) throw new JSONException("Máximo 50 fuentes por evento");
+        for (int j = 0; j < links.length(); j++) {
+          try {
+            java.net.URI uri = new java.net.URI(links.getString(j));
+            if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null)
+              throw new Exception("URL inválida");
+          } catch (Exception invalid) { throw new JSONException("Fuente de evento no válida"); }
+        }
+      }
+    }
     Set<String> eventIds = new HashSet<>();
     if (data.has("events")) {
       JSONArray events = data.getJSONArray("events");
@@ -77,7 +94,7 @@ final class SharedCatalog {
         JSONObject event = events.getJSONObject(i);
         String id = event.getString("id"), cover = event.getString("cover");
         if (id.isEmpty() || !eventIds.add(id) || event.getString("name").trim().isEmpty()
-            || !ids.contains(event.getString("channelId")) || !validCover(cover))
+            || (!ids.contains(event.optString("channelId")) && (event.optJSONArray("streams") == null || event.getJSONArray("streams").length() == 0)) || !validCover(cover))
           throw new JSONException("Cada evento necesita nombre, portada y un canal creado");
       }
     }

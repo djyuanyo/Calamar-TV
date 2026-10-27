@@ -227,7 +227,14 @@ public final class Catalog {
       if (event.optBoolean("imported") && !allWeeks && !week.contains(event.optString("id"))) continue;
       Channel target = null;
       for (Channel c : channels) if (c.id.equals(event.optString("channelId")) && c.playable()) { target = c; break; }
-      if (target == null && !event.optBoolean("imported")) continue;
+      List<String> sources = new ArrayList<>();
+      if (target != null) sources.addAll(target.streams);
+      JSONArray extra = event.optJSONArray("streams");
+      if (extra != null) for (int i = 0; i < extra.length(); i++) {
+        String link = extra.optString(i).trim();
+        if ((link.startsWith("https://") || link.startsWith("http://")) && !sources.contains(link)) sources.add(link);
+      }
+      if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
         JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));
         JSONObject home = SportsCatalog.find(custom.optJSONArray("teams"), event.optString("homeTeamId"));
@@ -237,7 +244,7 @@ public final class Catalog {
             .put("cover", event.optString("cover")).put("event", true)
             .put("background", league != null ? league.optString("background") : "").put("leagueLogo", league != null ? league.optString("logo") : "")
             .put("homeLogo", home != null ? home.optString("logo") : "").put("awayLogo", away != null ? away.optString("logo") : "");
-        if (target != null) card.put("channelId", target.id).put("meta", meta).put("group", target.name).put("streams", new JSONArray(target.streams));
+        if (!sources.isEmpty()) card.put("channelId", target != null ? target.id : "").put("meta", meta).put("group", target != null ? target.name : "Fuentes del evento").put("streams", new JSONArray(sources));
         else card.put("channelId", "").put("pending", true).put("group", Competitions.PENDING).put("streams", new JSONArray())
             .put("meta", meta.isEmpty() ? Competitions.PENDING : meta + " · " + Competitions.PENDING);
         out.add(new Channel(card, true));
