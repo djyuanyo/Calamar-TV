@@ -1,3 +1,4 @@
+import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
 import { fetchMatch, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
@@ -513,9 +514,10 @@ initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
-let stopRenewable = null;
+let stopRenewable = null, sourceLookup = null;
 function stop() {
   playbackGeneration++;
+  if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
   video.onerror = null;
   video.onplaying = null;
@@ -541,7 +543,7 @@ function recoveryRound(c, now = Date.now()) {
 }
 const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
 
-function playSource(c, index) {
+async function playSource(c, index) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
@@ -551,7 +553,23 @@ function playSource(c, index) {
     return;
   }
   const generation = playbackGeneration;
-  const allSources = sourceOptions(c.streams);
+  if (c.streams.some(zicoEventApi) && !c.eventSourcesExpanded) {
+    playerStatus.textContent = 'Consultando fuentes del evento…';
+    renderSourcePicker(playerSources, [], 0, () => {});
+    const lookup = sourceLookup = new AbortController();
+    const timeout = setTimeout(() => lookup.abort(), 15000);
+    const requested = c.streams[index];
+    const resolved = await expandEventSources(c.streams, { signal: lookup.signal });
+    clearTimeout(timeout);
+    if (generation !== playbackGeneration) return;
+    sourceLookup = null;
+    c = { ...c, streams: resolved.map(s => s.url), eventSourcesExpanded: true,
+      sourceNames: Object.fromEntries(resolved.map(s => [s.url, s.name])),
+      sourceErrors: Object.fromEntries(resolved.filter(s => s.error).map(s => [s.url, s.error])),
+      originalStreams: c.streams };
+    index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
+  }
+  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
@@ -641,6 +659,13 @@ function playSource(c, index) {
     controls.attach(null);
     playerStatus.textContent = '';
   };
+  if (source.how.kind === 'event') {
+    const message = c.sourceErrors?.[source.url] || 'No se pudieron obtener las fuentes de este evento.';
+    playerStatus.replaceChildren(message, ' ', el('button', { type: 'button', class: 'ghost', onclick: () => {
+      playSource({ ...c, streams: c.originalStreams || c.streams, eventSourcesExpanded: false }, 0);
+    } }, '↻ Consultar de nuevo'));
+    return;
+  }
   if (source.how.renewable) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
       onAttach: (instance) => { hls = instance; controls.attach(instance); },

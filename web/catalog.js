@@ -1,3 +1,4 @@
+import { zicoEventApi } from './event-sources.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures } from './competitions.js';
@@ -271,6 +272,7 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
   if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
   if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
@@ -324,8 +326,9 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
   return all.filter((e) => !e.imported || allWeeks || imported.has(e)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
-    if (target) return [{ ...target, ...shared, channelId: target.id, channelName: target.name, meta: eventMeta(event, custom),
-      streams: target.streams, playable: target.playable }];
+    const streams = [...new Set([...(target?.streams || []), ...(event.streams || [])])];
+    if (streams.length) return [{ logo: '', group: '', region: '', web: '', own: true, ...target, ...shared, channelId: target?.id || '', channelName: target?.name || 'Fuentes del evento', meta: eventMeta(event, custom),
+      streams, playable: true }];
     if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
       channelName: FINISHED, meta: [eventMeta(event, custom), FINISHED].filter(Boolean).join(' · ') }];
     return event.imported ? [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,

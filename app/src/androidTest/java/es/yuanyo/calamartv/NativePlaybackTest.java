@@ -39,61 +39,7 @@ public class NativePlaybackTest {
   @Test public void httpHlsActuallyPlays() throws Exception { playback(false, "/live.m3u8"); }
   @Test public void extensionlessIptvActuallyPlays() throws Exception { playback(false, "/user/password/123"); }
 
-  @Test public void publicHttpIptvPlaysThroughWebHostingTransport() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(video()); server.enqueue(video()); server.enqueue(video()); server.start();
-      String original="http://31.43.191.125:8080/test-user/test-password/244";
-      // A provider this device cannot reach: it goes through the hosting.
-      HttpIptvDataSource.RELAYED.add("31.43.191.125:8080");
-      Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("media_url",server.url("/bootstrap.ts").toString()).putExtra("title","Prueba puente HTTPS");
-      try (ActivityScenario<NativePlayerActivity> scenario=ActivityScenario.launch(intent)) {
-        scenario.onActivity(activity -> {
-          try {
-            java.lang.reflect.Method release=NativePlayerActivity.class.getDeclaredMethod("releasePlayer");
-            release.setAccessible(true);release.invoke(activity);
-            androidx.media3.datasource.DataSource.Factory factory=new HttpIptvDataSource.Factory(
-                new androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(new okhttp3.OkHttpClient()),
-                android.net.Uri.parse(server.url("/relay?stream=1").toString()));
-            ExoPlayer player=new ExoPlayer.Builder(activity).setMediaSourceFactory(
-                new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(activity).setDataSourceFactory(factory)).build();
-            Field field=NativePlayerActivity.class.getDeclaredField("player");field.setAccessible(true);field.set(activity,player);
-            Field view=NativePlayerActivity.class.getDeclaredField("playerView");view.setAccessible(true);
-            ((androidx.media3.ui.PlayerView)view.get(activity)).setPlayer(player);
-            player.setMediaItem(new androidx.media3.common.MediaItem.Builder().setUri(original)
-                .setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP2T).build());
-            player.prepare();player.play();
-          } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
-        AtomicBoolean playing=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+20000;
-        while(!playing.get() && SystemClock.elapsedRealtime()<deadline) {
-          scenario.onActivity(activity -> {
-            try {
-              Field f=NativePlayerActivity.class.getDeclaredField("player");f.setAccessible(true);ExoPlayer p=(ExoPlayer)f.get(activity);
-              playing.set(p!=null && p.isPlaying() && p.getCurrentPosition()>300 && p.getVideoSize().width>0);
-            } catch(ReflectiveOperationException error){throw new AssertionError(error);}
-          }); SystemClock.sleep(100);
-        }
-        assertTrue("The hosting transport never decoded the IPTV stream",playing.get());
-        boolean found=false;
-        for(int i=0,n=server.getRequestCount();i<n;i++) {
-          okhttp3.mockwebserver.RecordedRequest request=server.takeRequest(2,TimeUnit.SECONDS);
-          if(request!=null && "/relay?stream=1".equals(request.getPath())) {
-            assertEquals(original,new String(android.util.Base64.decode(request.getHeader("X-Calamar-Source"),android.util.Base64.DEFAULT),java.nio.charset.StandardCharsets.UTF_8));found=true;
-          }
-        }
-        assertTrue("IPTV must use the web transport with credentials exclusively in the header",found);
-      } finally { HttpIptvDataSource.RELAYED.clear(); }
-    }
-  }
-
-  @Test public void zicoSourcesAreSkippedAndTheAlternativeActuallyPlays() throws Exception {
-    playback(false, "/live.ts", true);
-  }
-
-  private void playback(boolean stalled, String path) throws Exception { playback(stalled, path, false); }
-
-  private void playback(boolean stalled, String path, boolean mixedCatalog) throws Exception {
+  private void playback(boolean stalled, String path) throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       if (stalled) server.enqueue(video().throttleBody(1, 5, TimeUnit.SECONDS));
       boolean hls = path.endsWith(".m3u8");
@@ -104,22 +50,7 @@ public class NativePlaybackTest {
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.CLOUDFLARE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("media_url", server.url(path).toString()).putExtra("title", "Prueba TS");
-      if (mixedCatalog) {
-        java.util.ArrayList<String> sources = new java.util.ArrayList<>(java.util.Arrays.asList(
-            "https://bp.zicotv.cc/api/player/28", "https://cdn4.zicotv.cc/live/index.m3u8?token=old", server.url(path).toString()));
-        intent.putExtra("page_url", sources.get(0));
-        intent.putStringArrayListExtra("media_urls", sources);
-        intent.putStringArrayListExtra("channel_streams", sources);
-      }
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
-        if (mixedCatalog) scenario.onActivity(activity -> {
-          try {
-            Field pages = NativePlayerActivity.class.getDeclaredField("channelPages"); pages.setAccessible(true);
-            Field direct = NativePlayerActivity.class.getDeclaredField("directUrls"); direct.setAccessible(true);
-            assertTrue(((java.util.List<?>) pages.get(activity)).isEmpty());
-            assertEquals(java.util.Collections.singletonList(server.url(path).toString()), direct.get(activity));
-          } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + (stalled ? 55000 : 20000);
         while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {

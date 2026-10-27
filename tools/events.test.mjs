@@ -56,3 +56,17 @@ test('a finished match leaves the home page but its own link still opens it', as
   assert.equal(alone.pending, true); assert.equal(alone.channelName, FINISHED); assert.match(alone.meta, /Partido finalizado$/);
   assert.deepEqual(events(all, data, now), []);
 });
+
+test('manual links combine with the channel, deduplicate, and work without a channel', () => {
+  const data = catalog(), link = 'https://bp.zicotv.cc/events/98019';
+  data.events[0].streams = [channel.streams[0], link];
+  validateCatalog(data);
+  assert.deepEqual(events(merge(null, data), data)[0].streams, [channel.streams[0], link]);
+  data.events[0].channelId = '';
+  validateCatalog(data);
+  assert.deepEqual(events([], data)[0].streams, [channel.streams[0], link]);
+  for (const streams of [['javascript:alert(1)'], ['https://u:p@example.com/'], {}, [42]]) {
+    data.events[0].streams = streams;
+    assert.throws(() => validateCatalog(data));
+  }
+});

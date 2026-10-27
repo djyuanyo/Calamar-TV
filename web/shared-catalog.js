@@ -14,11 +14,19 @@ export function validateCatalog(data, { checkSize = true } = {}) {
     }
   }
   if (data.events !== undefined && !Array.isArray(data.events)) throw new Error('La lista de eventos no es válida.');
+  for (const event of [...(data.events || []), ...(Array.isArray(data.fixtures) ? data.fixtures : [])]) {
+    if (event?.streams === undefined) continue;
+    if (!Array.isArray(event.streams) || event.streams.length > 50) throw new Error('Las fuentes del evento no son válidas (máximo 50).');
+    for (const link of event.streams) {
+      let u; try { u = new URL(link); } catch {}
+      if (typeof link !== 'string' || !u || !/^https?:$/.test(u.protocol) || u.username || u.password) throw new Error('Las fuentes del evento deben ser enlaces HTTP o HTTPS válidos.');
+    }
+  }
   const eventIds = new Set();
   for (const event of data.events || []) {
     if (!event || typeof event.id !== 'string' || !event.id || eventIds.has(event.id)
-        || typeof event.name !== 'string' || !event.name.trim() || !ids.has(event.channelId)
-        || typeof event.cover !== 'string' || !validCover(event.cover)) throw new Error('Cada evento necesita nombre, portada y un canal creado.');
+        || typeof event.name !== 'string' || !event.name.trim() || (!ids.has(event.channelId) && !event.streams?.length)
+        || typeof event.cover !== 'string' || !validCover(event.cover)) throw new Error('Cada evento necesita nombre, portada y un canal o enlaces manuales.');
     eventIds.add(event.id);
   }
   validateSports(data, validCover);

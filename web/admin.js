@@ -534,6 +534,7 @@ function eventForm(existing, rerender, catalogState) {
     try { status.textContent = 'Preparando portada…'; selectedCover = await coverFromFile(upload.files[0]); cover.value = ''; updatePreview(); status.textContent = 'Portada preparada.'; }
     catch (error) { status.textContent = error.message; }
   } });
+  const links = el('textarea', { rows: 4, placeholder: 'https://… (un enlace por línea)' }, (existing?.streams || []).join('\n'));
   let selected = existing?.channelId || '';
   const chosen = el('p', { class: 'note' });
   const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales y los de TDT' });
@@ -544,15 +545,15 @@ function eventForm(existing, rerender, catalogState) {
   const choices = [...own.map((c) => ({ id: c.id, name: c.name })), ...tdt.map((c) => ({ id: c.id, name: c.name, tdt: true }))];
   const draw = () => {
     const channel = choices.find((c) => c.id === selected) || data.channels.find((c) => c.id === selected);
-    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}${channel.tdt ? ' (TDT)' : ''}` : imported ? 'Sin canal: los usuarios verán «Canal por confirmar».' : 'Selecciona un canal para reproducir el evento.';
+    chosen.textContent = channel ? `Canal seleccionado: ${channel.name}${channel.tdt ? ' (TDT)' : ''}` : 'Añade enlaces manuales o selecciona un canal.';
     const q = query.value.trim().toLocaleLowerCase('es');
     const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
     const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
     const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
-    options.replaceChildren(...(imported ? [el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal (por confirmar)`)] : []),
+    options.replaceChildren(...([el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal seleccionado`)]),
       ...(mine.length ? [el('p', { class: 'note channel-group' }, 'Tus canales'), ...mine.map(button)] : []),
       ...(public_.length ? [el('p', { class: 'note channel-group' }, 'Canales de TDT'), ...public_.map(button)] : []));
-    if (!found.length) options.append(el('p', { class: 'note' }, choices.length ? 'Sin resultados.' : 'Crea primero un canal.'));
+    if (!found.length) options.append(el('p', { class: 'note' }, choices.length ? 'Sin resultados.' : 'Puedes añadir enlaces manuales arriba.'));
   };
   query.addEventListener('input', draw); draw();
   return el('form', { class: 'form', onsubmit: async (event) => {
@@ -560,8 +561,9 @@ function eventForm(existing, rerender, catalogState) {
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
-      if (!(imported && !selected) && !choices.some((c) => c.id === selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal de la lista.');
-      const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
+      const streams = [...new Set(links.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
+      if (!streams.length && !(imported && !selected) && !choices.some((c) => c.id === selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal de la lista.');
+      const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, streams, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const link = matchLink.value.trim();
       if (link) {
         googleMatchUrl(link);
@@ -596,7 +598,7 @@ function eventForm(existing, rerender, catalogState) {
       data.events = updated; data.channels = channels;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Buscar canal', query), chosen, options,
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Enlaces adicionales del evento', links, 'Un enlace por línea. Se añaden a las fuentes del canal, o puedes usarlos sin seleccionar canal. Zico TV solo se muestra en la web. La reproducción depende del proveedor.'), field('Buscar canal (opcional si añades enlaces)', query), chosen, options,
   el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
@@ -611,7 +613,7 @@ function eventList(rerender, state) {
     const found = [...data.events, ...(data.fixtures || []).map((f) => fixtureEvent(f, data))].sort(eventOrder).filter(e => (!league.value || e.leagueId === league.value) && `${e.name} ${eventMeta(e, data)}`.toLocaleLowerCase('es').includes(query.value.trim().toLocaleLowerCase('es')));
     output.replaceChildren(...found.map(event => el('div', { class: 'item' },
       el('img', { src: event.cover || data.teams.find((t) => t.id === event.homeTeamId)?.logo || undefined, alt: '', style: event.cover ? 'object-fit:cover' : 'object-fit:contain' }),
-      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || (state?.channels || []).find((c) => c.id === event.channelId)?.name || (event.imported ? 'Canal por confirmar · Importado' : 'Canal no disponible'))),
+      el('div', { class: 'meta' }, el('b', {}, `${event.featured ? '★ ' : ''}${event.name}`), el('span', {}, eventMeta(event, data)), el('span', {}, data.channels.find(c => c.id === event.channelId)?.name || (state?.channels || []).find((c) => c.id === event.channelId)?.name || (event.streams?.length ? `${event.streams.length} fuentes del evento` : event.imported ? 'Canal por confirmar · Importado' : 'Canal no disponible'))),
       el('div', { class: 'actions' }, el('a', { class: 'btn small secondary', href: eventPath({ ...event, slug: slugs.get(event.id) }) }, 'Abrir evento'),
         el('button', { class: 'btn small secondary', type: 'button', onclick: async (e) => {
           try { const button = e.currentTarget; await navigator.clipboard.writeText(eventShareLink({ ...event, slug: slugs.get(event.id) })); button.textContent = 'Copiado'; }

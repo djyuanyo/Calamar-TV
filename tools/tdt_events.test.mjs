@@ -13,7 +13,7 @@ test('an event on a TDT channel keeps a copy of it among the catalog channels, f
   assert.deepEqual(channels[1].streams, ['https://example.com/la1-new.m3u8']);
   // Older apps validate events against the catalog's own channels: the copy makes it valid.
   assert.doesNotThrow(() => validateCatalog({ ...data, channels }));
-  assert.throws(() => validateCatalog(data), /canal creado/);
+  assert.throws(() => validateCatalog(data), /canal o enlaces/);
 });
 
 test('copies nothing uses go away, and a copy stays when TDT no longer has that channel', () => {

@@ -18,6 +18,19 @@ public class CatalogEventsTest {
     assertEquals("https://example.com/two.m3u8", Catalog.events(Catalog.merge(null, data), data).get(0).streams.get(0));
     assertTrue(Catalog.events(Collections.emptyList(), data).isEmpty());
   }
+  @Test public void manualLinksCombineAndWorkWithoutChannel() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    event.put("streams", new JSONArray().put("https://example.com/one.m3u8").put("https://bp.zicotv.cc/events/98019").put("https://example.com/two.m3u8"));
+    SharedCatalog.validate(data);
+    Catalog.Channel card = Catalog.events(Catalog.merge(null, data), data).get(0);
+    assertEquals(3, card.streams.size());
+    assertEquals(3, AppSources.forAndroid(card.streams).size());
+    event.put("channelId", "");
+    SharedCatalog.validate(data);
+    assertEquals(3, Catalog.events(Collections.emptyList(), data).get(0).streams.size());
+    event.put("streams", new JSONArray().put("javascript:alert(1)"));
+    try { SharedCatalog.validate(data); fail("Invalid link accepted"); } catch (JSONException expected) {}
+  }
   @Test public void legacyCatalogNeedsNoEvents() throws Exception {
     JSONObject data = catalog(); data.remove("events"); SharedCatalog.validate(data);
     assertTrue(Catalog.events(Catalog.merge(null, data), data).isEmpty());

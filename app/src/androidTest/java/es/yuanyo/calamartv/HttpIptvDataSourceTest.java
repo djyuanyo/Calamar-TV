@@ -15,24 +15,23 @@ public class HttpIptvDataSourceTest {
   /** A 188-byte TS packet on PID 256 with a PCR clock; a keyframe starts a unit. */
   static byte[] packet(double pcr,boolean key){
     byte[] p=new byte[188];long base=(long)(pcr*90000);
-    p[0]=0x47;p[1]=(byte)(key?0x40:0x00);p[2]=0x00;p[1]|=0x01;p[3]=0x30;p[4]=7;p[5]=(byte)(0x10|(key?0x40:0));
+    p[0]=0x47;p[1]=(byte)((key?0x40:0x00)|0x01);p[2]=0x00;p[3]=0x30;p[4]=7;p[5]=(byte)(0x10|(key?0x40:0));
     p[6]=(byte)(base>>25);p[7]=(byte)(base>>17);p[8]=(byte)(base>>9);p[9]=(byte)(base>>1);p[10]=(byte)(((base&1)<<7)|0x7e);
     return p;
   }
-  /** Each connection sends a keyframe, a packet and the next keyframe, later in time than the one before. */
+  /** With ts, each connection sends a keyframe, a packet and the next keyframe, later in time than the one before. */
   static class Fake implements DataSource {
-    List<DataSpec> requests=new ArrayList<>();int reads,closes;boolean blocked;boolean ts;
+    List<DataSpec> requests=new ArrayList<>();int reads,closes;boolean blocked,ts;
     public void addTransferListener(TransferListener l){}
     public long open(DataSpec s) throws java.io.IOException {
       requests.add(s);reads=0;
-      if(blocked && !s.uri.equals(HttpIptvDataSource.ENDPOINT))throw new java.io.IOException("blocked by the operator");
+      if(blocked)throw new java.io.IOException("blocked by the operator");
       return 188;
     }
     public int read(byte[] b,int o,int n){
       if(!ts){if(reads++>0)return C.RESULT_END_OF_INPUT;b[o]=71;return 1;}
       if(reads>=3)return C.RESULT_END_OF_INPUT;
-      double base=10*requests.size();
-      byte[] p=packet(base+reads+1,reads!=1);
+      byte[] p=packet(10*requests.size()+reads+1,reads!=1);
       reads++;System.arraycopy(p,0,b,o,188);return 188;
     }
     public Uri getUri(){return requests.get(requests.size()-1).uri;}
@@ -46,8 +45,7 @@ public class HttpIptvDataSourceTest {
     assertTrue(transport.mediaFactory(null,false,"http://cdn.example/user/password/244").createDataSource() instanceof HttpIptvDataSource);
   }
   @Test public void iptvPlaysStraightFromTheProviderAsInVlc() throws Exception {
-    HttpIptvDataSource.RELAYED.clear();
-    Fake upstream=new Fake();upstream.ts=true;HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
+    Fake upstream=new Fake();upstream.ts=true;HttpIptvDataSource source=new HttpIptvDataSource(upstream);
     String original="http://31.43.191.125:8080/user/password/244";
     assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original),5000,C.LENGTH_UNSET)));
     // A whole picture (keyframe and packet) once the next keyframe arrives.
@@ -57,31 +55,26 @@ public class HttpIptvDataSourceTest {
     assertEquals(188,source.read(bytes,0,188));
     assertEquals(2,upstream.requests.size());
     for(DataSpec request:upstream.requests){assertEquals(original,request.uri.toString());assertEquals(0,request.position);}
-    assertTrue(HttpIptvDataSource.RELAYED.isEmpty());
     source.close();
   }
-  @Test public void finiteHostingConnectionsRenewWithoutEndingLivePlayback() throws Exception {
-    HttpIptvDataSource.RELAYED.clear();
-    Fake upstream=new Fake();upstream.blocked=true;upstream.ts=true;HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
-    String original="http://31.43.191.125:8080/user/password/244";
-    assertEquals(C.LENGTH_UNSET,source.open(new DataSpec(Uri.parse(original))));
-    byte[] bytes=new byte[188];
-    for(int i=0;i<3;i++)assertEquals(188,source.read(bytes,0,188));
-    // The direct try failed (blocked), then the hosting, renewed once.
-    assertEquals(3,upstream.requests.size());assertEquals(2,upstream.closes);
-    assertEquals(original,upstream.requests.remove(0).uri.toString());
-    assertTrue(HttpIptvDataSource.RELAYED.contains("31.43.191.125:8080"));
-    assertEquals(original,source.getUri().toString());
-    for(DataSpec request:upstream.requests){assertEquals(HttpIptvDataSource.ENDPOINT,request.uri);assertEquals(0,request.position);assertEquals(C.LENGTH_UNSET,request.length);assertFalse(request.uri.toString().contains("password"));}
-    source.close();assertEquals(3,upstream.closes);
-    // The next connection to that provider goes straight to the hosting.
-    Fake next=new Fake();next.blocked=true;HttpIptvDataSource again=new HttpIptvDataSource(next,HttpIptvDataSource.ENDPOINT);
-    again.open(new DataSpec(Uri.parse(original)));assertEquals(1,next.requests.size());assertEquals(HttpIptvDataSource.ENDPOINT,next.requests.get(0).uri);
-    HttpIptvDataSource.RELAYED.clear();
+  @Test public void failuresNeverRedirectCredentialsToHostingAndNextOpenRetriesDirect() throws Exception {
+    Fake upstream = new Fake(); upstream.blocked = true;
+    HttpIptvDataSource source = new HttpIptvDataSource(upstream);
+    Uri original = Uri.parse("http://provider.example:8080/user/password/265");
+    try { source.open(new DataSpec(original)); fail("Failure should reach the player"); }
+    catch (java.io.IOException expected) {}
+    source.close(); upstream.blocked = false;
+    source.open(new DataSpec(original));
+    assertEquals(2, upstream.requests.size());
+    for (DataSpec request : upstream.requests) {
+      assertEquals(original, request.uri);
+      assertFalse(request.httpRequestHeaders.containsKey("X-Calamar-Source"));
+    }
+    source.close();
   }
   @Test public void tdtHttpsAndLocalHttpRemainDirectAndKeepTheirEndOfInput() throws Exception {
     for(String address:new String[]{"https://tdt.example/live.m3u8","http://127.0.0.1/local.ts"}){
-      Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream,HttpIptvDataSource.ENDPOINT);
+      Fake upstream=new Fake();HttpIptvDataSource source=new HttpIptvDataSource(upstream);
       assertEquals(188,source.open(new DataSpec(Uri.parse(address))));byte[] bytes=new byte[188];source.read(bytes,0,188);
       assertEquals(C.RESULT_END_OF_INPUT,source.read(bytes,0,188));assertEquals(address,upstream.requests.get(0).uri.toString());assertEquals(1,upstream.requests.size());source.close();
     }

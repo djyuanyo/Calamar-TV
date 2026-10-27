@@ -10,12 +10,7 @@ final class AppSources {
   private AppSources() {}
 
   static boolean webOnly(String address) {
-    try {
-      String host = new URI(address.trim()).getHost();
-      if (host == null) return false;
-      host = host.toLowerCase(Locale.ROOT);
-      return host.equals("zicotv.cc") || host.endsWith(".zicotv.cc");
-    } catch (Exception invalid) { return false; }
+    return false; // Public Zico sources are supported again; resolution stays on the device.
   }
 
   static ArrayList<String> forAndroid(List<String> sources) {
