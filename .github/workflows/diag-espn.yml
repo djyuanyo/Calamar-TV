@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 diag/cut.py
+      - run: node diag/poly.mjs
       - run: |
           git config user.name diag; git config user.email diag@example.com
           git add diag/*.json && git commit -m "dump data" && git push
