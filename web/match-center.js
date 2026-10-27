@@ -207,10 +207,31 @@ export function oddsCard(el, m) {
     el('span', { class: 'mc-odd-label' }, label), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${pct}%` })), el('b', {}, `${pct}%`));
   const volume = o.volume >= 1e6 ? `${(o.volume / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 })} M$` : o.volume >= 1e3 ? `${Math.round(o.volume / 1e3).toLocaleString('es-ES')} mil $` : `${Math.round(o.volume)} $`;
   return el('section', { class: 'mc-odds', 'aria-label': 'Pronóstico de Polymarket' },
-    el('h3', {}, '¿Quién ganará?'),
+    el('h3', {}, 'Pronóstico de Polymarket'),
     row(m.home.name, o.home, 'home'), row('Empate', o.draw, 'draw'), row(m.away.name, o.away, 'away'),
     el('p', { class: 'mc-odds-source' }, `Probabilidades del mercado de predicción Polymarket · ${volume} en juego · `,
       el('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver en Polymarket')));
+}
+
+/** The visitors' own 1X2 poll: buttons until kick-off, then (or once voted) what everyone picked. */
+export function votesCard(el, m) {
+  const v = m.votes;
+  if (!v) return null;
+  const t = v.tally;
+  const shown = t && t.total > 0 && (v.pick || !v.open);
+  if (!v.open && !shown) return null;
+  const options = [['1', m.home.name, 'home', 'home'], ['X', 'Empate', 'draw', 'draw'], ['2', m.away.name, 'away', 'away']];
+  const children = [el('h3', {}, v.open ? '¿Quién ganará? Vota' : 'Lo que votaron los usuarios')];
+  if (v.open) children.push(el('div', { class: 'mc-vote-buttons', role: 'group', 'aria-label': 'Tu voto' }, options.map(([pick, label, cls]) =>
+    el('button', { class: `mc-vote ${cls}`, type: 'button', id: `mc-vote-${pick}`, 'aria-pressed': String(v.pick === pick), disabled: v.busy ? '' : null,
+      onclick: () => v.choose(pick) }, el('b', {}, pick), el('span', {}, label)))));
+  if (shown) for (const [pick, label, cls, key] of options) children.push(el('div', { class: `mc-odd ${cls}${v.pick === pick ? ' mine' : ''}` },
+    el('span', { class: 'mc-odd-label' }, `${pick} · ${label}`), el('span', { class: 'mc-odd-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${t[key]}%` })), el('b', {}, `${t[key]}%`)));
+  const total = t?.total ? `${t.total.toLocaleString('es-ES')} ${t.total === 1 ? 'voto' : 'votos'}` : '';
+  children.push(el('p', { class: 'mc-odds-source' }, v.error ? v.error
+    : v.open ? (v.pick ? `Has votado ${v.pick}. ${total ? total + ' · ' : ''}Puedes cambiarlo hasta el inicio del partido.` : 'Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el inicio del partido.')
+    : `${total} · Votación cerrada al empezar el partido.`));
+  return el('section', { class: 'mc-odds mc-votes', 'aria-label': 'Votación de los usuarios' }, ...children);
 }
 
 export function renderMatchCenter(el, m, tab, choose) {
@@ -282,7 +303,7 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty('No hay enfrentamientos anteriores registrados.')];
   } else {
     // General: timeline, key figures, incidents, form and details.
-    const parts = [noLink, oddsCard(el, m)];
+    const parts = [noLink, votesCard(el, m), oddsCard(el, m)];
     const maxMinute = Math.max(90, ...m.events.map((e) => minuteOf(e.minute)), m.live ? minuteOf(m.clock) : 0);
     if (m.events.length || m.live || m.state === 'finished' || m.state === 'halftime') {
       const at = (minute) => `${Math.min(100, (minute / maxMinute) * 100).toFixed(2)}%`;

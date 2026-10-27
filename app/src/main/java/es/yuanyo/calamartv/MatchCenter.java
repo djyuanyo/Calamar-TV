@@ -688,6 +688,9 @@ final class MatchCenter {
   }
 
   void general(Model m) {
+    loadVotes(m, false);
+    View poll = votesCard(m);
+    if (poll != null) add(poll);
     loadOdds(m);
     if (odds != null && oddsKey.equals(extrasKey(m)) && !m.state.equals("finished")) add(oddsCard(m, odds));
     if (!m.events.isEmpty() || m.live || m.state.equals("finished") || m.state.equals("halftime")) {
@@ -931,6 +934,145 @@ final class MatchCenter {
     }).start();
   }
 
+  // The visitors' 1X2 poll (Firestore), on the phone only: the totals are asked every 2 minutes with the
+  // General tab open; one vote per install and match, which can be changed until kick-off.
+  String pollKey = ""; long pollAt; long[] pollTotals; boolean pollBusy, pollSending; String pollError = "";
+
+  android.content.SharedPreferences votePrefs() { return context.getSharedPreferences("votes", Context.MODE_PRIVATE); }
+
+  String voter() {
+    android.content.SharedPreferences prefs = votePrefs();
+    String id = prefs.getString("voter", "");
+    if (!id.matches("[A-Za-z0-9]{24}")) { id = Votes.newVoter(new java.security.SecureRandom()); prefs.edit().putString("voter", id).apply(); }
+    return id;
+  }
+
+  com.google.firebase.firestore.FirebaseFirestore votesDb() {
+    return com.google.firebase.firestore.FirebaseFirestore.getInstance(SharedCatalog.app(context));
+  }
+
+  void loadVotes(Model m, boolean force) {
+    if (television()) return;
+    final String key = Votes.matchKey(m.home.name, m.away.name, m.date);
+    if (key.isEmpty()) return;
+    if (!key.equals(pollKey)) { pollKey = key; pollAt = 0; pollTotals = null; pollError = ""; }
+    if (pollBusy || (!force && System.currentTimeMillis() - pollAt < Votes.REFRESH_MS)) return;
+    pollAt = System.currentTimeMillis(); pollBusy = true;
+    com.google.firebase.firestore.AggregateField h = com.google.firebase.firestore.AggregateField.sum("h"),
+        d = com.google.firebase.firestore.AggregateField.sum("d"), a = com.google.firebase.firestore.AggregateField.sum("a");
+    try {
+      votesDb().collection(Votes.PATH).whereEqualTo("match", key).aggregate(h, d, a).get(com.google.firebase.firestore.AggregateSource.SERVER)
+          .addOnCompleteListener(task -> {
+            pollBusy = false;
+            if (!key.equals(pollKey) || !task.isSuccessful() || task.getResult() == null) return;
+            long[] totals = {number(task.getResult().get(h)), number(task.getResult().get(d)), number(task.getResult().get(a))};
+            boolean changed = pollTotals == null || !Arrays.equals(pollTotals, totals);
+            pollTotals = totals;
+            if (changed && model != null && tab.equals("general")) show(model);
+          });
+    } catch (RuntimeException failed) { pollBusy = false; }
+  }
+
+  static long number(Object value) { return value instanceof Number ? Math.round(((Number) value).doubleValue()) : 0; }
+
+  void vote(final String pick) {
+    final Model m = model;
+    final String key = pollKey;
+    if (m == null || key.isEmpty() || pollSending || !Votes.open(m.state, SportsCatalog.instant(MatchScores.iso(m.date)), System.currentTimeMillis())) return;
+    pollSending = true; pollError = "";
+    show(m);
+    Map<String, Object> data = new HashMap<>();
+    data.put("match", key);
+    data.put("h", pick.equals("1") ? 1 : 0); data.put("d", pick.equals("X") ? 1 : 0); data.put("a", pick.equals("2") ? 1 : 0);
+    data.put("updatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
+    try {
+      votesDb().collection(Votes.PATH).document(Votes.id(voter(), key)).set(data).addOnCompleteListener(task -> {
+        pollSending = false;
+        if (task.isSuccessful()) { votePrefs().edit().putString("pick:" + key, pick).apply(); loadVotes(m, true); }
+        else pollError = "No se ha podido guardar el voto. Inténtalo de nuevo.";
+        if (model != null) show(model);
+      });
+    } catch (RuntimeException failed) { pollSending = false; pollError = "No se ha podido guardar el voto. Inténtalo de nuevo."; show(m); }
+  }
+
+  View votesCard(Model m) {
+    if (television()) return null;
+    String key = Votes.matchKey(m.home.name, m.away.name, m.date);
+    if (key.isEmpty() || !key.equals(pollKey)) return null;
+    boolean open = Votes.open(m.state, SportsCatalog.instant(MatchScores.iso(m.date)), System.currentTimeMillis());
+    String pick = votePrefs().getString("pick:" + key, "");
+    long[] t = pollTotals == null ? null : Votes.tally(pollTotals[0], pollTotals[1], pollTotals[2]);
+    boolean shown = t != null && t[3] > 0 && (!pick.isEmpty() || !open);
+    if (!open && !shown) return null;
+    LinearLayout box = card();
+    box.setContentDescription("Votación de los usuarios");
+    TextView title = text(open ? "¿Quién ganará? Vota" : "Lo que votaron los usuarios", 15, Ui.FG, true);
+    title.setPadding(0, 0, 0, dp(8));
+    box.addView(title);
+    String[] picks = {"1", "X", "2"}, labels = {m.home.name, "Empate", m.away.name};
+    int[] colors = {Ui.ACC, 0xff8a93a0, 0xff6fb7ff};
+    if (open) {
+      LinearLayout buttons = new LinearLayout(context);
+      for (int i = 0; i < 3; i++) {
+        final String p = picks[i];
+        boolean mine = p.equals(pick);
+        LinearLayout b = new LinearLayout(context);
+        b.setOrientation(LinearLayout.VERTICAL);
+        b.setGravity(Gravity.CENTER_HORIZONTAL);
+        b.setPadding(dp(6), dp(10), dp(6), dp(10));
+        b.setClickable(true); b.setFocusable(true);
+        b.setEnabled(!pollSending);
+        b.setAlpha(pollSending ? 0.6f : 1f);
+        b.setBackground(Ui.shape(context, mine ? 0x1fd6ff00 : SURFACE_2, 10, 1, mine ? Ui.ACC : LINE));
+        b.addView(text(p, 18, mine ? Ui.ACC : Ui.FG, true));
+        TextView name = text(labels[i], 12, Ui.MUTED, false);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        b.addView(name);
+        b.setContentDescription("Votar " + p + ", " + labels[i] + (mine ? ", tu voto" : ""));
+        b.setOnClickListener(v -> vote(p));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, -2, 1);
+        bp.setMargins(i == 0 ? 0 : dp(4), 0, i == 2 ? 0 : dp(4), 0);
+        buttons.addView(b, bp);
+      }
+      box.addView(buttons);
+    }
+    if (shown) {
+      for (int i = 0; i < 3; i++) {
+        LinearLayout row = new LinearLayout(context);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(i == 0 && open ? 10 : 4), 0, dp(4));
+        TextView label = text(picks[i] + " · " + labels[i], 13, Ui.FG, picks[i].equals(pick));
+        label.setSingleLine(true);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        row.addView(label, new LinearLayout.LayoutParams(0, -2, 1.1f));
+        LinearLayout track = new LinearLayout(context);
+        track.setBackground(Ui.shape(context, SURFACE_2, 4, 0, 0));
+        View fill = new View(context);
+        fill.setBackground(Ui.shape(context, colors[i], 4, 0, 0));
+        track.addView(fill, new LinearLayout.LayoutParams(0, -1, t[i]));
+        track.addView(new View(context), new LinearLayout.LayoutParams(0, -1, 100 - t[i]));
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(8), 1.6f);
+        tp.setMargins(dp(8), 0, dp(8), 0);
+        row.addView(track, tp);
+        TextView value = text(t[i] + "%", 13, Ui.FG, true);
+        value.setGravity(Gravity.END);
+        row.addView(value, new LinearLayout.LayoutParams(dp(42), -2));
+        row.setContentDescription(picks[i] + ", " + labels[i] + ", " + t[i] + " por ciento");
+        box.addView(row);
+      }
+    }
+    String total = t != null && t[3] > 0 ? t[3] + (t[3] == 1 ? " voto" : " votos") : "";
+    String note = !pollError.isEmpty() ? pollError
+        : open ? (pick.isEmpty() ? "Elige 1, X o 2 para ver lo que opinan los demás. Puedes cambiarlo hasta el inicio del partido."
+            : "Has votado " + pick + ". " + (total.isEmpty() ? "" : total + " · ") + "Puedes cambiarlo hasta el inicio del partido.")
+        : total + " · Votación cerrada al empezar el partido.";
+    TextView source = text(note, 11, Ui.MUTED, false);
+    source.setPadding(0, dp(8), 0, 0);
+    box.addView(source);
+    return box;
+  }
+
   static String volume(double v) {
     if (v >= 1e6) return String.format(Locale.forLanguageTag("es-ES"), "%.1f M$", v / 1e6).replace(",0 ", " ");
     if (v >= 1e3) return Math.round(v / 1e3) + " mil $";
@@ -940,7 +1082,7 @@ final class MatchCenter {
   View oddsCard(Model m, Polymarket.Odds o) {
     LinearLayout box = card();
     box.setContentDescription("Pronóstico de Polymarket");
-    TextView title = text("¿Quién ganará?", 15, Ui.FG, true);
+    TextView title = text("Pronóstico de Polymarket", 15, Ui.FG, true);
     title.setPadding(0, 0, 0, dp(6));
     box.addView(title);
     String[] labels = {m.home.name, "Empate", m.away.name};

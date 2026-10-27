@@ -3,9 +3,10 @@ import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
+import { VOTES_PATH, voteData, voteId } from './votes.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -116,6 +117,14 @@ export async function publishLibraryParts({ index, parts }) {
   for (const [section, count] of Object.entries(before?.sections || {})) {
     for (let n = index.sections[section] ?? 0; n < count; n++) await deleteDoc(doc(db, 'calamarLibrary', `${section}-${n}`)).catch(() => {});
   }
+}
+
+// ---- The visitors' 1X2 poll ----------------------------------------------------------------------
+export const castVote = (voter, match, pick) => setDoc(doc(db, VOTES_PATH, voteId(voter, match)), { ...voteData(match, pick), updatedAt: serverTimestamp() });
+/** Votes of a match in one aggregation (one read per 1000 votes): { h, d, a }. */
+export async function matchVotes(match) {
+  const snapshot = await getAggregateFromServer(query(collection(db, VOTES_PATH), where('match', '==', match)), { h: sum('h'), d: sum('d'), a: sum('a') });
+  return snapshot.data();
 }
 
 // ---- Audience ---------------------------------------------------------------------------------
