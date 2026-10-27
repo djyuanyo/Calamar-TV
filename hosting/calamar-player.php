@@ -273,6 +273,31 @@ function playerMain() {
         playerStream($url, $page);
     }
 
+    // Resolve catalog event sources from the hosting when the device's operator resets Zico API requests.
+    if (isset($_GET['event'])) {
+        $event = trim((string)$_GET['event']);
+        $parts = parse_url($event);
+        $host = strtolower($parts['host'] ?? '');
+        if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -strlen('.zicotv.cc')) !== '.zicotv.cc')
+            || isset($parts['user']) || isset($parts['port']) || isset($parts['query']) || isset($parts['fragment'])
+            || !preg_match('#^/events/([0-9]+)/?$#', $parts['path'] ?? '', $match)
+            || !isset(playerCatalogStreams()[$event])) playerAnswer(array('error' => 'Evento fuera del catálogo.'), 403);
+        list($status, $body) = playerGet('https://' . $host . '/api/v1/events/' . $match[1], '');
+        if ($status !== 200 || !is_string($body)) playerAnswer(array('error' => 'La API del evento no responde.'), 502);
+        $data = json_decode($body, true);
+        $sources = array();
+        foreach (($data['data']['sources'] ?? array()) as $source) {
+            if (!is_array($source) || !empty($source['locked']) || !empty($source['is_premium'])) continue;
+            $url = $source['player_url'] ?? $source['url'] ?? '';
+            $target = parse_url($url);
+            $sourceHost = strtolower($target['host'] ?? '');
+            if (($target['scheme'] ?? '') !== 'https' || ($sourceHost !== 'zicotv.cc' && substr($sourceHost, -strlen('.zicotv.cc')) !== '.zicotv.cc')
+                || isset($target['user']) || isset($target['port']) || !preg_match('#^/api/player/[0-9]+/?$#', $target['path'] ?? '')) continue;
+            $sources[] = array('name' => (string)($source['name'] ?? 'Fuente del evento'), 'player_url' => $url);
+        }
+        playerAnswer(array('data' => array('sources' => $sources)));
+    }
+
     $page = trim((string)($_GET['page'] ?? ''));
     if (!preg_match('#^https://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
     // Only channels of the catalog: the hosting is not a relay for any page on the internet.

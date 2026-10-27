@@ -576,8 +576,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (eventApi != null) {
-              PlayerDocument.Result event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                  NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              PlayerDocument.Result event;
+              try {
+                event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              } catch (java.io.IOException blocked) {
+                handler.post(() -> { if (active && request == generation)
+                    status.setText("La red cortó la consulta. Buscando fuentes por tu hosting…"); });
+                event = PlayerDocument.fetch(Library.eventRelay(requestedPage),
+                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+              }
               List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {

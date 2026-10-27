@@ -476,6 +476,14 @@ final class Library {
     }
   }
 
+  static String eventRelay(String event) {
+    try {
+      return PLAYER_ENDPOINT + "?event=" + java.net.URLEncoder.encode(event.trim(), "UTF-8").replace("+", "%20");
+    } catch (java.io.UnsupportedEncodingException impossible) {
+      throw new IllegalStateException(impossible);
+    }
+  }
+
   /**
    * {intro start, intro end, credits length, credits start, credits typed} in seconds for an episode of that
    * season: the season's own times, else the series' (start -1 without an intro, credits start -1 until
