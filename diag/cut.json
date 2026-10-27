@@ -1,0 +1,14 @@
+{
+ "api_browser_ua": {
+  "status": 200,
+  "secs": 0.54,
+  "cors": null,
+  "body": "{\"server_time\":\"2026-10-27 00:16:48\",\"requests_available\":99,\"status\":400,\"msg\":\"Invalid key\"}"
+ },
+ "hosting_relay_fake_key": {
+  "status": 200,
+  "secs": 0.94,
+  "cors": "https://djyuanyo.github.io",
+  "body": "{\"requests_available\":99,\"status\":400,\"server_time\":\"2026-10-27 00:16:49\",\"msg\":\"Invalid key\"}"
+ }
+}
