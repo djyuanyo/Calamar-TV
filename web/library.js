@@ -667,42 +667,104 @@ export function horrorBanner(el, title, entries, { href = '#', onclick = null } 
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
 
-/** Detail page: backdrop, poster, synopsis, genres, cast, rating; seasons and episodes for series. */
+/**
+ * «Similares»: other titles of the same section that share genres with this one, the closest first
+ * (then the best rated); without any in common, the best rated of the section.
+ */
+export function similarTitles(library, section, item, size = 12) {
+  const genres = new Set(item.tmdb?.genres || []);
+  const others = (library?.sections?.[section.key] || []).filter((other) => other.id !== item.id);
+  const scored = others.map((other) => [other, (other.tmdb?.genres || []).filter((g) => genres.has(g)).length]);
+  const close = scored.filter(([, n]) => n > 0);
+  return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
+}
+
+/** The episode to play from a series' page: the one left half watched most recently, else the first. */
+export function resumeEpisode(item, saved = () => null) {
+  const episodes = [...(item.episodes || [])].sort((a, b) => a.season - b.season || a.episode - b.episode);
+  const started = episodes.map((e) => [e, saved(e.id)]).filter(([, s]) => s).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
+  return started ? started[0] : episodes[0] || null;
+}
+
+/**
+ * A title's page, as on Netflix: the backdrop, the platform, the title and its facts, a big «Reproducir»
+ * button, the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», and the tabs «Episodios»
+ * (series: the season drop-down and its episodes), «Tráileres y más» (the trailer in Spanish) and «Similares».
+ */
 export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null) {
   const info = item.tmdb || {};
-  const facts = [itemYear(item), info.runtime ? `${info.runtime} min` : '', info.rating ? `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}` : ''].filter(Boolean).join(' · ');
-  const head = el('section', { class: 'library-hero', style: info.backdrop ? `--backdrop:url("${info.backdrop.replace(/"/g, '')}")` : null },
-    poster(el, item, 'library-poster'),
-    el('div', { class: 'library-info' },
-      el('a', { class: 'library-back', href: `#/${section.page}` }, `‹ ${section.label}`),
+  const series = item.kind === 'tv';
+  const seasons = series ? [...new Set(item.episodes.map((e) => e.season))].sort((a, b) => a - b) : [];
+  const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
+    info.rating ? `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}` : ''].filter(Boolean).join(' · ');
+  const brand = (info.providers || [])[0];
+  // «Reproducir»: the film, or the episode of the series left half watched most recently (else the first).
+  let action;
+  if (series) {
+    const next = resumeEpisode(item, saved);
+    const left = next && saved(next.id);
+    action = next ? el('div', { class: 'library-actions' },
+      el('button', { class: 'btn lg title-play', type: 'button', onclick: () => play(item, next, false) },
+        left ? `▶ Continuar T${next.season}:E${next.episode} · ${clock(left.position)}` : `▶ Reproducir T${next.season}:E${next.episode}`), bar(el, left)) : null;
+  } else action = playButtons(el, saved(item.id), (restart) => play(item, null, restart));
+  // «Protagonizada por: a, b, c… más»: «más» shows everyone.
+  const cast = (info.cast || []).map((c) => c.name).filter(Boolean);
+  const starring = cast.length ? el('p', { class: 'title-credit cast-list' }, el('b', {}, 'Protagonizada por: '), cast.slice(0, 3).join(', ')) : null;
+  if (starring && cast.length > 3) {
+    const more = el('button', { class: 'link-button', type: 'button', onclick: () => { starring.replaceChildren(el('b', {}, 'Protagonizada por: '), cast.join(', ')); } }, 'más');
+    starring.append('… ', more);
+  }
+  const creators = (info.creators || []).filter(Boolean);
+  const share = el('button', { class: 'title-action', type: 'button', onclick: async () => {
+    const url = new URL(itemPath(section, item), location.href).href;
+    try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.lastChild.textContent = 'Enlace copiado'; } } catch {}
+  } }, el('span', { 'aria-hidden': 'true' }, '⤴'), el('span', {}, 'Compartir'));
+  const head = el('section', { class: 'title-page' },
+    el('div', { class: 'title-backdrop' }, info.backdrop ? el('img', { src: info.backdrop, alt: '', referrerpolicy: 'no-referrer' }) : poster(el, item, 'library-poster'),
+      el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹')),
+    el('div', { class: 'title-body' },
+      brand ? el('p', { class: 'title-brand' }, brand) : null,
       el('h1', {}, itemTitle(item)),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
-      info.genres?.length ? el('div', { class: 'library-genres' }, info.genres.map((g) => el('span', { class: 'chip' }, g))) : null,
+      action, !series ? soundNote(el, item.file) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
-      item.kind === 'movie' ? playButtons(el, saved(item.id), (restart) => play(item, null, restart)) : null,
-      item.kind === 'movie' ? soundNote(el, item.file) : null));
-  const nodes = [head];
-  if (item.kind === 'tv') {
-    const seasons = [...new Set(item.episodes.map((e) => e.season))];
-    let chosen = seasons.includes(initialSeason) ? initialSeason : seasons[0];
-    const chips = el('div', { class: 'chips', role: 'group', 'aria-label': 'Temporadas' });
+      starring,
+      creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
+      info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
+      el('div', { class: 'title-actions' }, share)));
+  // The tabs.
+  const panel = el('div', { class: 'title-panel' });
+  const tabs = [];
+  if (series) tabs.push(['episodes', 'Episodios', () => {
+    let chosen = seasons.includes(initialSeason) ? initialSeason : (resumeEpisode(item, saved)?.season ?? seasons[0]);
+    const picker = el('select', { class: 'season-picker', 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: String(s) }, `Temporada ${s}`)));
+    picker.value = String(chosen);
     const list = el('div', { class: 'episode-list' });
-    const draw = () => {
-      chips.replaceChildren(...seasons.map((s) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(s === chosen), onclick: () => { chosen = s; draw(); } }, `Temporada ${s}`)));
-      list.replaceChildren(...item.episodes.filter((e) => e.season === chosen).map((e) => el('a', { class: 'episode', href: episodePath(section, item, e) },
-        el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)), bar(el, saved(e.id))),
-        el('span', { class: 'episode-text' }, el('b', {}, episodeTitle(e)), e.overview ? el('span', {}, e.overview) : null),
-        el('span', { class: 'episode-play', 'aria-hidden': 'true' }, '›'))));
-    };
+    const draw = () => list.replaceChildren(...item.episodes.filter((e) => e.season === chosen).sort((a, b) => a.episode - b.episode).map((e) => el('a', { class: 'episode', href: episodePath(section, item, e) },
+      el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
+        el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), bar(el, saved(e.id))),
+      el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), e.runtime ? el('small', {}, `${e.runtime} min`) : null),
+      e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null)));
+    picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
     draw();
-    nodes.push(el('div', { class: 'section-head' }, el('h2', {}, 'Capítulos'), el('span', {}, `${item.episodes.length}`)), chips, list);
-  }
-  if (info.cast?.length) {
-    nodes.push(el('div', { class: 'section-head' }, el('h2', {}, 'Reparto')),
-      el('ul', { class: 'cast-list' }, info.cast.map((c) => el('li', {}, el('b', {}, c.name), c.character ? el('span', {}, c.character) : null))));
-  }
-  nodes.push(attribution(el, library));
-  return nodes;
+    return [el('label', { class: 'browse-select season-select' }, picker), list];
+  }]);
+  tabs.push(['trailers', 'Tráileres y más', () => (info.trailer
+    ? [el('div', { class: 'title-trailer' }, el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(info.trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
+      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' }))]
+    : [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')])]);
+  tabs.push(['similar', 'Similares', () => {
+    const found = similarTitles(library, section, item);
+    return found.length ? [el('div', { class: 'poster-grid similar-grid' }, found.map((other) => browseCard(el, section, other)))] : [el('p', { class: 'status' }, 'Todavía no hay títulos parecidos.')];
+  }]);
+  const bar_ = el('div', { class: 'title-tabs', role: 'tablist' });
+  const open = (key) => {
+    for (const b of bar_.children) b.setAttribute('aria-selected', String(b.dataset.tab === key));
+    panel.replaceChildren(...tabs.find(([k]) => k === key)[2]());
+  };
+  for (const [key, label] of tabs) bar_.append(el('button', { class: 'title-tab', type: 'button', role: 'tab', 'data-tab': key, onclick: () => open(key) }, label));
+  open(series ? 'episodes' : info.trailer ? 'trailers' : 'similar');
+  return [head, bar_, panel, attribution(el, library)];
 }
 
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
@@ -1053,7 +1115,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     const withFacts = Object.fromEntries(Object.entries(current.sections).map(([section, items]) => [section, items.map((item) => facts[item.id]
       ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}),
         ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}),
-        logos: facts[item.id].logos } } : item)]));
+        logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);

@@ -279,4 +279,24 @@ public class LibraryTest {
       if (row.key.equals("terror")) { assertEquals("horror", row.kind); return; }
     fail("No horror row");
   }
+
+  @Test public void titlePageDataMatchesTheWeb() throws Exception {
+    Library.Item a = new Library.Item(new JSONObject("{\"id\":\"a\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/a.mkv\",\"tmdb\":{\"title\":\"A\",\"genres\":[\"Drama\",\"Crimen\"],\"trailer\":\"dQw4w9WgXcQ\",\"creators\":[\"Said Chamie\",\"Claudia Sánchez\"]}}"));
+    Library.Item bad = new Library.Item(new JSONObject("{\"id\":\"x\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/x.mkv\",\"tmdb\":{\"title\":\"X\",\"trailer\":\"<script>\"}}"));
+    assertEquals("dQw4w9WgXcQ", a.trailer);
+    assertEquals("", bad.trailer);
+    assertEquals(Arrays.asList("Said Chamie", "Claudia Sánchez"), a.creators);
+    Library.Data data = new Library.Data(new JSONObject("{\"sections\":{\"movies\":["
+        + "{\"id\":\"a\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/a.mkv\",\"tmdb\":{\"title\":\"A\",\"genres\":[\"Drama\",\"Crimen\"]}},"
+        + "{\"id\":\"b\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/b.mkv\",\"tmdb\":{\"title\":\"B\",\"genres\":[\"Drama\",\"Crimen\"],\"rating\":5}},"
+        + "{\"id\":\"c\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/c.mkv\",\"tmdb\":{\"title\":\"C\",\"genres\":[\"Drama\"],\"rating\":9}},"
+        + "{\"id\":\"d\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/d.mkv\",\"tmdb\":{\"title\":\"D\",\"genres\":[\"Western\"]}}]}}"));
+    List<String> similar = new ArrayList<>();
+    for (Library.Item item : Library.similar(data, "movies", data.items("movies").get(0), 12)) similar.add(item.id);
+    assertEquals(Arrays.asList("b", "c"), similar);
+    Library.Item paco = new Library.Data(new JSONObject(JSON)).items("series").get(0);
+    assertEquals("e3", Library.resumeEpisode(paco, new JSONObject()).id);
+    assertEquals("e2", Library.resumeEpisode(paco, new JSONObject("{\"e1\":{\"at\":5},\"e2\":{\"at\":9}}")).id);
+    assertEquals("documentales", Library.page("documentaries"));
+  }
 }

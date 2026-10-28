@@ -567,7 +567,13 @@ try {
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
-  await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
+  // A series' page as on Netflix: «Reproducir» the first episode, the tabs, and the season drop-down.
+  assert.equal(await page.getByLabel('Temporada', { exact: true }).inputValue(), '10');
+  await page.getByRole('button', { name: '▶ Reproducir T10:E1', exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'Tráileres y más' }).click();
+  await page.getByText('Este título no tiene tráiler en español.').waitFor();
+  await page.getByRole('tab', { name: 'Similares' }).click();
+  await page.getByRole('tab', { name: 'Episodios' }).click();
   // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
   assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');
   await page.locator('.episode', { hasText: 'Vuelta a empezar' }).click();

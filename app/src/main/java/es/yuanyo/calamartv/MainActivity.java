@@ -1617,11 +1617,15 @@ public class MainActivity extends Activity {
     return card;
   }
 
-  /** The title's page: backdrop, facts, synopsis, Ver (films) or seasons and episodes, and cast. */
+  /**
+   * A title's page, as on Netflix: the backdrop, the platform, the title and its facts, a big white
+   * «Reproducir», the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», «Compartir», and the
+   * tabs «Episodios» (series), «Tráileres y más» (the trailer in Spanish) and «Similares».
+   */
   void libraryDetail(final String section, final Library.Item item) {
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
-    scroll.setBackgroundColor(Ui.BG);
+    scroll.setBackgroundColor(0xff000000);
     final LinearLayout page = new LinearLayout(this);
     page.setOrientation(LinearLayout.VERTICAL);
     page.setPadding(0, 0, 0, dp(28));
@@ -1629,77 +1633,139 @@ public class MainActivity extends Activity {
 
     FrameLayout hero = new FrameLayout(this);
     hero.setBackground(Ui.heroBackground(this, Palette.hue(item.title)));
-    if (!item.backdrop.isEmpty()) {
+    String picture = item.backdrop.isEmpty() ? item.poster : item.backdrop;
+    if (!picture.isEmpty()) {
       ImageView backdrop = new ImageView(this);
       backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
       hero.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
-      image(backdrop, item.backdrop);
+      image(backdrop, picture);
     }
     View scrim = new View(this);
-    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff0b0d10, 0x990b0d10, 0x220b0d10}));
+    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
     hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
-    Button back = Ui.pill(this, "‹ Volver", Ui.Kind.SURFACE, true);
+    Button back = Ui.pill(this, "‹", Ui.Kind.SURFACE, true);
+    back.setContentDescription("Volver");
     back.setOnClickListener(v -> dialog.dismiss());
-    FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, dp(44), Gravity.TOP | Gravity.START);
+    FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.START);
     bp.setMargins(dp(gutter()), dp(12), 0, 0);
     hero.addView(back, bp);
-    LinearLayout head = new LinearLayout(this);
-    head.setOrientation(LinearLayout.VERTICAL);
-    head.setGravity(Gravity.BOTTOM);
-    head.setPadding(dp(gutter() + 6), 0, dp(gutter() + 6), dp(14));
-    TextView title = text(item.title, wide() ? 34 : 26);
-    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    title.setPadding(0, 0, 0, dp(4));
-    head.addView(title);
-    String facts = item.facts();
-    if (!facts.isEmpty()) head.addView(noPad(label(facts, 14, 0xffd6dbe2)));
-    if (!item.genres.isEmpty()) head.addView(noPad(label(String.join(" · ", item.genres), 13, Ui.ACC)));
-    hero.addView(head, new FrameLayout.LayoutParams(-1, -1));
-    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 260)));
+    int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.min(wide() ? 420 : 300, screen * 9 / 16))));
 
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(LinearLayout.VERTICAL);
-    body.setPadding(dp(gutter()), 0, dp(gutter()), 0);
+    body.setPadding(dp(gutter() + 4), dp(4), dp(gutter() + 4), 0);
     page.addView(body);
-    if (!item.series) playButtons(body, item.entry(section, null));
-    if (!item.overview.isEmpty()) body.addView(label(item.overview, 15, 0xffd6dbe2));
-
+    if (!item.providers.isEmpty()) {
+      TextView brand = label(item.providers.get(0).toUpperCase(new Locale("es", "ES")), 18, 0xffe50914);
+      brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      brand.setLetterSpacing(0.04f);
+      body.addView(noPad(brand));
+    }
+    TextView title = text(item.title, wide() ? 36 : 30);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setPadding(0, 0, 0, dp(4));
+    body.addView(title);
+    String facts = item.facts();
+    if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
+    final JSONObject progress = Library.Progress.load(this);
     if (item.series) {
-      final Map<Integer, List<Library.Episode>> seasons = item.seasons();
-      final LinearLayout chips = row();
-      final LinearLayout episodes = new LinearLayout(this);
-      episodes.setOrientation(LinearLayout.VERTICAL);
-      final int[] current = {seasons.keySet().iterator().next()};
-      final Runnable[] draw = new Runnable[1];
-      draw[0] = () -> {
-        chips.removeAllViews();
-        for (final int number : seasons.keySet()) {
-          Button chip = Ui.pill(this, "Temporada " + number, number == current[0] ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
-          chip.setOnClickListener(v -> { current[0] = number; draw[0].run(); });
-          addButton(chips, chip);
-        }
-        episodes.removeAllViews();
-        for (final Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(section, item, e));
-      };
-      draw[0].run();
-      HorizontalScrollView chipScroll = new HorizontalScrollView(this);
-      chipScroll.setHorizontalScrollBarEnabled(false);
-      chipScroll.addView(chips);
-      body.addView(chipScroll);
-      body.addView(episodes);
-      if (episodes.getChildCount() > 0) episodes.getChildAt(0).requestFocus();
+      final Library.Episode next = Library.resumeEpisode(item, progress);
+      if (next != null) {
+        JSONObject saved = progress.optJSONObject(next.id);
+        String text = (saved != null ? "Continuar T" : "Reproducir T") + next.season + ":E" + next.episode + (saved != null ? " · " + Library.clock(saved.optLong("position")) : "");
+        bigPlay(body, text, () -> playEntry(item.entry(section, next), false)).requestFocus();
+        if (saved != null) body.addView(progressBar(saved), progressBarParams(dp(4)));
+      }
+    } else {
+      final JSONObject entry = item.entry(section, null);
+      JSONObject saved = progress.optJSONObject(entry.optString("key"));
+      bigPlay(body, saved == null ? "Reproducir" : "Continuar · " + Library.clock(saved.optLong("position")), () -> playEntry(entry, false)).requestFocus();
+      if (saved != null) {
+        Button restart = Ui.pill(this, "↺ Desde el principio", Ui.Kind.SURFACE, false);
+        restart.setOnClickListener(v -> playEntry(entry, true));
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2);
+        rp.setMargins(0, dp(8), 0, 0);
+        body.addView(restart, rp);
+        body.addView(progressBar(saved), progressBarParams(dp(4)));
+      }
     }
-
+    TextView overview = label(item.overview.isEmpty() ? "Sin sinopsis." : item.overview, 16, 0xffffffff);
+    overview.setPadding(0, dp(14), 0, dp(8));
+    overview.setLineSpacing(0, 1.15f);
+    body.addView(overview);
     if (!item.cast.isEmpty()) {
-      TextView castTitle = text("Reparto", 18);
-      castTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      castTitle.setPadding(dp(4), dp(18), 0, dp(4));
-      body.addView(castTitle);
-      StringBuilder cast = new StringBuilder();
-      for (String[] person : item.cast)
-        cast.append(cast.length() == 0 ? "" : "\n").append(person[0]).append(person[1].isEmpty() ? "" : " · " + person[1]);
-      body.addView(label(cast.toString(), 14, Ui.MUTED));
+      final List<String> names = new ArrayList<>();
+      for (String[] person : item.cast) names.add(person[0]);
+      final TextView starring = label("", 14, 0xffb3b8c0);
+      final boolean[] all = {names.size() <= 3};
+      final Runnable drawCast = () -> starring.setText(android.text.Html.fromHtml("<b>Protagonizada por:</b> "
+          + android.text.TextUtils.htmlEncode(String.join(", ", all[0] ? names : names.subList(0, 3))) + (all[0] ? "" : "… <b>más</b>"), android.text.Html.FROM_HTML_MODE_LEGACY));
+      drawCast.run();
+      if (!all[0]) { starring.setFocusable(true); starring.setOnClickListener(v -> { all[0] = true; drawCast.run(); }); }
+      body.addView(noPad(starring));
     }
+    if (!item.creators.isEmpty())
+      body.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
+    if (!item.genres.isEmpty()) body.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
+    Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
+    share.setOnClickListener(v -> {
+      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+          .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/#/" + Library.page(section) + "/" + Uri.encode(item.id));
+      startActivity(Intent.createChooser(send, "Compartir"));
+    });
+    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
+    sp.setMargins(0, dp(12), 0, dp(6));
+    body.addView(share, sp);
+
+    // The tabs.
+    final LinearLayout tabs = row();
+    final LinearLayout panel = new LinearLayout(this);
+    panel.setOrientation(LinearLayout.VERTICAL);
+    final List<String> tabNames = new ArrayList<>();
+    if (item.series) tabNames.add("Episodios");
+    tabNames.add("Tráileres y más");
+    tabNames.add("Similares");
+    final Runnable[] open = new Runnable[1];
+    final String[] chosen = {item.series ? "Episodios" : !item.trailer.isEmpty() ? "Tráileres y más" : "Similares"};
+    open[0] = () -> {
+      tabs.removeAllViews();
+      for (final String name : tabNames) {
+        // The open tab has a red bar on top, as on Netflix.
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setFocusable(true);
+        tab.setClickable(true);
+        tab.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 4, 0));
+        View bar = new View(this);
+        bar.setBackgroundColor(name.equals(chosen[0]) ? 0xffe50914 : 0x00000000);
+        tab.addView(bar, new LinearLayout.LayoutParams(-1, dp(4)));
+        TextView text = label(name, 16, name.equals(chosen[0]) ? 0xffffffff : 0xffb3b8c0);
+        text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        text.setPadding(dp(4), dp(12), dp(4), dp(10));
+        tab.addView(text);
+        tab.setContentDescription(name + (name.equals(chosen[0]) ? ", seleccionada" : ""));
+        tab.setOnClickListener(v -> { chosen[0] = name; open[0].run(); });
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
+        tp.setMargins(0, 0, dp(22), 0);
+        tabs.addView(tab, tp);
+      }
+      panel.removeAllViews();
+      if (chosen[0].equals("Episodios")) episodesTab(panel, section, item, progress);
+      else if (chosen[0].equals("Tráileres y más")) trailerTab(panel, item);
+      else similarTab(panel, section, item, dialog);
+    };
+    open[0].run();
+    View line = new View(this);
+    line.setBackgroundColor(0x33ffffff);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(1));
+    lp.setMargins(0, dp(16), 0, 0);
+    body.addView(line, lp);
+    HorizontalScrollView tabScroll = new HorizontalScrollView(this);
+    tabScroll.setHorizontalScrollBarEnabled(false);
+    tabScroll.addView(tabs);
+    body.addView(tabScroll);
+    body.addView(panel);
     if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
 
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
@@ -1708,14 +1774,115 @@ public class MainActivity extends Activity {
     dialog.getWindow().setLayout(-1, -1);
   }
 
+  TextView credit(String name, String value) {
+    TextView v = label("", 14, 0xffb3b8c0);
+    v.setText(android.text.Html.fromHtml("<b>" + android.text.TextUtils.htmlEncode(name) + "</b>" + android.text.TextUtils.htmlEncode(value), android.text.Html.FROM_HTML_MODE_LEGACY));
+    return v;
+  }
+
+  /** The big white «Reproducir» of a title's page. */
+  Button bigPlay(LinearLayout parent, String text, final Runnable action) {
+    Button play = new Button(this);
+    play.setText(text);
+    play.setAllCaps(false);
+    play.setTextSize(18);
+    play.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    play.setTextColor(0xff111111);
+    play.setBackground(Ui.focusFill(this, 0xffffffff, 0xffdddddd, Ui.ACC, 6, 0));
+    play.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, 0xff111111, dp(20)), null, null, null);
+    play.setCompoundDrawablePadding(dp(8));
+    play.setPadding(dp(16), dp(10), dp(16), dp(10));
+    play.setOnClickListener(v -> action.run());
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(56));
+    p.setMargins(0, dp(14), 0, 0);
+    parent.addView(play, p);
+    return play;
+  }
+
+  /** «Episodios»: «Temporada N ▾» and the episodes of that season. */
+  void episodesTab(final LinearLayout panel, final String section, final Library.Item item, JSONObject progress) {
+    final Map<Integer, List<Library.Episode>> seasons = item.seasons();
+    if (seasons.isEmpty()) return;
+    Library.Episode next = Library.resumeEpisode(item, progress);
+    final int[] current = {next != null && seasons.containsKey(next.season) ? next.season : seasons.keySet().iterator().next()};
+    final Button picker = Ui.pill(this, "", Ui.Kind.SURFACE, false);
+    final LinearLayout episodes = new LinearLayout(this);
+    episodes.setOrientation(LinearLayout.VERTICAL);
+    final Runnable draw = () -> {
+      picker.setText("Temporada " + current[0] + "  ▾");
+      episodes.removeAllViews();
+      for (Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(section, item, e));
+    };
+    picker.setOnClickListener(v -> {
+      final List<Integer> numbers = new ArrayList<>(seasons.keySet());
+      String[] labels = new String[numbers.size()];
+      for (int i = 0; i < labels.length; i++) labels[i] = "Temporada " + numbers.get(i);
+      new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { current[0] = numbers.get(which); draw.run(); }).show();
+    });
+    draw.run();
+    LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
+    pp.setMargins(0, dp(10), 0, dp(10));
+    panel.addView(picker, pp);
+    panel.addView(episodes);
+  }
+
+  /** «Tráileres y más»: the trailer in Spanish (its YouTube picture opens it in YouTube). */
+  void trailerTab(LinearLayout panel, final Library.Item item) {
+    if (item.trailer.isEmpty()) { panel.addView(label("Este título no tiene tráiler en español.", 15, MUTED)); return; }
+    FrameLayout card = new FrameLayout(this);
+    card.setFocusable(true);
+    card.setClickable(true);
+    card.setBackground(Ui.shape(this, 0xff111111, 10, 0, 0));
+    card.setForeground(Ui.focusOutline(this, 10));
+    card.setClipToOutline(true);
+    ImageView thumb = new ImageView(this);
+    thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+    card.addView(thumb, new FrameLayout.LayoutParams(-1, -1));
+    image(thumb, "https://img.youtube.com/vi/" + item.trailer + "/hqdefault.jpg");
+    ImageView play = new ImageView(this);
+    play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(26)));
+    play.setScaleType(ImageView.ScaleType.CENTER);
+    play.setBackground(Ui.shape(this, 0xaa000000, 999, 2, 0xffffffff));
+    card.addView(play, new FrameLayout.LayoutParams(dp(56), dp(56), Gravity.CENTER));
+    card.setContentDescription("Ver el tráiler de " + item.title);
+    card.setOnClickListener(v -> {
+      try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=" + item.trailer))); }
+      catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para abrir YouTube.", Toast.LENGTH_SHORT).show(); }
+    });
+    int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density) - 2 * (gutter() + 4);
+    int width = Math.min(screen, 640);
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), dp(width * 9 / 16));
+    p.setMargins(0, dp(10), 0, dp(6));
+    panel.addView(card, p);
+    TextView caption = label("Tráiler · " + item.title, 14, 0xffb3b8c0);
+    panel.addView(caption);
+  }
+
+  /** «Similares»: titles of the same section that share genres with this one. */
+  void similarTab(LinearLayout panel, final String section, Library.Item item, final Dialog dialog) {
+    List<Library.Item> found = library == null ? new ArrayList<Library.Item>() : Library.similar(library, section, item, 12);
+    if (found.isEmpty()) { panel.addView(label("Todavía no hay títulos parecidos.", 15, MUTED)); return; }
+    int columns = wide() ? 6 : 3;
+    int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density) - 2 * (gutter() + 4);
+    int width = screen / columns - 8;
+    LinearLayout r = null;
+    for (int i = 0; i < found.size(); i++) {
+      if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); panel.addView(r); }
+      r.addView(poster(found.get(i), width, true));
+    }
+  }
+
   View episodeRow(final String section, final Library.Item item, final Library.Episode e) {
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setFocusable(true);
+    box.setClickable(true);
+    box.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 10, 0));
+    box.setPadding(dp(2), dp(6), dp(2), dp(8));
     LinearLayout r = row();
-    r.setFocusable(true);
-    r.setClickable(true);
-    r.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 10, 0));
-    r.setPadding(dp(8), dp(8), dp(8), dp(8));
+    r.setDuplicateParentStateEnabled(true);
     FrameLayout still = new FrameLayout(this);
-    still.setBackground(Ui.artBackground(this, Palette.hue(item.title), 8));
+    still.setBackground(Ui.artBackground(this, Palette.hue(item.title), 6));
     still.setClipToOutline(true);
     TextView number = label(e.label(), 14, Ui.FG);
     number.setGravity(Gravity.CENTER);
@@ -1726,29 +1893,44 @@ public class MainActivity extends Activity {
       still.addView(image, new FrameLayout.LayoutParams(-1, -1));
       image(image, e.still);
     }
-    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 160 : 112), dp(wide() ? 90 : 63)));
+    ImageView play = new ImageView(this);
+    play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(16)));
+    play.setScaleType(ImageView.ScaleType.CENTER);
+    play.setBackground(Ui.shape(this, 0x77000000, 999, 2, 0xffffffff));
+    still.addView(play, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
+    JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
+    if (saved != null) {
+      FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM);
+      barSize.setMargins(dp(6), 0, dp(6), dp(5));
+      still.addView(progressBar(saved), barSize);
+    }
+    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 140), dp(wide() ? 112 : 79)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
-    TextView name = text(e.title(), 15);
+    texts.setGravity(Gravity.CENTER_VERTICAL);
+    TextView name = text(e.name.isEmpty() ? e.label() : e.episode + ". " + e.name, 16);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    name.setPadding(dp(12), 0, dp(4), 0);
+    name.setPadding(dp(14), 0, dp(4), 0);
     texts.addView(name);
-    JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
-    if (saved != null) texts.addView(progressBar(saved), progressBarParams(dp(12)));
-    if (!e.overview.isEmpty()) {
-      TextView about = label(e.overview, 12, Ui.MUTED);
-      about.setMaxLines(2);
-      about.setEllipsize(android.text.TextUtils.TruncateAt.END);
-      about.setPadding(dp(12), dp(2), dp(4), 0);
-      texts.addView(about);
+    if (e.runtime > 0) {
+      TextView minutes = label(e.runtime + " min", 14, 0xffb3b8c0);
+      minutes.setPadding(dp(14), dp(2), dp(4), 0);
+      texts.addView(minutes);
     }
-    r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-    r.setContentDescription(e.seasonLabel() + ", " + e.title());
-    r.setOnClickListener(v -> episodePage(section, item, e));
+    r.addView(texts, new LinearLayout.LayoutParams(0, -1, 1));
+    box.addView(r);
+    if (!e.overview.isEmpty()) {
+      TextView about = label(e.overview, 14, 0xffb3b8c0);
+      about.setPadding(0, dp(8), 0, 0);
+      about.setLineSpacing(0, 1.1f);
+      box.addView(about);
+    }
+    box.setContentDescription(e.seasonLabel() + ", " + e.title());
+    box.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-    p.setMargins(0, dp(4), 0, dp(4));
-    r.setLayoutParams(p);
-    return r;
+    p.setMargins(0, dp(6), 0, dp(6));
+    box.setLayoutParams(p);
+    return box;
   }
 
   /** Long names are shown whole, on as many lines as they need, with balanced line lengths. */

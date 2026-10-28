@@ -114,3 +114,18 @@ test('the platforms set in the admin page go first in their order, with their ow
   assert.throws(() => validateCatalog({ ...base, platforms: [{ name: 'X' }, { name: 'X' }] }), /plataforma/);
   assert.throws(() => validateCatalog({ ...base, platforms: [{ name: 'X', logo: 'javascript:alert(1)' }] }), /plataforma/);
 });
+
+import { similarTitles, resumeEpisode } from '../web/library.js';
+import { trailerOf, creatorsOf } from '../web/library-tmdb.js';
+test('the title page: trailer in Spanish, creators, similar titles and the episode to play', () => {
+  const v = (key, extra) => ({ key, site: 'YouTube', iso_639_1: 'es', type: 'Trailer', ...extra });
+  assert.equal(trailerOf({ videos: { results: [v('teaserTeaser', { type: 'Teaser', iso_3166_1: 'ES' }), v('latinoLatin', { iso_3166_1: 'MX' }), v('espanaSpain', { iso_3166_1: 'ES' })] } }), 'espanaSpain');
+  assert.equal(trailerOf({ videos: { results: [v('englishOnly', { iso_639_1: 'en' }), v('bad', {})] } }), '');
+  assert.deepEqual(creatorsOf({ created_by: [{ name: 'Said Chamie' }, { name: 'Claudia Sánchez' }] }), ['Said Chamie', 'Claudia Sánchez']);
+  assert.deepEqual(creatorsOf({ credits: { crew: [{ job: 'Director', name: 'James Cameron' }, { job: 'Writer', name: 'X' }] } }), ['James Cameron']);
+  const library = { sections: { series: [item('a', { genres: ['Drama', 'Crimen'] }), item('b', { genres: ['Drama', 'Crimen'], rating: 5 }), item('c', { genres: ['Drama'], rating: 9 }), item('d', { genres: ['Western'] })] } };
+  assert.deepEqual(similarTitles(library, LIBRARY_SECTIONS[1], library.sections.series[0]).map((i) => i.id), ['b', 'c']);
+  const show = { episodes: [{ id: 'e2', season: 1, episode: 2 }, { id: 'e1', season: 1, episode: 1 }, { id: 'f1', season: 2, episode: 1 }] };
+  assert.equal(resumeEpisode(show).id, 'e1');
+  assert.equal(resumeEpisode(show, (id) => ({ e2: { at: 5 }, f1: { at: 9 } })[id] || null).id, 'f1');
+});
