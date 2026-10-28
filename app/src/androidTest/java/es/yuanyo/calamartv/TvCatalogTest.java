@@ -15,7 +15,7 @@ public class TvCatalogTest {
     try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(CatalogFixtureActivity.class)) {
       scenario.onActivity(activity -> {
         activity.television = true;
-        activity.mode = "Canales";
+        activity.mode = "TV";
         activity.home();
       });
       SystemClock.sleep(1000);

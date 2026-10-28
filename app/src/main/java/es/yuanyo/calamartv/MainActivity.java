@@ -284,7 +284,7 @@ public class MainActivity extends Activity {
 
     LinearLayout nav = row();
     if (Library.section(mode) != null && !libraryShown(custom)) mode = "Inicio";
-    List<String> menu = new ArrayList<>(Arrays.asList("Inicio", "Canales"));
+    List<String> menu = new ArrayList<>(Arrays.asList("Inicio", "TV"));
     if (libraryShown(custom)) for (String[] section : Library.SECTIONS) menu.add(section[1]);
     menu.add("Favoritos");
     for (final String m : menu) {
@@ -354,7 +354,7 @@ public class MainActivity extends Activity {
   void renderFilters() {
     if (filters == null) return;
     filters.removeAllViews();
-    if (!mode.equals("Canales")) return;
+    if (!mode.equals("TV")) return;
     List<String> names = new ArrayList<>();
     names.add("Todos");
     names.addAll(Catalog.groups(channels, custom).keySet());
@@ -442,7 +442,7 @@ public class MainActivity extends Activity {
       list.addView(label("Pulsa Actualizar para volver a consultarlo.", 15, MUTED));
       return;
     }
-    if (mode.equals("Canales")) {
+    if (mode.equals("TV")) {
       grid();
     } else {
       List<Catalog.Channel> featured = new ArrayList<>(Catalog.highlights(channels, custom));
@@ -477,7 +477,7 @@ public class MainActivity extends Activity {
         if (!row.logo.isEmpty()) leagueLogo(row.logo);
         carousel(row.events, row.events.size());
       }
-      if (events.isEmpty()) list.addView(label("Todavía no hay eventos. Abre Canales para ver todos los canales.", 15, MUTED));
+      if (events.isEmpty()) list.addView(label("Todavía no hay eventos. Abre TV para ver todos los canales.", 15, MUTED));
     }
     TextView note =
         label(
