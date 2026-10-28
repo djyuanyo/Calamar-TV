@@ -139,6 +139,18 @@ test('the last aired episode comes from TMDB', () => {
   assert.equal(lastEpisodeOf({}), null);
 });
 
+import { anonmp4Embed, webPlayback } from '../web/catalog.js';
+import { validVideoLink } from '../web/library.js';
+test('AnonMP4 links play in its own embed page', () => {
+  assert.equal(anonmp4Embed('https://anonmp4.art/v/ESuKsItGgV4rMAE'), 'https://anonmp4.art/embed/ESuKsItGgV4rMAE');
+  assert.equal(anonmp4Embed('https://anonmp4.to/embed/NLEusIzEvLs3s3B'), 'https://anonmp4.to/embed/NLEusIzEvLs3s3B');
+  assert.equal(anonmp4Embed('http://anonmp4.art/v/ESuKsItGgV4rMAE'), null);
+  assert.equal(anonmp4Embed('https://anonmp4.art.evil.com/v/ESuKsItGgV4rMAE'), null);
+  assert.equal(anonmp4Embed('https://anonmp4.art/api-docs'), null);
+  assert.deepEqual(webPlayback('https://anonmp4.art/v/ESuKsItGgV4rMAE'), { ok: true, kind: 'frame', address: 'https://anonmp4.art/embed/ESuKsItGgV4rMAE' });
+  assert.equal(validVideoLink('https://anonmp4.art/v/ESuKsItGgV4rMAE'), true);
+});
+
 test('manual trailer overrides TMDB, accepts YouTube links and can be cleared', async () => {
   const { youtubeId, trailerId } = await import('../web/trailer.js');
   const id = 'abcdefghijk';

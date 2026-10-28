@@ -309,4 +309,11 @@ public class LibraryTest {
     assertEquals("e2", Library.resumeEpisode(paco, new JSONObject("{\"e1\":{\"at\":5},\"e2\":{\"at\":9}}")).id);
     assertEquals("documentales", Library.page("documentaries"));
   }
+
+  @Test public void anonmp4LinksOpenItsEmbedPage() {
+    assertEquals("https://anonmp4.art/embed/ESuKsItGgV4rMAE", Library.Media.anonmp4("https://anonmp4.art/v/ESuKsItGgV4rMAE"));
+    assertNull(Library.Media.anonmp4("http://anonmp4.art/v/ESuKsItGgV4rMAE"));
+    assertNull(Library.Media.anonmp4("https://anonmp4.art.evil.com/v/ESuKsItGgV4rMAE"));
+    assertTrue(Library.Media.allowed("https://anonmp4.art/v/ESuKsItGgV4rMAE"));
+  }
 }
