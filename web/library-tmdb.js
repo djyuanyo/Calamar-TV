@@ -48,7 +48,7 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers' }, key, fetcher);
   const info = { id: Number(id), kind, title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
-    released: d.release_date || d.first_air_date || '', providers: providersOf(d),
+    released: d.release_date || d.first_air_date || '', providers: providersOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
@@ -76,7 +76,14 @@ export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) 
 /** Popularity, release date and the platforms where it can be watched in Spain, in one request. */
 export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers' }, key, fetcher);
-  return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d) };
+  return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
+    countries: countriesOf(d), language: d.original_language || '' };
+}
+
+/** Where a title was made (ISO codes: «ES», «US»…), for the «Películas españolas» row. */
+export function countriesOf(details) {
+  const codes = [...(details?.production_countries || []).map((c) => c?.iso_3166_1), ...(details?.origin_country || [])];
+  return [...new Set(codes.filter((c) => typeof c === 'string' && /^[A-Z]{2}$/.test(c)))].slice(0, 6);
 }
 
 /** The streaming platforms of a title in Spain (subscription, free or with ads), by TMDB's watch providers. */

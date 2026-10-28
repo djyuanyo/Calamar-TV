@@ -195,4 +195,43 @@ public class LibraryTest {
     assertEquals(Arrays.asList(classic), Library.filter(all, "", 1998, "", "", "", now));
     assertEquals(Arrays.asList(oldAdded, fresh, release, classic), Library.filter(all, "", 0, "", "", "added", now));
   }
+
+  private static Library.Item titled(String id, String genres, String countries, String providers, String extra) throws Exception {
+    return new Library.Item(new JSONObject("{\"id\":\"" + id + "\",\"kind\":\"movie\",\"url\":\"https://example.com/a.mp4\"" + extra
+        + ",\"tmdb\":{\"id\":" + id.length() + ",\"title\":\"" + id + "\",\"genres\":[" + genres + "],\"countries\":[" + countries + "],\"providers\":[" + providers + "]}}"));
+  }
+
+  @Test public void sectionPageRowsMatchTheWeb() throws Exception {
+    long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
+    List<Library.Item> items = Arrays.asList(
+        titled("torrente", "\"Comedia\"", "\"ES\"", "\"Netflix\"", ",\"trend\":2,\"addedAt\":\"2026-10-01\""),
+        titled("weapons", "\"Terror\",\"Misterio\"", "\"US\"", "", ",\"trend\":1,\"addedAt\":\"2026-10-20\""),
+        titled("kraven", "\"Acción\",\"Ciencia ficción\"", "\"US\"", "\"Netflix\"", ""),
+        titled("ozark", "\"Western\"", "\"US\"", "\"Netflix\"", ""));
+    List<String> titles = new ArrayList<>();
+    Map<String, Library.Row> by = new HashMap<>();
+    for (Library.Row row : Library.browseRows("movies", items, new HashSet<String>(), "Yuanyo", now)) { titles.add(row.title); by.put(row.key, row); }
+    assertEquals(Arrays.asList("Películas españolas", "Recomendaciones de hoy para ti", "Las 2 películas más populares de la semana",
+        "Películas de terror", "Solo en Calamar TV", "Seguir viendo para Yuanyo", "Ciencia ficción y fantasía", "¿Quieres echarte unas risas?",
+        "Novedades en Calamar TV", "Acción a tope", "Misterios por resolver", "Películas de western"), titles);
+    assertEquals("weapons", by.get("top").items.get(0).id);
+    assertEquals("top", by.get("top").kind);
+    assertEquals("big", by.get("only").kind);
+    assertEquals(1, by.get("only").items.size());
+    assertEquals("weapons", by.get("new").items.get(0).id);
+  }
+
+  @Test public void dailyPicksAndHalloweenMatchTheWeb() throws Exception {
+    assertEquals(0.8042505686171353, Library.dailyLuck("2026-10-28", "mavatar"), 1e-12);
+    assertEquals(0.7184240000788122, Library.dailyLuck("2026-10-29", "sñ"), 1e-12);
+    assertFalse(Library.halloweenOn(SportsCatalog.instant("2026-09-30T12:00:00Z")));
+    assertTrue(Library.halloweenOn(SportsCatalog.instant("2026-10-01T08:00:00Z")));
+    assertTrue(Library.halloweenOn(SportsCatalog.instant("2026-11-02T22:30:00Z")));
+    assertFalse(Library.halloweenOn(SportsCatalog.instant("2026-11-02T23:30:00Z")));
+    Library.Data data = new Library.Data(new JSONObject("{\"sections\":{\"movies\":[{\"id\":\"m\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/M.mkv\",\"tmdb\":{\"title\":\"M\",\"genres\":[\"Terror\"]}},"
+        + "{\"id\":\"n\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/N.mkv\",\"tmdb\":{\"title\":\"N\",\"genres\":[\"Drama\"]}}]}}"));
+    List<Object[]> horror = Library.horror(data);
+    assertEquals(1, horror.size());
+    assertEquals("movies", horror.get(0)[0]);
+  }
 }

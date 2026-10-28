@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -137,6 +138,9 @@ final class Library {
     /** TMDB release date (YYYY-MM-DD or empty), the day it arrived in the library, and its platforms in Spain. */
     final String released, addedAt;
     final List<String> providers = new ArrayList<>();
+    /** Where it was made (TMDB country codes) and its original language, for «Películas españolas». */
+    final List<String> countries = new ArrayList<>();
+    final String language;
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
@@ -161,6 +165,9 @@ final class Library {
       if (g != null) for (int i = 0; i < g.length(); i++) genres.add(g.optString(i));
       released = t.optString("released");
       addedAt = o.optString("addedAt");
+      language = t.optString("language");
+      JSONArray cn = t.optJSONArray("countries");
+      if (cn != null) for (int i = 0; i < cn.length(); i++) if (!cn.optString(i).isEmpty()) countries.add(cn.optString(i));
       JSONArray pv = t.optJSONArray("providers");
       if (pv != null) for (int i = 0; i < pv.length(); i++) if (!pv.optString(i).isEmpty()) providers.add(pv.optString(i));
       JSONArray c = t.optJSONArray("cast");
@@ -249,6 +256,178 @@ final class Library {
       }
       return o;
     }
+  }
+
+  // ---- Netflix-style section page (browseRows in web/library.js builds the same rows) ----
+
+  /** One row of a section page; kind: "poster", "top" (big numbers), "big" (large posters) or "continue". */
+  static final class Row {
+    final String key, title, kind;
+    final List<Item> items;
+
+    Row(String key, String title, String kind, List<Item> items) {
+      this.key = key;
+      this.title = title;
+      this.kind = kind;
+      this.items = items.size() > ROW_LIMIT ? new ArrayList<>(items.subList(0, ROW_LIMIT)) : items;
+    }
+  }
+
+  static final int ROW_LIMIT = 40;
+  static final String[][] GENRE_ROWS = {
+    {"terror", "", "Terror"},
+    {"scifi", "Ciencia ficción y fantasía", "Ciencia ficción", "Fantasía", "Sci-Fi & Fantasy"},
+    {"comedy", "¿Quieres echarte unas risas?", "Comedia"},
+    {"thriller", "Thrillers que te mantendrán en vilo", "Suspense", "Thriller"},
+    {"action", "Acción a tope", "Acción", "Action & Adventure"},
+    {"drama", "Dramas que enganchan", "Drama"},
+    {"crime", "Crimen e investigación", "Crimen"},
+    {"family", "Para ver en familia", "Animación", "Familia", "Kids"},
+    {"adventure", "Grandes aventuras", "Aventura"},
+    {"romance", "Historias de amor", "Romance"},
+    {"mystery", "Misterios por resolver", "Misterio"},
+  };
+
+  /** «película», «serie», «documental». */
+  static String one(String section) {
+    return section.equals("series") ? "serie" : section.equals("documentaries") ? "documental" : "película";
+  }
+
+  static String label(String section) {
+    for (String[] s : SECTIONS) if (s[0].equals(section)) return s[1];
+    return "";
+  }
+
+  /** Made in Spain (TMDB production countries), or in Spanish when TMDB gives no country. */
+  static boolean spanish(Item item) {
+    return item.countries.isEmpty() ? "es".equals(item.language) : item.countries.contains("ES");
+  }
+
+  private static final java.util.Comparator<Item> INTEREST = (a, b) -> {
+    int ta = a.trend > 0 ? a.trend : 999, tb = b.trend > 0 ? b.trend : 999;
+    if (ta != tb) return Integer.compare(ta, tb);
+    int added = b.addedAt.compareTo(a.addedAt);
+    return added != 0 ? added : Double.compare(b.rating, a.rating);
+  };
+
+  static String madridDay(long now) {
+    java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
+    f.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+    return f.format(new java.util.Date(now));
+  }
+
+  /** A number from 0 to 1 that changes every day for each title (the same as dailyLuck on the web). */
+  static double dailyLuck(String day, String id) {
+    long h = 2166136261L;
+    String text = day + "|" + id;
+    for (int i = 0; i < text.length(); ) {
+      int cp = text.codePointAt(i);
+      i += Character.charCount(cp);
+      h = ((h ^ cp) * 16777619L) & 0xffffffffL;
+    }
+    return h / 4294967296.0;
+  }
+
+  /** «Recomendaciones de hoy para ti»: a new pick every day, first the genres this device watches, without those already started. */
+  static List<Item> todaysPicks(List<Item> items, java.util.Set<String> watched, String day, int size) {
+    java.util.Set<String> liked = new java.util.HashSet<>();
+    for (Item item : items) if (watched.contains(item.id)) liked.addAll(item.genres);
+    final Map<Item, Double> score = new java.util.HashMap<>();
+    List<Item> out = new ArrayList<>();
+    for (Item item : items) {
+      if (watched.contains(item.id)) continue;
+      int common = 0;
+      for (String g : item.genres) if (liked.contains(g)) common++;
+      score.put(item, common + dailyLuck(day, item.id));
+      out.add(item);
+    }
+    Collections.sort(out, (a, b) -> Double.compare(score.get(b), score.get(a)));
+    return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
+  }
+
+  private static String plain(String s) {
+    return java.text.Normalizer.normalize(s.toLowerCase(new Locale("es", "ES")), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+  }
+
+  /** The rows of a section page, in the web's order; empty rows are left out except «Seguir viendo» (filled by the page). */
+  static List<Row> browseRows(String section, List<Item> items, java.util.Set<String> watched, String name, long now) {
+    List<Row> rows = new ArrayList<>();
+    String label = label(section);
+    java.util.Set<String> used = new java.util.HashSet<>();
+    List<Item> spanish = new ArrayList<>();
+    for (Item item : items) if (spanish(item)) spanish.add(item);
+    Collections.sort(spanish, INTEREST);
+    add(rows, "spanish", section.equals("series") ? "Series españolas" : section.equals("documentaries") ? "Documentales españoles" : "Películas españolas", spanish, "poster");
+    add(rows, "today", "Recomendaciones de hoy para ti", todaysPicks(items, watched, madridDay(now), 15), "poster");
+    if (!section.equals("documentaries")) {
+      List<Item> top = new ArrayList<>();
+      for (Item item : items) if (item.trend > 0) top.add(item);
+      Collections.sort(top, (a, b) -> Integer.compare(a.trend, b.trend));
+      if (top.size() > 10) top = new ArrayList<>(top.subList(0, 10));
+      add(rows, "top", top.size() > 1 ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana" : "La " + one(section) + " más popular de la semana", top, "top");
+    }
+    genre(rows, GENRE_ROWS[0], label + " de terror", items, used);
+    List<Item> only = new ArrayList<>();
+    for (Item item : items) if (item.tmdbId > 0 && item.providers.isEmpty()) only.add(item);
+    Collections.sort(only, INTEREST);
+    add(rows, "only", "Solo en Calamar TV", only, "big");
+    rows.add(new Row("continue", name.isEmpty() ? "Seguir viendo" : "Seguir viendo para " + name, "continue", new ArrayList<>()));
+    genre(rows, GENRE_ROWS[1], GENRE_ROWS[1][1], items, used);
+    genre(rows, GENRE_ROWS[2], GENRE_ROWS[2][1], items, used);
+    List<Item> fresh = new ArrayList<>();
+    for (Item item : items) if (!item.addedAt.isEmpty()) fresh.add(item);
+    Collections.sort(fresh, (a, b) -> b.addedAt.compareTo(a.addedAt));
+    add(rows, "new", "Novedades en Calamar TV", fresh, "poster");
+    for (int i = 3; i < GENRE_ROWS.length; i++) genre(rows, GENRE_ROWS[i], GENRE_ROWS[i][1], items, used);
+    // The other genres follow as «Películas de …», the most common first; the section's own genre has no row.
+    final Map<String, Integer> counts = new LinkedHashMap<>();
+    for (Item item : items) for (String g : item.genres) if (!used.contains(g) && !plain(g).equals(plain(one(section)))) counts.put(g, counts.containsKey(g) ? counts.get(g) + 1 : 1);
+    final java.text.Collator collator = java.text.Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    List<String> rest = new ArrayList<>(counts.keySet());
+    Collections.sort(rest, (a, b) -> counts.get(a).equals(counts.get(b)) ? collator.compare(a, b) : Integer.compare(counts.get(b), counts.get(a)));
+    for (String g : rest) {
+      List<Item> list = new ArrayList<>();
+      for (Item item : items) if (item.genres.contains(g)) list.add(item);
+      Collections.sort(list, INTEREST);
+      add(rows, "genre:" + g, label + " de " + g.toLowerCase(new Locale("es", "ES")), list, "poster");
+    }
+    return rows;
+  }
+
+  private static void add(List<Row> rows, String key, String title, List<Item> items, String kind) {
+    if (!items.isEmpty()) rows.add(new Row(key, title, kind, items));
+  }
+
+  private static void genre(List<Row> rows, String[] row, String title, List<Item> items, java.util.Set<String> used) {
+    List<String> genres = Arrays.asList(row).subList(2, row.length);
+    used.addAll(genres);
+    List<Item> list = new ArrayList<>();
+    for (Item item : items) for (String g : item.genres) if (genres.contains(g)) { list.add(item); break; }
+    Collections.sort(list, INTEREST);
+    add(rows, row[0], title, list, "poster");
+  }
+
+  // ---- Especial Halloween: 1 October to 2 November (Madrid), every horror title, as on the web ----
+
+  static boolean halloweenOn(long now) {
+    String day = madridDay(now);
+    int month = Integer.parseInt(day.substring(5, 7)), date = Integer.parseInt(day.substring(8, 10));
+    return month == 10 || (month == 11 && date <= 2);
+  }
+
+  /** Every horror title (TMDB genre «Terror») with its section key: [section, item]. */
+  static List<Object[]> horror(Data data) {
+    List<Object[]> out = new ArrayList<>();
+    if (data == null) return out;
+    for (String[] section : SECTIONS) {
+      List<Item> list = new ArrayList<>();
+      for (Item item : data.items(section[0])) if (item.genres.contains("Terror")) list.add(item);
+      Collections.sort(list, INTEREST);
+      for (Item item : list) out.add(new Object[] {section[0], item});
+    }
+    final java.util.Comparator<Item> interest = INTEREST;
+    Collections.sort(out, (a, b) -> interest.compare((Item) a[1], (Item) b[1]));
+    return out;
   }
 
   static final class Data {
