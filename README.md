@@ -329,3 +329,10 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - **«Recién llegada»** (cinta roja, estilo Netflix): títulos de este año añadidos a la biblioteca en el último mes.
 - Cada título guarda el día en que se añadió (`addedAt`), desde que se publica con esta versión del administrador; los que ya estaban no salen como recién llegados. Las plataformas y la fecha de estreno se rellenan al buscar un título en TMDB y con «Actualizar el top y las plataformas con TMDB» (también automático una vez al día al abrir Pelis y series en el administrador).
 - «Leer carpetas de LuluStream» guarda como día de llegada (`addedAt`) el día en que LuluStream recibió cada vídeo (`uploaded`); una serie toma el de su primer capítulo. Así los títulos que ya estaban también salen como «Recién llegada» si son de este año y se subieron en el último mes, en cuanto se vuelven a leer las carpetas.
+
+## Imágenes PNG con transparencia (2.20.39)
+
+- Al subir una portada, logo o fondo desde el administrador (web y app), las imágenes con partes transparentes (PNG o WebP) se guardan como PNG (o WebP si el PNG pasa del tamaño permitido, reduciéndolas si hace falta). Antes se convertían siempre a JPEG, que no admite transparencia, y lo transparente salía negro. Las fotos sin transparencia siguen en JPEG.
+- En la web, los logos de las tarjetas tienen una sombra que sigue el dibujo en lugar de un cuadrado oscuro detrás.
+- Las vistas previas de los enlaces compartidos (WhatsApp) ponen el verde oscuro de las tarjetas detrás de las portadas transparentes, no negro.
+- Las imágenes ya subidas como JPEG conservan su fondo negro: hay que volver a subirlas.

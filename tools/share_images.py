@@ -81,7 +81,11 @@ class Images:
 
 
 def cover_crop(picture, size=SIZE):
-    return ImageOps.fit(picture.convert('RGB'), size, Image.LANCZOS, centering=(0.5, 0.5))
+    """The picture filling the card. Transparent parts (a PNG) show the dark green of the cards, not black."""
+    fitted = ImageOps.fit(picture.convert('RGBA'), size, Image.LANCZOS, centering=(0.5, 0.5))
+    base = gradient((16, 38, 26, 255), (11, 20, 16, 255), size)
+    base.alpha_composite(fitted)
+    return base.convert('RGB')
 
 
 def fit_inside(canvas, picture, box):

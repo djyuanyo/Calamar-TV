@@ -97,7 +97,8 @@ try {
   assert.equal(published.events[0].startAt, '2026-12-01T20:00:00.000Z');
   assert.equal(published.events[0].leagueId, leagueId);
   assert.equal(published.events[0].homeTeamId, teamIds[0]);
-  assert.match(published.events[0].cover, /^data:image\/jpeg;base64,/);
+  // A transparent PNG keeps its transparency (PNG or WebP): as JPEG its transparent parts turned black.
+  assert.match(published.events[0].cover, /^data:image\/(png|webp);base64,/);
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
   await page.locator('.event-card:not(.live-rail *)').waitFor();
   assert.equal(await page.locator('a[data-route=futbol]').count(), 0);

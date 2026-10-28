@@ -581,6 +581,17 @@ public class AdminActivity extends Activity {
     }catch(Exception invalid){error.setText(invalid.getMessage());}}));dialog.show();
   }
 
+  /** True when some pixel is not fully opaque. */
+  static boolean hasTransparency(android.graphics.Bitmap bitmap) {
+    int w = bitmap.getWidth(), h = bitmap.getHeight();
+    int[] row = new int[w];
+    for (int y = 0; y < h; y++) {
+      bitmap.getPixels(row, 0, w, 0, y, w, 1);
+      for (int p : row) if ((p >>> 24) != 0xff) return true;
+    }
+    return false;
+  }
+
   @Override
   protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
@@ -600,6 +611,23 @@ public class AdminActivity extends Activity {
           try (java.io.InputStream in = getContentResolver().openInputStream(uri)) { bitmap = android.graphics.BitmapFactory.decodeStream(in, null, options); }
           if (bitmap == null) return null;
           try {
+            // A picture with transparent parts (a PNG logo) stays PNG, so they do not turn black; if it is too
+            // big it is made smaller. Only opaque pictures go to JPEG.
+            boolean transparent = bitmap.hasAlpha() && hasTransparency(bitmap);
+            if (transparent) {
+              android.graphics.Bitmap picture = bitmap;
+              for (int side : new int[] {960, 720, 512, 384}) {
+                int longest = Math.max(bitmap.getWidth(), bitmap.getHeight());
+                if (longest > side) picture = android.graphics.Bitmap.createScaledBitmap(bitmap, Math.max(1, bitmap.getWidth() * side / longest), Math.max(1, bitmap.getHeight() * side / longest), true);
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                picture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                if (picture != bitmap) picture.recycle();
+                String encoded = "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+                if (encoded.length() <= 130000) return encoded;
+                picture = bitmap;
+              }
+              return null;
+            }
             for (int quality : new int[] {80, 65, 50, 35}) {
               java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
               bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, out);
