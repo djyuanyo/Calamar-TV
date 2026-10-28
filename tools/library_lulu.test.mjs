@@ -161,3 +161,16 @@ test('names come HTML-encoded from LuluStream and are used as written', async ()
   assert.deepEqual([folder.folders[0].name, folder.files[0].title], ['Cuando nadie nos ve (Temporada 1)', 'Torrente & Cia (2025).mp4']);
   assert.deepEqual(cleanTitle(folder.files[0].title), { title: 'Torrente & Cia', year: 2025 });
 });
+
+test('the day LuluStream received each video is the day it arrived in the library', async () => {
+  const { dayOf } = await import('../web/library-lulu.js');
+  assert.equal(dayOf('2026-10-21 18:03:11'), '2026-10-21');
+  assert.equal(dayOf(''), '');
+  assert.equal(dayOf('ayer'), '');
+  const folder = await luluFolder(0, 'clave123456', async () => json({ status: 200, result: {
+    folders: [], files: [{ file_code: 'abcd1234efgh', title: 'Nueva (2026).mp4', uploaded: '2026-10-21 18:03:11' }, { file_code: 'zzzz1234efgh', title: 'Vieja.mp4' }] } }));
+  assert.deepEqual(folder.files.map((f) => f.uploaded), ['2026-10-21', '']);
+  const result = await libraryFromScan({ films: [{ section: 'movies', title: 'Nueva', year: 2026, file: 'Nueva (2026).mp4', link: 'https://lulustream.com/e/abcd1234efgh', uploaded: '2026-10-21' }], series: [], unknown: [] },
+    { movies: [], series: [], documentaries: [] }, 'abcdef0123456789abcdef0123456789', { fetcher: async () => json({ results: [] }) });
+  assert.equal(result.sections.movies[0].addedAt, '2026-10-21');
+});
