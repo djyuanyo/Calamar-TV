@@ -93,3 +93,13 @@ test('platform buttons and the platform page with every section together', () =>
   assert.deepEqual(providerLogosOf({ 'watch/providers': { results: { ES: { flatrate: [{ provider_name: 'Netflix', logo_path: '/n.jpg' }, { provider_name: 'Bad', logo_path: 'javascript:x' }] } } } }),
     { Netflix: 'https://image.tmdb.org/t/p/w154/n.jpg' });
 });
+
+import { luluvidoLinks } from '../web/library.js';
+test('LuluStream links move to luluvido.com, other links stay', () => {
+  const { sections, changed } = luluvidoLinks({
+    movies: [{ id: 'a', url: 'https://lulustream.com/abc123def456' }, { id: 'b', url: 'https://luluvido.com/xyz987654321' }, { id: 'c', url: 'https://calamarmenciano.com/PELIS/C.mp4' }],
+    series: [{ id: 's', episodes: [{ id: 'e1', url: 'https://www.luluvdo.com/d/ep1code12345.html' }, { id: 'e2', url: 'https://lulustream.com/e/ep2code12345' }] }] });
+  assert.equal(changed, 3);
+  assert.deepEqual(sections.movies.map((m) => m.url), ['https://luluvido.com/abc123def456', 'https://luluvido.com/xyz987654321', 'https://calamarmenciano.com/PELIS/C.mp4']);
+  assert.deepEqual(sections.series[0].episodes.map((e) => e.url), ['https://luluvido.com/ep1code12345', 'https://luluvido.com/ep2code12345']);
+});

@@ -714,6 +714,20 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
 // ---- Administration ---------------------------------------------------------------------------
 
 /** A link the web or the app can play: LuluStream, or a direct HTTPS video (MP4, HLS…). */
+/** LuluStream's links (of films, documentaries and episodes) on its current site, luluvido.com: { sections, changed }. */
+export function luluvidoLinks(sections) {
+  let changed = 0;
+  const move = (url) => {
+    const code = lulustreamEmbed(url)?.split('/').pop();
+    const next = code ? `https://luluvido.com/${code}` : url;
+    if (next !== url) changed++;
+    return next;
+  };
+  const out = Object.fromEntries(Object.entries(sections || {}).map(([key, items]) => [key, (items || []).map((item) => ({
+    ...item, ...(item.url ? { url: move(item.url) } : {}), ...(item.episodes ? { episodes: item.episodes.map((e) => (e.url ? { ...e, url: move(e.url) } : e)) } : {}) }))]));
+  return { sections: out, changed };
+}
+
 export const validVideoLink = (url) => !!lulustreamEmbed(url) || (/^https:\/\//.test(String(url).trim()) && webPlayback(String(url).trim()).ok);
 
 /**
@@ -739,7 +753,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const saveLulu = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave de LuluStream');
   const store = async (sections) => {
     // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
-    const next = stampAdded(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []])), current.sections);
+    // LuluStream links are saved on its current site (luluvido.com), whatever name they were pasted with.
+    const next = stampAdded(luluvidoLinks(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]))).sections, current.sections);
     await publish(libraryParts(next));
     current = { ...current, sections: next };
     drawList();
@@ -926,6 +941,17 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
     } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; }
   } }, 'Leer carpetas de LuluStream');
+  // LuluStream moved to luluvido.com: the links saved before (lulustream.com, luluvdo.com…) move there in one go.
+  const moveButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    moveButton.disabled = true;
+    try {
+      const { changed } = luluvidoLinks(current.sections);
+      if (!changed) { scanNote.textContent = 'Todos los enlaces de LuluStream ya están en luluvido.com.'; return; }
+      scanNote.textContent = 'Publicando…';
+      await store(current.sections);
+      scanNote.textContent = `Hecho: ${changed} ${changed === 1 ? 'enlace cambiado' : 'enlaces cambiados'} a luluvido.com (películas, documentales y capítulos).`;
+    } catch (error) { scanNote.textContent = error.message; } finally { moveButton.disabled = false; }
+  } }, 'Cambiar los enlaces a luluvido.com');
 
   // ---- A title TMDB did not recognise: search TMDB and choose its record; its links go with it ----
   function openMatcher(sectionKey, item) {
@@ -1082,7 +1108,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu)),
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
-    el('div', { class: 'actions' }, scanButton), scanNote, scanReport,
+    el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,
     el('h3', {}, 'Portada y Top 10 de películas y series'),
     el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en cualquier título de la lista de abajo para que salga en la portada de inicio, junto a los eventos destacados. La portada muestra el top de la semana de tus películas y el de tus series (hasta 10 de cada, o las que haya), ordenadas por las tendencias de la semana en TMDB y su popularidad; se actualiza solo una vez al día al abrir esta página.'),
     el('div', { class: 'actions' }, topButton), topNote,
