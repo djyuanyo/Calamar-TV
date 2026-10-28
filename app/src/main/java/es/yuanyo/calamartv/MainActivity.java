@@ -404,6 +404,7 @@ public class MainActivity extends Activity {
   void render() {
     if (list == null) return;
     handler.removeCallbacks(heroAdvance); heroHost = null;
+    handler.removeCallbacks(browseAdvance); browseTrack = null;
     lazySections.clear();
     list.removeAllViews();
     message.setText(status());
@@ -413,6 +414,10 @@ public class MainActivity extends Activity {
     }
     if (mode.equals(HALLOWEEN)) {
       halloweenPage();
+      return;
+    }
+    if (mode.startsWith(PLATFORM)) {
+      platformPage(mode.substring(PLATFORM.length()));
       return;
     }
     if (mode.equals("Favoritos")) {
@@ -1145,7 +1150,7 @@ public class MainActivity extends Activity {
     super.onPause();
     if (updater != null) updater.pause();
     sharedSession++;
-    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
+    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
     handler.removeCallbacks(searchRender);
     if (sharedListener != null) {
@@ -1565,9 +1570,10 @@ public class MainActivity extends Activity {
       badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       art.addView(badge, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
     }
-    if (Library.newArrival(item, System.currentTimeMillis())) {
-      // «Recién llegada»: the red label of new titles, as on Netflix (and on the web).
-      TextView ribbon = label("Recién llegada", 11, 0xffffffff);
+    String tag = Library.posterLabel(item, System.currentTimeMillis());
+    if (!tag.isEmpty()) {
+      // «Recién llegada» or «Nuevo episodio»: the red label of new titles, as on Netflix (and on the web).
+      TextView ribbon = label(tag, 11, 0xffffffff);
       ribbon.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
       ribbon.setGravity(Gravity.CENTER);
       ribbon.setSingleLine(true);
@@ -1980,6 +1986,8 @@ public class MainActivity extends Activity {
     java.util.Set<String> watched = new HashSet<>();
     for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
       if (section.equals(entry.optString("section"))) watched.add(entry.optString("item"));
+    heroSlider(section, Library.heroTitles(items, System.currentTimeMillis(), 8));
+    platformButtons(section, Library.platforms(items));
     for (Library.Row row : Library.browseRows(section, items, watched, userName(), System.currentTimeMillis())) {
       if (row.kind.equals("continue")) continueRow(section, row.title);
       else if (row.kind.equals("top")) topRow(row.items, "", row.title);
@@ -2005,6 +2013,188 @@ public class MainActivity extends Activity {
     else {
       try { list.addView(rail.call()); } catch (Exception impossible) { throw new IllegalStateException(impossible); }
     }
+  }
+
+  static final String PLATFORM = "Plataforma: ";
+  /** The section a platform's page was opened from, to go back to it. */
+  String platformFrom = "Películas";
+  HorizontalScrollView browseTrack;
+  final Runnable browseAdvance = new Runnable() { public void run() {
+    HorizontalScrollView track = browseTrack;
+    if (track == null || !track.isAttachedToWindow() || track.getChildCount() == 0) return;
+    View row = track.getChildAt(0);
+    int step = row instanceof ViewGroup && ((ViewGroup) row).getChildCount() > 0 ? ((ViewGroup) row).getChildAt(0).getWidth() + dp(12) : track.getWidth();
+    boolean end = track.getScrollX() + track.getWidth() >= row.getWidth() - dp(8);
+    if (!track.isPressed()) track.smoothScrollTo(end ? 0 : track.getScrollX() + step, 0);
+    handler.postDelayed(this, 6000);
+  } };
+
+  /** The tagline of a slide: «Nuevo episodio disponible», «Recién llegada», «Nº 1 de la semana»… (as on the web). */
+  static String heroTagline(Library.Item item, long now) {
+    String label = Library.posterLabel(item, now);
+    if (label.equals("Nuevo episodio")) return "Nuevo episodio disponible";
+    if (!label.isEmpty()) return label;
+    return item.trend > 0 ? "Nº " + item.trend + " de la semana" : "";
+  }
+
+  /** The slider at the top of a section, as on Disney+: big cards that move by themselves every six seconds. */
+  void heroSlider(final String section, List<Library.Item> items) {
+    if (items.isEmpty()) return;
+    HorizontalScrollView h = new HorizontalScrollView(this);
+    h.setHorizontalScrollBarEnabled(false);
+    h.setClipToPadding(false);
+    LinearLayout r = row();
+    int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
+    int width = wide() ? Math.min(900, screen * 70 / 100) : screen * 84 / 100;
+    int height = wide() ? width * 7 / 16 : width * 5 / 4;
+    long now = System.currentTimeMillis();
+    for (final Library.Item item : items) {
+      FrameLayout card = new FrameLayout(this);
+      card.setFocusable(true);
+      card.setClickable(true);
+      card.setBackground(Ui.artBackground(this, Palette.hue(item.title), 14));
+      card.setForeground(Ui.focusOutline(this, 14));
+      card.setClipToOutline(true);
+      Ui.scaleOnFocus(card, 1.02f);
+      String picture = wide() ? (item.backdrop.isEmpty() ? item.poster : item.backdrop) : (item.poster.isEmpty() ? item.backdrop : item.poster);
+      if (!picture.isEmpty()) {
+        ImageView art = new ImageView(this);
+        art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        card.addView(art, new FrameLayout.LayoutParams(-1, -1));
+        image(art, picture);
+      }
+      View shade = new View(this);
+      shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x00000000, 0x00000000, 0xdd000000}));
+      card.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+      LinearLayout text = new LinearLayout(this);
+      text.setOrientation(LinearLayout.VERTICAL);
+      text.setGravity(Gravity.CENTER_HORIZONTAL);
+      text.setPadding(dp(14), 0, dp(14), dp(16));
+      TextView name = label(item.title, wide() ? 26 : 22, 0xffffffff);
+      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      name.setGravity(Gravity.CENTER);
+      name.setShadowLayer(dp(6), 0, dp(2), 0x99000000);
+      text.addView(name);
+      String tagline = heroTagline(item, now);
+      if (!tagline.isEmpty()) {
+        TextView tag = label(tagline, 15, 0xffffffff);
+        tag.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        tag.setGravity(Gravity.CENTER);
+        text.addView(tag);
+      }
+      String meta = (item.year > 0 ? item.year + "" : "") + (!item.genres.isEmpty() ? (item.year > 0 ? " • " : "") + item.genres.get(0) : "");
+      if (!meta.isEmpty()) {
+        TextView m = label(meta, 14, 0xddffffff);
+        m.setGravity(Gravity.CENTER);
+        text.addView(m);
+      }
+      card.addView(text, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+      card.setContentDescription(item.title + (tagline.isEmpty() ? "" : ", " + tagline));
+      card.setOnClickListener(v -> libraryDetail(section, item));
+      LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), dp(height));
+      p.setMargins(0, dp(4), dp(12), dp(6));
+      r.addView(card, p);
+    }
+    h.addView(r);
+    LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+    hp.setMargins(0, dp(4), 0, dp(4));
+    list.addView(h, hp);
+    browseTrack = h;
+    handler.removeCallbacks(browseAdvance);
+    if (resumed && !television && items.size() > 1) handler.postDelayed(browseAdvance, 6000);
+  }
+
+  /** The platform buttons under the slider (logo from TMDB, or its name), each opening the platform's page. */
+  void platformButtons(final String section, List<String[]> platforms) {
+    if (platforms.isEmpty()) return;
+    HorizontalScrollView h = new HorizontalScrollView(this);
+    h.setHorizontalScrollBarEnabled(false);
+    LinearLayout r = row();
+    for (final String[] p : platforms) {
+      FrameLayout tile = new FrameLayout(this);
+      tile.setFocusable(true);
+      tile.setClickable(true);
+      tile.setBackground(Ui.shape(this, 0xff23262e, 10, 1, 0x33ffffff));
+      tile.setForeground(Ui.focusOutline(this, 10));
+      Ui.scaleOnFocus(tile, 1.06f);
+      if (!p[1].isEmpty()) {
+        ImageView logo = new ImageView(this);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setClipToOutline(true);
+        logo.setBackground(Ui.shape(this, 0x00000000, 10, 0, 0));
+        tile.addView(logo, new FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER));
+        image(logo, p[1]);
+      } else {
+        TextView name = label(p[0], 12, Ui.FG);
+        name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        name.setGravity(Gravity.CENTER);
+        tile.addView(name, new FrameLayout.LayoutParams(-1, -1));
+      }
+      tile.setContentDescription(p[0]);
+      tile.setOnClickListener(v -> { platformFrom = mode; mode = PLATFORM + p[0]; query = ""; home(); });
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(wide() ? 130 : 104), dp(wide() ? 80 : 64));
+      lp.setMargins(0, dp(6), dp(10), dp(6));
+      r.addView(tile, lp);
+    }
+    h.addView(r);
+    list.addView(h);
+  }
+
+  /**
+   * A platform's page, as on Disney+ (Marvel): its logo over the backdrop of one of its titles (a different
+   * one, at random, every time) and its titles in rows: «En primer plano», by section and by genre.
+   */
+  void platformPage(String name) {
+    loadLibrary();
+    Button back = Ui.pill(this, "‹ Volver", Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> { mode = Library.section(platformFrom) != null ? platformFrom : "Películas"; home(); });
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, dp(44));
+    bp.setMargins(0, dp(10), 0, dp(6));
+    list.addView(back, bp);
+    if (library == null) { heading(name, null); list.addView(label(libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED)); return; }
+    List<Library.Item> all = new ArrayList<>();
+    List<Library.Row> rows = Library.platformRows(library, name, System.currentTimeMillis(), all);
+    FrameLayout hero = new FrameLayout(this);
+    hero.setBackground(Ui.shape(this, 0xff1b1e25, 14, 0, 0));
+    hero.setClipToOutline(true);
+    List<String> backdrops = new ArrayList<>();
+    String logo = "";
+    for (Library.Item item : all) {
+      if (!item.backdrop.isEmpty()) backdrops.add(item.backdrop);
+      if (logo.isEmpty() && item.logos.containsKey(name)) logo = item.logos.get(name);
+    }
+    if (!backdrops.isEmpty()) {
+      ImageView art = new ImageView(this);
+      art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      hero.addView(art, new FrameLayout.LayoutParams(-1, -1));
+      image(art, backdrops.get(new java.util.Random().nextInt(backdrops.size())));
+    }
+    View shade = new View(this);
+    shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x220b0d10, 0x660b0d10, 0xff0b0d10}));
+    hero.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setGravity(Gravity.CENTER_HORIZONTAL);
+    box.setPadding(dp(12), 0, dp(12), dp(18));
+    if (!logo.isEmpty()) {
+      ImageView icon = new ImageView(this);
+      icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      icon.setClipToOutline(true);
+      icon.setBackground(Ui.shape(this, 0x00000000, 20, 0, 0));
+      box.addView(icon, new LinearLayout.LayoutParams(dp(wide() ? 120 : 96), dp(wide() ? 120 : 96)));
+      image(icon, logo);
+    }
+    TextView title = label(name, wide() ? 36 : 30, 0xffffffff);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(Gravity.CENTER);
+    title.setShadowLayer(dp(8), 0, dp(2), 0xcc000000);
+    box.addView(title);
+    box.addView(label(all.size() == 1 ? "1 título" : all.size() + " títulos", 14, 0xddffffff));
+    hero.addView(box, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+    list.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 280)));
+    if (all.isEmpty()) list.addView(label("Todavía no hay títulos de " + name + ".", 15, MUTED));
+    for (Library.Row row : rows) posterRail(row.title, row.items, wide() ? 140 : 108);
+    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }
 
   /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
