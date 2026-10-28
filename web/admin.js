@@ -937,7 +937,8 @@ function statsNames(state) {
   for (const c of [...merge(state.tdt || { channels: [] }, null), ...file.data.channels]) {
     names.set(visitKey('channel', c.id), c.name); names.set(`c:${c.id}`, c.name);
   }
-  for (const e of file.data.events) {
+  // Manual events and imported matches («Levante - Athletic» rather than partido-401874993).
+  for (const e of [...file.data.events, ...(file.data.fixtures || []).map((f) => fixtureEvent(f, file.data))]) {
     const label = `${e.name}${e.startAt ? ` · ${eventMeta({ startAt: e.startAt }, null)}` : ''}`;
     names.set(visitKey('event', e.id), label); names.set(`e:${e.id}`, label);
   }
