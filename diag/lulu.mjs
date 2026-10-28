@@ -1,12 +1,10 @@
 import { writeFileSync } from 'node:fs';
-const out = [];
-let url = 'https://share.google/DJd1zj8nhTStnCTTd';
-for (let i = 0; i < 6 && url; i++) {
-  try {
-    const r = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Safari/537.36' } });
-    const loc = r.headers.get('location');
-    out.push({ url, status: r.status, location: loc });
-    url = loc ? new URL(loc, url).href : null;
-  } catch (e) { out.push({ url, error: String(e.message) }); break; }
-}
-writeFileSync('diag/host3.json', JSON.stringify(out, null, 1));
+const r = await fetch('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom');
+const data = JSON.parse((await r.json()).fields.json.stringValue);
+const short = (v) => typeof v === 'string' ? (v.startsWith('data:') ? `data:(${v.length})` : v.slice(0, 140)) : v;
+const teams = (data.teams || []).filter((t) => /manchester|brighton|bournemouth/i.test(t.name)).map((t) => ({ ...t, logo: short(t.logo) }));
+const leagues = (data.leagues || []).filter((l) => /carabao/i.test(l.name)).map((l) => ({ ...l, logo: short(l.logo), background: short(l.background) }));
+const ids = new Set(teams.map((t) => t.id));
+const fixtures = (data.fixtures || []).filter((f) => ids.has(f.homeTeamId) || ids.has(f.awayTeamId)).map((f) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, short(v)])));
+const events = (data.events || []).filter((e) => /manchester|brighton/i.test(e.name)).map((e) => Object.fromEntries(Object.entries(e).map(([k, v]) => [k, short(v)])));
+writeFileSync('diag/host3.json', JSON.stringify({ teams, leagues, fixtures, events }, null, 1));
