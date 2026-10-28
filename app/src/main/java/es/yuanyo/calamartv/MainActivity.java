@@ -1148,6 +1148,7 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
+    if (trailerPreview != null) { trailerPreview.evaluateJavascript("window.pauseTrailer && window.pauseTrailer()", null); trailerPreview.onPause(); }
     if (updater != null) updater.pause();
     sharedSession++;
     resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
@@ -1161,6 +1162,7 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
+    if (trailerPreview != null) trailerPreview.onResume();
     if (updater != null) updater.resume();
     // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
@@ -1622,6 +1624,8 @@ public class MainActivity extends Activity {
    * «Reproducir», the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», «Compartir», and the
    * tabs «Episodios» (series), «Tráileres y más» (the trailer in Spanish) and «Similares».
    */
+  private android.webkit.WebView trailerPreview;
+
   void libraryDetail(final String section, final Library.Item item) {
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
@@ -1640,9 +1644,35 @@ public class MainActivity extends Activity {
       hero.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
       image(backdrop, picture);
     }
+    final android.webkit.WebView preview;
+    if (!item.trailer.isEmpty()) {
+      preview = new android.webkit.WebView(this);
+      trailerPreview = preview;
+      preview.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+      preview.getSettings().setJavaScriptEnabled(true);
+      preview.getSettings().setDomStorageEnabled(true);
+      preview.getSettings().setMediaPlaybackRequiresUserGesture(false);
+      preview.getSettings().setAllowFileAccess(false);
+      preview.getSettings().setAllowContentAccess(false);
+      preview.setWebViewClient(new android.webkit.WebViewClient() {
+        @Override public void onReceivedError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
+          if (request.isForMainFrame()) view.setVisibility(View.GONE);
+        }
+        @Override public void onReceivedHttpError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceResponse response) {
+          if (request.isForMainFrame()) view.setVisibility(View.GONE);
+        }
+      });
+      hero.addView(preview, new FrameLayout.LayoutParams(-1, -1));
+      preview.loadUrl("https://djyuanyo.github.io/Calamar-TV/trailer.html?v=" + item.trailer);
+      dialog.setOnDismissListener(d -> {
+        if (trailerPreview == preview) trailerPreview = null;
+        preview.stopLoading(); preview.loadUrl("about:blank");
+        hero.removeView(preview); preview.destroy();
+      });
+    } else preview = null;
     View scrim = new View(this);
     scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
-    hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+    if (preview == null) hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
     Button back = Ui.pill(this, "‹", Ui.Kind.SURFACE, true);
     back.setContentDescription("Volver");
     back.setOnClickListener(v -> dialog.dismiss());

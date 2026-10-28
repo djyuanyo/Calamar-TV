@@ -138,3 +138,13 @@ test('the last aired episode comes from TMDB', () => {
   assert.deepEqual(lastEpisodeOf({ last_episode_to_air: { air_date: '2026-10-26', season_number: 2, episode_number: 5 } }), { season: 2, episode: 5, aired: '2026-10-26' });
   assert.equal(lastEpisodeOf({}), null);
 });
+
+test('manual trailer overrides TMDB, accepts YouTube links and can be cleared', async () => {
+  const { youtubeId, trailerId } = await import('../web/trailer.js');
+  const id = 'abcdefghijk';
+  for (const link of [`https://youtu.be/${id}?si=abc`, `https://www.youtube.com/watch?v=${id}&t=2`, `https://www.youtube.com/shorts/${id}`, `https://www.youtube-nocookie.com/embed/${id}`]) assert.equal(youtubeId(link), id);
+  for (const link of [`https://youtube.com.evil.test/watch?v=${id}`, 'javascript:alert(1)', 'https://youtube.com/watch?v=invalid']) assert.equal(youtubeId(link), '');
+  assert.equal(trailerId({tmdb:{trailer:id}}), id);
+  assert.equal(trailerId({trailerUrl:'',tmdb:{trailer:id}}), '');
+  assert.equal(trailerId({trailerUrl:'https://youtu.be/12345678901',tmdb:{trailer:id}}), '12345678901');
+});

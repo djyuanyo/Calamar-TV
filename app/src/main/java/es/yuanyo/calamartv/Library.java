@@ -133,6 +133,25 @@ final class Library {
     return out;
   }
 
+  static String youtubeTrailer(String value) {
+    if (value == null) return "";
+    value = value.trim();
+    if (value.matches("[A-Za-z0-9_-]{11}")) return value;
+    try {
+      java.net.URI uri = java.net.URI.create(value);
+      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null) return "";
+      String host = uri.getHost(), id = "";
+      if ("youtu.be".equalsIgnoreCase(host)) id = uri.getPath().substring(1);
+      else if (host != null && java.util.Arrays.asList("youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com").contains(host.toLowerCase(java.util.Locale.ROOT))) {
+        if ("/watch".equals(uri.getPath())) {
+          for (String part : (uri.getRawQuery() == null ? "" : uri.getRawQuery()).split("&"))
+            if (part.startsWith("v=")) id = java.net.URLDecoder.decode(part.substring(2), "UTF-8");
+        } else if (uri.getPath().matches("/(embed|shorts|live)/.*")) id = uri.getPath().split("/")[2];
+      }
+      return id.matches("[A-Za-z0-9_-]{11}") ? id : "";
+    } catch (Exception ignored) { return ""; }
+  }
+
   static final class Item {
     final String id, title, url, overview, poster, backdrop;
     final int year, runtime, votes;
@@ -191,7 +210,7 @@ final class Library {
       lastSeason = le == null ? -1 : le.optInt("season", -1);
       lastEpisode = le == null ? -1 : le.optInt("episode", -1);
       lastAired = le == null ? "" : le.optString("aired");
-      trailer = t.optString("trailer").matches("[\\w-]{11}") ? t.optString("trailer") : "";
+      trailer = youtubeTrailer(o.has("trailerUrl") ? o.optString("trailerUrl") : t.optString("trailer"));
       JSONArray cr = t.optJSONArray("creators");
       if (cr != null) for (int i = 0; i < cr.length() && i < 4; i++) if (!cr.optString(i).trim().isEmpty()) creators.add(cr.optString(i).trim());
       JSONObject lg = t.optJSONObject("logos");

@@ -1,3 +1,4 @@
+import { youtubeId, trailerId } from './trailer.js';
 // Films, series and documentaries chosen in TMDB by the administrator, each with its video link
 // (LuluStream or a direct video), with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the whole catalog (catalog field
 // `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
@@ -701,6 +702,7 @@ export function resumeEpisode(item, saved = () => null) {
  */
 export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null) {
   const info = item.tmdb || {};
+  const trailer = trailerId(item);
   const series = item.kind === 'tv';
   const seasons = series ? [...new Set(item.episodes.map((e) => e.season))].sort((a, b) => a - b) : [];
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
@@ -740,6 +742,16 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
       info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
       el('div', { class: 'title-actions' }, share)));
+  if (trailer) {
+    const backdrop = head.querySelector('.title-backdrop');
+    const frame = el('iframe', { class: 'title-preview', src: `./trailer.html?v=${trailer}`, title: `Tráiler de ${itemTitle(item)}`,
+      allow: 'autoplay; encrypted-media; fullscreen; picture-in-picture', allowfullscreen: true });
+    backdrop.insertBefore(frame, backdrop.firstChild.nextSibling);
+    // Route changes remove the header; stop YouTube and release its frame immediately.
+    const observer = new MutationObserver(() => { if (!head.isConnected) { frame.remove(); observer.disconnect(); } });
+    queueMicrotask(() => { if (head.isConnected) observer.observe(document.body, { childList: true, subtree: true }); });
+    head.addEventListener('click', (event) => { if (event.target.closest('.title-play, .library-actions button')) frame.contentWindow?.postMessage('pause-trailer', location.origin); });
+  }
   // The tabs.
   const panel = el('div', { class: 'title-panel' });
   const tabs = [];
@@ -757,8 +769,8 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     draw();
     return [el('label', { class: 'browse-select season-select' }, picker), list];
   }]);
-  tabs.push(['trailers', 'Tráileres y más', () => (info.trailer
-    ? [el('div', { class: 'title-trailer' }, el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(info.trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
+  tabs.push(['trailers', 'Tráileres y más', () => (trailer
+    ? [el('div', { class: 'title-trailer' }, el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
       allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' }))]
     : [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')])]);
   tabs.push(['similar', 'Similares', () => {
@@ -771,7 +783,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     panel.replaceChildren(...tabs.find(([k]) => k === key)[2]());
   };
   for (const [key, label] of tabs) bar_.append(el('button', { class: 'title-tab', type: 'button', role: 'tab', 'data-tab': key, onclick: () => open(key) }, label));
-  open(series ? 'episodes' : info.trailer ? 'trailers' : 'similar');
+  open(series ? 'episodes' : 'similar');
   return [head, bar_, panel, attribution(el, library)];
 }
 
@@ -855,6 +867,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const upsert = async (section, item) => {
     // Editing a title keeps it «En portada» and in the top.
     const before = Object.values(current.sections).flat().find((x) => x.id === item.id);
+    if (before && Object.hasOwn(before, 'trailerUrl') && !Object.hasOwn(item, 'trailerUrl')) item = { ...item, trailerUrl: before.trailerUrl };
     if (before?.featured && item.featured === undefined) item = { ...item, featured: before.featured };
     if (before?.trend && item.trend === undefined) item = { ...item, trend: before.trend };
     const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
@@ -1092,6 +1105,26 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     search();
   }
 
+  function editTrailer(sectionKey, item) {
+    editor.hidden = false;
+    const input = el('input', { type: 'url', value: trailerId(item) ? `https://www.youtube.com/watch?v=${trailerId(item)}` : '', placeholder: 'https://www.youtube.com/watch?v=…', 'aria-label': 'Enlace del tráiler de YouTube' });
+    const note = el('p', { class: 'note', role: 'status' });
+    const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
+      try {
+        const value = input.value.trim(), id = youtubeId(value);
+        if (value && !id) throw new Error('Introduce un enlace válido de YouTube.');
+        save.disabled = true;
+        const latest = current.sections[sectionKey].find((x) => x.id === item.id);
+        if (!latest) throw new Error('Este título ya no está en el catálogo.');
+        await upsert(sectionKey, { ...latest, trailerUrl: id ? `https://www.youtube.com/watch?v=${id}` : '' });
+        note.textContent = 'Tráiler guardado y publicado.';
+      } catch (e) { note.textContent = e.message; } finally { save.disabled = false; }
+    } }, 'Guardar tráiler');
+    editor.replaceChildren(el('h3', {}, `Tráiler · ${itemTitle(item)}`), field('Enlace del tráiler de YouTube', input, 'Se reproduce automáticamente en la cabecera. Déjalo vacío para mostrar la imagen.'),
+      el('div', { class: 'actions' }, save, el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
+    editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
   // ---- Portada: a title «En portada» joins the featured slider of the home page ----
   async function toggleFeatured(sectionKey, item, button) {
     button.disabled = true;
@@ -1151,6 +1184,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
           el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
             title: item.featured ? 'Quitar de la portada' : 'Mostrar en la portada de inicio', onclick: (event) => toggleFeatured(section.key, item, event.currentTarget) },
             item.featured ? '★ En portada' : '☆ Destacar'),
+          el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
           item.status === 'unmatched'
             ? el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')
             : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openEditor(section.key, item.tmdb?.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar')))) : [el('p', { class: 'note' }, 'Todavía no hay ninguno.')])];
