@@ -4,7 +4,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -402,8 +402,9 @@ function home() {
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
-  // Only events on the home page: one row per league, each in date order (soonest first).
-  for (const row of eventRows(matches, state.custom)) {
+  // Only events on the home page: one row per league, each in date order (soonest first), with this
+  // week's events only: a league whose next matches are in two weeks does not appear yet.
+  for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }

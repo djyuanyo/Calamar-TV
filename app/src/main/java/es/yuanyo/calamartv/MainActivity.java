@@ -460,7 +460,8 @@ public class MainActivity extends Activity {
       }
       // Only events on the home page: one row per league, each in date order.
       // The same events stay in their league's row too, as copies of the same card.
-      for (Catalog.EventRow row : Catalog.eventRows(events, custom)) {
+      // Only this week's events in the league rows: a league whose next matches are in two weeks does not appear yet.
+      for (Catalog.EventRow row : Catalog.eventRows(Catalog.thisWeekEvents(events, System.currentTimeMillis()), custom)) {
         heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
         if (!row.logo.isEmpty()) leagueLogo(row.logo);
         carousel(row.events, row.events.size());

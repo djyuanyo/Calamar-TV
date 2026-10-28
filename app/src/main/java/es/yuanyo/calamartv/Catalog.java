@@ -275,6 +275,21 @@ public final class Catalog {
     return out;
   }
 
+  /**
+   * The league rows of the home page show only this week's events (Monday to Sunday, Madrid), as on the web:
+   * a league with matches in two weeks does not appear yet. Events without a league or a date stay, and a
+   * match from last week still on air too.
+   */
+  public static List<Channel> thisWeekEvents(List<Channel> events, long now) {
+    String week = Competitions.week(now);
+    List<Channel> out = new ArrayList<>();
+    for (Channel e : events) {
+      long at = SportsCatalog.instant(e.startAt);
+      if (e.leagueId.isEmpty() || at == Long.MAX_VALUE || Competitions.week(at).equals(week) || (at <= now && now - at < 4 * 3600000L)) out.add(e);
+    }
+    return out;
+  }
+
   /** A home row: a league with its logo and its events in date order. */
   public static final class EventRow {
     public final String name, logo;

@@ -336,3 +336,7 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - En la web, los logos de las tarjetas tienen una sombra que sigue el dibujo en lugar de un cuadrado oscuro detrás.
 - Las vistas previas de los enlaces compartidos (WhatsApp) ponen el verde oscuro de las tarjetas detrás de las portadas transparentes, no negro.
 - Las imágenes ya subidas como JPEG conservan su fondo negro: hay que volver a subirlas.
+
+## Filas de ligas solo con los eventos de esta semana (2.20.40)
+
+- En la portada (web y app), las filas de cada liga muestran solo sus eventos de **esta semana** (lunes a domingo, hora de Madrid); una liga cuyos próximos partidos son dentro de dos semanas no aparece todavía. Los eventos sin liga o sin fecha siguen saliendo, y un partido de la semana anterior que sigue en juego también. Los demás siguen abriéndose por su enlace y en el buscador.

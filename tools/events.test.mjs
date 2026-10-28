@@ -81,3 +81,14 @@ test('«Eventos En Directo»: only today\'s events with video, in kick-off order
   // Past midnight in Madrid, a match that started before it is still on air.
   assert.deepEqual(liveEvents([e('night', '2026-10-27T22:30:00Z')], Date.parse('2026-10-27T23:30:00Z')).map((x) => x.id), ['night']);
 });
+
+test('league rows show only this week\'s events (Monday to Sunday, Madrid)', async () => {
+  const { thisWeekEvents } = await import('../web/catalog.js');
+  const now = Date.parse('2026-10-28T10:00:00Z'); // Wednesday
+  const e = (id, startAt, leagueId = 'laliga') => ({ id, startAt, leagueId });
+  const list = [e('monday', '2026-10-26T19:00:00Z'), e('sunday', '2026-11-01T20:00:00Z'), e('next-week', '2026-11-03T19:00:00Z'),
+    e('in-two-weeks', '2026-11-10T19:00:00Z'), e('no-league', '2026-11-10T19:00:00Z', ''), e('no-date', '', 'laliga')];
+  assert.deepEqual(thisWeekEvents(list, now).map((x) => x.id), ['monday', 'sunday', 'no-league', 'no-date']);
+  // Sunday night in Madrid is still this week; a match of last Sunday still on air stays on Monday at 00:30.
+  assert.deepEqual(thisWeekEvents([e('late', '2026-11-01T22:30:00Z')], Date.parse('2026-11-01T23:30:00Z')).map((x) => x.id), ['late']);
+});

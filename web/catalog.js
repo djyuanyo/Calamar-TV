@@ -1,7 +1,7 @@
 import { zicoEventApi } from './event-sources.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
-import { fixtureEvent, weekFixtures } from './competitions.js';
+import { fixtureEvent, weekFixtures, madridWeek, MATCH_SPAN_MS } from './competitions.js';
 import { httpTsSource } from './http-stream.js';
 // Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
 const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
@@ -372,6 +372,20 @@ export function liveEvents(list, now = Date.now()) {
     return day(at) === today || (at < now && now - at < 4 * 3600000);
   }).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
 }
+/**
+ * The league rows of the home page show only this week's events (Monday to Sunday, Madrid): a league with
+ * matches in two weeks does not appear yet. Events without a league or a date stay; a match from last week
+ * still on air too. Later events still open from their link and the search.
+ */
+export function thisWeekEvents(list, now = Date.now()) {
+  const week = madridWeek(new Date(now).toISOString());
+  return list.filter((e) => {
+    const at = Date.parse(e.startAt || '');
+    if (!e.leagueId || !Number.isFinite(at)) return true;
+    return madridWeek(e.startAt) === week || (at <= now && now - at < MATCH_SPAN_MS);
+  });
+}
+
 /** Home rows: one per league (with its logo), ordered by its next event; events without league last. */
 export function eventRows(list, custom) {
   const leagues = new Map((custom?.leagues || []).map((l) => [l.id, l]));
