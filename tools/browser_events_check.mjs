@@ -583,6 +583,9 @@ try {
   await page.waitForFunction(() => document.getElementById('player-title').textContent === 'Los hombres de Paco · T10 · Capítulo 2');
   assert.ok(page.url().endsWith('#/series/spaco/ver/e1002'));
   await page.waitForFunction(() => document.getElementById('video').src === 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST');
+  // A series counts in the statistics as itself (all its episodes), without «people watching» in its player.
+  await page.waitForFunction(() => window.__visits.some(([, key]) => key.startsWith('l_')));
+  assert.equal(await page.locator('#player-viewers').isHidden(), true);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // «Continuar viendo» heads the home page (after «Eventos En Directo», the first row of all when there are
   // events today) and opens the film where it was left.

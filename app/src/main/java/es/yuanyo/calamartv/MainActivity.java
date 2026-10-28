@@ -1386,8 +1386,32 @@ public class MainActivity extends Activity {
   // ---- Films, series and documentaries (Google Drive videos, published to Firestore) ----------
 
   Library.Data library;
-  String genre = "", genreSection = "";
-  final int genrePickerId = View.generateViewId();
+  String genre = "", genreSection = "", libPlatform = "", libOnly = "", libOrder = "";
+  int libYear;
+  final int genrePickerId = View.generateViewId(), yearPickerId = View.generateViewId(), platformPickerId = View.generateViewId(),
+      orderPickerId = View.generateViewId(), releasesChipId = View.generateViewId(), arrivalsChipId = View.generateViewId();
+
+  /** A drop-down pill: shows the choice and opens the list; "" is «all» (allLabel). */
+  Button dropdown(final int id, String what, String current, final String allLabel, final List<String> values, final List<String> labels, final java.util.function.Consumer<String> set) {
+    int at = values.indexOf(current);
+    final Button picker = Ui.pill(this, (at < 0 ? allLabel : labels.get(at)) + "  ▾", Ui.Kind.SURFACE, true);
+    picker.setId(id);
+    picker.setContentDescription(what + ": " + (at < 0 ? allLabel : labels.get(at)));
+    picker.setOnClickListener(v -> {
+      PopupMenu menu = new PopupMenu(this, picker);
+      menu.getMenu().add(0, 0, 0, allLabel);
+      for (int i = 0; i < values.size(); i++) menu.getMenu().add(0, i + 1, i + 1, labels.get(i));
+      menu.setOnMenuItemClickListener(choice -> {
+        set.accept(choice.getItemId() == 0 ? "" : values.get(choice.getItemId() - 1));
+        render();
+        View again = root.findViewById(id);
+        if (again != null) again.requestFocus();
+        return true;
+      });
+      menu.show();
+    });
+    return picker;
+  }
   boolean libraryBusy;
   long libraryAt;
   String libraryError = "";
@@ -1426,43 +1450,48 @@ public class MainActivity extends Activity {
       list.addView(label(libraryBusy ? "Cargando…" : libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED));
       return;
     }
-    // Categories: the TMDB genres of the titles in this section; one at a time narrows the grid.
-    if (!section.equals(genreSection)) { genreSection = section; genre = ""; }
-    TreeSet<String> genres = new TreeSet<>(java.text.Collator.getInstance(new Locale("es", "ES")));
-    for (Library.Item item : library.items(section)) genres.addAll(item.genres);
+    // Filters as on the web: TMDB genre, year, platform (Spain), releases and new arrivals, and an order.
+    if (!section.equals(genreSection)) { genreSection = section; genre = ""; libYear = 0; libPlatform = ""; libOnly = ""; libOrder = ""; }
+    java.text.Collator collator = java.text.Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    TreeSet<String> genres = new TreeSet<>(collator), platforms = new TreeSet<>(collator);
+    TreeSet<Integer> years = new TreeSet<>(Collections.reverseOrder());
+    for (Library.Item item : library.items(section)) { genres.addAll(item.genres); platforms.addAll(item.providers); if (item.year > 0) years.add(item.year); }
     if (!genres.contains(genre)) genre = "";
-    List<Library.Item> items = new ArrayList<>();
-    for (Library.Item item : library.items(section))
-      if (matches(item.title) && (genre.isEmpty() || item.genres.contains(genre))) items.add(item);
+    if (!platforms.contains(libPlatform)) libPlatform = "";
+    if (!years.contains(libYear)) libYear = 0;
+    List<Library.Item> named = new ArrayList<>();
+    for (Library.Item item : library.items(section)) if (matches(item.title)) named.add(item);
+    List<Library.Item> items = Library.filter(named, genre, libYear, libPlatform, libOnly, libOrder, System.currentTimeMillis());
     heading(name, items.size() == 1 ? "1 título" : items.size() + " títulos");
-    if (!genres.isEmpty()) {
-      // A drop-down: the button shows the category chosen and opens the list of them.
-      final List<String> options = new ArrayList<>();
-      options.add("");
-      options.addAll(genres);
-      final Button picker = Ui.pill(this, (genre.isEmpty() ? "Todas las categorías" : genre) + "  ▾", Ui.Kind.SURFACE, true);
-      picker.setId(genrePickerId);
-      picker.setContentDescription("Categoría: " + (genre.isEmpty() ? "todas" : genre));
-      picker.setOnClickListener(v -> {
-        PopupMenu menu = new PopupMenu(this, picker);
-        for (int i = 0; i < options.size(); i++) menu.getMenu().add(0, i, i, options.get(i).isEmpty() ? "Todas las categorías" : options.get(i));
-        menu.setOnMenuItemClickListener(choice -> {
-          genre = options.get(choice.getItemId());
-          render();
-          View again = root.findViewById(genrePickerId);
-          if (again != null) again.requestFocus();
-          return true;
-        });
-        menu.show();
-      });
-      LinearLayout pickerRow = row();
-      addButton(pickerRow, picker);
-      LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-      cp.setMargins(0, dp(6), 0, dp(16));
-      list.addView(pickerRow, cp);
+    LinearLayout pickers = row();
+    List<String> genreOptions = new ArrayList<>(genres);
+    if (!genres.isEmpty()) addButton(pickers, dropdown(genrePickerId, "Categoría", genre, "Todas las categorías", genreOptions, genreOptions, v -> genre = v));
+    if (years.size() > 1) {
+      List<String> values = new ArrayList<>(); for (Integer y : years) values.add(String.valueOf(y));
+      addButton(pickers, dropdown(yearPickerId, "Año", libYear > 0 ? String.valueOf(libYear) : "", "Todos los años", values, values, v -> libYear = v.isEmpty() ? 0 : Integer.parseInt(v)));
     }
+    List<String> platformOptions = new ArrayList<>(platforms);
+    if (!platforms.isEmpty()) addButton(pickers, dropdown(platformPickerId, "Plataforma", libPlatform, "Todas las plataformas", platformOptions, platformOptions, v -> libPlatform = v));
+    addButton(pickers, dropdown(orderPickerId, "Orden", libOrder, "Orden del catálogo", Arrays.asList("added", "year", "rating", "name"),
+        Arrays.asList("Añadidas recientemente", "Más nuevas primero", "Mejor valoradas", "Por nombre (A-Z)"), v -> libOrder = v));
+    for (final String[] o : new String[][] {{"estrenos", "Estrenos"}, {"nuevas", "Recién llegadas"}}) {
+      final boolean on = libOnly.equals(o[0]);
+      final int id = o[0].equals("estrenos") ? releasesChipId : arrivalsChipId;
+      Button chip = Ui.pill(this, (on ? "✓ " : "") + o[1], on ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+      chip.setId(id);
+      chip.setContentDescription(o[1] + (on ? ", activado" : ""));
+      chip.setOnClickListener(v -> { libOnly = on ? "" : o[0]; render(); View again = root.findViewById(id); if (again != null) again.requestFocus(); });
+      addButton(pickers, chip);
+    }
+    HorizontalScrollView scroller = new HorizontalScrollView(this);
+    scroller.setHorizontalScrollBarEnabled(false);
+    scroller.addView(pickers);
+    LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+    cp.setMargins(0, dp(6), 0, dp(16));
+    list.addView(scroller, cp);
+    boolean filtered = !genre.isEmpty() || libYear > 0 || !libPlatform.isEmpty() || !libOnly.isEmpty();
     if (items.isEmpty())
-      list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : !genre.isEmpty() ? "No hay títulos de " + genre + "." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
+      list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : filtered ? "No hay títulos con esos filtros." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
     int columns = wide() ? 6 : 3;
     int width = gridWidth(columns);
     if (television) {
@@ -1507,6 +1536,15 @@ public class MainActivity extends Activity {
       cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
       image(cover, item.poster);
+    }
+    if (Library.newArrival(item, System.currentTimeMillis())) {
+      // «Recién llegada»: the red ribbon of new titles, as on Netflix (and on the web).
+      TextView ribbon = label("RECIÉN LLEGADA", 10, 0xffffffff);
+      ribbon.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      ribbon.setGravity(Gravity.CENTER);
+      ribbon.setBackgroundColor(0xffe50914);
+      ribbon.setPadding(dp(4), dp(3), dp(4), dp(3));
+      art.addView(ribbon, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
     }
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 1.5f)));
     TextView name = text(item.title, 13);
