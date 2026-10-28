@@ -4,6 +4,9 @@ import { resetLuluRoute, cleanTitle, episodeOf, confident, luluApi, scanLulu, li
 
 const json = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
 
+// LuluStream's API: luluvido.com first, the old api.lulustream.com after.
+const isDirect = (url) => url.startsWith('https://luluvido.com/api/') || url.startsWith('https://api.lulustream.com/api/');
+
 test('file and folder names give title, year, season and episode', () => {
   assert.deepEqual(cleanTitle('Torrente.Presidente.2025.1080p.WEB-DL.mkv'), { title: 'Torrente Presidente', year: 2025 });
   assert.deepEqual(cleanTitle('Avatar (2009) [Castellano].mp4'), { title: 'Avatar', year: 2009 });
@@ -23,10 +26,10 @@ test('the API is called straight, and through the hosting when the browser is no
   const calls = [];
   const direct = async (url) => { calls.push(url); return json({ status: 200, msg: 'OK', result: { folders: [] } }); };
   assert.deepEqual(await luluApi('folder/list', { fld_id: '0' }, 'clave123456', direct), { folders: [] });
-  assert.match(calls[0], /^https:\/\/api\.lulustream\.com\/api\/folder\/list\?fld_id=0&key=clave123456$/);
+  assert.match(calls[0], /^https:\/\/luluvido\.com\/api\/folder\/list\?fld_id=0&key=clave123456$/);
   const relayed = [];
   const blocked = async (url, options) => {
-    if (url.startsWith('https://api.lulustream.com')) throw new TypeError('Failed to fetch');
+    if (isDirect(url)) throw new TypeError('Failed to fetch');
     relayed.push([url, String(options.body), options.method]);
     return json({ status: 200, result: { files: [] } });
   };
@@ -40,14 +43,14 @@ test('once the browser may not call the API, the hosting is used directly and re
   const calls = [];
   let hosting = 0;
   const flaky = async (url) => {
-    calls.push(url.startsWith('https://api.lulustream.com') ? 'direct' : 'hosting');
-    if (url.startsWith('https://api.lulustream.com')) throw new TypeError('Failed to fetch');
+    calls.push(isDirect(url) ? 'direct' : 'hosting');
+    if (isDirect(url)) throw new TypeError('Failed to fetch');
     if (++hosting === 1) throw Object.assign(new Error('late'), { name: 'TimeoutError' });
     return json({ status: 200, result: { folders: [] } });
   };
   assert.deepEqual(await luluApi('folder/list', { fld_id: '0' }, 'clave123456', flaky), { folders: [] });
   assert.deepEqual(await luluApi('folder/list', { fld_id: '1' }, 'clave123456', flaky), { folders: [] });
-  assert.deepEqual(calls, ['direct', 'hosting', 'hosting', 'hosting']);
+  assert.deepEqual(calls, ['direct', 'direct', 'hosting', 'hosting', 'hosting'], 'luluvido.com, then api.lulustream.com, then the hosting');
   resetLuluRoute();
 });
 
@@ -68,11 +71,11 @@ test('the folders are read as films, series with seasons and documentaries', asy
   const seen = [];
   const scan = await scanLulu('clave123456', { fetcher: lulu, onFolder: (name) => seen.push(name) });
   assert.deepEqual(scan.films.map((f) => [f.section, f.title, f.year, f.link]), [
-    ['movies', 'Torrente Presidente', 2025, 'https://lulustream.com/torrente2025a'],
-    ['movies', 'Avatar', 2009, 'https://lulustream.com/avatar2009abc'],
-    ['documentaries', 'Nuestro planeta', null, 'https://lulustream.com/planeta12345']]);
+    ['movies', 'Torrente Presidente', 2025, 'https://luluvido.com/torrente2025a'],
+    ['movies', 'Avatar', 2009, 'https://luluvido.com/avatar2009abc'],
+    ['documentaries', 'Nuestro planeta', null, 'https://luluvido.com/planeta12345']]);
   assert.deepEqual(scan.series.map((s) => [s.section, s.title, s.episodes.map((e) => [e.season, e.episode, e.link])]), [
-    ['series', 'Los hombres de Paco', [[1, 1, 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'https://lulustream.com/paco1x02aaaa'], [2, 1, 'https://lulustream.com/paco2x01bbbb']]]]);
+    ['series', 'Los hombres de Paco', [[1, 1, 'https://luluvido.com/paco1x01aaaa'], [1, 2, 'https://luluvido.com/paco1x02aaaa'], [2, 1, 'https://luluvido.com/paco2x01bbbb']]]]);
   assert.equal(scan.unknown.length, 1);
   assert.match(scan.unknown[0], /Making of/);
   assert.ok(!seen.includes('Otros'));
@@ -92,20 +95,20 @@ test('the scan is matched in TMDB and merged with the titles added by hand', asy
     if (path === '/tv/4500/season/2') return json({ episodes: [] });
     return json({}, 404);
   };
-  const byHand = { id: 'm999', kind: 'movie', title: 'A mano', url: 'https://lulustream.com/amano123456', tmdb: { title: 'A mano' } };
+  const byHand = { id: 'm999', kind: 'movie', title: 'A mano', url: 'https://luluvido.com/amano123456', tmdb: { title: 'A mano' } };
   const oldPaco = { id: 's4500', kind: 'tv', title: 'Los hombres de Paco', tmdb: { id: 4500 }, episodes: [
-    { id: 'e4500x1x1', season: 1, episode: 1, url: 'https://lulustream.com/manual1x01xx' }, { id: 'e4500x1x3', season: 1, episode: 3, url: 'https://lulustream.com/manual1x03xx' },
-    { id: 'e4500x3x1', season: 3, episode: 1, url: 'https://lulustream.com/paco3x01cccc' }] };
+    { id: 'e4500x1x1', season: 1, episode: 1, url: 'https://luluvido.com/manual1x01xx' }, { id: 'e4500x1x3', season: 1, episode: 3, url: 'https://luluvido.com/manual1x03xx' },
+    { id: 'e4500x3x1', season: 3, episode: 1, url: 'https://luluvido.com/paco3x01cccc' }] };
   const progress = [];
   const result = await libraryFromScan(scan, { movies: [byHand], series: [oldPaco], documentaries: [] }, 'abcdef0123456789abcdef0123456789',
     { fetcher: tmdb, onProgress: (n, total) => progress.push(`${n}/${total}`) });
-  assert.deepEqual(result.sections.movies.map((m) => [m.id, m.url]), [['m999', 'https://lulustream.com/amano123456'], ['m19995', 'https://lulustream.com/avatar2009abc'], ['m1', 'https://lulustream.com/torrente2025a']]);
+  assert.deepEqual(result.sections.movies.map((m) => [m.id, m.url]), [['m999', 'https://luluvido.com/amano123456'], ['m19995', 'https://luluvido.com/avatar2009abc'], ['m1', 'https://luluvido.com/torrente2025a']]);
   assert.deepEqual(result.sections.series[0].episodes.map((e) => [e.season, e.episode, e.name, e.url]), [
-    [1, 1, 'Piloto', 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'Segundo', 'https://lulustream.com/paco1x02aaaa'], [1, 3, '', 'https://lulustream.com/manual1x03xx'],
-    [2, 1, '', 'https://lulustream.com/paco2x01bbbb'], [3, 1, undefined, 'https://lulustream.com/paco3x01cccc']]);
+    [1, 1, 'Piloto', 'https://luluvido.com/paco1x01aaaa'], [1, 2, 'Segundo', 'https://luluvido.com/paco1x02aaaa'], [1, 3, '', 'https://luluvido.com/manual1x03xx'],
+    [2, 1, '', 'https://luluvido.com/paco2x01bbbb'], [3, 1, undefined, 'https://luluvido.com/paco3x01cccc']]);
   assert.deepEqual(result.added, { films: 2, shows: 1, episodes: 3, pending: 1 });
   // Not in TMDB: added anyway with the file's name, to be matched in the admin page.
-  assert.deepEqual(result.sections.documentaries, [{ id: 'uplaneta12345', kind: 'movie', title: 'Nuestro planeta', year: null, file: 'Nuestro planeta.mp4', url: 'https://lulustream.com/planeta12345', status: 'unmatched' }]);
+  assert.deepEqual(result.sections.documentaries, [{ id: 'uplaneta12345', kind: 'movie', title: 'Nuestro planeta', year: null, file: 'Nuestro planeta.mp4', url: 'https://luluvido.com/planeta12345', status: 'unmatched' }]);
   assert.ok(result.unknown.some((line) => /Nuestro planeta.*sin ficha de TMDB/.test(line)));
   assert.deepEqual(progress, ['1/4', '2/4', '3/4', '4/4']);
 });
@@ -132,16 +135,16 @@ test('titles TMDB does not find are added, matched by hand, and recognised by th
   const first = await libraryFromScan(await scanLulu('clave123456', { fetcher: fetchLulu }), { movies: [], series: [], documentaries: [] }, key, { fetcher: tmdb });
   assert.deepEqual(first.added, { films: 0, shows: 0, episodes: 0, pending: 2 });
   const [film] = first.sections.movies, [show] = first.sections.series;
-  assert.deepEqual([film.id, film.status, film.title, film.url], ['urara12345678', 'unmatched', 'Rarisima', 'https://lulustream.com/rara12345678']);
+  assert.deepEqual([film.id, film.status, film.title, film.url], ['urara12345678', 'unmatched', 'Rarisima', 'https://luluvido.com/rara12345678']);
   assert.deepEqual([show.id, show.status, show.folder, show.episodes.map((e) => [e.season, e.episode, e.url])],
-    ['userie-rara', 'unmatched', 'Serie rara', [[1, 1, 'https://lulustream.com/serie1x01aaa'], [1, 2, 'https://lulustream.com/serie1x02aaa']]]);
+    ['userie-rara', 'unmatched', 'Serie rara', [[1, 1, 'https://luluvido.com/serie1x01aaa'], [1, 2, 'https://luluvido.com/serie1x02aaa']]]);
 
   // In the admin page the right TMDB record is chosen: the links go with it.
   const movie = await matchUnmatched(film, 77, null, key, tmdb);
-  assert.deepEqual([movie.id, movie.tmdb.title, movie.url], ['m77', 'La rarísima', 'https://lulustream.com/rara12345678']);
+  assert.deepEqual([movie.id, movie.tmdb.title, movie.url], ['m77', 'La rarísima', 'https://luluvido.com/rara12345678']);
   const series = await matchUnmatched(show, 88, null, key, tmdb);
   assert.deepEqual([series.id, series.folder, series.episodes.map((e) => [e.episode, e.name, e.url])],
-    ['s88', 'Serie rara', [[1, 'Uno', 'https://lulustream.com/serie1x01aaa'], [2, 'Dos', 'https://lulustream.com/serie1x02aaa']]]);
+    ['s88', 'Serie rara', [[1, 'Uno', 'https://luluvido.com/serie1x01aaa'], [2, 'Dos', 'https://luluvido.com/serie1x02aaa']]]);
 
   // Reading the folders again keeps those records (by link and by folder) instead of adding them again.
   rare[4].files.push({ file_code: 'serie1x03aaa', title: '1x03.mp4' });
@@ -170,7 +173,7 @@ test('the day LuluStream received each video is the day it arrived in the librar
   const folder = await luluFolder(0, 'clave123456', async () => json({ status: 200, result: {
     folders: [], files: [{ file_code: 'abcd1234efgh', title: 'Nueva (2026).mp4', uploaded: '2026-10-21 18:03:11' }, { file_code: 'zzzz1234efgh', title: 'Vieja.mp4' }] } }));
   assert.deepEqual(folder.files.map((f) => f.uploaded), ['2026-10-21', '']);
-  const result = await libraryFromScan({ films: [{ section: 'movies', title: 'Nueva', year: 2026, file: 'Nueva (2026).mp4', link: 'https://lulustream.com/e/abcd1234efgh', uploaded: '2026-10-21' }], series: [], unknown: [] },
+  const result = await libraryFromScan({ films: [{ section: 'movies', title: 'Nueva', year: 2026, file: 'Nueva (2026).mp4', link: 'https://luluvido.com/e/abcd1234efgh', uploaded: '2026-10-21' }], series: [], unknown: [] },
     { movies: [], series: [], documentaries: [] }, 'abcdef0123456789abcdef0123456789', { fetcher: async () => json({ results: [] }) });
   assert.equal(result.sections.movies[0].addedAt, '2026-10-21');
 });

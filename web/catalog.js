@@ -218,7 +218,7 @@ export function lulustreamEmbed(url) {
   try {
     const u = new URL(String(url).trim());
     const code = u.pathname.match(/^\/(?:e\/|d\/|v\/)?([A-Za-z0-9]{8,20})(?:\.html)?\/?$/)?.[1];
-    return u.protocol === 'https:' && LULU_HOST.test(u.hostname) && code && code !== 'api' ? `https://lulustream.com/e/${code}` : null;
+    return u.protocol === 'https:' && LULU_HOST.test(u.hostname) && code && code !== 'api' ? `https://luluvido.com/e/${code}` : null;
   } catch { return null; }
 }
 

@@ -6,6 +6,11 @@
 //    (seg=…): nothing is written to disk, but every film watched on the web passes through here (1–2 GB).
 //  - GET code=…: the video address (debug=1: what the player page contains; probar=1: open that address).
 
+// LuluStream moved its site to luluvido.com (lulustream.com stopped answering in October 2026): the same
+// videos, codes and API. Each page and API call tries luluvido.com first and lulustream.com after.
+const LULU_SITE = 'https://luluvido.com';
+const LULU_PAGES = array('https://luluvido.com/e/', 'https://lulustream.com/e/');
+const LULU_APIS = array('https://luluvido.com/api/', 'https://api.lulustream.com/api/');
 const LULU_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 function answer($data, $code = 200) {
@@ -92,7 +97,7 @@ function luluCurl($url, $timeout) {
     curl_setopt_array($ch, array(
         CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => $timeout, CURLOPT_USERAGENT => LULU_BROWSER,
-        CURLOPT_HTTPHEADER => array('Referer: https://lulustream.com/', 'Origin: https://lulustream.com'),
+        CURLOPT_HTTPHEADER => array('Referer: ' . LULU_SITE . '/', 'Origin: ' . LULU_SITE),
     ));
     return $ch;
 }
@@ -117,7 +122,7 @@ function luluStream($url) {
     $headers = array(); $status = 0; $sent = false;
     $ch = luluCurl($url, 300);
     $range = $_SERVER['HTTP_RANGE'] ?? '';
-    if (preg_match('/^bytes=\d*-\d*$/', $range)) curl_setopt($ch, CURLOPT_HTTPHEADER, array('Referer: https://lulustream.com/', 'Origin: https://lulustream.com', 'Range: ' . $range));
+    if (preg_match('/^bytes=\d*-\d*$/', $range)) curl_setopt($ch, CURLOPT_HTTPHEADER, array('Referer: ' . LULU_SITE . '/', 'Origin: ' . LULU_SITE, 'Range: ' . $range));
     curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $line) use (&$headers, &$status) {
         if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $m)) { $status = (int)$m[1]; $headers = array(); }
         elseif (preg_match('/^(content-type|content-length|content-range|accept-ranges):\s*(.+?)\s*$/i', $line, $m)) $headers[strtolower($m[1])] = $m[2];
@@ -168,8 +173,12 @@ function luluMain() {
             answer(array('error' => 'Consulta de LuluStream no válida.'), 400);
         // A folder with many videos can take LuluStream a while to list.
         @set_time_limit(45);
-        list(, $body) = luluGet('https://api.lulustream.com/api/folder/list?' . http_build_query(array('key' => $key, 'fld_id' => $folder, 'files' => '1')), 4194304, 35);
-        $data = $body !== null ? json_decode($body, true) : null;
+        $data = null;
+        foreach (LULU_APIS as $api) {
+            list(, $body) = luluGet($api . 'folder/list?' . http_build_query(array('key' => $key, 'fld_id' => $folder, 'files' => '1')), 4194304, 35);
+            $data = $body !== null ? json_decode($body, true) : null;
+            if (is_array($data)) break;
+        }
         if (!is_array($data)) answer(array('error' => 'LuluStream no ha respondido.'), 502);
         answer($data);
     }
@@ -209,7 +218,10 @@ function luluMain() {
 
     $code = $_GET['code'] ?? '';
     if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,20}$/', $code)) answer(array('error' => 'Código de vídeo no válido.'), 400);
-    list($status, $html) = luluGet('https://lulustream.com/e/' . $code);
+    foreach (LULU_PAGES as $page) {
+        list($status, $html) = luluGet($page . $code);
+        if ($status === 200 && $html !== null) break;
+    }
     if ($status !== 200 || $html === null)
         answer(array('error' => 'LuluStream no responde (' . $status . ').') + (isset($_GET['debug']) && $html ? array('inicio' => substr(strip_tags($html), 0, 400)) : array()), 502);
     $scripts = luluScripts($html);

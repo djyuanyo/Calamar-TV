@@ -1987,9 +1987,15 @@ public class MainActivity extends Activity {
     for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
       if (section.equals(entry.optString("section"))) watched.add(entry.optString("item"));
     heroSlider(section, Library.heroTitles(items, System.currentTimeMillis(), 8));
-    platformButtons(section, Library.platforms(items));
+    platformButtons(section, Library.platforms(items, custom == null ? null : custom.optJSONArray("platforms")));
     for (Library.Row row : Library.browseRows(section, items, watched, userName(), System.currentTimeMillis())) {
       if (row.kind.equals("continue")) continueRow(section, row.title);
+      else if (row.kind.equals("horror")) {
+        List<Object[]> entries = new ArrayList<>();
+        for (Library.Item item : row.items) entries.add(new Object[] {section, item});
+        // «Descubrir todo»: every horror title of this section, as when «Terror» is chosen in the categories.
+        horrorBanner(row.title, entries, () -> { genre = "Terror"; render(); });
+      }
       else if (row.kind.equals("top")) topRow(row.items, "", row.title);
       else posterRail(row.title, row.items, row.kind.equals("big") ? (wide() ? 230 : 170) : (wide() ? 140 : 108));
     }
@@ -2163,6 +2169,8 @@ public class MainActivity extends Activity {
       if (!item.backdrop.isEmpty()) backdrops.add(item.backdrop);
       if (logo.isEmpty() && item.logos.containsKey(name)) logo = item.logos.get(name);
     }
+    // The logo set in the admin page goes before TMDB's.
+    for (String[] p : Library.platforms(all, custom == null ? null : custom.optJSONArray("platforms"))) if (p[0].equals(name) && !p[1].isEmpty()) logo = p[1];
     if (!backdrops.isEmpty()) {
       ImageView art = new ImageView(this);
       art.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -2199,7 +2207,11 @@ public class MainActivity extends Activity {
 
   /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
   void halloweenRow() {
-    List<Object[]> horror = Library.horror(library);
+    horrorBanner("Especial Halloween", Library.horror(library), () -> { mode = HALLOWEEN; query = ""; home(); });
+  }
+
+  /** The dark horror banner (Especial Halloween, and the horror row of each section): titles and «Descubrir todo». */
+  void horrorBanner(String heading, List<Object[]> horror, final Runnable discover) {
     if (horror.isEmpty()) return;
     FrameLayout banner = new FrameLayout(this);
     String backdrop = "";
@@ -2217,7 +2229,7 @@ public class MainActivity extends Activity {
     LinearLayout box = new LinearLayout(this);
     box.setOrientation(LinearLayout.VERTICAL);
     box.setPadding(dp(16), dp(22), 0, dp(18));
-    box.addView(halloweenTitle("ESPECIAL HALLOWEEN"));
+    box.addView(halloweenTitle(heading.toUpperCase(new Locale("es", "ES"))));
     TextView kicker = label("COLECCIÓN DE TERROR", 12, 0xffe7dccb);
     kicker.setLetterSpacing(0.2f);
     kicker.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -2232,7 +2244,7 @@ public class MainActivity extends Activity {
     h.addView(r);
     box.addView(h);
     Button all = Ui.pill(this, "Descubrir todo", Ui.Kind.ACCENT, false);
-    all.setOnClickListener(v -> { mode = HALLOWEEN; query = ""; home(); });
+    all.setOnClickListener(v -> discover.run());
     LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);
     ap.gravity = Gravity.CENTER_HORIZONTAL;
     ap.setMargins(0, dp(10), dp(16), 0);

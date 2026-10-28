@@ -358,8 +358,12 @@ export function heroTitles(items, now = Date.now(), size = 8) {
   return out.slice(0, size);
 }
 
-/** The platforms of a list of titles (TMDB, in Spain), the one with most titles first: [{ name, logo, count }]. */
-export function platformsOf(items) {
+/**
+ * The platforms of a list of titles (TMDB, in Spain): [{ name, logo, count }]. `settings` is the catalog's
+ * `platforms` list set in the admin page ([{ name, logo, hidden }], in the order chosen): those go first in
+ * that order with their own logo, hidden ones are left out, and the rest follow, the one with most titles first.
+ */
+export function platformsOf(items, settings = []) {
   const found = new Map();
   for (const item of items) for (const name of item.tmdb?.providers || []) {
     const p = found.get(name) || { name, logo: '', count: 0 };
@@ -367,7 +371,11 @@ export function platformsOf(items) {
     p.logo ||= item.tmdb?.logos?.[name] || '';
     found.set(name, p);
   }
-  return [...found.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'es'));
+  const chosen = Array.isArray(settings) ? settings.filter((s) => s && typeof s.name === 'string') : [];
+  const place = (p) => { const i = chosen.findIndex((s) => s.name === p.name); return i < 0 ? chosen.length : i; };
+  return [...found.values()].filter((p) => !chosen.some((s) => s.name === p.name && s.hidden))
+    .map((p) => ({ ...p, logo: chosen.find((s) => s.name === p.name)?.logo || p.logo }))
+    .sort((a, b) => place(a) - place(b) || b.count - a.count || a.name.localeCompare(b.name, 'es'));
 }
 export const PLATFORM_PAGE = 'plataforma';
 export const platformPath = (name) => `#/${PLATFORM_PAGE}/${encodeURIComponent(name)}`;
@@ -398,17 +406,19 @@ export function platformRows(library, name, now = Date.now()) {
  * numbers), 'big' (large posters) or 'continue' (filled by the page with what this browser left half watched).
  */
 export function browseRows(section, items, { now = Date.now(), watchedIds = [], name = '' } = {}) {
+  // kind 'horror': the dark banner of «Especial Halloween».
   const rows = [];
   const add = (key, title, list, kind = 'poster') => { if (kind === 'continue' || list.length) rows.push({ key, title, kind, items: list.slice(0, ROW_LIMIT) }); };
   const used = new Set();
-  const genre = (row) => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest)); };
+  const genre = (row, kind = 'poster') => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest), kind); };
   add('spanish', SPANISH_ROW[section.key] || `${section.label} españolas`, items.filter(isSpanish).sort(byInterest));
   add('today', 'Recomendaciones de hoy para ti', todaysPicks(items, watchedIds, madridDay(now)));
   if (TOP_SECTIONS.includes(section.key)) {
     const top = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend).slice(0, TOP_SIZE);
     add('top', top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`, top, 'top');
   }
-  genre(GENRE_ROWS.terror);
+  // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
+  genre(GENRE_ROWS.terror, 'horror');
   // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
   add('new', 'Novedades en Calamar TV', freshTitles(items, now), 'big');
   add('continue', name ? `Seguir viendo para ${name}` : 'Seguir viendo', [], 'continue');
@@ -487,7 +497,7 @@ export function browseCard(el, section, item, { big = false } = {}) {
  * filter, the poster grid of the titles that pass. `watching` are this browser's «Continuar viendo»
  * entries, `name` the signed-in user's first name.
  */
-export function libraryPage(el, section, library, { watching = [], name = '', open = () => {}, remove = () => {} } = {}) {
+export function libraryPage(el, section, library, { watching = [], name = '', open = () => {}, remove = () => {}, platforms: platformSettings = [] } = {}) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const body = el('div', { class: 'browse-body' });
@@ -519,12 +529,19 @@ export function libraryPage(el, section, library, { watching = [], name = '', op
     if (!filters.hidden) query.focus();
   } }, '🔍 Buscar y filtrar');
   const watchedIds = watching.filter((entry) => entry.page === section.page).map((entry) => entry.item);
-  const rows = () => [...heroSlider(el, section, heroTitles(items)), ...platformButtons(el, platformsOf(items)), ...browseRows(section, items, { watchedIds, name }).flatMap((row) => {
+  const rows = () => [...heroSlider(el, section, heroTitles(items)), ...platformButtons(el, platformsOf(items, platformSettings)), ...browseRows(section, items, { watchedIds, name }).flatMap((row) => {
     if (row.kind === 'continue') {
       const mine = watching.filter((entry) => entry.page === section.page);
       return mine.length ? continueRow(el, mine, { open, remove }, row.title) : [];
     }
     if (row.kind === 'top') return topRow(el, row.items.map((item) => ({ section, item })), '', row.title);
+    if (row.kind === 'horror') return horrorBanner(el, row.title, row.items.map((item) => ({ section, item })), { onclick: (event) => {
+      // «Descubrir todo»: every horror title of this section, as when «Terror» is chosen in the categories.
+      event.preventDefault();
+      picker.value = [...picker.options].some((o) => o.value === 'Terror') ? 'Terror' : '';
+      draw();
+      picker.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } });
     return [el('div', { class: 'section-head' }, el('h2', {}, row.title)),
       el('div', { class: `rail browse-rail${row.kind === 'big' ? ' big-rail' : ''}` }, row.items.map((item) => browseCard(el, section, item, { big: row.kind === 'big' })))];
   })];
@@ -602,9 +619,10 @@ export function platformButtons(el, platforms) {
  * A platform's page, as on Disney+ (Marvel): the platform's logo over the backdrop of one of its titles
  * (a different one, at random, every time) and its titles in rows: «En primer plano», by section and by genre.
  */
-export function platformPage(el, library, name, random = Math.random) {
+export function platformPage(el, library, name, random = Math.random, settings = []) {
   const { all, rows } = platformRows(library, name);
-  const logo = all.map(({ item }) => item.tmdb?.logos?.[name]).find(Boolean);
+  const own = Array.isArray(settings) ? settings.find((s) => s?.name === name)?.logo : '';
+  const logo = own || all.map(({ item }) => item.tmdb?.logos?.[name]).find(Boolean);
   const backdrops = all.map(({ item }) => item.tmdb?.backdrop).filter(Boolean);
   const backdrop = backdrops[Math.floor(random() * backdrops.length)];
   const nodes = [el('section', { class: 'platform-hero', style: backdrop ? `--platform-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
@@ -634,13 +652,17 @@ export function halloweenPage(el, library) {
 
 /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
 export function halloweenRow(el, library) {
-  const found = horrorTitles(library);
-  if (!found.length) return [];
-  const backdrop = found.find(({ item }) => item.tmdb?.backdrop)?.item.tmdb.backdrop;
-  return [el('section', { class: 'halloween-banner', 'aria-label': 'Especial Halloween', style: backdrop ? `--halloween-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
-    el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h2', {}, 'Especial Halloween'),
-    el('div', { class: 'rail browse-rail' }, found.slice(0, ROW_LIMIT).map(({ section, item }) => browseCard(el, section, item))),
-    el('a', { class: 'halloween-all', href: `#/${HALLOWEEN_PAGE}` }, 'Descubrir todo'))];
+  return horrorBanner(el, 'Especial Halloween', horrorTitles(library), { href: `#/${HALLOWEEN_PAGE}` });
+}
+
+/** The dark horror banner (Especial Halloween, and the horror row of each section): titles and «Descubrir todo». */
+export function horrorBanner(el, title, entries, { href = '#', onclick = null } = {}) {
+  if (!entries.length) return [];
+  const backdrop = entries.find(({ item }) => item.tmdb?.backdrop)?.item.tmdb.backdrop;
+  return [el('section', { class: 'halloween-banner', 'aria-label': title, style: backdrop ? `--halloween-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
+    el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h2', {}, title),
+    el('div', { class: 'rail browse-rail' }, entries.slice(0, ROW_LIMIT).map(({ section, item }) => browseCard(el, section, item))),
+    el('a', { class: 'halloween-all', href, onclick }, 'Descubrir todo'))];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
@@ -714,6 +736,20 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
 // ---- Administration ---------------------------------------------------------------------------
 
 /** A link the web or the app can play: LuluStream, or a direct HTTPS video (MP4, HLS…). */
+/** LuluStream's links (of films, documentaries and episodes) on its current site, luluvido.com: { sections, changed }. */
+export function luluvidoLinks(sections) {
+  let changed = 0;
+  const move = (url) => {
+    const code = lulustreamEmbed(url)?.split('/').pop();
+    const next = code ? `https://luluvido.com/${code}` : url;
+    if (next !== url) changed++;
+    return next;
+  };
+  const out = Object.fromEntries(Object.entries(sections || {}).map(([key, items]) => [key, (items || []).map((item) => ({
+    ...item, ...(item.url ? { url: move(item.url) } : {}), ...(item.episodes ? { episodes: item.episodes.map((e) => (e.url ? { ...e, url: move(e.url) } : e)) } : {}) }))]));
+  return { sections: out, changed };
+}
+
 export const validVideoLink = (url) => !!lulustreamEmbed(url) || (/^https:\/\//.test(String(url).trim()) && webPlayback(String(url).trim()).ok);
 
 /**
@@ -739,7 +775,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const saveLulu = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave de LuluStream');
   const store = async (sections) => {
     // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
-    const next = stampAdded(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []])), current.sections);
+    // LuluStream links are saved on its current site (luluvido.com), whatever name they were pasted with.
+    const next = stampAdded(luluvidoLinks(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]))).sections, current.sections);
     await publish(libraryParts(next));
     current = { ...current, sections: next };
     drawList();
@@ -755,10 +792,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     await store(sections);
   };
   const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
-  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://lulustream.com/…', 'aria-label': label, class: 'library-link' });
+  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://luluvido.com/…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
     const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
-    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://lulustream.com/…) o un vídeo MP4/HLS por HTTPS.`); }
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…) o un vídeo MP4/HLS por HTTPS.`); }
   };
 
   // ---- Search ----
@@ -813,7 +850,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
-        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (lulustream.com, luluvido.com, luluvdo.com…).'),
+        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (luluvido.com, lulustream.com, luluvdo.com…).'),
           el('div', { class: 'actions' }, save, del, close), note);
         link.focus();
         return;
@@ -926,6 +963,17 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
     } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; }
   } }, 'Leer carpetas de LuluStream');
+  // LuluStream moved to luluvido.com: the links saved before (lulustream.com, luluvdo.com…) move there in one go.
+  const moveButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    moveButton.disabled = true;
+    try {
+      const { changed } = luluvidoLinks(current.sections);
+      if (!changed) { scanNote.textContent = 'Todos los enlaces de LuluStream ya están en luluvido.com.'; return; }
+      scanNote.textContent = 'Publicando…';
+      await store(current.sections);
+      scanNote.textContent = `Hecho: ${changed} ${changed === 1 ? 'enlace cambiado' : 'enlaces cambiados'} a luluvido.com (películas, documentales y capítulos).`;
+    } catch (error) { scanNote.textContent = error.message; } finally { moveButton.disabled = false; }
+  } }, 'Cambiar los enlaces a luluvido.com');
 
   // ---- A title TMDB did not recognise: search TMDB and choose its record; its links go with it ----
   function openMatcher(sectionKey, item) {
@@ -1082,7 +1130,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu)),
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
-    el('div', { class: 'actions' }, scanButton), scanNote, scanReport,
+    el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,
     el('h3', {}, 'Portada y Top 10 de películas y series'),
     el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en cualquier título de la lista de abajo para que salga en la portada de inicio, junto a los eventos destacados. La portada muestra el top de la semana de tus películas y el de tus series (hasta 10 de cada, o las que haya), ordenadas por las tendencias de la semana en TMDB y su popularidad; se actualiza solo una vez al día al abrir esta página.'),
     el('div', { class: 'actions' }, topButton), topNote,

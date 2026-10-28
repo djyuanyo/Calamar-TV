@@ -130,10 +130,10 @@ public class LibraryTest {
     assertFalse(Library.Media.allowed("http://www.googleapis.com/drive/v3/files/1AbC"));
     assertFalse(Library.Media.allowed("https://example.com/drive/v3/files/1AbC"));
     assertTrue(Library.Media.allowed("https://lulustream.com/abcd1234efgh"));
-    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
-    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
+    assertEquals("https://luluvido.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
+    assertEquals("https://luluvido.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
     assertNull(Library.Media.embed("https://lulustream.com/fld/h9vd4z179z"));
-    assertEquals("https://lulustream.com/e/duj5ak4x5waa", Library.Media.embed("https://luluvido.com/d/duj5ak4x5waa"));
+    assertEquals("https://luluvido.com/e/duj5ak4x5waa", Library.Media.embed("https://luluvido.com/d/duj5ak4x5waa"));
     assertEquals("https://calamarmenciano.com/calamar-lulu.php?code=bq4heljir3hb&hls=1", Library.Media.hosting("https://lulustream.com/bq4heljir3hb"));
     assertNull(Library.Media.hosting("https://example.com/video.mp4"));
     // Same address as playerPageRelay() on the web.
@@ -260,5 +260,23 @@ public class LibraryTest {
     assertEquals("Disney Plus", platforms.get(0)[0]);
     assertEquals("2", platforms.get(0)[2]);
     assertEquals("https://image.tmdb.org/t/p/w154/n.jpg", platforms.get(1)[1]);
+  }
+
+  @Test public void platformSettingsFromTheAdminPageMatchTheWeb() throws Exception {
+    Library.Item a = titled("a", "", "", "\"Netflix\",\"Max\",\"Filmin\"", "");
+    Library.Item b = titled("b", "", "", "\"Netflix\",\"Max\"", "");
+    JSONArray settings = new JSONArray("[{\"name\":\"Filmin\",\"logo\":\"https://mio/filmin.png\"},{\"name\":\"Max\",\"hidden\":true}]");
+    List<String[]> out = Library.platforms(Arrays.asList(a, b), settings);
+    assertEquals(2, out.size());
+    assertEquals("Filmin", out.get(0)[0]);
+    assertEquals("https://mio/filmin.png", out.get(0)[1]);
+    assertEquals("Netflix", out.get(1)[0]);
+  }
+
+  @Test public void horrorRowHasTheHalloweenBanner() throws Exception {
+    long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
+    for (Library.Row row : Library.browseRows("movies", Arrays.asList(titled("w", "\"Terror\"", "", "", "")), new HashSet<String>(), "", now))
+      if (row.key.equals("terror")) { assertEquals("horror", row.kind); return; }
+    fail("No horror row");
   }
 }

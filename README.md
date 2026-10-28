@@ -366,3 +366,16 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - **Novedades en Calamar TV**, con los pósteres grandes, ocupa el sitio de *Solo en Calamar TV* y muestra las recién llegadas y las series con capítulo nuevo.
 - **Nuevo episodio**: cada capítulo guarda el día en que llegó (al publicarlo o, con «Leer carpetas de LuluStream», el día en que LuluStream lo recibió). Una serie que ya estaba y recibe un capítulo lleva la etiqueta roja «Nuevo episodio» durante dos semanas. Los capítulos que ya estaban antes de esta versión no cuentan.
 - Los logos de las plataformas se guardan al añadir un título y en los demás con «Actualizar el top y las plataformas con TMDB» (o la actualización automática diaria). Hasta entonces, el botón muestra el nombre de la plataforma.
+
+## LuluStream en luluvido.com (2.20.44)
+
+- LuluStream cambió su web a **luluvido.com** (lulustream.com ya no responde, error 521); los vídeos, los códigos y la API son los mismos.
+- La web, la app y `calamar-lulu.php` abren ahora la página de cada vídeo en `https://luluvido.com/e/CÓDIGO` y llaman a la API en `https://luluvido.com/api/`, con `lulustream.com` como respaldo. Los enlaces ya guardados (lulustream.com, luluvdo.com, lulu.st…) siguen valiendo: se reconocen por el código.
+- Los enlaces guardados se cambian a `https://luluvido.com/CÓDIGO`: con el botón **«Cambiar los enlaces a luluvido.com»** (Administración → Pelis y series, junto a «Leer carpetas de LuluStream») de una vez, y en cada publicación los que se peguen con otro nombre.
+- **Hay que volver a subir `hosting/calamar-lulu.php` al hosting** (junto a los demás PHP de Calamar TV): es el que lee las páginas de LuluStream para reproducir en la web y lee las carpetas en el administrador.
+
+## Terror con el banner de Halloween y plataformas desde el administrador (2.20.44)
+
+- En Películas, Series y Documentales (web y app), la fila de **terror** tiene el diseño del «Especial Halloween»: banner oscuro con los títulos y **Descubrir todo**, que muestra todos los títulos de terror de esa sección.
+- **Administración → Pelis y series → Plataformas**: lista de las plataformas de tus títulos (según TMDB) para **ordenar** los botones (arrastrando ⠿), **subir un logo propio** o pegar su enlace (mejor PNG cuadrado y transparente de unos 256×256; sin logo propio se usa el de TMDB) y **ocultar** los que no quieras (por ejemplo «Amazon Prime Video with Ads»). Se guarda en el catálogo (`platforms`) y lo usan la web y la app.
+- Los logos de TMDB aparecen después de pulsar «Actualizar el top y las plataformas con TMDB».

@@ -38,6 +38,17 @@ export function validateCatalog(data, { checkSize = true } = {}) {
   if (data.leagueOrder !== undefined && (!Array.isArray(data.leagueOrder) || data.leagueOrder.length > 500
       || data.leagueOrder.some((id) => typeof id !== 'string' || !id || id.length > 120)
       || new Set(data.leagueOrder).size !== data.leagueOrder.length)) throw new Error('El orden de las ligas no es válido.');
+  // The platform buttons of films and series: [{ name, logo, hidden }] in the order chosen in the admin page.
+  if (data.platforms !== undefined) {
+    if (!Array.isArray(data.platforms) || data.platforms.length > 100) throw new Error('La lista de plataformas no es válida.');
+    const names = new Set();
+    for (const p of data.platforms) {
+      if (!p || typeof p.name !== 'string' || !p.name.trim() || p.name.length > 80 || names.has(p.name)
+          || (p.logo !== undefined && p.logo !== '' && (typeof p.logo !== 'string' || !validCover(p.logo)))
+          || (p.hidden !== undefined && typeof p.hidden !== 'boolean')) throw new Error('Cada plataforma necesita su nombre, un logo válido o ninguno, y si está oculta.');
+      names.add(p.name);
+    }
+  }
   if (data.libraryVisible !== undefined && typeof data.libraryVisible !== 'boolean') throw new Error('El interruptor de películas y series no es válido.');
   if (data.categories !== undefined) {
     const ids = new Set(), names = new Set();
