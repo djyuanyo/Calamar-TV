@@ -105,6 +105,14 @@ try {
   // The home page lists only events, in one row per league with its name.
   assert.equal(await page.locator('main .rail .card:not(.event-card)').count(), 0);
   assert.equal(await page.locator('main .section-head h2').first().textContent(), 'Liga de prueba');
+  // The league's name opens its page with every match that has a channel, and it can be shared.
+  assert.equal(await page.locator('main .section-head h2 a.league-head').first().getAttribute('href'), '#/liga/liga-de-prueba');
+  await page.locator('main .section-head h2 a.league-head').first().click();
+  await page.locator('.league-hero h1', { hasText: 'Liga de prueba' }).waitFor();
+  assert.ok(await page.locator('.league-grid .event-card').count() > 0);
+  await page.getByRole('button', { name: '⤴ Compartir' }).waitFor();
+  await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
+  await page.locator('.event-card:not(.live-rail *)').waitFor();
   const dimensions = await page.evaluate(() => {
     const cover = document.querySelector('.event-card:not(.live-rail *) .event-cover'), art = cover.parentElement;
     const header = document.querySelector('.brand').getBoundingClientRect(), search = document.querySelector('.search').getBoundingClientRect();

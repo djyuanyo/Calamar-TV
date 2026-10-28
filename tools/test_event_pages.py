@@ -123,7 +123,7 @@ class SharePreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as site:
             pages.publish(site, BASE, FIXTURES, download=lambda url: self.fail('covers are drawn, not linked'), images=images, tdt=TDT)
             root = pathlib.Path(site)
-            for folder in ('evento/real-betis-vs-feyenoord-1', 'evento/real-betis-vs-feyenoord-2', 'canal/la-1', 'canal/la-1-2', 'canal/solo-web'):
+            for folder in ('liga/laliga', 'evento/real-betis-vs-feyenoord-1', 'evento/real-betis-vs-feyenoord-2', 'canal/la-1', 'canal/la-1-2', 'canal/solo-web'):
                 with Image.open(root / folder / 'vista.jpg') as picture:
                     self.assertEqual(picture.size, (1200, 630))
                 self.assertLessEqual((root / folder / 'vista.jpg').stat().st_size, 300 * 1024)
@@ -136,6 +136,12 @@ class SharePreviewTest(unittest.TestCase):
             self.assertGreater(match.getpixel((270, 315))[1], 120)        # The home crest on the left.
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/canal/la-1"', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             self.assertIn('Deportes · En directo en Calamar TV', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
+            # Each league has its own page to share: its logo large in the middle, opening #/liga/<slug>.
+            league = (root / 'liga/laliga/index.html').read_text(encoding='utf-8')
+            self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/liga/laliga"', league)
+            self.assertIn('Todos los partidos de LaLiga con canal, en Calamar TV', league)
+            with Image.open(root / 'liga/laliga/vista.jpg') as opened:
+                self.assertGreater(min(opened.convert('RGB').getpixel((600, 315))), 200)
             # The background that does not answer is left out; each image is read once.
             self.assertEqual(asked.count('https://img.example/liga.png'), 1)
 

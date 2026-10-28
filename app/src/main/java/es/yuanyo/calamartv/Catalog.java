@@ -292,20 +292,28 @@ public final class Catalog {
 
   /** A home row: a league with its logo and its events in date order. */
   public static final class EventRow {
-    public final String name, logo;
+    /** The league's id ("" for «Otros eventos»), its name and logo. */
+    public final String id, name, logo;
     public final List<Channel> events = new ArrayList<>();
-    EventRow(String name, String logo) { this.name = name; this.logo = logo; }
+    EventRow(String id, String name, String logo) { this.id = id; this.name = name; this.logo = logo; }
+  }
+
+  /** A league's page: its matches of every week that already have a channel or video (as leagueEvents on the web). */
+  public static List<Channel> leagueEvents(List<Channel> channels, JSONObject custom, String leagueId, long now) {
+    List<Channel> out = new ArrayList<>();
+    for (Channel e : events(channels, custom, now, true)) if (e.leagueId.equals(leagueId) && e.playable() && !e.pending) out.add(e);
+    return out;
   }
 
   /** One row per league, ordered by its next event; events without league go last. */
   public static List<EventRow> eventRows(List<Channel> events, JSONObject custom) {
     LinkedHashMap<String, EventRow> rows = new LinkedHashMap<>();
-    EventRow other = new EventRow("Otros eventos", "");
+    EventRow other = new EventRow("", "Otros eventos", "");
     for (Channel e : events) {
       JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), e.leagueId);
       if (league == null) { other.events.add(e); continue; }
       EventRow row = rows.get(e.leagueId);
-      if (row == null) rows.put(e.leagueId, row = new EventRow(league.optString("name"), league.optString("logo")));
+      if (row == null) rows.put(e.leagueId, row = new EventRow(e.leagueId, league.optString("name"), league.optString("logo")));
       row.events.add(e);
     }
     // The order set in Administración → Ligas comes first (as on the web); the rest follow by their next event.

@@ -8,6 +8,8 @@ export const WEB_BASE = 'https://djyuanyo.github.io/Calamar-TV/';
  * the name for WhatsApp, and it opens the event. Until that page exists 404.html still opens it.
  */
 export const eventShareLink = (event) => `${WEB_BASE}evento/${encodeURIComponent(event.slug || event.eventId || event.id)}/`;
+/** A league's link to share: tools/event_pages.py publishes liga/<slug>/ with the league's card. */
+export const leagueShareLink = (slug) => `${WEB_BASE}liga/${encodeURIComponent(slug)}/`;
 /** A channel's link to share: tools/event_pages.py publishes canal/<slug>/ with its logo card. */
 export const channelShareLink = (channel) => `${WEB_BASE}canal/${encodeURIComponent(channel.slug || channel.id)}/`;
 export const eventOrder = (a, b) => (Date.parse(a.startAt) || Infinity) - (Date.parse(b.startAt) || Infinity) || String(a.id).localeCompare(String(b.id));

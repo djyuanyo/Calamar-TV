@@ -319,6 +319,24 @@ export function eventSlugs(custom) {
   return out;
 }
 
+/** Link name of every league, from its name ("laliga"); repeated names get -2, -3… in the catalog's order. tools/event_pages.py and SportsCatalog.leagueSlugs() do the same. */
+export function leagueSlugs(custom) {
+  const out = new Map(), used = new Set();
+  for (const league of custom?.leagues || []) {
+    const base = slugify(league.name);
+    let slug = base;
+    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    out.set(league.id, slug);
+  }
+  return out;
+}
+
+/** A league's page: its matches of every week that already have a channel or video, soonest first (not finished ones). */
+export function leagueEvents(channels, custom, leagueId, now = Date.now()) {
+  return events(channels, custom, now, { allWeeks: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending);
+}
+
 /** The event of a link name: its own, or for an old link without number («local-vs-visitante») the first of that name («…-1»). */
 export function findBySlug(list, slug) {
   return list.find((e) => e.slug === slug) || list.find((e) => e.slug === `${slug}-1`) || null;
@@ -415,7 +433,7 @@ export function eventRows(list, custom) {
   for (const event of list) {
     const league = leagues.get(event.leagueId);
     const key = league ? league.id : '';
-    if (!rows.has(key)) rows.set(key, { id: key, name: league ? league.name : 'Otros eventos', logo: mirrorLogo(https(league?.logo)) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
+    if (!rows.has(key)) rows.set(key, { id: key, slug: league ? leagueSlugs(custom).get(league.id) : '', name: league ? league.name : 'Otros eventos', logo: mirrorLogo(https(league?.logo)) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
     rows.get(key).events.push(event);
   }
   const out = [...rows.values()];

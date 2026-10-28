@@ -100,3 +100,17 @@ test('league rows follow the order set in the admin page, then the rest by their
   assert.deepEqual(eventRows(list, { leagues }).map((r) => r.name), ['A', 'B', 'C', 'Otros eventos']);
   assert.deepEqual(eventRows(list, { leagues, leagueOrder: ['c', 'a'] }).map((r) => r.name), ['C', 'A', 'B', 'Otros eventos']);
 });
+
+import { leagueSlugs, leagueEvents } from '../web/catalog.js';
+test('each league has its link and a page with its matches that have a channel', () => {
+  const custom = { channels: [{ id: 'c1', name: 'Canal', streams: ['https://x.example/a.m3u8'] }], featured: [], hidden: [],
+    leagues: [{ id: 'l1', name: 'LaLiga' }, { id: 'l2', name: 'Premier League' }, { id: 'l3', name: 'LaLiga' }],
+    teams: [{ id: 'h', name: 'Local' }, { id: 'a', name: 'Visitante' }],
+    events: [{ id: 'e1', name: 'Con canal', leagueId: 'l1', channelId: 'c1', startAt: '2026-12-01T20:00:00Z', cover: 'https://x.example/c.jpg' },
+      { id: 'e2', name: 'De otra liga', leagueId: 'l2', channelId: 'c1', startAt: '2026-12-01T20:00:00Z', cover: 'https://x.example/c.jpg' }],
+    fixtures: [{ id: 'partido-9', leagueId: 'l1', homeTeamId: 'h', awayTeamId: 'a', startAt: '2026-12-20T20:00:00Z', matchId: '9' }] };
+  assert.deepEqual([...leagueSlugs(custom)], [['l1', 'laliga'], ['l2', 'premier-league'], ['l3', 'laliga-2']]);
+  const channels = [{ id: 'c1', name: 'Canal', streams: ['https://x.example/a.m3u8'], playable: true }];
+  // The imported match without a channel («Canal por confirmar») is left out.
+  assert.deepEqual(leagueEvents(channels, custom, 'l1', Date.parse('2026-11-01T00:00:00Z')).map((e) => e.id), ['e1']);
+});

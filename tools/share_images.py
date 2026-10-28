@@ -149,6 +149,17 @@ def match_card(background, home, away, league_logo):
     return canvas
 
 
+def league_card(background, logo):
+    """A league's card: its background (or the dark green of matches) with its logo large in the middle."""
+    canvas = cover_crop(background).convert('RGBA') if background else gradient((16, 38, 26, 255), (11, 20, 16, 255))
+    shade = Image.new('RGBA', canvas.size, (0, 0, 0, 70))
+    canvas.alpha_composite(shade)
+    if logo:
+        shadow(canvas, logo, (400, 115, 400, 400))
+        fit_inside(canvas, logo, (400, 115, 400, 400))
+    return canvas
+
+
 def channel_card(color, logo, name):
     """The channel's logo on its category colour, as its card; without a logo, its initials."""
     rgb = tuple(int(color[i:i + 2], 16) for i in (1, 3, 5)) if re.match(r'^#[0-9a-fA-F]{6}$', color or '') else (31, 79, 143)
