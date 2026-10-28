@@ -633,6 +633,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   if (document.usedHttp1) mediaHttp1 = true;
                   lastReport =
                       reportHeader() + "\nPágina: HTTP 200\nFuentes compatibles: " + found.size();
+                  String previousSource = selection >= 0 && selection < sources.size() ? sources.get(selection).url : null;
                   sources.clear();
                   sources.addAll(found);
                   // Other channel pages may use the hosting, but Zico always stays on this device.
@@ -650,7 +651,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
                   } else {
-                    selection = Math.min(selection, sources.size() - 1);
+                    selection = VideoResolver.renewedSelection(sources, previousSource, selection);
                     playSource(sources.get(selection));
                   }
                 });
@@ -936,8 +937,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(renewal);
     // There is no page to re-resolve for a raw URL.
     if (directUrl != null || VideoResolver.isMedia(pageUrl)) return;
-    long delay = VideoResolver.renewalDelay(address, System.currentTimeMillis());
-    if (delay >= 0) handler.postDelayed(renewal, Math.max(15000L, delay));
+    long delay = VideoResolver.pageRenewalDelay(pageUrl, address, System.currentTimeMillis());
+    if (delay >= 0) handler.postDelayed(renewal, delay);
   }
 
   private String mediaReferer() {

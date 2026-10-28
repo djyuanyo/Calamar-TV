@@ -65,6 +65,25 @@ public class VideoResolverTest {
     assertEquals(-1, VideoResolver.expiryMillis("https://cdn.example/a.m3u8?token=opaque"));
   }
 
+  @Test public void zicoRenewalPollsOpaqueTokensAndBoundsNearExpiryRetries() {
+    String page = "https://zicotv.cc/api/player/4";
+    long now = 1792066051000L;
+    assertEquals(300000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?token=opaque", now));
+    assertEquals(30000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066111", now));
+    assertEquals(15000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066052", now));
+    assertEquals(15000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066050", now));
+    assertEquals(-1L, VideoResolver.pageRenewalDelay("https://other.example/player", "https://cdn.example/a.m3u8?token=opaque", now));
+  }
+
+  @Test public void renewedSourcesKeepSelectedCdnWhenOrderAndTokensChange() {
+    java.util.List<VideoResolver.Source> sources = java.util.Arrays.asList(
+        new VideoResolver.Source("CDN 2", "https://cdn2.zicotv.cc/live/index.m3u8?token=new"),
+        new VideoResolver.Source("CDN 1", "https://cdn.zicotv.cc/live/index.m3u8?token=new"));
+    assertEquals(1, VideoResolver.renewedSelection(sources, "https://cdn.zicotv.cc/live/index.m3u8?token=old", 0));
+    assertEquals(0, VideoResolver.renewedSelection(sources, "https://cdn2.zicotv.cc/live/index.m3u8?token=old", 1));
+    assertEquals(1, VideoResolver.renewedSelection(sources, "https://missing.example/a.m3u8", 9));
+  }
+
   @Test
   public void neverTreatsIframeUrlAsDirectVideo() throws Exception {
     assertTrue(

@@ -196,4 +196,28 @@ public final class VideoResolver {
     long expiry = expiryMillis(address);
     return expiry > now ? Math.max(1000L, expiry - now - 30000L) : -1;
   }
+
+  /** Opaque Zico tokens still need periodic page lookup; raw media URLs cannot be renewed. */
+  public static long pageRenewalDelay(String page, String address, long now) {
+    long delay = renewalDelay(address, now);
+    if (delay >= 0) return Math.max(15000L, delay);
+    if (!renewablePage(page)) return -1;
+    return expiryMillis(address) > 0 ? 15000L : 300000L;
+  }
+
+  /** A token or list order change must not silently select another CDN. */
+  public static int renewedSelection(List<Source> sources, String previous, int fallback) {
+    if (previous != null && !previous.isEmpty()) {
+      try {
+        URI old = URI.create(previous);
+        for (int i = 0; i < sources.size(); i++) {
+          URI fresh = URI.create(sources.get(i).url);
+          if (java.util.Objects.equals(old.getScheme(), fresh.getScheme())
+              && java.util.Objects.equals(old.getRawAuthority(), fresh.getRawAuthority())
+              && java.util.Objects.equals(old.getRawPath(), fresh.getRawPath())) return i;
+        }
+      } catch (IllegalArgumentException invalid) { /* Use the previous index if no identity is available. */ }
+    }
+    return Math.max(0, Math.min(fallback, sources.size() - 1));
+  }
 }
