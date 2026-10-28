@@ -1086,3 +1086,10 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .event-admin-box { margin-top: 12px; display: grid; gap: 10px; }
 .event-admin-box input { padding: 11px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
 .player.with-match:fullscreen .event-admin, .player.with-match:-webkit-full-screen .event-admin { display: none; }
+.player-unmute {
+  position: absolute; left: 16px; top: calc(max(14px, env(safe-area-inset-top)) + 64px); z-index: 4; display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(15, 18, 23, 0.88); color: #fff;
+  font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.player-unmute svg { width: 20px; height: 20px; }
+.player-unmute[hidden] { display: none; }

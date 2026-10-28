@@ -1,6 +1,7 @@
 // Custom controls for the web player: play/pause, volume, live edge, quality, picture in picture
 // and full screen. The video element keeps no native controls, so everything here is accessible
 // through buttons, the keyboard and touch.
+import { soundChosen } from './autoplay.js';
 
 const ICONS = {
   play: '<path d="M8 5.5v13l11-6.5z"/>',
@@ -100,7 +101,21 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   const saved = stored === null ? NaN : Number(stored);
   video.volume = saved >= 0 && saved <= 1 ? saved : 1;
   video.muted = store('calamar-muted') === '1';
+  // Started muted because the browser blocked the sound (autoplay.js): one tap brings it back.
+  const unmute = document.createElement('button');
+  unmute.type = 'button';
+  unmute.className = 'player-unmute';
+  unmute.hidden = true;
+  unmute.append(icon('muted'), document.createTextNode('Activar sonido'));
+  unmute.addEventListener('click', (e) => {
+    e.stopPropagation();
+    soundChosen(video);
+    video.muted = false;
+    if (video.volume === 0) video.volume = 0.5;
+  });
+  root.append(unmute);
   const showVolume = () => {
+    unmute.hidden = !(video.dataset.autoMuted && video.muted);
     const silent = video.muted || video.volume === 0;
     els.mute.replaceChildren(icon(silent ? 'muted' : 'volume'));
     els.mute.setAttribute('aria-label', silent ? 'Activar sonido' : 'Silenciar');
@@ -108,14 +123,17 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   };
   video.addEventListener('volumechange', () => {
     showVolume();
+    if (video.dataset.autoMuted) return;
     store('calamar-volume', String(video.volume));
     store('calamar-muted', video.muted ? '1' : '0');
   });
   els.mute.addEventListener('click', () => {
+    soundChosen(video);
     video.muted = !video.muted;
     if (!video.muted && video.volume === 0) video.volume = 0.5;
   });
   els.volume.addEventListener('input', () => {
+    soundChosen(video);
     video.volume = Number(els.volume.value);
     video.muted = video.volume === 0;
   });
@@ -346,11 +364,12 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     // Space on a focused button already activates that button.
     if (key === 'k' || (key === ' ' && !onButton)) toggle();
     else if (key === 'f') toggleFullscreen();
-    else if (key === 'm') video.muted = !video.muted;
+    else if (key === 'm') { soundChosen(video); video.muted = !video.muted; }
     else if (e.key === 'ArrowUp') {
+      soundChosen(video);
       video.muted = false;
       video.volume = Math.min(1, video.volume + 0.05);
-    } else if (e.key === 'ArrowDown') video.volume = Math.max(0, video.volume - 0.05);
+    } else if (e.key === 'ArrowDown') { soundChosen(video); video.volume = Math.max(0, video.volume - 0.05); }
     else if (e.key === 'ArrowRight' && !isLive()) video.currentTime += 10;
     else if (e.key === 'ArrowLeft' && !isLive()) video.currentTime -= 10;
     else return;

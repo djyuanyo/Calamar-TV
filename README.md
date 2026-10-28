@@ -345,3 +345,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - En el administrador, **Ligas** tiene «Orden de las filas en la portada»: arrastra ⠿ (o usa las flechas del teclado) y pulsa «Guardar orden». La portada de la web y de la app sigue ese orden (`leagueOrder`); las ligas que no están en la lista van detrás en su orden de siempre y «Otros eventos» sigue al final. Solo salen las ligas con eventos esta semana.
 - Si entras como administrador en un evento (web), al final de la página aparece **Administración** con el botón «Seleccionar canal»: abre un buscador por nombre con tus canales y los de TDT, y al elegir uno se publica el evento (manual o importado) con ese canal. Los demás usuarios no ven este bloque.
+
+## Reproducción automática al entrar por un enlace (web)
+
+- Al abrir el enlace de un canal o evento, el reproductor de la web empieza solo. Si el navegador no deja reproducir con sonido porque aún no has tocado la página, el vídeo arranca **sin sonido** y aparece el botón «Activar sonido» arriba a la izquierda; con un toque vuelve el sonido. Antes salía «Pulsa ▶ para empezar».
+- Ese silencio automático no se guarda como preferencia: tu volumen y el botón de silencio se siguen recordando como siempre.
