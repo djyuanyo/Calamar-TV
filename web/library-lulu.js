@@ -209,11 +209,11 @@ export async function seriesWithLinks(item, info, links, key, fetcher) {
 export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    return movieItem(info, item.url);
+    return { ...movieItem(info, item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
   const series = await seriesWithLinks(existing, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
-  return { ...series, folder: item.folder || existing?.folder || info.title };
+  return { ...series, ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}), folder: item.folder || existing?.folder || info.title };
 }
 
 /**
@@ -223,6 +223,8 @@ export async function matchUnmatched(item, tmdbId, existing, key, fetcher = glob
 export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {} } = {}) {
   const sections = Object.fromEntries(Object.entries(current).map(([k, items]) => [k, [...items]]));
   const put = (section, item) => {
+    const previous = Object.values(sections).flat().find((x) => x.id === item.id);
+    if (previous && Object.hasOwn(previous, "trailerUrl")) item = { ...item, trailerUrl: previous.trailerUrl };
     for (const k of Object.keys(sections)) sections[k] = sections[k].filter((x) => x.id !== item.id);
     (sections[section] ||= []).push(item);
   };

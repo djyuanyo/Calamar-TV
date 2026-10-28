@@ -392,7 +392,7 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - El tráiler, los creadores y la duración de los capítulos se guardan al añadir títulos o temporadas. En los que ya estaban, el tráiler y los creadores llegan con «Actualizar el top y las plataformas con TMDB»; la duración de los capítulos ya guardados, al volver a guardar su temporada.
 - **Nuevo episodio** va ahora por la **fecha real de emisión** del capítulo (TMDB), no por el día en que se subió: una serie sale con la etiqueta si tiene en la biblioteca un capítulo emitido en las dos últimas semanas. Una serie antigua subida hoy no la lleva. La fecha llega al guardar la temporada y, para el último capítulo emitido, con la actualización diaria de TMDB.
 
-## Enlaces de AnonMP4 en películas y series (2.20.46)
+## Enlaces de AnonMP4 en películas y series (2.20.49)
 
 - Al crear o editar una película, serie o capítulo se puede pegar un enlace de **AnonMP4** (`https://anonmp4.art/v/CÓDIGO`, también `anonmp4.to`, `/embed/…`).
 - Se reproduce con **el propio reproductor de AnonMP4**, en su página para incrustar (`embed_url`, la que da su API para otras webs): en la web dentro del reproductor de Calamar TV y en la app a pantalla completa (Atrás para salir). No se saca la dirección del vídeo de su página, que la protege con un permiso firmado.

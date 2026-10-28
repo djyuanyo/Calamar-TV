@@ -5,6 +5,16 @@ import org.json.*;
 import org.junit.Test;
 
 public class LibraryTest {
+  @Test public void manualTrailerOverridesAndEmptyUsesImage() throws Exception {
+    JSONObject title = new JSONObject().put("tmdb", new JSONObject().put("trailer", "abcdefghijk"));
+    assertEquals("abcdefghijk", new Library.Item(title).trailer);
+    title.put("trailerUrl", "https://youtu.be/12345678901?si=test");
+    assertEquals("12345678901", new Library.Item(title).trailer);
+    title.put("trailerUrl", "");
+    assertEquals("", new Library.Item(title).trailer);
+    assertEquals("", Library.youtubeTrailer("https://youtube.com.evil.test/watch?v=abcdefghijk"));
+  }
+
   private static final String JSON = "{\"sections\":{"
       + "\"movies\":[{\"id\":\"mavatar\",\"kind\":\"movie\",\"title\":\"Avatar\",\"year\":2009,\"url\":\"https://calamarmenciano.com/MENCIA%20MEDIA/PELICULAS/Avatar.mkv\","
       + "\"tmdb\":{\"title\":\"Avatar\",\"year\":2009,\"overview\":\"Pandora\",\"genres\":[\"Acción\"],\"cast\":[{\"name\":\"Sam Worthington\",\"character\":\"Jake\"}],\"rating\":7.6,\"votes\":32000,\"runtime\":162}},"

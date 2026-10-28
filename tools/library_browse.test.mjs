@@ -150,3 +150,13 @@ test('AnonMP4 links play in its own embed page', () => {
   assert.deepEqual(webPlayback('https://anonmp4.art/v/ESuKsItGgV4rMAE'), { ok: true, kind: 'frame', address: 'https://anonmp4.art/embed/ESuKsItGgV4rMAE' });
   assert.equal(validVideoLink('https://anonmp4.art/v/ESuKsItGgV4rMAE'), true);
 });
+
+test('manual trailer overrides TMDB, accepts YouTube links and can be cleared', async () => {
+  const { youtubeId, trailerId } = await import('../web/trailer.js');
+  const id = 'abcdefghijk';
+  for (const link of [`https://youtu.be/${id}?si=abc`, `https://www.youtube.com/watch?v=${id}&t=2`, `https://www.youtube.com/shorts/${id}`, `https://www.youtube-nocookie.com/embed/${id}`]) assert.equal(youtubeId(link), id);
+  for (const link of [`https://youtube.com.evil.test/watch?v=${id}`, 'javascript:alert(1)', 'https://youtube.com/watch?v=invalid']) assert.equal(youtubeId(link), '');
+  assert.equal(trailerId({tmdb:{trailer:id}}), id);
+  assert.equal(trailerId({trailerUrl:'',tmdb:{trailer:id}}), '');
+  assert.equal(trailerId({trailerUrl:'https://youtu.be/12345678901',tmdb:{trailer:id}}), '12345678901');
+});
