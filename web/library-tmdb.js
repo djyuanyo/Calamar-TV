@@ -35,8 +35,9 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 
 /** A film's or series' details in Spanish; for series also its seasons [{ season, name, episodes }]. */
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
-  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits' }, key, fetcher);
+  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers' }, key, fetcher);
   const info = { id: Number(id), kind, title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
+    released: d.release_date || d.first_air_date || '', providers: providersOf(d),
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
@@ -59,6 +60,33 @@ export async function tmdbTrending(key, fetcher = globalThis.fetch, pages = 5) {
 /** How popular a film or series is on TMDB today (its `popularity`). */
 export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) {
   return Number((await tmdb(`/${kind}/${Number(id)}`, {}, key, fetcher)).popularity) || 0;
+}
+
+/** Popularity, release date and the platforms where it can be watched in Spain, in one request. */
+export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
+  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers' }, key, fetcher);
+  return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d) };
+}
+
+/** The streaming platforms of a title in Spain (subscription, free or with ads), by TMDB's watch providers. */
+export function providersOf(details) {
+  const es = details?.['watch/providers']?.results?.ES || {};
+  const names = [...(es.flatrate || []), ...(es.free || []), ...(es.ads || [])].map((p) => String(p.provider_name || '').trim()).filter(Boolean);
+  return [...new Set(names)].slice(0, 8);
+}
+
+/**
+ * The day each title arrived in the library (`addedAt`, YYYY-MM-DD): titles new in this publication get today,
+ * the others keep theirs. Titles from before this existed have none and are never «Recién llegada».
+ */
+export function stampAdded(next, before, today = new Date().toISOString().slice(0, 10)) {
+  const known = new Map(Object.values(before || {}).flat().map((item) => [item.id, item]));
+  return Object.fromEntries(Object.entries(next).map(([section, items]) => [section, items.map((item) => {
+    const old = known.get(item.id);
+    if (item.addedAt) return item;
+    if (old) return old.addedAt ? { ...item, addedAt: old.addedAt } : item;
+    return { ...item, addedAt: today };
+  })]));
 }
 
 /** The episodes of one season: [{ episode, name, overview, still }]. */

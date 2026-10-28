@@ -67,3 +67,35 @@ test('the library is read from Firestore: the index names the parts of each sect
   const empty = await fetchLibrary({ fresh: true, fetcher: async () => ({ ok: false, status: 404 }) });
   assert.deepEqual(empty.sections, {});
 });
+
+test('filters: name, category, year, platform, releases and new arrivals, and the order', async () => {
+  const { filterLibrary, isNewArrival, isRecentRelease } = await import('../web/library.js');
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  const item = (id, year, extra = {}) => ({ id, title: id, kind: 'movie', ...extra, tmdb: { title: id, year, genres: ['Drama'], providers: [], rating: 5, ...(extra.tmdb || {}) } });
+  const items = [
+    item('nueva', 2026, { addedAt: '2026-10-20', tmdb: { providers: ['Netflix'], released: '2026-09-01', rating: 7 } }),
+    item('vieja-anadida', 2019, { addedAt: '2026-10-25', tmdb: { genres: ['Comedia'], rating: 8 } }),
+    item('estreno-antiguo', 2026, { addedAt: '2026-08-01', tmdb: { released: '2026-02-01', providers: ['Prime Video'] } }),
+    item('clasica', 1998),
+  ];
+  assert.deepEqual(items.filter((i) => isNewArrival(i, now)).map((i) => i.id), ['nueva']);
+  assert.deepEqual(items.filter((i) => isRecentRelease(i, now)).map((i) => i.id), ['nueva', 'estreno-antiguo']);
+  const ids = (f) => filterLibrary(items, f, now).map((i) => i.id);
+  assert.deepEqual(ids({ only: 'nuevas' }), ['nueva']);
+  assert.deepEqual(ids({ only: 'estrenos' }), ['nueva', 'estreno-antiguo']);
+  assert.deepEqual(ids({ platform: 'Netflix' }), ['nueva']);
+  assert.deepEqual(ids({ year: '1998' }), ['clasica']);
+  assert.deepEqual(ids({ genre: 'Comedia' }), ['vieja-anadida']);
+  assert.deepEqual(ids({ q: 'clas' }), ['clasica']);
+  assert.deepEqual(ids({ order: 'added' }), ['vieja-anadida', 'nueva', 'estreno-antiguo', 'clasica']);
+  assert.deepEqual(ids({ order: 'rating' }).slice(0, 2), ['vieja-anadida', 'nueva']);
+});
+
+test('each title keeps the day it arrived, new ones get today, and TMDB platforms are read for Spain', async () => {
+  const { stampAdded, providersOf } = await import('../web/library-tmdb.js');
+  const before = { movies: [{ id: 'old' }, { id: 'dated', addedAt: '2026-01-02' }] };
+  const next = stampAdded({ movies: [{ id: 'old' }, { id: 'dated' }, { id: 'fresh' }] }, before, '2026-10-28');
+  assert.deepEqual(next.movies.map((i) => i.addedAt), [undefined, '2026-01-02', '2026-10-28']);
+  assert.deepEqual(providersOf({ 'watch/providers': { results: { ES: { flatrate: [{ provider_name: 'Netflix' }], ads: [{ provider_name: 'Pluto TV' }], buy: [{ provider_name: 'Apple TV' }] }, US: { flatrate: [{ provider_name: 'Hulu' }] } } } }), ['Netflix', 'Pluto TV']);
+  assert.deepEqual(providersOf({}), []);
+});

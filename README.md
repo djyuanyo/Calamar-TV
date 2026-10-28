@@ -322,3 +322,9 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Las películas, series y documentales tienen **estadísticas propias**: en vivo (`l:<id>`) y visitas por día (`l_<id>`), todos los capítulos de una serie juntos. En Administración → Estadísticas salen en «Pelis y series» y suman al total. Web y app.
 - Su reproductor (web y app) **no muestra** «personas viendo».
 - **Hay que publicar las reglas nuevas** de `firebase/firestore.rules` en Firebase Console → Firestore → Reglas (aceptan `l:` y `l_`); sin ellas no se guardan las estadísticas de pelis y series.
+
+## Filtros de pelis y series y «Recién llegada» (2.20.38)
+
+- En Películas, Series y Documentales (web y app), además de la categoría: **año**, **plataforma** (dónde se puede ver en España según TMDB), **orden** (añadidas recientemente, más nuevas, mejor valoradas, A-Z) y los botones **Estrenos** (estrenadas en los últimos 12 meses) y **Recién llegadas**. El buscador también encuentra por reparto.
+- **«Recién llegada»** (cinta roja, estilo Netflix): títulos de este año añadidos a la biblioteca en el último mes.
+- Cada título guarda el día en que se añadió (`addedAt`), desde que se publica con esta versión del administrador; los que ya estaban no salen como recién llegados. Las plataformas y la fecha de estreno se rellenan al buscar un título en TMDB y con «Actualizar el top y las plataformas con TMDB» (también automático una vez al día al abrir Pelis y series en el administrador).

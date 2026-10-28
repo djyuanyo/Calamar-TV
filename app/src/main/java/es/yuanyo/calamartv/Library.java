@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -70,6 +71,54 @@ final class Library {
     }
   }
 
+  static final long DAY = 86400000L;
+
+  private static long day(String date) {
+    if (date == null || !date.matches("\\d{4}-\\d{2}-\\d{2}.*")) return Long.MIN_VALUE;
+    java.util.Calendar c = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+    c.clear();
+    c.set(Integer.parseInt(date.substring(0, 4)), Integer.parseInt(date.substring(5, 7)) - 1, Integer.parseInt(date.substring(8, 10)));
+    return c.getTimeInMillis();
+  }
+
+  private static int yearOf(long now) {
+    java.util.Calendar c = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+    c.setTimeInMillis(now);
+    return c.get(java.util.Calendar.YEAR);
+  }
+
+  /** Released in the last 12 months (by its TMDB date; without one, a title of this year), as on the web. */
+  static boolean recentRelease(Item item, long now) {
+    long at = day(item.released);
+    if (at != Long.MIN_VALUE) return at <= now && now - at <= 365 * DAY;
+    return item.year == yearOf(now);
+  }
+
+  /** «Recién llegada», as on Netflix: a title of this year that arrived in the library in the last month. */
+  static boolean newArrival(Item item, long now) {
+    long added = day(item.addedAt);
+    return item.year == yearOf(now) && added != Long.MIN_VALUE && now - added <= 31 * DAY && added <= now + DAY;
+  }
+
+  /** The titles that pass the filters (as filterLibrary on the web); only: "estrenos", "nuevas" or ""; order: "", "added", "year", "rating", "name". */
+  static List<Item> filter(List<Item> items, String genre, int year, String platform, String only, String order, long now) {
+    List<Item> out = new ArrayList<>();
+    for (Item item : items) {
+      if (!genre.isEmpty() && !item.genres.contains(genre)) continue;
+      if (year > 0 && item.year != year) continue;
+      if (!platform.isEmpty() && !item.providers.contains(platform)) continue;
+      if (only.equals("estrenos") && !recentRelease(item, now)) continue;
+      if (only.equals("nuevas") && !newArrival(item, now)) continue;
+      out.add(item);
+    }
+    java.text.Collator collator = java.text.Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    if (order.equals("added")) Collections.sort(out, (a, b) -> b.addedAt.compareTo(a.addedAt));
+    else if (order.equals("year")) Collections.sort(out, (a, b) -> Integer.compare(b.year, a.year));
+    else if (order.equals("rating")) Collections.sort(out, (a, b) -> Double.compare(b.rating, a.rating));
+    else if (order.equals("name")) Collections.sort(out, (a, b) -> collator.compare(a.title, b.title));
+    return out;
+  }
+
   static final class Item {
     final String id, title, url, overview, poster, backdrop;
     final int year, runtime, votes;
@@ -85,6 +134,9 @@ final class Library {
     /** «En portada»: when the administrator marked it (0 when not); and its place in the weekly top (0 outside). */
     final long featured;
     final int trend;
+    /** TMDB release date (YYYY-MM-DD or empty), the day it arrived in the library, and its platforms in Spain. */
+    final String released, addedAt;
+    final List<String> providers = new ArrayList<>();
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
@@ -107,6 +159,10 @@ final class Library {
       rating = t.optDouble("rating", 0);
       JSONArray g = t.optJSONArray("genres");
       if (g != null) for (int i = 0; i < g.length(); i++) genres.add(g.optString(i));
+      released = t.optString("released");
+      addedAt = o.optString("addedAt");
+      JSONArray pv = t.optJSONArray("providers");
+      if (pv != null) for (int i = 0; i < pv.length(); i++) if (!pv.optString(i).isEmpty()) providers.add(pv.optString(i));
       JSONArray c = t.optJSONArray("cast");
       if (c != null)
         for (int i = 0; i < c.length(); i++) {

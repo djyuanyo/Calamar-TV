@@ -730,9 +730,9 @@ label[hidden] { display: none; }
 .continue-remove { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(0,0,0,.7); color: #fff; cursor: pointer; font-size: 14px; }
 .continue-remove:hover, .continue-remove:focus-visible { background: var(--accent); color: var(--on-accent); }
 /* Search box and category drop-down of a library section, with room before the posters. */
-.library-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 28px; }
+.library-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 14px; }
 .library-filters .library-search { margin: 0; flex: 1 1 260px; max-width: 520px; }
-.library-genre { position: relative; flex: 0 1 260px; }
+.library-genre { position: relative; flex: 0 1 220px; }
 .library-genre::after { content: "▾"; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
 .library-genre select { width: 100%; appearance: none; -webkit-appearance: none; padding: 11px 40px 11px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
 .library-genre select:hover { background: var(--surface-2); }
@@ -1069,3 +1069,12 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .mc-porra-note a { color: inherit; text-decoration: underline; }
 .mc-porra-note.error { color: #ff8a8a; }
 @media (max-width: 380px) { .mc-porra-goals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mc-porra-tile strong { font-size: 20px; } }
+/* «Recién llegada»: the red ribbon of new titles, as on Netflix. */
+.poster-new { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; background: #e50914; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em; text-align: center; text-transform: uppercase; }
+.library-chips { margin: 0 0 24px; }
+@media (max-width: 640px) {
+  .library-filters { gap: 8px; }
+  .library-filters .library-genre { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  .library-genre select { padding: 10px 32px 10px 14px; font-size: 14px; text-overflow: ellipsis; }
+  .library-genre::after { right: 12px; }
+}

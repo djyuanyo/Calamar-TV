@@ -3,7 +3,7 @@
 // `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbPopularity } from './library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 
@@ -303,29 +303,75 @@ function poster(el, item, cls = 'poster-art') {
 }
 
 /** Poster grid of a section, with a search box. */
+const DAY = 86400000;
+/** Released in the last 12 months (by its TMDB date; without one, a title of this year). */
+export function isRecentRelease(item, now = Date.now()) {
+  const at = Date.parse(item.tmdb?.released || '');
+  if (Number.isFinite(at)) return at <= now && now - at <= 365 * DAY;
+  return Number(itemYear(item)) === new Date(now).getFullYear();
+}
+/** «Recién llegada», as on Netflix: a title of this year that arrived in the library in the last month. */
+export function isNewArrival(item, now = Date.now()) {
+  const added = Date.parse(item.addedAt || '');
+  return Number(itemYear(item)) === new Date(now).getFullYear() && Number.isFinite(added) && now - added <= 31 * DAY && added <= now + DAY;
+}
+export const LIBRARY_ORDERS = [['', 'Orden del catálogo'], ['added', 'Añadidas recientemente'], ['year', 'Más nuevas primero'], ['rating', 'Mejor valoradas'], ['name', 'Por nombre (A-Z)']];
+/** The titles of a section that pass the filters: name, category, year, platform, «Estrenos» / «Recién llegadas», in an order. */
+export function filterLibrary(items, { q = '', genre = '', year = '', platform = '', only = '', order = '' } = {}, now = Date.now()) {
+  const text = norm(q.trim());
+  const found = items.filter((item) => (!genre || (item.tmdb?.genres || []).includes(genre))
+    && (!year || String(itemYear(item)) === String(year))
+    && (!platform || (item.tmdb?.providers || []).includes(platform))
+    && (only !== 'estrenos' || isRecentRelease(item, now))
+    && (only !== 'nuevas' || isNewArrival(item, now))
+    && (!text || norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')} ${(item.tmdb?.cast || []).map((c) => c.name).join(' ')}`).includes(text)));
+  const by = { added: (a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')),
+    year: (a, b) => (Number(itemYear(b)) || 0) - (Number(itemYear(a)) || 0),
+    rating: (a, b) => (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0),
+    name: (a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es') }[order];
+  return by ? [...found].sort(by) : found;
+}
+
 export function libraryPage(el, section, library) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const grid = el('div', { class: 'poster-grid' });
-  // Categories: a drop-down with the TMDB genres of the titles in this section; one narrows the grid.
+  const select = (label, all, values) => el('select', { 'aria-label': label }, [['', all], ...values.map((v) => (Array.isArray(v) ? v : [v, v]))].map(([value, text]) => el('option', { value }, text)));
+  // Filters: TMDB genre, year, platform where it can be watched (in Spain), releases and new arrivals, and an order.
   const genres = [...new Set(items.flatMap((item) => item.tmdb?.genres || []))].sort((a, b) => a.localeCompare(b, 'es'));
-  const picker = el('select', { 'aria-label': 'Categoría' }, ['', ...genres].map((g) => el('option', { value: g }, g || 'Todas las categorías')));
+  const years = [...new Set(items.map((item) => Number(itemYear(item))).filter(Boolean))].sort((a, b) => b - a);
+  const platforms = [...new Set(items.flatMap((item) => item.tmdb?.providers || []))].sort((a, b) => a.localeCompare(b, 'es'));
+  const picker = select('Categoría', 'Todas las categorías', genres);
+  const yearPicker = select('Año', 'Todos los años', years.map(String));
+  const platformPicker = select('Plataforma', 'Todas las plataformas', platforms);
+  const orderPicker = el('select', { 'aria-label': 'Ordenar' }, LIBRARY_ORDERS.map(([value, text]) => el('option', { value }, text)));
+  let only = '';
+  const chip = (value, text) => el('button', { class: 'chip', type: 'button', 'aria-pressed': 'false', onclick: (e) => {
+    only = only === value ? '' : value;
+    for (const b of e.currentTarget.parentElement.children) b.setAttribute('aria-pressed', String(b.dataset.only === only));
+    draw();
+  }, 'data-only': value }, text);
+  const chips = el('div', { class: 'chips library-chips', role: 'group', 'aria-label': 'Mostrar' }, chip('estrenos', 'Estrenos'), chip('nuevas', 'Recién llegadas'));
   const draw = () => {
-    const q = norm(query.value.trim()), genre = picker.value;
-    const found = items.filter((item) => (!genre || (item.tmdb?.genres || []).includes(genre))
-      && norm(`${itemTitle(item)} ${item.title} ${(item.tmdb?.genres || []).join(' ')}`).includes(q));
+    const found = filterLibrary(items, { q: query.value, genre: picker.value, year: yearPicker.value, platform: platformPicker.value, only, order: orderPicker.value });
     grid.replaceChildren(...found.map((item) => el('a', { class: 'poster-card', href: `#/${section.page}/${encodeURIComponent(item.id)}`, title: itemTitle(item) },
-      el('span', { class: 'poster-frame' }, poster(el, item), item.tmdb?.rating ? el('span', { class: 'poster-rating' }, `★ ${item.tmdb.rating.toLocaleString('es-ES')}`) : null),
+      el('span', { class: 'poster-frame' }, poster(el, item), item.tmdb?.rating ? el('span', { class: 'poster-rating' }, `★ ${item.tmdb.rating.toLocaleString('es-ES')}`) : null,
+        isNewArrival(item) ? el('span', { class: 'poster-new' }, 'Recién llegada') : null),
       el('span', { class: 'name' }, itemTitle(item)),
       el('span', { class: 'sub' }, [itemYear(item), item.kind === 'tv' ? `${item.episodes.length} capítulos` : ''].filter(Boolean).join(' · ')))));
-    if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : genre && !q ? `No hay títulos de ${genre}.` : 'No hay títulos con ese nombre.'));
+    const filtered = picker.value || yearPicker.value || platformPicker.value || only;
+    if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : filtered && !query.value.trim() ? 'No hay títulos con esos filtros.' : 'No hay títulos con ese nombre.'));
   };
   query.addEventListener('input', draw);
-  picker.addEventListener('change', draw);
+  for (const control of [picker, yearPicker, platformPicker, orderPicker]) control.addEventListener('change', draw);
   draw();
   return [el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, `${items.length} ${items.length === 1 ? section.one : section.label.toLowerCase()}`)),
-    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query), genres.length ? el('label', { class: 'library-genre' }, picker) : null),
-    grid, attribution(el, library)];
+    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query),
+      genres.length ? el('label', { class: 'library-genre' }, picker) : null,
+      years.length > 1 ? el('label', { class: 'library-genre' }, yearPicker) : null,
+      platforms.length ? el('label', { class: 'library-genre' }, platformPicker) : null,
+      el('label', { class: 'library-genre' }, orderPicker)),
+    chips, grid, attribution(el, library)];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
@@ -423,7 +469,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const luluKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de LuluStream' });
   const saveLulu = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave de LuluStream');
   const store = async (sections) => {
-    const next = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]));
+    // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
+    const next = stampAdded(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []])), current.sections);
     await publish(libraryParts(next));
     current = { ...current, sections: next };
     drawList();
@@ -677,13 +724,18 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     if (!quiet) topNote.textContent = 'Consultando las tendencias de la semana en TMDB…';
     const trending = await tmdbTrending(key);
     const titles = Object.values(current.sections).flat().filter((item) => item.tmdb?.id && item.status !== 'unmatched');
-    const popularity = {};
+    // The same request brings the release date and the platforms of each title (the filters of the lists).
+    const popularity = {}, facts = {};
     for (const [n, item] of titles.entries()) {
-      if (!quiet) topNote.textContent = `Popularidad en TMDB ${n + 1} de ${titles.length}: ${itemTitle(item)}…`;
+      if (!quiet) topNote.textContent = `Popularidad y plataformas en TMDB ${n + 1} de ${titles.length}: ${itemTitle(item)}…`;
       const kind = item.kind === 'tv' ? 'tv' : 'movie';
-      popularity[`${kind}:${item.tmdb.id}`] = await tmdbPopularity(item.tmdb.id, kind, key).catch(() => 0);
+      const found = await tmdbFacts(item.tmdb.id, kind, key).catch(() => null);
+      popularity[`${kind}:${item.tmdb.id}`] = found?.popularity || 0;
+      if (found) facts[item.id] = found;
     }
-    const ranked = rankTop(current.sections, trending, popularity);
+    const withFacts = Object.fromEntries(Object.entries(current.sections).map(([section, items]) => [section, items.map((item) => facts[item.id]
+      ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}) } } : item)]));
+    const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);
     try { localStorage.setItem(TOP_REFRESHED, new Date().toISOString().slice(0, 10)); } catch {}
@@ -694,7 +746,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     topButton.disabled = true;
     try { await refreshTop(); } catch (error) { topNote.textContent = error.message; } finally { topButton.disabled = false; }
-  } }, 'Actualizar el top con TMDB');
+  } }, 'Actualizar el top y las plataformas con TMDB');
 
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));

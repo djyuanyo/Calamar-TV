@@ -173,4 +173,26 @@ public class LibraryTest {
     assertEquals(0, Library.skipButton(auto, 3430000, 3480000, true));
     assertEquals(2, Library.skipButton(auto, 3431000, 3480000, true));
   }
+
+  private static Library.Item film(String id, int year, String extra, String tmdb) throws Exception {
+    return new Library.Item(new JSONObject("{\"id\":\"" + id + "\",\"kind\":\"movie\",\"url\":\"https://example.com/a.mp4\"" + extra
+        + ",\"tmdb\":{\"title\":\"" + id + "\",\"year\":" + year + ",\"genres\":[\"Drama\"]" + tmdb + "}}"));
+  }
+
+  @Test public void filtersReleasesAndNewArrivalsLikeTheWeb() throws Exception {
+    long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
+    Library.Item fresh = film("nueva", 2026, ",\"addedAt\":\"2026-10-20\"", ",\"providers\":[\"Netflix\"],\"released\":\"2026-09-01\",\"rating\":7");
+    Library.Item oldAdded = film("vieja", 2019, ",\"addedAt\":\"2026-10-25\"", ",\"rating\":8");
+    Library.Item release = film("estreno", 2026, ",\"addedAt\":\"2026-08-01\"", ",\"released\":\"2026-02-01\"");
+    Library.Item classic = film("clasica", 1998, "", "");
+    List<Library.Item> all = Arrays.asList(fresh, oldAdded, release, classic);
+    assertTrue(Library.newArrival(fresh, now));
+    assertFalse(Library.newArrival(oldAdded, now));
+    assertFalse(Library.newArrival(release, now));
+    assertEquals(Arrays.asList(fresh), Library.filter(all, "", 0, "", "nuevas", "", now));
+    assertEquals(Arrays.asList(fresh, release), Library.filter(all, "", 0, "", "estrenos", "", now));
+    assertEquals(Arrays.asList(fresh), Library.filter(all, "", 0, "Netflix", "", "", now));
+    assertEquals(Arrays.asList(classic), Library.filter(all, "", 1998, "", "", "", now));
+    assertEquals(Arrays.asList(oldAdded, fresh, release, classic), Library.filter(all, "", 0, "", "", "added", now));
+  }
 }
