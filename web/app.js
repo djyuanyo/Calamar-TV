@@ -4,7 +4,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { findBySlug, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -1254,7 +1254,7 @@ async function route() {
   if (page === 'canal' || page === 'evento') {
     // An event's own link keeps working after the match: it is only gone from the home page.
     const all = page === 'evento' ? events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }) : [];
-    const c = page === 'evento' ? (all.find(e => e.slug === arg) || all.find(e => e.eventId === arg)) : findChannel(state.channels, arg);
+    const c = page === 'evento' ? (findBySlug(all, arg) || all.find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.
     if ((!c || (!c.playable && !c.pending)) && !player.hidden) hidePlayer();
     view.replaceChildren(
@@ -1289,7 +1289,8 @@ document.addEventListener('click', event => {
   const link = event.target.closest('a[href^="#/evento/"]');
   if (!link || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
   const key = decodeURIComponent(link.hash.split('/')[2] || '');
-  const item = events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }).find(c => c.slug === key || c.id === key);
+  const list = events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true });
+  const item = findBySlug(list, key) || list.find(c => c.id === key);
   if (item) { event.preventDefault(); open(item); }
 });
 window.addEventListener('hashchange', () => {

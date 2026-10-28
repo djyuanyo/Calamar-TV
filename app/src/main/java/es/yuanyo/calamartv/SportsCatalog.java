@@ -78,11 +78,17 @@ final class SportsCatalog {
     };
     // Imported matches come after the events, so they never change an event's link.
     Collections.sort(list, order); Collections.sort(imported, order); list.addAll(imported);
+    // A name that repeats (the same teams in several competitions) is numbered in every event: -1, -2…
+    Map<String, Integer> times = new HashMap<>();
+    for (JSONObject event : list) { String base = slugify(event.optString("name")); times.put(base, times.containsKey(base) ? times.get(base) + 1 : 1); }
     Map<String, String> out = new LinkedHashMap<>();
     Set<String> used = new HashSet<>();
     for (JSONObject event : list) {
-      String base = slugify(event.optString("name")), slug = base;
-      for (int n = 2; used.contains(slug); n++) slug = base + "-" + n;
+      String base = slugify(event.optString("name"));
+      boolean repeated = times.get(base) > 1;
+      int n = repeated ? 1 : 2;
+      String slug = repeated ? base + "-1" : base;
+      while (used.contains(slug)) slug = base + "-" + (++n);
       used.add(slug);
       out.put(event.optString("id"), slug);
     }

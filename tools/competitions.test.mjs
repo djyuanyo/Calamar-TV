@@ -151,7 +151,7 @@ test('imported matches never change the link of an event', () => {
   const { data } = applySeason(base(), seasonFixture(), now);
   data.events.push({ id: 'manual', name: 'Real Madrid vs Barcelona', cover: 'https://example.com/c.jpg', channelId: 'dazn', startAt: '2026-12-01T19:00:00Z' });
   const slugs = eventSlugs(data);
-  assert.equal(slugs.get('manual'), 'real-madrid-vs-barcelona');
+  assert.equal(slugs.get('manual'), 'real-madrid-vs-barcelona-1');
   assert.equal(slugs.get('partido-301'), 'real-madrid-vs-barcelona-2');
 });
 

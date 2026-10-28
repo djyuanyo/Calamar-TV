@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { madridInstant, localDateTime, eventPath, eventShareLink } from '../web/sports.js';
-import { events, eventRows, eventSlugs, groups, homeHighlights, merge, categoryList, resolveCategory, defaultColor } from '../web/catalog.js';
+import { events, eventRows, eventSlugs, findBySlug, groups, homeHighlights, merge, categoryList, resolveCategory, defaultColor } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
 const channel = { id:'sports', name:'Sports', streams:['https://example.com/live.m3u8'] };
 const make = () => ({ channels:[channel], featured:['sports'], hidden:[], leagues:[{id:'liga',name:'Mi Liga'}], teams:[{id:'home',name:'Local',leagueId:'liga'},{id:'away',name:'Visitante'}], events:[{id:'match',name:'Partido',cover:'https://example.com/photo.jpg',channelId:'sports',leagueId:'liga',homeTeamId:'home',awayTeamId:'away',startAt:'2026-12-01T20:00:00.000Z',featured:true}] });
@@ -23,9 +23,12 @@ test('event links use the slug of the event name, like channels, and ignore the 
   assert.equal(eventPath(after),'#/evento/final-de-copa-menciana-nora');
   assert.match(after.meta,/Mi Liga/); assert.match(after.meta,/01\/12\/2026/);
 });
-test('repeated event names get -2, -3 in date order, whatever their channel',()=>{
+test('a repeated event name is numbered -1, -2, -3 in date order, whatever their channel',()=>{
   const data=make(); data.events.push({...data.events[0],id:'later',startAt:'2026-12-08T20:00:00Z'},{...data.events[0],id:'earlier',startAt:'2026-11-01T20:00:00Z'});
-  assert.deepEqual([...eventSlugs(data)],[['earlier','partido'],['match','partido-2'],['later','partido-3']]);
+  assert.deepEqual([...eventSlugs(data)],[['earlier','partido-1'],['match','partido-2'],['later','partido-3']]);
+  // An old link without number opens the first of that name.
+  const list=[...eventSlugs(data)].map(([id,slug])=>({id,slug}));
+  assert.equal(findBySlug(list,'partido').id,'earlier'); assert.equal(findBySlug(list,'partido-3').id,'later');
 });
 test('chronological events, unscheduled last; highlighted channels and events coexist',()=>{
   const data=make(); data.events.push({...data.events[0],id:'earlier',startAt:'2026-11-01T20:00:00Z',featured:false},{...data.events[0],id:'legacy',startAt:'',featured:false});

@@ -406,3 +406,9 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 ## Más nombres de competiciones al importar (web)
 
 - Los enlaces de Google en español usan nombres como **«Copa de la Liga de Inglaterra»** (Carabao Cup), «Copa de Inglaterra» (FA Cup) o «Primera División de Inglaterra/Italia/Alemania/Francia/Portugal/Países Bajos»: ahora se reconocen al importar una competición por enlace.
+
+## Enlaces numerados para partidos con el mismo nombre (2.20.51)
+
+- Si dos o más eventos tienen el mismo nombre (los mismos equipos en LaLiga, Copa, Champions…), **todos** llevan número al final del enlace en orden de fecha: `levante-vs-athletic-1`, `levante-vs-athletic-2`… (antes el primero no llevaba número). Igual en la web, la app y las páginas para compartir.
+- Cada enlace tiene su propia imagen al compartir: la portada del evento o, en los partidos importados, el **fondo de su competición** con los dos escudos y el logo de la liga. Una competición sin «Fondo de las tarjetas» (Administración → Ligas) usa un fondo verde con su logo.
+- Los enlaces compartidos antes sin número siguen funcionando y abren el primero.
