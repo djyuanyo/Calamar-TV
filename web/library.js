@@ -336,12 +336,20 @@ export function todaysPicks(items, watchedIds = [], day = madridDay(), size = 15
     .sort((a, b) => b[1] - a[1]).slice(0, size).map(([item]) => item);
 }
 const NEW_EPISODE_DAYS = 14;
-/** The day the newest episode of a series arrived (YYYY-MM-DD), or ''. */
-const lastEpisodeDay = (item) => (item.episodes || []).map((e) => String(e.addedAt || '')).filter(Boolean).sort().pop() || '';
-/** «Nuevo episodio»: a series already in the library that got an episode in the last two weeks. */
+/**
+ * The day the newest episode of the library first aired (TMDB, YYYY-MM-DD), or '': each episode's `aired`,
+ * and the series' last aired episode (tmdb.lastEpisode, refreshed every day) when it is in the library.
+ */
+const lastEpisodeDay = (item) => {
+  const days = (item.episodes || []).map((e) => String(e.aired || ''));
+  const last = item.tmdb?.lastEpisode;
+  if (last?.aired && (item.episodes || []).some((e) => e.season === last.season && e.episode === last.episode)) days.push(String(last.aired));
+  return days.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() || '';
+};
+/** «Nuevo episodio»: the series has an episode that first aired in the last two weeks (its real date, not the upload). */
 export function hasNewEpisode(item, now = Date.now()) {
-  const last = lastEpisodeDay(item), at = Date.parse(last);
-  return item.kind === 'tv' && !!item.addedAt && last > item.addedAt && Number.isFinite(at) && now - at <= NEW_EPISODE_DAYS * DAY && at <= now + DAY;
+  const at = Date.parse(lastEpisodeDay(item));
+  return item.kind === 'tv' && Number.isFinite(at) && now - at <= NEW_EPISODE_DAYS * DAY && at <= now + DAY;
 }
 /** The red label of a poster: «Nuevo episodio», «Recién llegada» or nothing. */
 export const posterLabel = (item, now = Date.now()) => (hasNewEpisode(item, now) ? 'Nuevo episodio' : isNewArrival(item, now) ? 'Recién llegada' : '');
@@ -1115,7 +1123,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     const withFacts = Object.fromEntries(Object.entries(current.sections).map(([section, items]) => [section, items.map((item) => facts[item.id]
       ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}),
         ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}),
-        logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}) } } : item)]));
+        logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}),
+        ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);

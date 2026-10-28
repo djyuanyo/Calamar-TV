@@ -239,7 +239,7 @@ public class LibraryTest {
     StringBuilder episodes = new StringBuilder();
     for (int i = 0; i < days.length; i++)
       episodes.append(i > 0 ? "," : "").append("{\"id\":\"").append(id).append(i).append("\",\"season\":1,\"episode\":").append(i + 1)
-          .append(",\"url\":\"https://calamarmenciano.com/").append(id).append(i).append(".mkv\"").append(days[i].isEmpty() ? "" : ",\"addedAt\":\"" + days[i] + "\"").append("}");
+          .append(",\"url\":\"https://calamarmenciano.com/").append(id).append(i).append(".mkv\"").append(days[i].isEmpty() ? "" : ",\"aired\":\"" + days[i] + "\"").append("}");
     return new Library.Item(new JSONObject("{\"id\":\"" + id + "\",\"kind\":\"tv\",\"addedAt\":\"" + added + "\",\"episodes\":[" + episodes
         + "],\"tmdb\":{\"id\":9,\"title\":\"" + id + "\",\"year\":2019,\"providers\":[\"Netflix\"],\"logos\":{\"Netflix\":\"https://image.tmdb.org/t/p/w154/n.jpg\"}}}"));
   }
@@ -250,7 +250,7 @@ public class LibraryTest {
     assertTrue(Library.newEpisode(fresh, now));
     assertEquals("Nuevo episodio", Library.posterLabel(fresh, now));
     assertFalse(Library.newEpisode(show("b", "2026-01-10", "2026-01-10", "2026-10-01"), now));
-    assertFalse(Library.newEpisode(show("c", "2026-10-25", "2026-10-25", "2026-10-25"), now));
+    assertFalse(Library.newEpisode(show("c", "2026-10-27", "2009-03-01", "2009-03-08"), now));
     assertFalse(Library.newEpisode(show("d", "2026-01-10", "", ""), now));
     Library.Item arrived = titled("m", "", "", "\"Disney Plus\"", ",\"year\":2026,\"addedAt\":\"2026-10-20\"");
     Library.Item top = titled("t", "", "", "\"Disney Plus\"", ",\"trend\":1");

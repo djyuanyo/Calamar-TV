@@ -47,7 +47,7 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 /** A film's or series' details in Spanish; for series also its seasons [{ season, name, episodes }]. */
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers,videos', include_video_language: 'es' }, key, fetcher);
-  const info = { id: Number(id), kind, trailer: trailerOf(d), creators: creatorsOf(d), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
+  const info = { id: Number(id), kind, trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
     released: d.release_date || d.first_air_date || '', providers: providersOf(d), logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
@@ -77,7 +77,7 @@ export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) 
 export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers,videos,credits', include_video_language: 'es' }, key, fetcher);
   return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
-    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d) };
+    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d) };
 }
 
 /** The logo of each of those platforms (TMDB's square icons): { «Netflix»: «https://image.tmdb.org/…» }. */
@@ -90,6 +90,13 @@ export function providerLogosOf(details) {
     if (names.has(name) && !out[name] && /^\/[\w.-]+$/.test(p.logo_path || '')) out[name] = `https://image.tmdb.org/t/p/w154${p.logo_path}`;
   }
   return out;
+}
+
+/** A series' last aired episode (TMDB): { season, episode, aired: YYYY-MM-DD }, or null. */
+export function lastEpisodeOf(details) {
+  const e = details?.last_episode_to_air;
+  return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && e.season_number >= 0 && e.episode_number > 0
+    ? { season: e.season_number, episode: e.episode_number, aired: e.air_date } : null;
 }
 
 /** The YouTube key of the title's trailer in Spanish (Spain first, then any Spanish), or ''. */
@@ -150,7 +157,7 @@ export function stampEpisodes(episodes, before, today) {
 export async function seasonEpisodes(id, season, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/tv/${Number(id)}/season/${Number(season)}`, {}, key, fetcher);
   return (d.episodes || []).map((e) => ({ episode: e.episode_number, name: e.name || '', overview: (e.overview || '').slice(0, 300), still: image(e.still_path, 'w300'),
-    ...(e.runtime > 0 ? { runtime: e.runtime } : {}) }));
+    ...(e.runtime > 0 ? { runtime: e.runtime } : {}), ...(/^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') ? { aired: e.air_date } : {}) }));
 }
 
 /** The library item of a film (or documentary film) with its video link. */
@@ -163,7 +170,7 @@ export const movieItem = (info, url) => ({ id: `m${info.id}`, kind: 'movie', tit
 export function seriesWithSeason(existing, info, season, episodes, links) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
   const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => ({
-    id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), file: '', url: String(links[e.episode]).trim() }));
+    id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: '', url: String(links[e.episode]).trim() }));
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
   return { ...(existing || {}), id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };

@@ -53,11 +53,13 @@ final class Library {
     final int season, episode;
     /** The day it arrived in the library (YYYY-MM-DD or empty), for «Nuevo episodio». */
     final String addedAt;
-    /** Its length in minutes from TMDB (0 when unknown). */
+    /** Its length in minutes from TMDB (0 when unknown), and the day it first aired (YYYY-MM-DD or empty). */
     final int runtime;
+    final String aired;
 
     Episode(JSONObject e) {
       id = e.optString("id");
+      aired = e.optString("aired");
       runtime = e.optInt("runtime", 0);
       addedAt = e.optString("addedAt");
       url = e.optString("url");
@@ -157,6 +159,9 @@ final class Library {
     /** The YouTube key of its trailer in Spanish (or empty), and «Creada por» / «Dirigida por». */
     final String trailer;
     final List<String> creators = new ArrayList<>();
+    /** The series' last aired episode (TMDB): season, number and day, for «Nuevo episodio». */
+    final int lastSeason, lastEpisode;
+    final String lastAired;
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
@@ -182,6 +187,10 @@ final class Library {
       released = t.optString("released");
       addedAt = o.optString("addedAt");
       language = t.optString("language");
+      JSONObject le = t.optJSONObject("lastEpisode");
+      lastSeason = le == null ? -1 : le.optInt("season", -1);
+      lastEpisode = le == null ? -1 : le.optInt("episode", -1);
+      lastAired = le == null ? "" : le.optString("aired");
       trailer = t.optString("trailer").matches("[\\w-]{11}") ? t.optString("trailer") : "";
       JSONArray cr = t.optJSONArray("creators");
       if (cr != null) for (int i = 0; i < cr.length() && i < 4; i++) if (!cr.optString(i).trim().isEmpty()) creators.add(cr.optString(i).trim());
@@ -433,18 +442,19 @@ final class Library {
 
   static final int NEW_EPISODE_DAYS = 14;
 
+  /** The day the newest episode of the library first aired (TMDB), as lastEpisodeDay on the web. */
   private static String lastEpisodeDay(Item item) {
     String last = "";
-    for (Episode e : item.episodes) if (e.addedAt.compareTo(last) > 0) last = e.addedAt;
+    for (Episode e : item.episodes) if (e.aired.matches("\\d{4}-\\d{2}-\\d{2}") && e.aired.compareTo(last) > 0) last = e.aired;
+    if (item.lastAired.matches("\\d{4}-\\d{2}-\\d{2}") && item.lastAired.compareTo(last) > 0)
+      for (Episode e : item.episodes) if (e.season == item.lastSeason && e.episode == item.lastEpisode) { last = item.lastAired; break; }
     return last;
   }
 
-  /** «Nuevo episodio»: a series already in the library that got an episode in the last two weeks (as on the web). */
+  /** «Nuevo episodio»: the series has an episode that first aired in the last two weeks (its real date, not the upload). */
   static boolean newEpisode(Item item, long now) {
-    String last = lastEpisodeDay(item);
-    long at = day(last);
-    return item.series && !item.addedAt.isEmpty() && last.compareTo(item.addedAt) > 0 && at != Long.MIN_VALUE
-        && now - at <= NEW_EPISODE_DAYS * DAY && at <= now + DAY;
+    long at = day(lastEpisodeDay(item));
+    return item.series && at != Long.MIN_VALUE && now - at <= NEW_EPISODE_DAYS * DAY && at <= now + DAY;
   }
 
   /** The red label of a poster: «Nuevo episodio», «Recién llegada» or "". */

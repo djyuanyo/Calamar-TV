@@ -1702,7 +1702,12 @@ public class MainActivity extends Activity {
       final Runnable drawCast = () -> starring.setText(android.text.Html.fromHtml("<b>Protagonizada por:</b> "
           + android.text.TextUtils.htmlEncode(String.join(", ", all[0] ? names : names.subList(0, 3))) + (all[0] ? "" : "… <b>más</b>"), android.text.Html.FROM_HTML_MODE_LEGACY));
       drawCast.run();
-      if (!all[0]) { starring.setFocusable(true); starring.setOnClickListener(v -> { all[0] = true; drawCast.run(); }); }
+      if (!all[0]) {
+        // «más» can be reached with the remote of a television too.
+        starring.setFocusable(true);
+        starring.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 6, 0));
+        starring.setOnClickListener(v -> { all[0] = true; drawCast.run(); });
+      }
       body.addView(noPad(starring));
     }
     if (!item.creators.isEmpty())
@@ -1712,7 +1717,8 @@ public class MainActivity extends Activity {
     share.setOnClickListener(v -> {
       Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
           .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/#/" + Library.page(section) + "/" + Uri.encode(item.id));
-      startActivity(Intent.createChooser(send, "Compartir"));
+      try { startActivity(Intent.createChooser(send, "Compartir")); }
+      catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });
     LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
     sp.setMargins(0, dp(12), 0, dp(6));
