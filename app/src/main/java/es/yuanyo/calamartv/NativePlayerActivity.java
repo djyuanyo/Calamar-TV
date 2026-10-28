@@ -1156,15 +1156,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     List<String> pages = new ArrayList<>(channelPages);
     if (pageUrl != null && !pages.contains(pageUrl)) pages.add(pageUrl);
     int number = 0, checked = -1;
-    for (String address : pages) {
-      if (directUrl == null && address.equals(pageUrl)) checked = names.size();
-      names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
-      actions.add(() -> selectChannelAddress(address, true));
-    }
+    // The direct IPTV links (M3U8…) first, then the player pages (ZicoTV's last, as AppSources orders them).
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
       names.add("Enlace " + (++number) + " · Vídeo directo");
       actions.add(() -> selectChannelAddress(address, false));
+    }
+    for (String address : pages) {
+      if (directUrl == null && address.equals(pageUrl)) checked = names.size();
+      names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      actions.add(() -> selectChannelAddress(address, true));
     }
     if (directUrl == null) {
       for (int i = 0; i < sources.size(); i++) {

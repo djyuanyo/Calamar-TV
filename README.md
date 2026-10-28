@@ -397,3 +397,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - Al crear o editar una película, serie o capítulo se puede pegar un enlace de **AnonMP4** (`https://anonmp4.art/v/CÓDIGO`, también `anonmp4.to`, `/embed/…`).
 - Se reproduce con **el propio reproductor de AnonMP4**, en su página para incrustar (`embed_url`, la que da su API para otras webs): en la web dentro del reproductor de Calamar TV y en la app a pantalla completa (Atrás para salir). No se saca la dirección del vídeo de su página, que la protege con un permiso firmado.
 - Como el reproductor es el de AnonMP4: lleva sus anuncios si los tiene, no se guarda por dónde ibas en «Continuar viendo» y no hay «Saltar intro» ni «Siguiente capítulo» automático.
+
+## «TV» en el menú y fuentes de ZicoTV al final en la app (2.20.50)
+
+- En la app (y antes en la web), la pestaña «Canales» se llama **TV**.
+- En la app, los enlaces de **ZicoTV** de un canal van siempre los **últimos**: primero se prueban los enlaces directos de IPTV (M3U8…) y en «Fuentes» salen también primero los vídeos directos y después las páginas de reproductor, con las de ZicoTV al final.
