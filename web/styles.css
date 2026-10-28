@@ -1215,6 +1215,6 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .title-credit.cast-list { display: block; padding: 0; margin: 4px 0; columns: auto; }
 
 .title-preview { position:absolute; inset:0; width:100%; height:100%; border:0; min-height:200px; }
-.title-backdrop:has(.title-preview) { min-height:200px; }
+.title-backdrop:has(.title-preview) { min-height:240px; }
 .title-backdrop:has(.title-preview)::after { display:none; }
 .title-back { z-index:2; }

@@ -1680,7 +1680,7 @@ public class MainActivity extends Activity {
     bp.setMargins(dp(gutter()), dp(12), 0, 0);
     hero.addView(back, bp);
     int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
-    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.min(wide() ? 420 : 300, screen * 9 / 16))));
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.max(preview == null ? 0 : 240, Math.min(wide() ? 420 : 300, screen * 9 / 16)))));
 
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(LinearLayout.VERTICAL);
