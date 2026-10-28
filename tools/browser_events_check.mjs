@@ -520,6 +520,9 @@ try {
   // Category drop-down (TMDB genres of the section) next to the section search; no channels search here.
   await page.locator('.poster-card').first().waitFor();
   assert.equal(await page.locator('#search').isHidden(), true, 'the channels and events search is hidden in the library');
+  // Netflix-style rows without filters: today's picks and the genre rows, under «Todas las categorías».
+  await page.getByRole('heading', { name: 'Recomendaciones de hoy para ti', exact: true }).waitFor();
+  assert.ok(await page.locator('.browse-rail').count() > 0);
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
@@ -536,7 +539,7 @@ try {
       get levels() { return []; }
     };
   });
-  await page.locator('.poster-card', { hasText: 'Torrente' }).click();
+  await page.locator('.poster-card', { hasText: 'Torrente' }).first().click();
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
   assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');
@@ -544,7 +547,7 @@ try {
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.locator('.nav a', { hasText: 'Películas' }).click();
   await page.locator('.poster-card').first().waitFor();
-  await page.locator('.poster-card', { hasText: 'Avatar' }).click();
+  await page.locator('.poster-card', { hasText: 'Avatar' }).first().click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
@@ -560,7 +563,7 @@ try {
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
   await page.locator('.nav a', { hasText: 'Series' }).click();
-  await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).click();
+  await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
   await page.getByRole('button', { name: 'Temporada 10', exact: true }).waitFor();
   // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
   assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');
@@ -607,7 +610,7 @@ try {
   assert.ok(await page.evaluate(() => { const slider = document.querySelector('.highlight-slider'), row = document.querySelector('.continue-rail');
     return !!slider && !!(slider.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Continuar viendo comes under the featured slider');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
-  await page.locator('.continue-card a').click();
+  await page.locator('.continue-card > a:first-child').click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();

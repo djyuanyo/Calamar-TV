@@ -6,6 +6,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
+import { madridDay } from './audience.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -233,14 +234,15 @@ export const clock = (seconds) => {
 const bar = (el, saved) => saved?.duration ? el('span', { class: 'watch-progress', role: 'presentation' }, el('span', { style: `width:${Math.min(100, Math.round(saved.position / saved.duration * 100))}%` })) : null;
 
 /** The first row of the home page: what this browser left half watched, most recent first. */
-export function continueRow(el, entries, { open, remove }) {
-  return [el('div', { class: 'section-head' }, el('h2', {}, 'Continuar viendo')),
+export function continueRow(el, entries, { open, remove }, title = 'Continuar viendo') {
+  return [el('div', { class: 'section-head' }, el('h2', {}, title)),
     el('div', { class: 'rail wide continue-rail' }, entries.map((entry) => el('div', { class: 'continue-card' },
       el('a', { href: progressPath(entry), title: entry.name, onclick: (event) => { if (event.button || event.ctrlKey || event.metaKey) return; event.preventDefault(); open(entry); } },
         el('span', { class: 'continue-art' }, entry.image ? el('img', { src: entry.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'poster-fallback' }, entry.name),
           el('span', { class: 'continue-play', 'aria-hidden': 'true' }, '▶'), bar(el, entry)),
         el('span', { class: 'name' }, entry.name),
         el('span', { class: 'sub' }, `${entry.sub}${entry.duration ? ` · quedan ${Math.max(1, Math.round((entry.duration - entry.position) / 60))} min` : ''}`)),
+      el('a', { class: 'continue-info', href: `#/${entry.page}/${encodeURIComponent(entry.item)}`, 'aria-label': `Ficha de ${entry.name}`, title: 'Ficha' }, 'i'),
       el('button', { class: 'continue-remove', type: 'button', 'aria-label': `Quitar ${entry.name} de Continuar viendo`, title: 'Quitar', onclick: () => remove(entry) }, '✕'))))];
 }
 
@@ -284,13 +286,95 @@ export function rankTop(sections, trending, popularity, size = TOP_SIZE) {
 }
 
 /** A home page row of the weekly top («películas» or «series»): big numbers next to the posters, as on Netflix. */
-export function topRow(el, entries, what) {
-  return [el('div', { class: 'section-head' }, el('h2', {}, `Top ${entries.length} ${what} de la semana`), el('span', {}, 'Según TMDB')),
+export function topRow(el, entries, what, title = `Top ${entries.length} ${what} de la semana`) {
+  return [el('div', { class: 'section-head' }, el('h2', {}, title), el('span', {}, 'Según TMDB')),
     el('div', { class: 'rail top-rail' }, entries.map(({ section, item }, i) => el('a', { class: 'top-card', href: itemPath(section, item), title: itemTitle(item) },
       el('span', { class: 'top-rank', 'aria-hidden': 'true' }, String(i + 1)),
-      el('span', { class: 'poster-frame' }, poster(el, item)),
+      el('span', { class: 'poster-frame' }, poster(el, item), isNewArrival(item) ? el('span', { class: 'poster-new' }, 'Recién llegada') : null),
       el('span', { class: 'sr' }, `Número ${i + 1}: ${itemTitle(item)}`))))];
 }
+
+
+// ---- Netflix-style section page --------------------------------------------------------------------
+// Without filters, a section is a stack of rows as on Netflix: Spanish titles, today's picks, the top 10,
+// genres with their own titles, titles on no platform in Spain («Solo en Calamar TV»), what this browser
+// left half watched and the newest arrivals. The app (Library.browseRows) builds the same rows.
+export const SPANISH_ROW = { movies: 'Películas españolas', series: 'Series españolas', documentaries: 'Documentales españoles' };
+/** Made in Spain (TMDB production countries), or in Spanish when TMDB gives no country. */
+export const isSpanish = (item) => (item.tmdb?.countries?.length ? item.tmdb.countries.includes('ES') : item.tmdb?.language === 'es');
+const genreRow = (key, genres, title) => ({ key, genres, title });
+/** Genre rows with their own name, in the order they appear; the other genres follow as «Películas de …». */
+export const GENRE_ROWS = {
+  terror: genreRow('terror', ['Terror'], (s) => `${s.label} de terror`),
+  scifi: genreRow('scifi', ['Ciencia ficción', 'Fantasía', 'Sci-Fi & Fantasy'], () => 'Ciencia ficción y fantasía'),
+  comedy: genreRow('comedy', ['Comedia'], () => '¿Quieres echarte unas risas?'),
+  thriller: genreRow('thriller', ['Suspense', 'Thriller'], () => 'Thrillers que te mantendrán en vilo'),
+  action: genreRow('action', ['Acción', 'Action & Adventure'], () => 'Acción a tope'),
+  drama: genreRow('drama', ['Drama'], () => 'Dramas que enganchan'),
+  crime: genreRow('crime', ['Crimen'], () => 'Crimen e investigación'),
+  family: genreRow('family', ['Animación', 'Familia', 'Kids'], () => 'Para ver en familia'),
+  adventure: genreRow('adventure', ['Aventura'], () => 'Grandes aventuras'),
+  romance: genreRow('romance', ['Romance'], () => 'Historias de amor'),
+  mystery: genreRow('mystery', ['Misterio'], () => 'Misterios por resolver'),
+};
+const ROW_LIMIT = 40;
+/** Most interesting first: the weekly top, then the newest arrivals, then the best rated. */
+const byInterest = (a, b) => (a.trend || 999) - (b.trend || 999) || String(b.addedAt || '').localeCompare(String(a.addedAt || ''))
+  || (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0);
+/** A number from 0 to 1 that changes every day for each title (the same in the web and the app). */
+export function dailyLuck(day, id) {
+  let h = 2166136261;
+  for (const ch of `${day}|${id}`) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h / 4294967296;
+}
+/** «Recomendaciones de hoy para ti»: a new pick every day, first titles of the genres this browser watches, without those already started. */
+export function todaysPicks(items, watchedIds = [], day = madridDay(), size = 15) {
+  const watched = new Set(watchedIds);
+  const liked = new Set(items.filter((item) => watched.has(item.id)).flatMap((item) => item.tmdb?.genres || []));
+  return items.filter((item) => !watched.has(item.id))
+    .map((item) => [item, (item.tmdb?.genres || []).filter((g) => liked.has(g)).length + dailyLuck(day, item.id)])
+    .sort((a, b) => b[1] - a[1]).slice(0, size).map(([item]) => item);
+}
+/**
+ * The rows of a section page, in order: [{ key, title, kind, items }]. kind is 'poster', 'top' (big
+ * numbers), 'big' (large posters) or 'continue' (filled by the page with what this browser left half watched).
+ */
+export function browseRows(section, items, { now = Date.now(), watchedIds = [], name = '' } = {}) {
+  const rows = [];
+  const add = (key, title, list, kind = 'poster') => { if (kind === 'continue' || list.length) rows.push({ key, title, kind, items: list.slice(0, ROW_LIMIT) }); };
+  const used = new Set();
+  const genre = (row) => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest)); };
+  add('spanish', SPANISH_ROW[section.key] || `${section.label} españolas`, items.filter(isSpanish).sort(byInterest));
+  add('today', 'Recomendaciones de hoy para ti', todaysPicks(items, watchedIds, madridDay(now)));
+  if (TOP_SECTIONS.includes(section.key)) {
+    const top = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend).slice(0, TOP_SIZE);
+    add('top', top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`, top, 'top');
+  }
+  genre(GENRE_ROWS.terror);
+  add('only', 'Solo en Calamar TV', items.filter((item) => item.tmdb?.id && item.status !== 'unmatched' && !(item.tmdb.providers || []).length).sort(byInterest), 'big');
+  add('continue', name ? `Seguir viendo para ${name}` : 'Seguir viendo', [], 'continue');
+  genre(GENRE_ROWS.scifi);
+  genre(GENRE_ROWS.comedy);
+  add('new', 'Novedades en Calamar TV', items.filter((item) => item.addedAt).sort((a, b) => String(b.addedAt).localeCompare(String(a.addedAt))));
+  for (const key of ['thriller', 'action', 'drama', 'crime', 'family', 'adventure', 'romance', 'mystery']) genre(GENRE_ROWS[key]);
+  const counts = new Map();
+  // «Documentales de documental» says nothing: the section's own genre has no row.
+  for (const item of items) for (const g of item.tmdb?.genres || []) if (!used.has(g) && norm(g) !== norm(section.one)) counts.set(g, (counts.get(g) || 0) + 1);
+  for (const [g] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es')))
+    add(`genre:${g}`, `${section.label} de ${g.toLocaleLowerCase('es')}`, items.filter((item) => (item.tmdb?.genres || []).includes(g)).sort(byInterest));
+  return rows;
+}
+
+// ---- Especial Halloween ------------------------------------------------------------------------------
+// From 1 October to 2 November (Madrid time) the home page has «Especial Halloween» with every horror
+// title (TMDB genre «Terror») of films, series and documentaries; «Descubrir todo» opens #/halloween.
+export const HALLOWEEN_PAGE = 'halloween';
+export function halloweenOn(now = Date.now()) {
+  const [, month, day] = madridDay(now).split('-').map(Number);
+  return month === 10 || (month === 11 && day <= 2);
+}
+export const horrorTitles = (library) => everyItem(library).filter(({ item }) => (item.tmdb?.genres || []).includes('Terror'))
+  .sort((a, b) => byInterest(a.item, b.item));
 
 // ---- Public pages -------------------------------------------------------------------------------
 
@@ -332,16 +416,30 @@ export function filterLibrary(items, { q = '', genre = '', year = '', platform =
   return by ? [...found].sort(by) : found;
 }
 
-export function libraryPage(el, section, library) {
+/** A poster of a row: «TOP 10» in the corner for the weekly top and «Recién llegada» under it, as on Netflix. */
+export function browseCard(el, section, item, { big = false } = {}) {
+  return el('a', { class: `poster-card browse-card${big ? ' big' : ''}`, href: itemPath(section, item), title: itemTitle(item), 'aria-label': itemTitle(item) },
+    el('span', { class: 'poster-frame' }, poster(el, item),
+      item.trend > 0 && TOP_SECTIONS.includes(section.key) ? el('span', { class: 'poster-top', 'aria-hidden': 'true' }, el('small', {}, 'TOP'), el('b', {}, '10')) : null,
+      isNewArrival(item) ? el('span', { class: 'poster-new' }, 'Recién llegada') : null));
+}
+
+/**
+ * A section page. Without filters, rows as on Netflix (browseRows); with a category, a search or any
+ * filter, the poster grid of the titles that pass. `watching` are this browser's «Continuar viendo»
+ * entries, `name` the signed-in user's first name.
+ */
+export function libraryPage(el, section, library, { watching = [], name = '', open = () => {}, remove = () => {} } = {}) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
-  const grid = el('div', { class: 'poster-grid' });
+  const body = el('div', { class: 'browse-body' });
   const select = (label, all, values) => el('select', { 'aria-label': label }, [['', all], ...values.map((v) => (Array.isArray(v) ? v : [v, v]))].map(([value, text]) => el('option', { value }, text)));
   // Filters: TMDB genre, year, platform where it can be watched (in Spain), releases and new arrivals, and an order.
   const genres = [...new Set(items.flatMap((item) => item.tmdb?.genres || []))].sort((a, b) => a.localeCompare(b, 'es'));
   const years = [...new Set(items.map((item) => Number(itemYear(item))).filter(Boolean))].sort((a, b) => b - a);
   const platforms = [...new Set(items.flatMap((item) => item.tmdb?.providers || []))].sort((a, b) => a.localeCompare(b, 'es'));
   const picker = select('Categoría', 'Todas las categorías', genres);
+  picker.classList.add('browse-category');
   const yearPicker = select('Año', 'Todos los años', years.map(String));
   const platformPicker = select('Plataforma', 'Todas las plataformas', platforms);
   const orderPicker = el('select', { 'aria-label': 'Ordenar' }, LIBRARY_ORDERS.map(([value, text]) => el('option', { value }, text)));
@@ -352,26 +450,73 @@ export function libraryPage(el, section, library) {
     draw();
   }, 'data-only': value }, text);
   const chips = el('div', { class: 'chips library-chips', role: 'group', 'aria-label': 'Mostrar' }, chip('estrenos', 'Estrenos'), chip('nuevas', 'Recién llegadas'));
+  const filters = el('div', { class: 'browse-filters', hidden: true },
+    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query),
+      years.length > 1 ? el('label', { class: 'library-genre' }, yearPicker) : null,
+      platforms.length ? el('label', { class: 'library-genre' }, platformPicker) : null,
+      el('label', { class: 'library-genre' }, orderPicker)), chips);
+  const toggle = el('button', { class: 'browse-toggle', type: 'button', 'aria-expanded': 'false', onclick: () => {
+    filters.hidden = !filters.hidden;
+    toggle.setAttribute('aria-expanded', String(!filters.hidden));
+    if (!filters.hidden) query.focus();
+  } }, '🔍 Buscar y filtrar');
+  const watchedIds = watching.filter((entry) => entry.page === section.page).map((entry) => entry.item);
+  const rows = () => browseRows(section, items, { watchedIds, name }).flatMap((row) => {
+    if (row.kind === 'continue') {
+      const mine = watching.filter((entry) => entry.page === section.page);
+      return mine.length ? continueRow(el, mine, { open, remove }, row.title) : [];
+    }
+    if (row.kind === 'top') return topRow(el, row.items.map((item) => ({ section, item })), '', row.title);
+    return [el('div', { class: 'section-head' }, el('h2', {}, row.title)),
+      el('div', { class: `rail browse-rail${row.kind === 'big' ? ' big-rail' : ''}` }, row.items.map((item) => browseCard(el, section, item, { big: row.kind === 'big' })))];
+  });
   const draw = () => {
+    const filtered = query.value.trim() || picker.value || yearPicker.value || platformPicker.value || only || orderPicker.value;
+    if (!filtered) {
+      body.replaceChildren(...(items.length ? rows() : [el('p', { class: 'status' }, `Todavía no hay ${section.label.toLowerCase()}.`)]));
+      return;
+    }
     const found = filterLibrary(items, { q: query.value, genre: picker.value, year: yearPicker.value, platform: platformPicker.value, only, order: orderPicker.value });
-    grid.replaceChildren(...found.map((item) => el('a', { class: 'poster-card', href: `#/${section.page}/${encodeURIComponent(item.id)}`, title: itemTitle(item) },
+    const grid = el('div', { class: 'poster-grid' }, found.map((item) => el('a', { class: 'poster-card', href: itemPath(section, item), title: itemTitle(item) },
       el('span', { class: 'poster-frame' }, poster(el, item), item.tmdb?.rating ? el('span', { class: 'poster-rating' }, `★ ${item.tmdb.rating.toLocaleString('es-ES')}`) : null,
         isNewArrival(item) ? el('span', { class: 'poster-new' }, 'Recién llegada') : null),
       el('span', { class: 'name' }, itemTitle(item)),
       el('span', { class: 'sub' }, [itemYear(item), item.kind === 'tv' ? `${item.episodes.length} capítulos` : ''].filter(Boolean).join(' · ')))));
-    const filtered = picker.value || yearPicker.value || platformPicker.value || only;
-    if (!found.length) grid.append(el('p', { class: 'status' }, !items.length ? `Todavía no hay ${section.label.toLowerCase()}.` : filtered && !query.value.trim() ? 'No hay títulos con esos filtros.' : 'No hay títulos con ese nombre.'));
+    if (!found.length) grid.append(el('p', { class: 'status' }, picker.value || yearPicker.value || platformPicker.value || only ? (query.value.trim() ? 'No hay títulos con ese nombre y esos filtros.' : 'No hay títulos con esos filtros.') : 'No hay títulos con ese nombre.'));
+    body.replaceChildren(el('div', { class: 'section-head' }, el('h2', {}, picker.value || 'Resultados'), el('span', {}, found.length === 1 ? '1 título' : `${found.length} títulos`)), grid);
   };
   query.addEventListener('input', draw);
   for (const control of [picker, yearPicker, platformPicker, orderPicker]) control.addEventListener('change', draw);
   draw();
-  return [el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, `${items.length} ${items.length === 1 ? section.one : section.label.toLowerCase()}`)),
-    el('div', { class: 'library-filters' }, el('label', { class: 'search library-search' }, query),
-      genres.length ? el('label', { class: 'library-genre' }, picker) : null,
-      years.length > 1 ? el('label', { class: 'library-genre' }, yearPicker) : null,
-      platforms.length ? el('label', { class: 'library-genre' }, platformPicker) : null,
-      el('label', { class: 'library-genre' }, orderPicker)),
-    chips, grid, attribution(el, library)];
+  return [el('div', { class: 'browse-head' }, el('h1', { class: 'browse-title' }, section.label),
+    el('div', { class: 'browse-controls' }, genres.length ? el('label', { class: 'browse-select' }, picker) : null, toggle)),
+    filters, body, attribution(el, library)];
+}
+
+/** «Especial Halloween»: every horror title of the library, by section. */
+export function halloweenPage(el, library) {
+  const found = horrorTitles(library);
+  const nodes = [el('div', { class: 'halloween-banner page' }, el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h1', {}, 'Especial Halloween'),
+    el('p', {}, found.length === 1 ? '1 título para pasar miedo' : `${found.length} títulos para pasar miedo`))];
+  for (const section of LIBRARY_SECTIONS) {
+    const mine = found.filter((f) => f.section === section);
+    if (!mine.length) continue;
+    nodes.push(el('div', { class: 'section-head' }, el('h2', {}, section.label), el('span', {}, String(mine.length))),
+      el('div', { class: 'poster-grid' }, mine.map(({ item }) => browseCard(el, section, item))));
+  }
+  if (!found.length) nodes.push(el('p', { class: 'status' }, 'Todavía no hay películas ni series de terror.'));
+  return nodes;
+}
+
+/** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
+export function halloweenRow(el, library) {
+  const found = horrorTitles(library);
+  if (!found.length) return [];
+  const backdrop = found.find(({ item }) => item.tmdb?.backdrop)?.item.tmdb.backdrop;
+  return [el('section', { class: 'halloween-banner', 'aria-label': 'Especial Halloween', style: backdrop ? `--halloween-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
+    el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h2', {}, 'Especial Halloween'),
+    el('div', { class: 'rail browse-rail' }, found.slice(0, ROW_LIMIT).map(({ section, item }) => browseCard(el, section, item))),
+    el('a', { class: 'halloween-all', href: `#/${HALLOWEEN_PAGE}` }, 'Descubrir todo'))];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
@@ -734,7 +879,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       if (found) facts[item.id] = found;
     }
     const withFacts = Object.fromEntries(Object.entries(current.sections).map(([section, items]) => [section, items.map((item) => facts[item.id]
-      ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}) } } : item)]));
+      ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}),
+        ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);

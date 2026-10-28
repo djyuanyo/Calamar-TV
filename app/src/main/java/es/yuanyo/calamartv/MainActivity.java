@@ -411,6 +411,10 @@ public class MainActivity extends Activity {
       libraryPage(Library.section(mode));
       return;
     }
+    if (mode.equals(HALLOWEEN)) {
+      halloweenPage();
+      return;
+    }
     if (mode.equals("Favoritos")) {
       heading("Favoritos", "Mantén pulsado para quitar");
       List<Catalog.Channel> saved = new ArrayList<>();
@@ -456,6 +460,8 @@ public class MainActivity extends Activity {
         if (library != null) {
           topRow(library.top("movies"), "películas");
           topRow(library.top("series"), "series");
+          // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
+          if (Library.halloweenOn(System.currentTimeMillis())) halloweenRow();
         }
       }
       // Only events on the home page: one row per league, each in date order.
@@ -1491,6 +1497,11 @@ public class MainActivity extends Activity {
     cp.setMargins(0, dp(6), 0, dp(16));
     list.addView(scroller, cp);
     boolean filtered = !genre.isEmpty() || libYear > 0 || !libPlatform.isEmpty() || !libOnly.isEmpty();
+    if (!filtered && libOrder.isEmpty() && query.trim().isEmpty() && !items.isEmpty()) {
+      browseRows(section, items);
+      if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
+      return;
+    }
     if (items.isEmpty())
       list.addView(label(!query.trim().isEmpty() ? "Sin resultados" : filtered ? "No hay títulos con esos filtros." : "Todavía no hay vídeos en esta sección.", 15, MUTED));
     int columns = wide() ? 6 : 3;
@@ -1516,6 +1527,11 @@ public class MainActivity extends Activity {
 
   /** A 2:3 poster with the title under it; without a TMDB poster the title is written on the card. */
   View poster(final Library.Item item, int width) {
+    return poster(item, width, false);
+  }
+
+  /** `bare`: only the picture, as in the rows of a section page (the name is in the poster and read aloud). */
+  View poster(final Library.Item item, int width, boolean bare) {
     LinearLayout card = new LinearLayout(this);
     card.setId(200000 + Math.abs(item.id.hashCode() % 800000));
     card.setOrientation(LinearLayout.VERTICAL);
@@ -1538,16 +1554,42 @@ public class MainActivity extends Activity {
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
       image(cover, item.poster);
     }
+    if (item.trend > 0) {
+      // «TOP 10» in the corner of the titles of the weekly top, as on Netflix (and on the web).
+      TextView badge = label("TOP\n10", 10, 0xffffffff);
+      badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      badge.setGravity(Gravity.CENTER);
+      badge.setLineSpacing(0, 0.85f);
+      badge.setBackground(Ui.shape(this, 0xffe50914, 3, 0, 0));
+      badge.setPadding(dp(4), dp(2), dp(4), dp(3));
+      badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      art.addView(badge, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
+    }
     if (Library.newArrival(item, System.currentTimeMillis())) {
-      // «Recién llegada»: the red ribbon of new titles, as on Netflix (and on the web).
-      TextView ribbon = label("RECIÉN LLEGADA", 10, 0xffffffff);
+      // «Recién llegada»: the red label of new titles, as on Netflix (and on the web).
+      TextView ribbon = label("Recién llegada", 11, 0xffffffff);
       ribbon.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
       ribbon.setGravity(Gravity.CENTER);
-      ribbon.setBackgroundColor(0xffe50914);
-      ribbon.setPadding(dp(4), dp(3), dp(4), dp(3));
-      art.addView(ribbon, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+      ribbon.setSingleLine(true);
+      ribbon.setBackground(Ui.shape(this, 0xffe50914, 4, 0, 0));
+      ribbon.setPadding(dp(8), dp(3), dp(8), dp(3));
+      FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+      rp.setMargins(dp(4), 0, dp(4), dp(7));
+      art.addView(ribbon, rp);
     }
     card.addView(art, new LinearLayout.LayoutParams(-1, Math.round(dp(width) * 1.5f)));
+    if (bare) {
+      card.setPadding(dp(3), dp(3), dp(3), dp(3));
+      card.setContentDescription(item.title + (item.year > 0 ? ", " + item.year : "") + (item.trend > 0 ? ", top 10" : ""));
+      card.setOnClickListener(v -> {
+        String section = library == null ? null : library.sectionOf(item);
+        if (section != null) libraryDetail(section, item);
+      });
+      LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), -2);
+      p.setMargins(dp(3), dp(4), dp(4), dp(6));
+      card.setLayoutParams(p);
+      return card;
+    }
     TextView name = text(item.title, 13);
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     wholeName(name);
@@ -1886,8 +1928,12 @@ public class MainActivity extends Activity {
 
   /** «Top 10 películas / series de la semana» (or as many as there are): big numbers next to the posters, as on Netflix. */
   void topRow(List<Library.Item> items, String what) {
+    topRow(items, what, "Top " + items.size() + " " + what + " de la semana");
+  }
+
+  void topRow(List<Library.Item> items, String what, String title) {
     if (items.isEmpty()) return;
-    heading("Top " + items.size() + " " + what + " de la semana", "Según TMDB");
+    heading(title, "Según TMDB");
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);
@@ -1914,6 +1960,134 @@ public class MainActivity extends Activity {
     }
     h.addView(r);
     list.addView(h);
+  }
+
+  static final String HALLOWEEN = "Especial Halloween";
+
+  /** The signed-in user's first name, for «Seguir viendo para …» (empty without an account). */
+  String userName() {
+    try {
+      com.google.firebase.auth.FirebaseUser user = SharedCatalog.auth(this).getCurrentUser();
+      String name = user == null || user.getDisplayName() == null ? "" : user.getDisplayName().trim();
+      return name.isEmpty() ? "" : name.split("\\s+")[0];
+    } catch (RuntimeException unavailable) {
+      return "";
+    }
+  }
+
+  /** A section page without filters: rows as on Netflix, in the web's order (Library.browseRows). */
+  void browseRows(String section, List<Library.Item> items) {
+    java.util.Set<String> watched = new HashSet<>();
+    for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
+      if (section.equals(entry.optString("section"))) watched.add(entry.optString("item"));
+    for (Library.Row row : Library.browseRows(section, items, watched, userName(), System.currentTimeMillis())) {
+      if (row.kind.equals("continue")) continueRow(section, row.title);
+      else if (row.kind.equals("top")) topRow(row.items, "", row.title);
+      else posterRail(row.title, row.items, row.kind.equals("big") ? (wide() ? 230 : 170) : (wide() ? 140 : 108));
+    }
+  }
+
+  /** A titled row of posters that scrolls sideways. */
+  void posterRail(String title, final List<Library.Item> items, final int width) {
+    heading(title, null);
+    java.util.concurrent.Callable<View> rail = () -> {
+      HorizontalScrollView h = new HorizontalScrollView(this);
+      h.setHorizontalScrollBarEnabled(false);
+      h.setClipToPadding(false);
+      LinearLayout r = row();
+      r.setGravity(Gravity.TOP);
+      for (Library.Item item : items) r.addView(poster(item, width, true));
+      h.addView(r);
+      return h;
+    };
+    // On a television the rows far from the screen are built when they come near (as the poster grid).
+    if (television) lazyRow(width * 3 / 2 + 24, rail);
+    else {
+      try { list.addView(rail.call()); } catch (Exception impossible) { throw new IllegalStateException(impossible); }
+    }
+  }
+
+  /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
+  void halloweenRow() {
+    List<Object[]> horror = Library.horror(library);
+    if (horror.isEmpty()) return;
+    FrameLayout banner = new FrameLayout(this);
+    String backdrop = "";
+    for (Object[] pair : horror) if (!((Library.Item) pair[1]).backdrop.isEmpty()) { backdrop = ((Library.Item) pair[1]).backdrop; break; }
+    if (!backdrop.isEmpty()) {
+      ImageView art = new ImageView(this);
+      art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      art.setAlpha(0.55f);
+      banner.addView(art, new FrameLayout.LayoutParams(-1, -1));
+      image(art, backdrop);
+    }
+    View shade = new View(this);
+    shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x990b0d10, 0x330b0d10, 0xee0b0d10}));
+    banner.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setPadding(dp(16), dp(22), 0, dp(18));
+    box.addView(halloweenTitle("ESPECIAL HALLOWEEN"));
+    TextView kicker = label("COLECCIÓN DE TERROR", 12, 0xffe7dccb);
+    kicker.setLetterSpacing(0.2f);
+    kicker.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    kicker.setPadding(0, dp(4), 0, dp(10));
+    box.addView(kicker);
+    HorizontalScrollView h = new HorizontalScrollView(this);
+    h.setHorizontalScrollBarEnabled(false);
+    LinearLayout r = row();
+    r.setGravity(Gravity.TOP);
+    int width = wide() ? 140 : 108;
+    for (int i = 0; i < Math.min(horror.size(), Library.ROW_LIMIT); i++) r.addView(poster((Library.Item) horror.get(i)[1], width, true));
+    h.addView(r);
+    box.addView(h);
+    Button all = Ui.pill(this, "Descubrir todo", Ui.Kind.ACCENT, false);
+    all.setOnClickListener(v -> { mode = HALLOWEEN; query = ""; home(); });
+    LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);
+    ap.gravity = Gravity.CENTER_HORIZONTAL;
+    ap.setMargins(0, dp(10), dp(16), 0);
+    box.addView(all, ap);
+    banner.addView(box, new FrameLayout.LayoutParams(-1, -2));
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+    bp.setMargins(0, dp(22), 0, dp(6));
+    banner.setClipToOutline(true);
+    banner.setBackground(Ui.shape(this, 0xff16090b, 14, 0, 0));
+    list.addView(banner, bp);
+  }
+
+  TextView halloweenTitle(String text) {
+    TextView title = label(text, wide() ? 38 : 30, 0xffff2a12);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setShadowLayer(dp(8), 0, 0, 0xccff3c14);
+    return title;
+  }
+
+  /** «Especial Halloween»: every horror title of the library, by section. */
+  void halloweenPage() {
+    loadLibrary();
+    Button back = Ui.pill(this, "‹ Inicio", Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> { mode = "Inicio"; home(); });
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, dp(44));
+    bp.setMargins(0, dp(10), 0, dp(6));
+    list.addView(back, bp);
+    list.addView(halloweenTitle("ESPECIAL HALLOWEEN"));
+    if (library == null) { list.addView(label(libraryError.isEmpty() ? "Cargando…" : libraryError, 15, MUTED)); return; }
+    List<Object[]> horror = Library.horror(library);
+    list.addView(label(horror.size() == 1 ? "1 título para pasar miedo" : horror.size() + " títulos para pasar miedo", 14, 0xffe7dccb));
+    if (horror.isEmpty()) list.addView(label("Todavía no hay películas ni series de terror.", 15, MUTED));
+    int columns = wide() ? 6 : 3;
+    int width = gridWidth(columns);
+    for (String[] section : Library.SECTIONS) {
+      List<Library.Item> mine = new ArrayList<>();
+      for (Object[] pair : horror) if (section[0].equals(pair[0])) mine.add((Library.Item) pair[1]);
+      if (mine.isEmpty()) continue;
+      heading(section[1], String.valueOf(mine.size()));
+      LinearLayout r = null;
+      for (int i = 0; i < mine.size(); i++) {
+        if (i % columns == 0) { r = row(); r.setGravity(Gravity.TOP); list.addView(r); }
+        r.addView(poster(mine.get(i), width));
+      }
+    }
   }
 
   /** The library's own entry for a «Continuar viendo» entry (section, item and episode), or null. */
@@ -1950,10 +2124,17 @@ public class MainActivity extends Activity {
 
   /** The first row of the home page: what this device left half watched, most recent first. */
   void continueRow() {
-    List<JSONObject> entries = Library.Progress.list(Library.Progress.load(this));
+    continueRow(null, "Continuar viendo");
+  }
+
+  /** What this device left half watched; only the titles of one section when `section` is not null. */
+  void continueRow(String section, String title) {
+    List<JSONObject> entries = new ArrayList<>();
+    for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
+      if (section == null || section.equals(entry.optString("section"))) entries.add(entry);
     if (entries.isEmpty()) return;
     loadLibrary();
-    heading("Continuar viendo", null);
+    heading(title, null);
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);

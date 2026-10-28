@@ -350,3 +350,11 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - Al abrir el enlace de un canal o evento, el reproductor de la web empieza solo. Si el navegador no deja reproducir con sonido porque aún no has tocado la página, el vídeo arranca **sin sonido** y aparece el botón «Activar sonido» arriba a la izquierda; con un toque vuelve el sonido. Antes salía «Pulsa ▶ para empezar».
 - Ese silencio automático no se guarda como preferencia: tu volumen y el botón de silencio se siguen recordando como siempre.
+
+## Películas y series al estilo Netflix y «Especial Halloween» (2.20.42)
+
+- **Películas**, **Series** y **Documentales** (web y app) se ven como en Netflix: título grande, «Todas las categorías» y filas: *Películas españolas* (país de producción en TMDB), *Recomendaciones de hoy para ti* (cambian cada día y dan prioridad a los géneros que ya has visto), *Las 10 … más populares de la semana* (números grandes), *Películas de terror*, *Solo en Calamar TV* (pósteres grandes: títulos que no están en ninguna plataforma en España), *Seguir viendo para (tu nombre)*, *Ciencia ficción y fantasía*, *¿Quieres echarte unas risas?*, *Novedades en Calamar TV*, *Thrillers que te mantendrán en vilo* y el resto de géneros.
+- Los pósteres llevan la etiqueta roja **TOP 10** en la esquina si están en el top de la semana y **Recién llegada** abajo.
+- Al elegir una categoría, buscar o usar «Buscar y filtrar» (año, plataforma, estrenos, recién llegadas, orden) se ve la cuadrícula de resultados como antes.
+- El país y el idioma se guardan al añadir un título y se rellenan en los que ya estaban con «Actualizar el top y las plataformas con TMDB» (también automático una vez al día al abrir Pelis y series en el administrador). Hasta entonces, *Películas españolas* no sale.
+- Del 1 de octubre al 2 de noviembre (hora de Madrid) la portada tiene **Especial Halloween**: un banner oscuro con todas las películas, series y documentales del género *Terror* y el botón **Descubrir todo**, que abre una página con todo el contenido de terror (en la web, `#/halloween`).

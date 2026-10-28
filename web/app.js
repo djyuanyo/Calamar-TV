@@ -12,7 +12,7 @@ import { autoplay, soundChosen } from './autoplay.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
-  cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath,
+  cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
@@ -405,6 +405,8 @@ function home() {
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
+  // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
+  if (libraryShown() && halloweenOn()) nodes.push(...halloweenRow(el, library));
   // Only events on the home page: one row per league, each in date order (soonest first), with this
   // week's events only: a league whose next matches are in two weeks does not appear yet.
   for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
@@ -1125,7 +1127,10 @@ shareButton.addEventListener('click', async () => {
 // ---- Films, series and documentaries --------------------------------------------------------------
 // Shown in the menu while the administrator has the catalog switched on (libraryVisible); the
 // administrator, signed in on this browser, always sees it, to prepare it before showing it to everyone.
+let userName = '';
 shared().then((f) => f.watchAuth((user) => {
+  // «Seguir viendo para Juan» in the film and series pages.
+  userName = String(user?.displayName || '').trim().split(/\s+/)[0] || '';
   const was = libraryAdmin;
   libraryAdmin = f.administrator(user);
   if (was === libraryAdmin) return;
@@ -1141,6 +1146,17 @@ startProgressSync(shared, () => { if (!location.hash.replace(/^#\/?/, '')) route
 function syncLibraryNav() {
   for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryShown();
 }
+// What a section page needs for «Seguir viendo para …»: this browser's unfinished titles and the user's name.
+const browseOptions = () => ({ watching: progressList(loadProgress()), name: userName, open: resumeEntry,
+  remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } });
+async function halloweenRoute(version) {
+  if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, 'El Especial Halloween no está disponible ahora.')); return; }
+  view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Cargando el Especial Halloween…'));
+  let library;
+  try { library = await fetchLibrary(); }
+  catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
+  if (version === routeVersion) view.replaceChildren(...halloweenPage(el, library));
+}
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);
   // While the library is hidden its lists are not public, but a film's or series' own link still opens it.
@@ -1153,7 +1169,7 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   // Only the administrator gets here while it is hidden: say so, so it is not mistaken for public.
   const hiddenNote = libraryVisible(state.custom) || !libraryAdmin ? null
     : el('p', { class: 'note library-hidden-note' }, 'Oculto para los usuarios: solo lo ves tú, como administrador. Actívalo en Administración → Pelis y series.');
-  if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library)].filter(Boolean)); return; }
+  if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library, browseOptions())].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
   const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
@@ -1180,7 +1196,7 @@ async function route() {
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   // Films, series and documentaries have their own search box: the channels and events one hides there.
-  search.closest('.search').hidden = !!sectionByPage(page);
+  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE;
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
@@ -1225,6 +1241,7 @@ async function route() {
     return;
   }
   if (sectionByPage(page)) { await libraryRoute(page, hash.split('/').slice(1), version); return; }
+  if (page === HALLOWEEN_PAGE) { await halloweenRoute(version); return; }
   if (page === 'canal' || page === 'evento') {
     // An event's own link keeps working after the match: it is only gone from the home page.
     const all = page === 'evento' ? events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }) : [];
