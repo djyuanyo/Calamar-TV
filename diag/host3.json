@@ -1,17 +1,277 @@
-[
- {
-  "url": "https://share.google/DJd1zj8nhTStnCTTd",
-  "status": 302,
-  "location": "https://www.google.com/share.google?q=DJd1zj8nhTStnCTTd"
- },
- {
-  "url": "https://www.google.com/share.google?q=DJd1zj8nhTStnCTTd",
-  "status": 301,
-  "location": "https://www.google.com/search?kgmid=/m/012dbw&hl=es-ES&q=Copa+de+la+Liga+de+Inglaterra&shem=dlvs1,epsd1,rimspwouoe&shndl=0&source=sh/x/kp/osrp/m5/2&kgs=593b9dd0128acc13&utm_source=dlvs1,epsd1,rimspwouoe,sh/x/kp/osrp/m5/2"
- },
- {
-  "url": "https://www.google.com/search?kgmid=/m/012dbw&hl=es-ES&q=Copa+de+la+Liga+de+Inglaterra&shem=dlvs1,epsd1,rimspwouoe&shndl=0&source=sh/x/kp/osrp/m5/2&kgs=593b9dd0128acc13&utm_source=dlvs1,epsd1,rimspwouoe,sh/x/kp/osrp/m5/2",
-  "status": 200,
-  "location": null
- }
-]
+{
+ "teams": [
+  {
+   "id": "espn-331",
+   "name": "Brighton & Hove Albion",
+   "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/331.png",
+   "espnId": "331",
+   "leagueId": "espn-eng.1"
+  },
+  {
+   "id": "espn-360",
+   "name": "Manchester United",
+   "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/360.png",
+   "espnId": "360",
+   "leagueId": "espn-eng.1"
+  },
+  {
+   "id": "espn-349",
+   "name": "AFC Bournemouth",
+   "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/349.png",
+   "espnId": "349",
+   "leagueId": "espn-eng.1"
+  },
+  {
+   "id": "espn-382",
+   "name": "Manchester City",
+   "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
+   "espnId": "382",
+   "leagueId": "espn-eng.1"
+  }
+ ],
+ "leagues": [
+  {
+   "id": "espn-eng.league_cup",
+   "name": "Carabao Cup",
+   "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/41.png",
+   "espn": "eng.league_cup",
+   "season": "2026/2027"
+  }
+ ],
+ "fixtures": [
+  {
+   "id": "partido-401879248",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-363",
+   "awayTeamId": "espn-360",
+   "startAt": "2026-10-31T12:30:00.000Z",
+   "round": "Jornada 9",
+   "matchId": "401879248"
+  },
+  {
+   "id": "partido-401879251",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-349",
+   "awayTeamId": "espn-357",
+   "startAt": "2026-10-31T15:00:00.000Z",
+   "round": "Jornada 9",
+   "matchId": "401879251"
+  },
+  {
+   "id": "partido-401879245",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-382",
+   "awayTeamId": "espn-331",
+   "startAt": "2026-10-31T15:00:00.000Z",
+   "round": "Jornada 9",
+   "matchId": "401879245"
+  },
+  {
+   "id": "partido-401878757",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-393",
+   "awayTeamId": "espn-382",
+   "startAt": "2026-11-07T17:30:00.000Z",
+   "round": "Jornada 10",
+   "matchId": "401878757"
+  },
+  {
+   "id": "partido-401879244",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-331",
+   "awayTeamId": "espn-337",
+   "startAt": "2026-11-08T14:00:00.000Z",
+   "round": "Jornada 10",
+   "matchId": "401879244"
+  },
+  {
+   "id": "partido-401878759",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-373",
+   "awayTeamId": "espn-349",
+   "startAt": "2026-11-08T14:00:00.000Z",
+   "round": "Jornada 10",
+   "matchId": "401878759"
+  },
+  {
+   "id": "partido-401879240",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-360",
+   "awayTeamId": "espn-362",
+   "startAt": "2026-11-08T16:30:00.000Z",
+   "round": "Jornada 10",
+   "matchId": "401879240"
+  },
+  {
+   "id": "partido-401879233",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-382",
+   "awayTeamId": "espn-370",
+   "startAt": "2026-11-21T12:30:00.000Z",
+   "round": "Jornada 11",
+   "matchId": "401879233"
+  },
+  {
+   "id": "partido-401879238",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-349",
+   "awayTeamId": "espn-393",
+   "startAt": "2026-11-21T15:00:00.000Z",
+   "round": "Jornada 11",
+   "matchId": "401879238"
+  },
+  {
+   "id": "partido-401879234",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-306",
+   "awayTeamId": "espn-331",
+   "startAt": "2026-11-22T14:00:00.000Z",
+   "round": "Jornada 11",
+   "matchId": "401879234"
+  },
+  {
+   "id": "partido-401878755",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-364",
+   "awayTeamId": "espn-360",
+   "startAt": "2026-11-22T16:30:00.000Z",
+   "round": "Jornada 11",
+   "matchId": "401878755"
+  },
+  {
+   "id": "partido-401879226",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-360",
+   "awayTeamId": "espn-337",
+   "startAt": "2026-11-28T15:00:00.000Z",
+   "round": "Jornada 12",
+   "matchId": "401879226"
+  },
+  {
+   "id": "partido-401879231",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-331",
+   "awayTeamId": "espn-361",
+   "startAt": "2026-11-29T14:05:00.000Z",
+   "round": "Jornada 12",
+   "matchId": "401879231"
+  },
+  {
+   "id": "partido-401879228",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-370",
+   "awayTeamId": "espn-349",
+   "startAt": "2026-11-29T14:05:00.000Z",
+   "round": "Jornada 12",
+   "matchId": "401879228"
+  },
+  {
+   "id": "partido-401878753",
+   "leagueId": "espn-eng.1",
+   "homeTeamId": "espn-359",
+   "awayTeamId": "espn-382",
+   "startAt": "2026-11-29T16:30:00.000Z",
+   "round": "Jornada 12",
+   "matchId": "401878753"
+  },
+  {
+   "id": "partido-401915308",
+   "leagueId": "espn-uefa.champions",
+   "homeTeamId": "espn-360",
+   "awayTeamId": "espn-104",
+   "startAt": "2026-11-03T20:00:00.000Z",
+   "round": "Jornada 4",
+   "matchId": "401915308"
+  },
+  {
+   "id": "partido-401915306",
+   "leagueId": "espn-uefa.champions",
+   "homeTeamId": "espn-11420",
+   "awayTeamId": "espn-382",
+   "startAt": "2026-11-04T20:00:00.000Z",
+   "round": "Jornada 4",
+   "matchId": "401915306"
+  },
+  {
+   "id": "partido-401915379",
+   "leagueId": "espn-uefa.champions",
+   "homeTeamId": "espn-382",
+   "awayTeamId": "espn-114",
+   "startAt": "2026-11-24T20:00:00.000Z",
+   "round": "Jornada 5",
+   "matchId": "401915379"
+  },
+  {
+   "id": "partido-401915373",
+   "leagueId": "espn-uefa.champions",
+   "homeTeamId": "espn-2250",
+   "awayTeamId": "espn-360",
+   "startAt": "2026-11-25T20:00:00.000Z",
+   "round": "Jornada 5",
+   "matchId": "401915373"
+  },
+  {
+   "id": "partido-401915528",
+   "leagueId": "espn-uefa.europa",
+   "homeTeamId": "espn-433",
+   "awayTeamId": "espn-349",
+   "startAt": "2026-11-05T17:45:00.000Z",
+   "round": "Jornada 4",
+   "matchId": "401915528"
+  },
+  {
+   "id": "partido-401915519",
+   "leagueId": "espn-uefa.europa",
+   "homeTeamId": "espn-85",
+   "awayTeamId": "espn-349",
+   "startAt": "2026-11-26T17:45:00.000Z",
+   "round": "Jornada 5",
+   "matchId": "401915519"
+  },
+  {
+   "id": "partido-401915821",
+   "leagueId": "espn-uefa.europa.conf",
+   "homeTeamId": "espn-2922",
+   "awayTeamId": "espn-331",
+   "startAt": "2026-11-05T20:00:00.000Z",
+   "round": "Jornada 3",
+   "matchId": "401915821"
+  },
+  {
+   "id": "partido-401915814",
+   "leagueId": "espn-uefa.europa.conf",
+   "homeTeamId": "espn-331",
+   "awayTeamId": "espn-8089",
+   "startAt": "2026-11-26T17:45:00.000Z",
+   "round": "Jornada 4",
+   "matchId": "401915814"
+  },
+  {
+   "id": "partido-401921834",
+   "leagueId": "espn-eng.league_cup",
+   "homeTeamId": "espn-382",
+   "awayTeamId": "espn-331",
+   "startAt": "2026-10-28T19:30:00.000Z",
+   "round": "Ronda 3",
+   "matchId": "401921834",
+   "cover": "data:(51347)",
+   "streams": [
+    "https://bp.zicotv.cc/events/95211"
+   ],
+   "featured": true
+  },
+  {
+   "id": "partido-401921840",
+   "leagueId": "espn-eng.league_cup",
+   "homeTeamId": "espn-349",
+   "awayTeamId": "espn-362",
+   "startAt": "2026-10-28T19:45:00.000Z",
+   "round": "Ronda 3",
+   "matchId": "401921840",
+   "streams": [
+    "https://bp.zicotv.cc/events/94901"
+   ]
+  }
+ ],
+ "events": []
+}
