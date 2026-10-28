@@ -862,7 +862,7 @@ final class Library {
   static final class Media {
     private Media() {}
 
-    /** The LuluStream player page (https://lulustream.com/e/CODE) of a LuluStream link, or null. */
+    /** The LuluStream player page (https://luluvido.com/e/CODE: LuluStream's site since lulustream.com went down) of a LuluStream link, or null. */
     static String embed(String address) {
       try {
         java.net.URI u = java.net.URI.create(address.trim());
@@ -870,7 +870,7 @@ final class Library {
         if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null
             || !host.matches("(?:www\\.)?(?:lulustream|luluvdoo?|luluvido|luluvid|lulu)\\.(?:com|st|to|net|org|io|live|pw)")) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("^/(?:e/|d/|v/)?([A-Za-z0-9]{8,20})(?:\\.html)?/?$").matcher(u.getPath() == null ? "" : u.getPath());
-        return m.matches() && !m.group(1).equals("api") ? "https://lulustream.com/e/" + m.group(1) : null;
+        return m.matches() && !m.group(1).equals("api") ? "https://luluvido.com/e/" + m.group(1) : null;
       } catch (Exception e) {
         return null;
       }

@@ -130,10 +130,10 @@ public class LibraryTest {
     assertFalse(Library.Media.allowed("http://www.googleapis.com/drive/v3/files/1AbC"));
     assertFalse(Library.Media.allowed("https://example.com/drive/v3/files/1AbC"));
     assertTrue(Library.Media.allowed("https://lulustream.com/abcd1234efgh"));
-    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
-    assertEquals("https://lulustream.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
+    assertEquals("https://luluvido.com/e/abcd1234efgh", Library.Media.embed("https://www.luluvdo.com/d/abcd1234efgh.html"));
+    assertEquals("https://luluvido.com/e/abcd1234efgh", Library.Media.embed("https://lulustream.com/e/abcd1234efgh"));
     assertNull(Library.Media.embed("https://lulustream.com/fld/h9vd4z179z"));
-    assertEquals("https://lulustream.com/e/duj5ak4x5waa", Library.Media.embed("https://luluvido.com/d/duj5ak4x5waa"));
+    assertEquals("https://luluvido.com/e/duj5ak4x5waa", Library.Media.embed("https://luluvido.com/d/duj5ak4x5waa"));
     assertEquals("https://calamarmenciano.com/calamar-lulu.php?code=bq4heljir3hb&hls=1", Library.Media.hosting("https://lulustream.com/bq4heljir3hb"));
     assertNull(Library.Media.hosting("https://example.com/video.mp4"));
     // Same address as playerPageRelay() on the web.

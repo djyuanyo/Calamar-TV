@@ -6,7 +6,9 @@
 import { LULU_ENDPOINT, lulustreamEmbed } from './catalog.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason } from './library-tmdb.js';
 
-export const LULU_API = 'https://api.lulustream.com/api/';
+// LuluStream moved to luluvido.com (lulustream.com stopped answering): the same API, tried there first.
+export const LULU_APIS = ['https://luluvido.com/api/', 'https://api.lulustream.com/api/'];
+export const LULU_API = LULU_APIS[0];
 
 function luluResult(data) {
   if (!data || typeof data !== 'object') throw new Error('LuluStream no ha respondido con datos.');
@@ -52,8 +54,13 @@ export async function luluApi(action, params, key, fetcher = globalThis.fetch) {
   let data = null;
   if (!directBlocked) {
     try {
-      const response = await fetcher(`${LULU_API}${action}?${query}`, { referrerPolicy: 'no-referrer', ...limited(LULU_DIRECT_MS) });
-      data = await response.json();
+      for (const api of LULU_APIS) {
+        try {
+          const response = await fetcher(`${api}${action}?${query}`, { referrerPolicy: 'no-referrer', ...limited(LULU_DIRECT_MS) });
+          data = await response.json();
+          break;
+        } catch (error) { if (api === LULU_APIS[LULU_APIS.length - 1]) throw error; }
+      }
     } catch { directBlocked = true; }
   }
   if (!data) data = await viaHosting(action, params, key, fetcher);
@@ -107,7 +114,7 @@ export function episodeOf(file, folder = '') {
 }
 
 const SECTION_FOLDERS = { peliculas: 'movies', pelis: 'movies', movies: 'movies', series: 'series', documentales: 'documentaries', documentaries: 'documentaries' };
-const link = (code) => `https://lulustream.com/${code}`;
+const link = (code) => `https://luluvido.com/${code}`;
 
 /**
  * Walks the section folders. Films: every video under Peliculas (or straight in Documentales).

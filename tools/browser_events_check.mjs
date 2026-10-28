@@ -488,7 +488,7 @@ try {
     10: { folders: [], files: [{ file_code: 'avatarlulu12', title: 'Avatar.El.sentido.del.agua.2022.1080p.mkv' }, { file_code: 'nadanada1234', title: 'Zzzz desconocida.mp4' }] },
     20: { folders: [{ fld_id: 21, name: 'Los hombres de Paco' }] }, 21: { folders: [{ fld_id: 22, name: 'Temporada 1' }] },
     22: { folders: [], files: [{ file_code: 'paco1x02cccc', title: 'Los hombres de Paco 1x02.mp4' }] } };
-  await page.route('https://api.lulustream.com/api/**', route => route.fulfill({ json: { status: 200, msg: 'OK', result: luluFolders[new URL(route.request().url()).searchParams.get('fld_id')] || {} }, headers: { 'Access-Control-Allow-Origin': '*' } }));
+  await page.route('https://luluvido.com/api/**', route => route.fulfill({ json: { status: 200, msg: 'OK', result: luluFolders[new URL(route.request().url()).searchParams.get('fld_id')] || {} }, headers: { 'Access-Control-Allow-Origin': '*' } }));
   await page.locator('summary', { hasText: 'Configuración' }).click();
   await page.getByLabel('Clave de LuluStream', { exact: true }).fill('clave1234567890');
   await page.getByRole('button', { name: 'Guardar clave de LuluStream', exact: true }).click();
@@ -497,9 +497,9 @@ try {
   await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
   assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
   parts = await page.evaluate(() => window.__libraryParts);
-  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://lulustream.com/avatarlulu12');
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/avatarlulu12');
   assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),
-    [[1, 1, 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'https://lulustream.com/paco1x02cccc'], [2, 1, 'https://lulustream.com/paco2x01bbbb']]);
+    [[1, 1, 'https://lulustream.com/paco1x01aaaa'], [1, 2, 'https://luluvido.com/paco1x02cccc'], [2, 1, 'https://lulustream.com/paco2x01bbbb']]);
   // The film TMDB did not find is in the list anyway; its record is chosen by hand and takes its video.
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'unadanada1234').status, 'unmatched');
   const pendingRow = page.locator('.library-item', { hasText: 'Zzzz desconocida' });
@@ -510,8 +510,8 @@ try {
   await page.getByText(/«Zzzz desconocida» es ahora «Avatar: El sentido del agua», con su vídeo/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
-  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://lulustream.com/nadanada1234');
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://lulustream.com/nadanada1234');
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/nadanada1234');
+  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);

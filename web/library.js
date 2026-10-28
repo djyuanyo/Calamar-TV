@@ -755,10 +755,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     await store(sections);
   };
   const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
-  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://lulustream.com/…', 'aria-label': label, class: 'library-link' });
+  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://luluvido.com/…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
     const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
-    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://lulustream.com/…) o un vídeo MP4/HLS por HTTPS.`); }
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…) o un vídeo MP4/HLS por HTTPS.`); }
   };
 
   // ---- Search ----
@@ -813,7 +813,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
-        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (lulustream.com, luluvido.com, luluvdo.com…).'),
+        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (luluvido.com, lulustream.com, luluvdo.com…).'),
           el('div', { class: 'actions' }, save, del, close), note);
         link.focus();
         return;
