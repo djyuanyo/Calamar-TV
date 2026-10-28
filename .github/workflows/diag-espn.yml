@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: node diag/poly2.mjs
+      - run: node diag/lulu.mjs
       - run: |
           git config user.name diag; git config user.email diag@example.com
           git add -f diag/host3.json diag/web3-*.png || true; git add -f diag/host3.json && git commit -m "dump data" && git push
