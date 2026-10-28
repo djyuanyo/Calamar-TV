@@ -8,6 +8,7 @@ import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRo
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
+import { autoplay, soundChosen } from './autoplay.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
@@ -549,6 +550,8 @@ function stop() {
   video.removeAttribute('src');
   video.load();
   controls.reset();
+  // A picture muted only because the browser blocked the sound gets it back on the next start (autoplay.js).
+  if (video.dataset.autoMuted) { soundChosen(video); video.muted = false; }
   document.getElementById('player-frame')?.remove();
   player.classList.remove('framed');
 }
@@ -722,7 +725,7 @@ async function playSource(c, index) {
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
       else { next({ ...data, details: 'codecUnsupported' }); return; }
       controls.attach(hls);
-      video.play().catch(() => {
+      autoplay(video).catch(() => {
         if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
       });
     };
@@ -768,7 +771,7 @@ async function playSource(c, index) {
   controls.attach(hls);
   video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
   video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
-  video.play().catch(() => {
+  autoplay(video).catch(() => {
     if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
 }

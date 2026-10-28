@@ -1,4 +1,5 @@
 import { streamExpiry } from './catalog.js';
+import { autoplay } from './autoplay.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
 export function pageSources(html, page) {
@@ -72,7 +73,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       onAttach(instance);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = url;
     else { fallback(); return; }
-    if (shouldPlay) video.play().catch(() => { if (!stopped) onStatus('Pulsa ▶ para empezar.'); });
+    if (shouldPlay) autoplay(video).catch(() => { if (!stopped) onStatus('Pulsa ▶ para empezar.'); });
   };
   async function refresh() {
     if (stopped || request) return;
