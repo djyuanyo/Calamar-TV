@@ -15,6 +15,11 @@ const [rm, fcb, atm, sev] = [team('86', 'Real Madrid'), team('83', 'Barcelona'),
 test('the competition comes from the words of the Google search', () => {
   assert.equal(detectCompetition('LaLiga').slug, 'esp.1');
   assert.equal(detectCompetition('LaLiga Hypermotion').slug, 'esp.2');
+  // The Spanish names of Google's share links («Copa de la Liga de Inglaterra» is the Carabao Cup).
+  assert.equal(detectCompetition('Copa de la Liga de Inglaterra').slug, 'eng.league_cup');
+  assert.equal(detectCompetition('Copa de Inglaterra').slug, 'eng.fa');
+  assert.equal(detectCompetition('Primera División de Inglaterra').slug, 'eng.1');
+  assert.equal(detectCompetition('Primera División de España').slug, 'esp.1');
   assert.equal(detectCompetition('Liga de Campeones de la UEFA').slug, 'uefa.champions');
   assert.equal(detectCompetition('Premier League clasificación').slug, 'eng.1');
   assert.equal(detectCompetition('receta de paella'), null);

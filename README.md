@@ -402,3 +402,7 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 
 - En la app (y antes en la web), la pestaña «Canales» se llama **TV**.
 - En la app, los enlaces de **ZicoTV** de un canal van siempre los **últimos**: primero se prueban los enlaces directos de IPTV (M3U8…) y en «Fuentes» salen también primero los vídeos directos y después las páginas de reproductor, con las de ZicoTV al final.
+
+## Más nombres de competiciones al importar (web)
+
+- Los enlaces de Google en español usan nombres como **«Copa de la Liga de Inglaterra»** (Carabao Cup), «Copa de Inglaterra» (FA Cup) o «Primera División de Inglaterra/Italia/Alemania/Francia/Portugal/Países Bajos»: ahora se reconocen al importar una competición por enlace.
