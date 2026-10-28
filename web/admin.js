@@ -700,7 +700,139 @@ function entityPanel(kind, rerender) {
       data[kind] = data[kind].filter(x => x.id !== item.id); guarded(() => saveFile(), rerender);
     } }, 'Eliminar')))));
   query.addEventListener('input', draw); draw();
-  return [form, team ? null : importPanel(rerender), el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
+  return [form, team ? null : importPanel(rerender), team ? null : leagueOrderPanel(rerender), el('h2', {}, team ? 'Equipos creados' : 'Ligas creadas'), field('Buscar', query), output];
+}
+
+/** Lets a row of an ordered list be dragged by its handle (mouse, finger or pen) or moved with the arrow keys. */
+function sortable(list, li, handle, changed) {
+  const numbers = () => [...list.children].forEach((x, i) => { const n = x.querySelector('.order-n'); if (n) n.textContent = i + 1; });
+  handle.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const items = [...list.children], from = items.indexOf(li), to = Math.max(0, Math.min(items.length - 1, from + (e.key === 'ArrowUp' ? -1 : 1)));
+    if (from !== to) { list.insertBefore(li, items[to + (to > from ? 1 : 0)] || null); numbers(); changed(); }
+    handle.focus();
+  });
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); li.classList.add('dragging');
+    const follow = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const others = [...list.children].filter((x) => x !== li);
+      const to = others.filter((x) => { const r = x.getBoundingClientRect(); return ev.clientY > r.top + r.height / 2; }).length;
+      if (to !== [...list.children].indexOf(li)) { list.insertBefore(li, others[to] || null); numbers(); changed(); }
+    };
+    const drop = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      li.classList.remove('dragging');
+      window.removeEventListener('pointermove', follow); window.removeEventListener('pointerup', drop); window.removeEventListener('pointercancel', drop);
+    };
+    window.addEventListener('pointermove', follow); window.addEventListener('pointerup', drop); window.addEventListener('pointercancel', drop);
+  });
+  numbers();
+}
+
+/** The order of the league rows on the home page (web and app): saved as `leagueOrder`. */
+function leagueOrderPanel(rerender) {
+  const data = file.data;
+  if (!data.leagues.length) return null;
+  const order = Array.isArray(data.leagueOrder) ? data.leagueOrder : [];
+  const place = (l) => { const i = order.indexOf(l.id); return i < 0 ? order.length : i; };
+  const leagues = [...data.leagues].sort((a, b) => place(a) - place(b) || a.name.localeCompare(b.name, 'es'));
+  const list = el('ol', { class: 'order-list' });
+  const status = el('p', { class: 'note', role: 'status' });
+  const changed = () => { status.textContent = 'Cambios sin guardar.'; status.className = 'note'; };
+  for (const league of leagues) {
+    const handle = el('button', { class: 'drag-handle', type: 'button', 'aria-label': `Mover ${league.name}`, title: 'Arrastra para cambiar el orden (o usa las flechas)' }, '⠿');
+    const li = el('li', {}, handle, el('b', { class: 'order-n' }), league.logo ? el('img', { class: 'order-logo', src: league.logo, alt: '' }) : null, el('span', {}, league.name));
+    li._id = league.id;
+    list.append(li);
+    sortable(list, li, handle, changed);
+  }
+  return el('section', { class: 'league-order' },
+    el('div', { class: 'section-head' }, el('h2', {}, 'Orden de las filas en la portada')),
+    el('p', { class: 'note' }, 'Arrastra ⠿ para elegir en qué orden salen las filas de cada liga en la portada de la web y de la app. Solo salen las ligas con eventos esta semana.'),
+    list,
+    el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'button', onclick: () => {
+      if (saving) return;
+      const leagueOrder = [...list.children].map((li) => li._id);
+      try { validateCatalog({ ...data, leagueOrder }, { checkSize: false }); }
+      catch (error) { status.textContent = error.message; status.className = 'error'; return; }
+      data.leagueOrder = leagueOrder;
+      guarded(() => saveFile(), rerender);
+    } }, 'Guardar orden')), status);
+}
+
+/**
+ * For the administrator watching an event: a «Seleccionar canal» button at the end of its page with the
+ * search of the event form (own channels first, then TDT). Choosing one publishes the change at once.
+ * Returns null for everybody else.
+ */
+export async function eventChannelPanel(eventId, state) {
+  await ready;
+  if (!administrator()) return null;
+  if (!file) {
+    if (!fallbackLoaded) { fallback = await fetchJson('data/custom.json'); fallbackLoaded = true; }
+    await loadFile();
+  }
+  if (!state.tdt) { try { state.tdt = await fetchJson('data/tdt.json'); } catch { state.tdt = { channels: [] }; } }
+  const data = file.data;
+  const current = findEvent(eventId);
+  if (!current) return null;
+  const own = data.channels.filter((c) => !c.tdt);
+  const tdt = merge(state.tdt, { ...data, channels: [] }).filter((c) => !c.own && c.playable && !own.some((o) => o.id === c.id));
+  const choices = [...own.map((c) => ({ id: c.id, name: c.name })), ...tdt.map((c) => ({ id: c.id, name: c.name, tdt: true }))];
+  let selected = current.channelId || '';
+  const status = el('p', { class: 'note', role: 'status' });
+  const query = el('input', { type: 'search', placeholder: 'Buscar canal por nombre', 'aria-label': 'Buscar canal por nombre' });
+  const options = el('div', { class: 'channel-options', role: 'group', 'aria-label': 'Elegir canal' });
+  const box = el('div', { class: 'event-admin-box', hidden: true }, query, options, status);
+  const nameOf = (id) => (choices.find((c) => c.id === id) || data.channels.find((c) => c.id === id))?.name || '';
+  const save = async (id) => {
+    if (saving || id === selected) return;
+    status.textContent = 'Publicando…'; status.className = 'note';
+    try {
+      const raw = data.events.find((e) => e.id === eventId);
+      if (raw) {
+        if (!id && !raw.streams?.length) throw new Error('Este evento no tiene enlaces manuales: elige un canal.');
+        const events = data.events.map((e) => (e.id === eventId ? { ...e, channelId: id } : e));
+        const channels = syncTdtCopies({ ...data, events }, state.tdt);
+        validateCatalog({ ...data, channels, events }, { checkSize: false });
+        data.events = events; data.channels = channels;
+      } else {
+        const fixtures = (data.fixtures || []).map((f) => {
+          if (f.id !== eventId) return f;
+          const next = { ...f, channelId: id };
+          if (!id) delete next.channelId;
+          return next;
+        });
+        const channels = syncTdtCopies({ ...data, fixtures }, state.tdt);
+        validateCatalog({ ...data, channels, fixtures }, { checkSize: false });
+        data.fixtures = fixtures; data.channels = channels;
+      }
+      await saveFile();
+      selected = id;
+      status.textContent = id ? `Publicado: el evento usa ahora «${nameOf(id)}». Vuelve a abrirlo para verlo con este canal.` : 'Publicado: el evento ya no tiene canal.';
+      draw();
+    } catch (error) { status.textContent = explain(error); status.className = 'error'; }
+  };
+  const draw = () => {
+    const q = query.value.trim().toLocaleLowerCase('es');
+    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
+    const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => save(c.id) }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
+    const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
+    options.replaceChildren(
+      ...(mine.length ? [el('p', { class: 'note channel-group' }, 'Tus canales'), ...mine.map(button)] : []),
+      ...(public_.length ? [el('p', { class: 'note channel-group' }, 'Canales de TDT'), ...public_.map(button)] : []));
+    if (!found.length) options.append(el('p', { class: 'note' }, 'Sin resultados.'));
+    toggle.textContent = `Seleccionar canal${selected ? ` · ahora: ${nameOf(selected) || selected}` : ' · sin canal'}`;
+  };
+  const toggle = el('button', { class: 'btn secondary', type: 'button', 'aria-expanded': 'false', onclick: () => {
+    box.hidden = !box.hidden; toggle.setAttribute('aria-expanded', String(!box.hidden));
+    if (!box.hidden) query.focus();
+  } });
+  query.addEventListener('input', draw); draw();
+  return el('div', {}, el('h3', {}, 'Administración'), toggle, box);
 }
 
 /** Reads a competition's season from ESPN and publishes its league, teams and upcoming matches. */

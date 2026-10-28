@@ -35,6 +35,9 @@ export function validateCatalog(data, { checkSize = true } = {}) {
   if (data.groupOrder !== undefined && (!Array.isArray(data.groupOrder) || data.groupOrder.length > 200
       || data.groupOrder.some((g) => typeof g !== 'string' || !g.trim() || g.length > 80)
       || new Set(data.groupOrder).size !== data.groupOrder.length)) throw new Error('El orden de categorías no es válido.');
+  if (data.leagueOrder !== undefined && (!Array.isArray(data.leagueOrder) || data.leagueOrder.length > 500
+      || data.leagueOrder.some((id) => typeof id !== 'string' || !id || id.length > 120)
+      || new Set(data.leagueOrder).size !== data.leagueOrder.length)) throw new Error('El orden de las ligas no es válido.');
   if (data.libraryVisible !== undefined && typeof data.libraryVisible !== 'boolean') throw new Error('El interruptor de películas y series no es válido.');
   if (data.categories !== undefined) {
     const ids = new Set(), names = new Set();

@@ -340,3 +340,8 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 ## Filas de ligas solo con los eventos de esta semana (2.20.40)
 
 - En la portada (web y app), las filas de cada liga muestran solo sus eventos de **esta semana** (lunes a domingo, hora de Madrid); una liga cuyos próximos partidos son dentro de dos semanas no aparece todavía. Los eventos sin liga o sin fecha siguen saliendo, y un partido de la semana anterior que sigue en juego también. Los demás siguen abriéndose por su enlace y en el buscador.
+
+## Orden de las filas de ligas y canal del evento desde su página (2.20.41)
+
+- En el administrador, **Ligas** tiene «Orden de las filas en la portada»: arrastra ⠿ (o usa las flechas del teclado) y pulsa «Guardar orden». La portada de la web y de la app sigue ese orden (`leagueOrder`); las ligas que no están en la lista van detrás en su orden de siempre y «Otros eventos» sigue al final. Solo salen las ligas con eventos esta semana.
+- Si entras como administrador en un evento (web), al final de la página aparece **Administración** con el botón «Seleccionar canal»: abre un buscador por nombre con tus canales y los de TDT, y al elegir uno se publica el evento (manual o importado) con ese canal. Los demás usuarios no ven este bloque.

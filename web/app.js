@@ -23,6 +23,8 @@ const search = document.getElementById('search');
 let sharedStarted = false;
 // Firebase loads on demand so the bundled catalog works even when it cannot be reached.
 let firebase = null;
+// True while the administrator is signed in on this browser (see the library section below).
+let libraryAdmin = false;
 const shared = () => (firebase ||= import('./firebase.js'));
 let sharedValue = null;
 // True once the live catalog arrived, failed or took too long: until then a link to an event or channel
@@ -1030,16 +1032,32 @@ function paintMatch() {
   }).filter(Boolean));
   if (focused) document.getElementById(focused)?.focus();
 }
+// The administrator watching an event gets «Seleccionar canal» at the end of its page.
+const eventAdmin = el('section', { class: 'event-admin', hidden: true, 'aria-label': 'Administración del evento' });
+matchPanel.after(eventAdmin);
+function showEventAdmin(c) {
+  eventAdmin.hidden = true; eventAdmin.replaceChildren();
+  if (!c?.event) return;
+  const id = String(c.eventId || c.id);
+  // Only for the administrator signed in on this browser: the admin page's code loads just then.
+  shared().then(async (f) => { await f.ready; return f.administrator() ? import('./admin.js') : null; })
+    .then((admin) => admin && admin.eventChannelPanel(id, state)).then((panel) => {
+    if (!panel || matchShown !== id) return;
+    eventAdmin.replaceChildren(panel); eventAdmin.hidden = false;
+  }).catch(() => {});
+}
 /** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  // Only events with a match link show the match under the video; the rest open in full screen.
-  const key = c?.event && c.matchUrl ? String(c.eventId || c.id) : '';
+  // Only events with a match link show the match under the video; the rest open in full screen
+  // (for the administrator too, so the event page has its «Seleccionar canal» at the end).
+  const key = c?.event && (c.matchUrl || libraryAdmin) ? String(c.eventId || c.id) : '';
   if (key && key === matchShown) return true;
   clearInterval(matchTimer);
   matchShown = key; matchModel = null; matchTab = 'general';
   player.classList.toggle('with-match', !!key);
   matchPanel.hidden = !key;
   player.scrollTop = 0;
+  showEventAdmin(key ? c : null);
   if (!key) { matchPanel.replaceChildren(); return false; }
   const base = eventMatchModel(c, state.custom, eventLabel(c, Date.now(), EVENT_STATES).text);
   const id = c.matchUrl && c.matchId ? String(c.matchId) : '';
@@ -1104,7 +1122,6 @@ shareButton.addEventListener('click', async () => {
 // ---- Films, series and documentaries --------------------------------------------------------------
 // Shown in the menu while the administrator has the catalog switched on (libraryVisible); the
 // administrator, signed in on this browser, always sees it, to prepare it before showing it to everyone.
-let libraryAdmin = false;
 shared().then((f) => f.watchAuth((user) => {
   const was = libraryAdmin;
   libraryAdmin = f.administrator(user);

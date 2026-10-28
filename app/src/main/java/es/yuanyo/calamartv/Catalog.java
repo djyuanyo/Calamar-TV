@@ -308,7 +308,19 @@ public final class Catalog {
       if (row == null) rows.put(e.leagueId, row = new EventRow(league.optString("name"), league.optString("logo")));
       row.events.add(e);
     }
-    List<EventRow> out = new ArrayList<>(rows.values());
+    // The order set in Administración → Ligas comes first (as on the web); the rest follow by their next event.
+    final List<String> order = new ArrayList<>();
+    JSONArray saved = custom == null ? null : custom.optJSONArray("leagueOrder");
+    for (int i = 0; saved != null && i < saved.length(); i++) order.add(saved.optString(i));
+    final List<String> ids = new ArrayList<>(rows.keySet());
+    List<String> sorted = new ArrayList<>(ids);
+    Collections.sort(sorted, (a, b) -> {
+      int pa = order.indexOf(a), pb = order.indexOf(b);
+      pa = pa < 0 ? order.size() : pa; pb = pb < 0 ? order.size() : pb;
+      return pa != pb ? Integer.compare(pa, pb) : Integer.compare(ids.indexOf(a), ids.indexOf(b));
+    });
+    List<EventRow> out = new ArrayList<>();
+    for (String id : sorted) out.add(rows.get(id));
     if (!other.events.isEmpty()) out.add(other);
     return out;
   }

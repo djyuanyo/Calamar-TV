@@ -92,3 +92,11 @@ test('league rows show only this week\'s events (Monday to Sunday, Madrid)', asy
   // Sunday night in Madrid is still this week; a match of last Sunday still on air stays on Monday at 00:30.
   assert.deepEqual(thisWeekEvents([e('late', '2026-11-01T22:30:00Z')], Date.parse('2026-11-01T23:30:00Z')).map((x) => x.id), ['late']);
 });
+
+test('league rows follow the order set in the admin page, then the rest by their next event', async () => {
+  const { eventRows } = await import('../web/catalog.js');
+  const leagues = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }];
+  const list = [{ id: 1, leagueId: 'a' }, { id: 2, leagueId: 'b' }, { id: 3, leagueId: '' }, { id: 4, leagueId: 'c' }];
+  assert.deepEqual(eventRows(list, { leagues }).map((r) => r.name), ['A', 'B', 'C', 'Otros eventos']);
+  assert.deepEqual(eventRows(list, { leagues, leagueOrder: ['c', 'a'] }).map((r) => r.name), ['C', 'A', 'B', 'Otros eventos']);
+});

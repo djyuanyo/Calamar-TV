@@ -397,7 +397,11 @@ export function eventRows(list, custom) {
     rows.get(key).events.push(event);
   }
   const out = [...rows.values()];
-  return [...out.filter((r) => r.id), ...out.filter((r) => !r.id)];
+  // The order set in Administración → Ligas comes first; leagues not in it follow by their next event.
+  const order = Array.isArray(custom?.leagueOrder) ? custom.leagueOrder : [];
+  const place = (r) => { const i = order.indexOf(r.id); return i < 0 ? order.length : i; };
+  const ordered = out.filter((r) => r.id).map((r, i) => [r, i]).sort((a, b) => place(a[0]) - place(b[0]) || a[1] - b[1]).map(([r]) => r);
+  return [...ordered, ...out.filter((r) => !r.id)];
 }
 export function homeHighlights(channels, custom) {
   const matches = events(channels, custom).filter(e => e.featured);

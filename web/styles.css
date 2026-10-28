@@ -1079,3 +1079,10 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
   .library-genre select { padding: 10px 32px 10px 14px; font-size: 14px; text-overflow: ellipsis; }
   .library-genre::after { right: 12px; }
 }
+.order-logo { width: 28px; height: 28px; object-fit: contain; flex: none; }
+.league-order { margin: 28px 0; }
+.event-admin { padding: 8px 16px 32px; max-width: 980px; margin: 0 auto; }
+.event-admin h3 { margin: 0 0 8px; font-size: 15px; color: var(--muted); }
+.event-admin-box { margin-top: 12px; display: grid; gap: 10px; }
+.event-admin-box input { padding: 11px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.player.with-match:fullscreen .event-admin, .player.with-match:-webkit-full-screen .event-admin { display: none; }

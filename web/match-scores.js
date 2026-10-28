@@ -175,8 +175,10 @@ export async function fetchScores(starts, fetcher = globalThis.fetch) {
   const day = (at, timeZone) => { const d = new Date(Date.parse(at)); return Number.isFinite(d.getTime()) ? d.toLocaleDateString('sv-SE', { timeZone }).replace(/-/g, '') : ''; };
   const days = [...new Set([...starts.values()].flatMap((at) => [day(at, 'UTC'), day(at, 'America/New_York')]).filter(Boolean))];
   const wanted = new Set([...starts.keys()].map(String));
+  let boardsRead = 0;
   await Promise.allSettled(days.map(async (d) => {
     const board = await fetchBoard(d, fetcher);
+    boardsRead++;
     for (const e of board?.events || []) {
       if (!wanted.has(String(e.id))) continue;
       try { out.set(String(e.id), rememberMatch(String(e.id), matchResult(e))); } catch {}
@@ -187,5 +189,7 @@ export async function fetchScores(starts, fetcher = globalThis.fetch) {
   lookupTurn = all.length ? (lookupTurn + SINGLE_LOOKUPS) % all.length : 0;
   // null: asked now and not available (the card says so); absent: not asked in this round.
   await Promise.allSettled(missing.map(async (id) => { try { out.set(id, await fetchMatch(id, fetcher)); } catch { out.set(id, null); } }));
+  // No scoreboard could be read (ESPN unreachable): every card says so now, not four per round.
+  if (days.length && !boardsRead) for (const id of all) if (!out.has(id)) out.set(id, null);
   return out;
 }
