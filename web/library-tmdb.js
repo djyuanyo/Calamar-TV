@@ -48,7 +48,7 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers' }, key, fetcher);
   const info = { id: Number(id), kind, title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
-    released: d.release_date || d.first_air_date || '', providers: providersOf(d), countries: countriesOf(d), language: d.original_language || '',
+    released: d.release_date || d.first_air_date || '', providers: providersOf(d), logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
@@ -77,7 +77,19 @@ export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) 
 export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
   const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers' }, key, fetcher);
   return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
-    countries: countriesOf(d), language: d.original_language || '' };
+    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '' };
+}
+
+/** The logo of each of those platforms (TMDB's square icons): { «Netflix»: «https://image.tmdb.org/…» }. */
+export function providerLogosOf(details) {
+  const es = details?.['watch/providers']?.results?.ES || {};
+  const names = new Set(providersOf(details));
+  const out = {};
+  for (const p of [...(es.flatrate || []), ...(es.free || []), ...(es.ads || [])]) {
+    const name = String(p.provider_name || '').trim();
+    if (names.has(name) && !out[name] && /^\/[\w.-]+$/.test(p.logo_path || '')) out[name] = `https://image.tmdb.org/t/p/w154${p.logo_path}`;
+  }
+  return out;
 }
 
 /** Where a title was made (ISO codes: «ES», «US»…), for the «Películas españolas» row. */
@@ -101,10 +113,23 @@ export function stampAdded(next, before, today = new Date().toISOString().slice(
   const known = new Map(Object.values(before || {}).flat().map((item) => [item.id, item]));
   return Object.fromEntries(Object.entries(next).map(([section, items]) => [section, items.map((item) => {
     const old = known.get(item.id);
-    if (item.addedAt) return item;
-    if (old) return old.addedAt ? { ...item, addedAt: old.addedAt } : item;
-    return { ...item, addedAt: today };
+    const stamped = item.addedAt ? item : old ? (old.addedAt ? { ...item, addedAt: old.addedAt } : item) : { ...item, addedAt: today };
+    return old && item.episodes?.length ? { ...stamped, episodes: stampEpisodes(item.episodes, old.episodes || [], today) } : stamped;
   })]));
+}
+
+/**
+ * The day each episode of a series already in the library arrived (for «Nuevo episodio»): an episode new
+ * in this publication gets today, the others keep theirs (episodes from before this existed have none).
+ */
+export function stampEpisodes(episodes, before, today) {
+  const known = new Map(before.map((e) => [e.id, e]));
+  return episodes.map((e) => {
+    if (e.addedAt) return e;
+    const old = known.get(e.id);
+    if (old) return old.addedAt ? { ...e, addedAt: old.addedAt } : e;
+    return { ...e, addedAt: today };
+  });
 }
 
 /** The episodes of one season: [{ episode, name, overview, still }]. */

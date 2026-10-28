@@ -1130,3 +1130,36 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .halloween-all:hover, .halloween-all:focus-visible { background: #ff8a3d; color: #111; }
 .halloween-banner.page { margin-top: 0; margin-bottom: 12px; }
 .halloween-banner.page p:last-child { margin: 8px 0 0; color: #e7dccb; }
+
+/* Slider at the top of films, series and documentaries (as on Disney+): poster on a phone, backdrop on a wide screen. */
+.browse-hero { margin: 14px calc(var(--gutter) * -1) 0; }
+.browse-hero-track { display: grid; grid-auto-flow: column; grid-auto-columns: min(88vw, 1100px); gap: 14px; overflow-x: auto; padding: 4px var(--gutter) 10px;
+  scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter); scrollbar-width: none; }
+.browse-hero-track::-webkit-scrollbar { display: none; }
+.browse-hero-slide { position: relative; display: block; scroll-snap-align: center; aspect-ratio: 16 / 7; border-radius: 14px; overflow: hidden; background: var(--surface-2); color: #fff; text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.browse-hero-slide img, .browse-hero-slide .poster-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.browse-hero-slide .hero-poster { display: none; }
+.browse-hero-slide::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(0,0,0,.85)); }
+.browse-hero-text { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: grid; justify-items: center; gap: 6px; padding: 18px 16px 20px; text-align: center; }
+.browse-hero-text b { font-size: clamp(22px, 3vw, 38px); font-weight: 900; line-height: 1.05; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.browse-hero-tag { font-weight: 800; font-size: 16px; }
+.browse-hero-meta { color: rgba(255,255,255,.85); font-size: 15px; }
+.browse-hero-slide:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+@media (max-width: 720px) {
+  .browse-hero-slide { aspect-ratio: 4 / 5; }
+  .browse-hero-slide .hero-poster { display: block; }
+  .browse-hero-slide .hero-backdrop { display: none; }
+}
+/* Platform buttons: dark tiles with each platform's logo. */
+.platform-buttons { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(96px, 12vw, 150px); gap: 12px; overflow-x: auto; margin: 18px calc(var(--gutter) * -1) 0; padding: 4px var(--gutter) 8px; scrollbar-width: none; }
+.platform-buttons::-webkit-scrollbar { display: none; }
+.platform-button { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 10; padding: 10px; border-radius: 10px; background: linear-gradient(160deg, #2a2d36, #1a1c23); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 6px 16px rgba(0,0,0,.35); color: var(--fg); text-decoration: none; font-weight: 800; font-size: 13px; text-align: center; transition: transform .15s, box-shadow .15s; }
+.platform-button img { width: 46%; max-width: 64px; aspect-ratio: 1; object-fit: contain; border-radius: 10px; }
+.platform-button img + span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.platform-button:hover, .platform-button:focus-visible { transform: scale(1.05); box-shadow: inset 0 0 0 2px var(--accent), 0 10px 22px rgba(0,0,0,.5); outline: none; }
+/* A platform's page: its logo over a backdrop of one of its titles. */
+.platform-hero { position: relative; display: grid; justify-items: center; align-content: end; gap: 6px; min-height: clamp(280px, 52vw, 520px); margin: 0 calc(var(--gutter) * -1) 6px; padding: 24px var(--gutter) 26px; text-align: center;
+  background: linear-gradient(180deg, rgba(11,13,16,.15), rgba(11,13,16,.35) 50%, var(--bg)), var(--platform-art, none) center / cover no-repeat, var(--surface-2); }
+.platform-hero-logo { width: clamp(96px, 16vw, 150px); aspect-ratio: 1; object-fit: contain; border-radius: 22px; box-shadow: 0 12px 34px rgba(0,0,0,.6); }
+.platform-hero h1 { margin: 6px 0 0; font-size: clamp(30px, 5vw, 54px); font-weight: 900; text-shadow: 0 3px 14px rgba(0,0,0,.7); }
+.platform-hero p { margin: 0; color: rgba(255,255,255,.85); font-weight: 600; }

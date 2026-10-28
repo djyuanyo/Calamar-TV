@@ -46,9 +46,12 @@ final class Library {
   static final class Episode {
     final String id, url, name, overview, still;
     final int season, episode;
+    /** The day it arrived in the library (YYYY-MM-DD or empty), for «Nuevo episodio». */
+    final String addedAt;
 
     Episode(JSONObject e) {
       id = e.optString("id");
+      addedAt = e.optString("addedAt");
       url = e.optString("url");
       season = e.optInt("season", 1);
       episode = e.optInt("episode", 0);
@@ -141,6 +144,8 @@ final class Library {
     /** Where it was made (TMDB country codes) and its original language, for «Películas españolas». */
     final List<String> countries = new ArrayList<>();
     final String language;
+    /** The logo of each platform (TMDB's square icons), by name. */
+    final Map<String, String> logos = new LinkedHashMap<>();
 
     Item(JSONObject o) {
       JSONObject t = o.optJSONObject("tmdb");
@@ -166,6 +171,12 @@ final class Library {
       released = t.optString("released");
       addedAt = o.optString("addedAt");
       language = t.optString("language");
+      JSONObject lg = t.optJSONObject("logos");
+      if (lg != null)
+        for (java.util.Iterator<String> it = lg.keys(); it.hasNext(); ) {
+          String k = it.next();
+          if (lg.optString(k).startsWith("https://")) logos.put(k, lg.optString(k));
+        }
       JSONArray cn = t.optJSONArray("countries");
       if (cn != null) for (int i = 0; i < cn.length(); i++) if (!cn.optString(i).isEmpty()) countries.add(cn.optString(i));
       JSONArray pv = t.optJSONArray("providers");
@@ -367,17 +378,11 @@ final class Library {
       add(rows, "top", top.size() > 1 ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana" : "La " + one(section) + " más popular de la semana", top, "top");
     }
     genre(rows, GENRE_ROWS[0], label + " de terror", items, used);
-    List<Item> only = new ArrayList<>();
-    for (Item item : items) if (item.tmdbId > 0 && item.providers.isEmpty()) only.add(item);
-    Collections.sort(only, INTEREST);
-    add(rows, "only", "Solo en Calamar TV", only, "big");
+    // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
+    add(rows, "new", "Novedades en Calamar TV", freshTitles(items, now), "big");
     rows.add(new Row("continue", name.isEmpty() ? "Seguir viendo" : "Seguir viendo para " + name, "continue", new ArrayList<>()));
     genre(rows, GENRE_ROWS[1], GENRE_ROWS[1][1], items, used);
     genre(rows, GENRE_ROWS[2], GENRE_ROWS[2][1], items, used);
-    List<Item> fresh = new ArrayList<>();
-    for (Item item : items) if (!item.addedAt.isEmpty()) fresh.add(item);
-    Collections.sort(fresh, (a, b) -> b.addedAt.compareTo(a.addedAt));
-    add(rows, "new", "Novedades en Calamar TV", fresh, "poster");
     for (int i = 3; i < GENRE_ROWS.length; i++) genre(rows, GENRE_ROWS[i], GENRE_ROWS[i][1], items, used);
     // The other genres follow as «Películas de …», the most common first; the section's own genre has no row.
     final Map<String, Integer> counts = new LinkedHashMap<>();
@@ -405,6 +410,98 @@ final class Library {
     for (Item item : items) for (String g : item.genres) if (genres.contains(g)) { list.add(item); break; }
     Collections.sort(list, INTEREST);
     add(rows, row[0], title, list, "poster");
+  }
+
+  static final int NEW_EPISODE_DAYS = 14;
+
+  private static String lastEpisodeDay(Item item) {
+    String last = "";
+    for (Episode e : item.episodes) if (e.addedAt.compareTo(last) > 0) last = e.addedAt;
+    return last;
+  }
+
+  /** «Nuevo episodio»: a series already in the library that got an episode in the last two weeks (as on the web). */
+  static boolean newEpisode(Item item, long now) {
+    String last = lastEpisodeDay(item);
+    long at = day(last);
+    return item.series && !item.addedAt.isEmpty() && last.compareTo(item.addedAt) > 0 && at != Long.MIN_VALUE
+        && now - at <= NEW_EPISODE_DAYS * DAY && at <= now + DAY;
+  }
+
+  /** The red label of a poster: «Nuevo episodio», «Recién llegada» or "". */
+  static String posterLabel(Item item, long now) {
+    return newEpisode(item, now) ? "Nuevo episodio" : newArrival(item, now) ? "Recién llegada" : "";
+  }
+
+  private static String freshDay(Item item, long now) {
+    return newEpisode(item, now) ? lastEpisodeDay(item) : item.addedAt;
+  }
+
+  /** «Novedades en Calamar TV»: new arrivals and series with a new episode, the newest first. */
+  static List<Item> freshTitles(List<Item> items, final long now) {
+    List<Item> out = new ArrayList<>();
+    for (Item item : items) if (!posterLabel(item, now).isEmpty()) out.add(item);
+    Collections.sort(out, (a, b) -> freshDay(b, now).compareTo(freshDay(a, now)));
+    return out;
+  }
+
+  /** The slider at the top of a section: what is new, then the weekly top; without either, the best rated. */
+  static List<Item> heroTitles(List<Item> items, long now, int size) {
+    java.util.LinkedHashSet<Item> out = new java.util.LinkedHashSet<>(freshTitles(items, now));
+    List<Item> top = new ArrayList<>();
+    for (Item item : items) if (item.trend > 0) top.add(item);
+    Collections.sort(top, (a, b) -> Integer.compare(a.trend, b.trend));
+    out.addAll(top);
+    if (out.isEmpty()) {
+      List<Item> rated = new ArrayList<>();
+      for (Item item : items) if (!item.backdrop.isEmpty() || !item.poster.isEmpty()) rated.add(item);
+      Collections.sort(rated, (a, b) -> Double.compare(b.rating, a.rating));
+      out.addAll(rated);
+    }
+    List<Item> list = new ArrayList<>(out);
+    return list.size() > size ? new ArrayList<>(list.subList(0, size)) : list;
+  }
+
+  /** The platforms of a list of titles, the one with most titles first: [name, logo, count]. */
+  static List<String[]> platforms(List<Item> items) {
+    final Map<String, String[]> found = new LinkedHashMap<>();
+    for (Item item : items)
+      for (String name : item.providers) {
+        String[] p = found.get(name);
+        if (p == null) found.put(name, p = new String[] {name, "", "0"});
+        p[2] = String.valueOf(Integer.parseInt(p[2]) + 1);
+        if (p[1].isEmpty() && item.logos.containsKey(name)) p[1] = item.logos.get(name);
+      }
+    List<String[]> out = new ArrayList<>(found.values());
+    final java.text.Collator collator = java.text.Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    Collections.sort(out, (a, b) -> a[2].equals(b[2]) ? collator.compare(a[0], b[0]) : Integer.compare(Integer.parseInt(b[2]), Integer.parseInt(a[2])));
+    return out;
+  }
+
+  /** Every title of a platform (every section together) and its rows: «En primer plano», by section and by genre. */
+  static List<Row> platformRows(Data data, String name, long now, List<Item> all) {
+    for (String[] section : SECTIONS) for (Item item : data.items(section[0])) if (item.providers.contains(name)) all.add(item);
+    List<Row> rows = new ArrayList<>();
+    List<Item> spotlight = heroTitles(all, now, 15);
+    if (spotlight.isEmpty()) { spotlight = new ArrayList<>(all); Collections.sort(spotlight, INTEREST); }
+    add(rows, "spotlight", "En primer plano", spotlight, "poster");
+    for (String[] section : SECTIONS) {
+      List<Item> mine = new ArrayList<>();
+      for (Item item : data.items(section[0])) if (item.providers.contains(name)) mine.add(item);
+      Collections.sort(mine, INTEREST);
+      add(rows, section[0], section[1], mine, "poster");
+    }
+    java.util.Set<String> used = new java.util.HashSet<>();
+    for (String[] row : GENRE_ROWS) genre(rows, row, row[0].equals("terror") ? "Terror" : row[1], all, used);
+    java.util.TreeSet<String> rest = new java.util.TreeSet<>(java.text.Collator.getInstance(Locale.forLanguageTag("es-ES")));
+    for (Item item : all) for (String g : item.genres) if (!used.contains(g)) rest.add(g);
+    for (String g : rest) {
+      List<Item> list = new ArrayList<>();
+      for (Item item : all) if (item.genres.contains(g)) list.add(item);
+      Collections.sort(list, INTEREST);
+      add(rows, "genre:" + g, g, list, "poster");
+    }
+    return rows;
   }
 
   // ---- Especial Halloween: 1 October to 2 November (Madrid), every horror title, as on the web ----

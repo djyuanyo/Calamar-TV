@@ -205,19 +205,19 @@ public class LibraryTest {
     long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
     List<Library.Item> items = Arrays.asList(
         titled("torrente", "\"Comedia\"", "\"ES\"", "\"Netflix\"", ",\"trend\":2,\"addedAt\":\"2026-10-01\""),
-        titled("weapons", "\"Terror\",\"Misterio\"", "\"US\"", "", ",\"trend\":1,\"addedAt\":\"2026-10-20\""),
+        titled("weapons", "\"Terror\",\"Misterio\"", "\"US\"", "", ",\"trend\":1,\"year\":2026,\"addedAt\":\"2026-10-20\""),
         titled("kraven", "\"Acción\",\"Ciencia ficción\"", "\"US\"", "\"Netflix\"", ""),
         titled("ozark", "\"Western\"", "\"US\"", "\"Netflix\"", ""));
     List<String> titles = new ArrayList<>();
     Map<String, Library.Row> by = new HashMap<>();
     for (Library.Row row : Library.browseRows("movies", items, new HashSet<String>(), "Yuanyo", now)) { titles.add(row.title); by.put(row.key, row); }
     assertEquals(Arrays.asList("Películas españolas", "Recomendaciones de hoy para ti", "Las 2 películas más populares de la semana",
-        "Películas de terror", "Solo en Calamar TV", "Seguir viendo para Yuanyo", "Ciencia ficción y fantasía", "¿Quieres echarte unas risas?",
-        "Novedades en Calamar TV", "Acción a tope", "Misterios por resolver", "Películas de western"), titles);
+        "Películas de terror", "Novedades en Calamar TV", "Seguir viendo para Yuanyo", "Ciencia ficción y fantasía", "¿Quieres echarte unas risas?",
+        "Acción a tope", "Misterios por resolver", "Películas de western"), titles);
     assertEquals("weapons", by.get("top").items.get(0).id);
     assertEquals("top", by.get("top").kind);
-    assertEquals("big", by.get("only").kind);
-    assertEquals(1, by.get("only").items.size());
+    assertEquals("big", by.get("new").kind);
+    assertEquals(1, by.get("new").items.size());
     assertEquals("weapons", by.get("new").items.get(0).id);
   }
 
@@ -233,5 +233,32 @@ public class LibraryTest {
     List<Object[]> horror = Library.horror(data);
     assertEquals(1, horror.size());
     assertEquals("movies", horror.get(0)[0]);
+  }
+
+  private static Library.Item show(String id, String added, String... days) throws Exception {
+    StringBuilder episodes = new StringBuilder();
+    for (int i = 0; i < days.length; i++)
+      episodes.append(i > 0 ? "," : "").append("{\"id\":\"").append(id).append(i).append("\",\"season\":1,\"episode\":").append(i + 1)
+          .append(",\"url\":\"https://calamarmenciano.com/").append(id).append(i).append(".mkv\"").append(days[i].isEmpty() ? "" : ",\"addedAt\":\"" + days[i] + "\"").append("}");
+    return new Library.Item(new JSONObject("{\"id\":\"" + id + "\",\"kind\":\"tv\",\"addedAt\":\"" + added + "\",\"episodes\":[" + episodes
+        + "],\"tmdb\":{\"id\":9,\"title\":\"" + id + "\",\"year\":2019,\"providers\":[\"Netflix\"],\"logos\":{\"Netflix\":\"https://image.tmdb.org/t/p/w154/n.jpg\"}}}"));
+  }
+
+  @Test public void newEpisodesNewsSliderAndPlatformsMatchTheWeb() throws Exception {
+    long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
+    Library.Item fresh = show("a", "2026-01-10", "2026-01-10", "2026-10-25");
+    assertTrue(Library.newEpisode(fresh, now));
+    assertEquals("Nuevo episodio", Library.posterLabel(fresh, now));
+    assertFalse(Library.newEpisode(show("b", "2026-01-10", "2026-01-10", "2026-10-01"), now));
+    assertFalse(Library.newEpisode(show("c", "2026-10-25", "2026-10-25", "2026-10-25"), now));
+    assertFalse(Library.newEpisode(show("d", "2026-01-10", "", ""), now));
+    Library.Item arrived = titled("m", "", "", "\"Disney Plus\"", ",\"year\":2026,\"addedAt\":\"2026-10-20\"");
+    Library.Item top = titled("t", "", "", "\"Disney Plus\"", ",\"trend\":1");
+    assertEquals(Arrays.asList(fresh, arrived), Library.freshTitles(Arrays.asList(arrived, fresh, top), now));
+    assertEquals(Arrays.asList(fresh, arrived, top), Library.heroTitles(Arrays.asList(top, arrived, fresh), now, 8));
+    List<String[]> platforms = Library.platforms(Arrays.asList(arrived, top, fresh));
+    assertEquals("Disney Plus", platforms.get(0)[0]);
+    assertEquals("2", platforms.get(0)[2]);
+    assertEquals("https://image.tmdb.org/t/p/w154/n.jpg", platforms.get(1)[1]);
   }
 }

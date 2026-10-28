@@ -12,7 +12,7 @@ import { autoplay, soundChosen } from './autoplay.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
-  cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE,
+  cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
@@ -1157,6 +1157,14 @@ async function halloweenRoute(version) {
   catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
   if (version === routeVersion) view.replaceChildren(...halloweenPage(el, library));
 }
+async function platformRoute(name, version) {
+  if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, 'Las películas y series no están disponibles ahora.')); return; }
+  view.replaceChildren(el('p', { class: 'status', role: 'status' }, `Cargando ${name || 'la plataforma'}…`));
+  let library;
+  try { library = await fetchLibrary(); }
+  catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
+  if (version === routeVersion) view.replaceChildren(...platformPage(el, library, name || ''));
+}
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);
   // While the library is hidden its lists are not public, but a film's or series' own link still opens it.
@@ -1196,7 +1204,7 @@ async function route() {
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   // Films, series and documentaries have their own search box: the channels and events one hides there.
-  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE;
+  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE;
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
@@ -1242,6 +1250,7 @@ async function route() {
   }
   if (sectionByPage(page)) { await libraryRoute(page, hash.split('/').slice(1), version); return; }
   if (page === HALLOWEEN_PAGE) { await halloweenRoute(version); return; }
+  if (page === PLATFORM_PAGE) { await platformRoute(hash.split('/').slice(1).join('/'), version); return; }
   if (page === 'canal' || page === 'evento') {
     // An event's own link keeps working after the match: it is only gone from the home page.
     const all = page === 'evento' ? events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }) : [];

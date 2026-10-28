@@ -259,7 +259,10 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
     }
     // Links pasted by hand stay; the folder adds or replaces its own episodes.
-    const item = await seriesWithLinks(find(`s${info.id}`), info, s.episodes, key, fetcher);
+    const linked = await seriesWithLinks(find(`s${info.id}`), info, s.episodes, key, fetcher);
+    // Each episode arrived the day LuluStream received it (for «Nuevo episodio»).
+    const uploads = new Map(s.episodes.filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
+    const item = linked && { ...linked, episodes: (linked.episodes || []).map((e) => (uploads.get(codeOf(e.url)) ? { ...e, addedAt: uploads.get(codeOf(e.url)) } : e)) };
     // A series arrived with its first uploaded episode.
     const first = s.episodes.map((e) => e.uploaded).filter(Boolean).sort()[0];
     if (item?.episodes?.length) {
