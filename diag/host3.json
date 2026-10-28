@@ -1,20 +1,74 @@
-{
- "hosting_post_fake": {
-  "status": 200,
-  "acao": "https://djyuanyo.github.io",
-  "type": "application/json; charset=utf-8",
-  "body": "{\"status\":400,\"requests_available\":99,\"msg\":\"Invalid key\",\"server_time\":\"2026-10-28 00:36:13\"}",
-  "ms": 943
+[
+ {
+  "url": "https://lulustream.com/",
+  "status": 521,
+  "location": null,
+  "body": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n\n<title>lulustream.com | 521: Web server is down</title>\n<meta charset=\"UTF-8\"",
+  "m3u8": false,
+  "sources": ""
  },
- "hosting_get": {
-  "status": 400,
-  "body": "{\"error\":\"C\\u00f3digo de v\\u00eddeo no v\\u00e1lido.\"}",
-  "ms": 132
+ {
+  "url": "https://luluvido.com/",
+  "status": 403,
+  "location": null,
+  "body": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\"><meta name=\"robots\" content=\"noindex,nofollow\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"content-security-policy\" content=\"default-src &#39;none&#39;; script-src &#39",
+  "m3u8": false,
+  "sources": ""
  },
- "lulu_direct_fake": {
+ {
+  "url": "https://www.luluvido.com/",
+  "error": "ENOTFOUND"
+ },
+ {
+  "url": "https://api.lulustream.com/api/account/info?key=x",
   "status": 200,
-  "acao": null,
-  "body": "{\"requests_available\":99,\"server_time\":\"2026-10-28 00:36:13\",\"status\":400,\"msg\":\"Invalid key\"}",
-  "ms": 403
+  "location": null,
+  "body": "{\"status\":400,\"requests_available\":99,\"msg\":\"Invalid key\",\"server_time\":\"2026-10-28 11:36:55\"}",
+  "m3u8": false,
+  "sources": ""
+ },
+ {
+  "url": "https://api.luluvido.com/api/account/info?key=x",
+  "error": "ENOTFOUND"
+ },
+ {
+  "url": "https://luluvido.com/api/account/info?key=x",
+  "status": 200,
+  "location": null,
+  "body": "{\"msg\":\"Invalid key\",\"server_time\":\"2026-10-28 11:36:56\",\"requests_available\":99,\"status\":400}",
+  "m3u8": false,
+  "sources": ""
+ },
+ {
+  "url": "https://lulustream.com/e/duj5ak4x5waa",
+  "status": 521,
+  "location": null,
+  "body": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n\n<title>lulustream.com | 521: Web server is down</title>\n<meta charset=\"UTF-8\"",
+  "m3u8": false,
+  "sources": ""
+ },
+ {
+  "url": "https://luluvido.com/e/duj5ak4x5waa",
+  "status": 200,
+  "location": null,
+  "body": "<HTML>\n  <HEAD>\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">\n      <title>Torrente_Presidente_(2026) - Lulustream.mp4  - LuluStream</title>\n      <meta name=\"og:image\" content=\"https://img.lulucdn.com/duj5ak4x5waa_xt.jpg\">\n      <meta name=\"twitter:image\" content=\"https://img.lulucdn.com/duj5ak4x5waa_xt.jpg\">\n      <meta name=\"robots\" content=\"noindex,",
+  "m3u8": false,
+  "sources": ""
+ },
+ {
+  "url": "https://luluvido.com/d/duj5ak4x5waa",
+  "status": 200,
+  "location": null,
+  "body": "<!DOCTYPE html>\n<html lang=\"en\">\n\n<head>\n  <meta charset=\"utf-8\">\n  <title>Torrente_Presidente_(2026) - Lulustream.mp4</title>\n  \n  \n  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">\n  <meta name=\"robots\" content=\"noindex, nofollow\" />\n  <meta name=\"theme-color\" content=\"#FFF\">\n  <meta name=\"og:image\" co",
+  "m3u8": false,
+  "sources": ""
+ },
+ {
+  "url": "https://luluvdo.com/e/duj5ak4x5waa",
+  "status": 403,
+  "location": null,
+  "body": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\"><meta name=\"robots\" content=\"noindex,nofollow\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"content-security-policy\" content=\"default-src &#39;none&#39;; script-src &#39",
+  "m3u8": false,
+  "sources": ""
  }
-}
+]
