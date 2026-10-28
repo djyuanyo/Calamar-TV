@@ -978,8 +978,21 @@ final class Library {
       return embed == null ? null : LULU_ENDPOINT + "?code=" + embed.substring(embed.lastIndexOf('/') + 1) + "&hls=1";
     }
 
+    /** AnonMP4's embed page (https://anonmp4.art/embed/CODE) of an AnonMP4 link (/v/, /e/ or /embed/), or null. */
+    static String anonmp4(String address) {
+      try {
+        java.net.URI u = java.net.URI.create(address.trim());
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("/(?:v|e|embed)/([A-Za-z0-9]{8,24})/?").matcher(u.getPath() == null ? "" : u.getPath());
+        return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && host.matches("(?:www\\.)?anonmp4\\.[a-z]{2,10}") && m.matches()
+            ? "https://" + host + "/embed/" + m.group(1) : null;
+      } catch (Exception e) {
+        return null;
+      }
+    }
+
     static boolean allowed(String address) {
-      if (embed(address) != null) return true;
+      if (embed(address) != null || anonmp4(address) != null) return true;
       try {
         java.net.URI u = java.net.URI.create(address);
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);

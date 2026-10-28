@@ -241,6 +241,17 @@ export function renewablePage(address) {
   } catch { return false; }
 }
 
+// AnonMP4 (anonmp4.art, anonmp4.to…): its API gives each video an embed page (embed_url) for other sites.
+// The video plays in that page, with AnonMP4's own player, inside ours.
+const ANON_HOST = /^(?:www\.)?anonmp4\.[a-z]{2,10}$/;
+export function anonmp4Embed(url) {
+  try {
+    const u = new URL(String(url).trim());
+    const code = (u.pathname.match(/^\/(?:v|e|embed)\/([A-Za-z0-9]{8,24})\/?$/) || [])[1];
+    return u.protocol === 'https:' && ANON_HOST.test(u.hostname) && !u.username && !u.password && code ? `https://${u.hostname}/embed/${code}` : null;
+  } catch { return null; }
+}
+
 const FRAME_HOSTS = ['zicotv.cc'];
 export function framedPage(url) {
   try {
@@ -258,6 +269,8 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const anon = anonmp4Embed(url);
+  if (anon) return { ok: true, kind: 'frame', address: anon };
   const embed = lulustreamEmbed(url);
   // LuluStream only serves the video to whoever opened its player page, so the hosting reads the page and
   // passes the HLS list and its pieces on (calamar-lulu.php); the video plays in our own player.

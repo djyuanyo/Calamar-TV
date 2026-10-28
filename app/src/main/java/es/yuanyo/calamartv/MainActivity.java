@@ -2072,6 +2072,8 @@ public class MainActivity extends Activity {
     }
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
+    String anon = Library.Media.anonmp4(url);
+    if (anon != null) { embedPlayer(entry.optString("title"), anon); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
     String embed = Library.Media.embed(url);
@@ -2086,6 +2088,51 @@ public class MainActivity extends Activity {
     if (audienceTarget != null) intent.putExtra("audience_target", audienceTarget);
     intent.putExtra("resume_ms", restart || saved == null ? 0 : saved.optLong("position"));
     startActivityForResult(intent, PLAY_LIBRARY);
+  }
+
+  /**
+   * AnonMP4: its embed page (the address its API gives for other sites) with its own player, full screen.
+   * Back closes it. «Continuar viendo» cannot know where it was left, as the player is AnonMP4's.
+   */
+  void embedPlayer(String title, String address) {
+    final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+    final FrameLayout box = new FrameLayout(this);
+    box.setBackgroundColor(0xff000000);
+    final android.webkit.WebView web = new android.webkit.WebView(this);
+    web.getSettings().setJavaScriptEnabled(true);
+    web.getSettings().setDomStorageEnabled(true);
+    web.getSettings().setMediaPlaybackRequiresUserGesture(false);
+    web.getSettings().setAllowFileAccess(false);
+    web.getSettings().setAllowContentAccess(false);
+    web.setBackgroundColor(0xff000000);
+    final String host = Uri.parse(address).getHost();
+    web.setWebViewClient(new android.webkit.WebViewClient() {
+      @Override
+      public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+        // Only AnonMP4's own pages: pop-ups and adverts that try to open other sites stay closed.
+        return !host.equals(request.getUrl().getHost());
+      }
+    });
+    web.setWebChromeClient(new android.webkit.WebChromeClient() {
+      View full;
+      @Override
+      public void onShowCustomView(View view, CustomViewCallback callback) {
+        full = view;
+        box.addView(view, new FrameLayout.LayoutParams(-1, -1));
+      }
+      @Override
+      public void onHideCustomView() {
+        if (full != null) box.removeView(full);
+        full = null;
+      }
+    });
+    box.addView(web, new FrameLayout.LayoutParams(-1, -1));
+    dialog.setContentView(box);
+    dialog.setOnDismissListener(d -> { web.loadUrl("about:blank"); web.destroy(); });
+    dialog.show();
+    web.loadUrl(address);
+    web.requestFocus();
+    Toast.makeText(this, title, Toast.LENGTH_SHORT).show();
   }
 
   // ---- Films and series «En portada» and the weekly top ----

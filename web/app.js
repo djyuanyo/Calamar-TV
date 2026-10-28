@@ -679,7 +679,7 @@ async function playSource(c, index) {
   playerStatus.textContent = 'Conectando…';
   const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
-    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.url, title: c.name,
+    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
