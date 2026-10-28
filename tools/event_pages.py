@@ -57,17 +57,24 @@ def all_events(catalog):
 
 
 def event_slugs(catalog):
-    """Same as eventSlugs() in web/catalog.js: date order, repeated names get -2, -3…; imported
-    matches after the events, so they never change an event's link."""
+    """Same as eventSlugs() in web/catalog.js: date order, a repeated name is numbered in every event
+    that has it (-1, -2, -3…); imported matches after the events, so they never change an event's number."""
     order = lambda e: (instant(e.get('startAt') or ''), str(e.get('id')))
     every = all_events(catalog)
     events = sorted([e for e in every if not e.get('imported')], key=order) + sorted([e for e in every if e.get('imported')], key=order)
+    times = {}
+    for event in events:
+        base = slugify(event.get('name', ''))
+        times[base] = times.get(base, 0) + 1
     out, used = {}, set()
     for event in events:
-        base = slug = slugify(event.get('name', ''))
-        n = 2
+        base = slugify(event.get('name', ''))
+        repeated = times[base] > 1
+        n = 1 if repeated else 2
+        slug = f'{base}-1' if repeated else base
         while slug in used:
-            slug, n = f'{base}-{n}', n + 1
+            n += 1
+            slug = f'{base}-{n}'
         used.add(slug)
         out[event['id']] = slug
     return out
@@ -244,9 +251,51 @@ def publish(site, base, catalog, download=download_cover, images=None, tdt=None)
             (folder / name).write_bytes(base64.b64decode(data))
             image = f'{base}evento/{slug}/{name}'
         (folder / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+        # A link shared before the names were numbered («local-vs-visitante») opens the first one («…-1»).
+        old = slug[:-2] if slug.endswith('-1') else None
+        if old and old not in slugs.values():
+            alias = site / 'evento' / old
+            alias.mkdir(parents=True, exist_ok=True)
+            (alias / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+    publish_leagues(site, base, catalog, images)
     if tdt is not None:
         publish_channels(site, base, catalog, tdt, images)
     return slugs
+
+
+def league_slugs(catalog):
+    """Same as leagueSlugs() in web/catalog.js: the league's name, repeated names get -2, -3… in the catalog's order."""
+    out, used = {}, set()
+    for league in catalog.get('leagues') or []:
+        base = slug = slugify(league.get('name', ''))
+        n = 2
+        while slug in used:
+            slug, n = f'{base}-{n}', n + 1
+        used.add(slug)
+        out[league['id']] = slug
+    return out
+
+
+def publish_leagues(site, base, catalog, images=None):
+    """liga/<slug>/ for every league, with its logo on its background; the page opens #/liga/<slug>."""
+    slugs = league_slugs(catalog)
+    for league in catalog.get('leagues') or []:
+        slug = slugs[league['id']]
+        folder = pathlib.Path(site) / 'liga' / slug
+        folder.mkdir(parents=True, exist_ok=True)
+        image = ''
+        if images:
+            import share_images
+            try:
+                pick = lambda value: images.image(value) if value else None
+                (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.league_card(pick(league.get('background')), pick(league.get('logo')))))
+                image = f'{base}liga/{slug}/vista.jpg'
+            except Exception as error:
+                print(f'::warning::No se pudo dibujar la vista previa de {league.get("name")} ({error})')
+        elif str(league.get('background') or league.get('logo') or '').startswith('https://'):
+            image = league.get('background') or league.get('logo')
+        text = f'Todos los partidos de {league.get("name")} con canal, en Calamar TV'
+        (folder / 'index.html').write_text(page(league, catalog, slug, base, image, kind='liga', text=text), encoding='utf-8')
 
 
 def publish_channels(site, base, catalog, tdt, images=None):

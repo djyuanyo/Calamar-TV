@@ -4,8 +4,8 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { eventPath, eventShareLink, channelShareLink, leagueShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
@@ -410,11 +410,39 @@ function home() {
   // Only events on the home page: one row per league, each in date order (soonest first), with this
   // week's events only: a league whose next matches are in two weeks does not appear yet.
   for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
-    nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
+    // The league's name opens its page: every match of the league that has a channel.
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
+    nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
+      : el('span', { class: 'league-head' }, ...head),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }
   if (!matches.length) nodes.push(el('p', { class: 'status' }, 'Todavía no hay eventos. ', el('a', { href: '#/canales' }, 'Ver los canales')));
   return nodes;
+}
+
+/** A league's page (#/liga/<slug>): its logo on its background, a share button and every match of the league with a channel, in a grid. */
+function leaguePage(slug) {
+  const slugs = leagueSlugs(state.custom);
+  const league = (state.custom?.leagues || []).find((l) => slugs.get(l.id) === slug);
+  if (!league) return [el('p', { class: 'error' }, `No existe la liga «${slug || ''}».`), ...home()];
+  const list = leagueEvents(state.channels, state.custom, league.id);
+  const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
+  const art = image(league.background);
+  const status = el('span', { class: 'note', role: 'status' });
+  const share = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    const url = leagueShareLink(slug);
+    try {
+      if (navigator.share) await navigator.share({ title: league.name, url });
+      else { await navigator.clipboard.writeText(url); status.textContent = 'Enlace copiado.'; }
+    } catch (error) { if (error?.name !== 'AbortError') status.textContent = `Copia este enlace: ${url}`; }
+  } }, '⤴ Compartir');
+  return [el('section', { class: 'league-hero', style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
+      image(league.logo) ? el('img', { class: 'league-hero-logo', src: image(league.logo), alt: '', referrerpolicy: 'no-referrer' }) : null,
+      el('h1', {}, league.name),
+      el('p', {}, list.length === 1 ? '1 partido con canal' : `${list.length} partidos con canal`),
+      el('div', { class: 'league-hero-actions' }, share, status)),
+    list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
+      : el('p', { class: 'status' }, 'Todavía no hay partidos de esta liga con canal asignado.')];
 }
 
 function channelsPage(selected) {
@@ -1254,7 +1282,7 @@ async function route() {
   if (page === 'canal' || page === 'evento') {
     // An event's own link keeps working after the match: it is only gone from the home page.
     const all = page === 'evento' ? events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }) : [];
-    const c = page === 'evento' ? (all.find(e => e.slug === arg) || all.find(e => e.eventId === arg)) : findChannel(state.channels, arg);
+    const c = page === 'evento' ? (findBySlug(all, arg) || all.find(e => e.eventId === arg)) : findChannel(state.channels, arg);
     // Moving from an open channel to one that cannot be played here must not leave the old one running.
     if ((!c || (!c.playable && !c.pending)) && !player.hidden) hidePlayer();
     view.replaceChildren(
@@ -1277,7 +1305,7 @@ async function route() {
     return;
   }
   const query = search.value.trim();
-  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : home()));
+  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : home()));
 }
 
 let typing;
@@ -1289,7 +1317,8 @@ document.addEventListener('click', event => {
   const link = event.target.closest('a[href^="#/evento/"]');
   if (!link || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
   const key = decodeURIComponent(link.hash.split('/')[2] || '');
-  const item = events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }).find(c => c.slug === key || c.id === key);
+  const list = events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true });
+  const item = findBySlug(list, key) || list.find(c => c.id === key);
   if (item) { event.preventDefault(); open(item); }
 });
 window.addEventListener('hashchange', () => {

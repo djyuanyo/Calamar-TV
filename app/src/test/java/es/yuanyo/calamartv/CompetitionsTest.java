@@ -55,7 +55,7 @@ public class CompetitionsTest {
     JSONObject data = catalog();
     data.getJSONArray("events").put(new JSONObject("{\"id\":\"manual\",\"name\":\"Real Madrid vs Barcelona\",\"cover\":\"https://example.com/c.jpg\",\"channelId\":\"dazn\",\"startAt\":\"2026-12-01T19:00:00Z\"}"));
     Map<String, String> slugs = SportsCatalog.slugs(data);
-    assertEquals("real-madrid-vs-barcelona", slugs.get("manual"));
+    assertEquals("real-madrid-vs-barcelona-1", slugs.get("manual"));
     assertEquals("real-madrid-vs-barcelona-2", slugs.get("partido-301"));
   }
 

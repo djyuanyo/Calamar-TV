@@ -298,21 +298,48 @@ export function catalogEvents(custom) {
 }
 
 /**
- * Link name of every event, from its name like channels ("local-vs-visitante"); repeated names get
- * -2, -3… in date order. tools/event_pages.py and SportsCatalog.slugs() apply the same rule. Imported
- * matches come after the events, so they never change an event's link.
+ * Link name of every event, from its name like channels ("local-vs-visitante"). A name that repeats (the
+ * same teams in several competitions) is numbered in every event that has it: -1, -2, -3… in date order.
+ * tools/event_pages.py and SportsCatalog.slugs() apply the same rule. Imported matches come after the
+ * events, so they never change an event's number.
  */
 export function eventSlugs(custom) {
   const out = new Map(), used = new Set();
   const all = catalogEvents(custom);
-  for (const event of [...all.filter((e) => !e.imported).sort(eventOrder), ...all.filter((e) => e.imported).sort(eventOrder)]) {
-    const base = slugify(event.name);
-    let slug = base;
-    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+  const list = [...all.filter((e) => !e.imported).sort(eventOrder), ...all.filter((e) => e.imported).sort(eventOrder)];
+  const times = new Map();
+  for (const event of list) times.set(slugify(event.name), (times.get(slugify(event.name)) || 0) + 1);
+  for (const event of list) {
+    const base = slugify(event.name), repeated = times.get(base) > 1;
+    let n = repeated ? 1 : 2, slug = repeated ? `${base}-1` : base;
+    while (used.has(slug)) slug = `${base}-${++n}`;
     used.add(slug);
     out.set(event.id, slug);
   }
   return out;
+}
+
+/** Link name of every league, from its name ("laliga"); repeated names get -2, -3… in the catalog's order. tools/event_pages.py and SportsCatalog.leagueSlugs() do the same. */
+export function leagueSlugs(custom) {
+  const out = new Map(), used = new Set();
+  for (const league of custom?.leagues || []) {
+    const base = slugify(league.name);
+    let slug = base;
+    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    out.set(league.id, slug);
+  }
+  return out;
+}
+
+/** A league's page: its matches of every week that already have a channel or video, soonest first (not finished ones). */
+export function leagueEvents(channels, custom, leagueId, now = Date.now()) {
+  return events(channels, custom, now, { allWeeks: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending);
+}
+
+/** The event of a link name: its own, or for an old link without number («local-vs-visitante») the first of that name («…-1»). */
+export function findBySlug(list, slug) {
+  return list.find((e) => e.slug === slug) || list.find((e) => e.slug === `${slug}-1`) || null;
 }
 
 /** Card art of an event without a cover: the league's background with both crests on top. */
@@ -406,7 +433,7 @@ export function eventRows(list, custom) {
   for (const event of list) {
     const league = leagues.get(event.leagueId);
     const key = league ? league.id : '';
-    if (!rows.has(key)) rows.set(key, { id: key, name: league ? league.name : 'Otros eventos', logo: mirrorLogo(https(league?.logo)) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
+    if (!rows.has(key)) rows.set(key, { id: key, slug: league ? leagueSlugs(custom).get(league.id) : '', name: league ? league.name : 'Otros eventos', logo: mirrorLogo(https(league?.logo)) || (league?.logo?.startsWith('data:image/') ? league.logo : ''), events: [] });
     rows.get(key).events.push(event);
   }
   const out = [...rows.values()];

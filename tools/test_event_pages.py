@@ -28,7 +28,7 @@ BASE = 'https://djyuanyo.github.io/Calamar-TV/'
 
 class EventPagesTest(unittest.TestCase):
     def test_slugs_match_the_web(self):
-        self.assertEqual(pages.event_slugs(CATALOG), {'b': 'local-vs-visitante-co', 'a': 'final-de-copa-nora', 'c': 'final-de-copa-nora-2',
+        self.assertEqual(pages.event_slugs(CATALOG), {'b': 'local-vs-visitante-co', 'a': 'final-de-copa-nora-1', 'c': 'final-de-copa-nora-2',
                                                       'd': 'celtic-vs-celta', 'e': 'betis-vs-feyenoord'})
         script = ("import('./web/catalog.js').then(m => console.log(JSON.stringify([...m.eventSlugs("
                   + json.dumps(CATALOG) + ")])))")
@@ -45,9 +45,13 @@ class EventPagesTest(unittest.TestCase):
             self.assertIn('Liga Menciana · sábado 24 de octubre, 21:00 · Jornada 9', html)
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/evento/local-vs-visitante-co', html)
             self.assertNotIn('<Visitante>', html)
-            upload = pathlib.Path(site) / 'evento/final-de-copa-nora'
+            upload = pathlib.Path(site) / 'evento/final-de-copa-nora-1'
             self.assertEqual((upload / 'portada.jpg').read_bytes(), JPEG)
-            self.assertIn(f'og:image" content="{BASE}evento/final-de-copa-nora/portada.jpg"', (upload / 'index.html').read_text(encoding='utf-8'))
+            self.assertIn(f'og:image" content="{BASE}evento/final-de-copa-nora-1/portada.jpg"', (upload / 'index.html').read_text(encoding='utf-8'))
+            # A link shared before repeated names were numbered opens the first one, with its image.
+            old = (pathlib.Path(site) / 'evento/final-de-copa-nora/index.html').read_text(encoding='utf-8')
+            self.assertIn(f'og:image" content="{BASE}evento/final-de-copa-nora-1/portada.jpg"', old)
+            self.assertIn('#/evento/final-de-copa-nora-1', old)
             self.assertIn('martes 1 de diciembre, 21:00', (upload / 'index.html').read_text(encoding='utf-8'))
             self.assertTrue((pathlib.Path(site) / 'evento/final-de-copa-nora-2/index.html').exists())
             # A cover on another site is copied next to the page; the copy is the preview image.
@@ -100,7 +104,7 @@ class SharePreviewTest(unittest.TestCase):
         return json.loads(subprocess.check_output(['node', '-e', script], cwd=ROOT, text=True))
 
     def test_imported_matches_and_channels_use_the_web_slugs(self):
-        self.assertEqual(pages.event_slugs(FIXTURES), {'manual': 'real-betis-vs-feyenoord', 'partido-1': 'real-betis-vs-feyenoord-2'})
+        self.assertEqual(pages.event_slugs(FIXTURES), {'manual': 'real-betis-vs-feyenoord-1', 'partido-1': 'real-betis-vs-feyenoord-2'})
         self.assertEqual(dict(self.web(f'[...m.eventSlugs({json.dumps(FIXTURES)})]')), pages.event_slugs(FIXTURES))
         python = [(c['id'], c['slug'], c['color']) for c in pages.channels(TDT, FIXTURES)]
         web = [tuple(x) for x in self.web(f'm.merge({json.dumps(TDT)}, {json.dumps(FIXTURES)}).map(c => [c.id, c.slug, c.color])')]
@@ -119,7 +123,7 @@ class SharePreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as site:
             pages.publish(site, BASE, FIXTURES, download=lambda url: self.fail('covers are drawn, not linked'), images=images, tdt=TDT)
             root = pathlib.Path(site)
-            for folder in ('evento/real-betis-vs-feyenoord', 'evento/real-betis-vs-feyenoord-2', 'canal/la-1', 'canal/la-1-2', 'canal/solo-web'):
+            for folder in ('liga/laliga', 'evento/real-betis-vs-feyenoord-1', 'evento/real-betis-vs-feyenoord-2', 'canal/la-1', 'canal/la-1-2', 'canal/solo-web'):
                 with Image.open(root / folder / 'vista.jpg') as picture:
                     self.assertEqual(picture.size, (1200, 630))
                 self.assertLessEqual((root / folder / 'vista.jpg').stat().st_size, 300 * 1024)
@@ -132,6 +136,12 @@ class SharePreviewTest(unittest.TestCase):
             self.assertGreater(match.getpixel((270, 315))[1], 120)        # The home crest on the left.
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/canal/la-1"', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             self.assertIn('Deportes · En directo en Calamar TV', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
+            # Each league has its own page to share: its logo large in the middle, opening #/liga/<slug>.
+            league = (root / 'liga/laliga/index.html').read_text(encoding='utf-8')
+            self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/liga/laliga"', league)
+            self.assertIn('Todos los partidos de LaLiga con canal, en Calamar TV', league)
+            with Image.open(root / 'liga/laliga/vista.jpg') as opened:
+                self.assertGreater(min(opened.convert('RGB').getpixel((600, 315))), 200)
             # The background that does not answer is left out; each image is read once.
             self.assertEqual(asked.count('https://img.example/liga.png'), 1)
 

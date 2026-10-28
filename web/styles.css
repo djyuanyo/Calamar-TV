@@ -1222,3 +1222,15 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .title-platform-logo { display:block; width:64px; height:64px; object-fit:contain; margin:0 0 8px; border-radius:10px; }
 .title-preview { opacity:0; pointer-events:none; }
 .title-preview.ready { opacity:1; pointer-events:auto; }
+
+/* A league's page: its logo on its background and its matches with a channel in a grid. */
+a.league-head { text-decoration: none; }
+a.league-head:hover, a.league-head:focus-visible { color: var(--accent); }
+a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
+.league-hero { display: grid; justify-items: center; gap: 8px; margin: 0 calc(var(--gutter) * -1) 18px; padding: 34px var(--gutter) 26px; text-align: center;
+  background: linear-gradient(180deg, rgba(11,13,16,.35), rgba(11,13,16,.6) 60%, var(--bg)), var(--league-art, none) center / cover no-repeat, linear-gradient(160deg, #1a3a26, #0b1410); }
+.league-hero-logo { width: clamp(90px, 14vw, 140px); aspect-ratio: 1; object-fit: contain; filter: drop-shadow(0 8px 20px rgba(0,0,0,.6)); }
+.league-hero h1 { margin: 4px 0 0; font-size: clamp(28px, 4.5vw, 48px); font-weight: 900; text-shadow: 0 3px 14px rgba(0,0,0,.7); }
+.league-hero p { margin: 0; color: rgba(255,255,255,.85); font-weight: 600; }
+.league-hero-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.league-grid { grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 26vw, 360px), 1fr)); }

@@ -45,9 +45,15 @@ public class SportsCatalogTest {
   @Test public void eventLinksUseTheSlugOfTheirNameLikeTheWeb() throws Exception {
     JSONObject data=new JSONObject("{\"events\":[{\"id\":\"match\",\"name\":\"Partido\",\"startAt\":\"2026-12-01T20:00:00Z\"},{\"id\":\"later\",\"name\":\"Partido\",\"startAt\":\"2026-12-08T20:00:00Z\"},{\"id\":\"earlier\",\"name\":\"Partido\",\"startAt\":\"2026-11-01T20:00:00Z\"},{\"id\":\"copa\",\"name\":\"Final de Copa: Menciana–Ñora\"}]}");
     Map<String,String> slugs=SportsCatalog.slugs(data);
-    assertEquals("partido",slugs.get("earlier"));assertEquals("partido-2",slugs.get("match"));assertEquals("partido-3",slugs.get("later"));
+    assertEquals("partido-1",slugs.get("earlier"));assertEquals("partido-2",slugs.get("match"));assertEquals("partido-3",slugs.get("later"));
     assertEquals("final-de-copa-menciana-nora",slugs.get("copa"));
     assertEquals("https://djyuanyo.github.io/Calamar-TV/evento/partido-2/",SportsCatalog.link(slugs.get("match")));
+  }
+  @Test public void leaguesHaveTheirOwnLinkLikeTheWeb() throws Exception {
+    JSONObject data=new JSONObject("{\"leagues\":[{\"id\":\"l1\",\"name\":\"LaLiga\"},{\"id\":\"l2\",\"name\":\"Premier League\"},{\"id\":\"l3\",\"name\":\"LaLiga\"}]}");
+    Map<String,String> slugs=SportsCatalog.leagueSlugs(data);
+    assertEquals("laliga",slugs.get("l1"));assertEquals("premier-league",slugs.get("l2"));assertEquals("laliga-2",slugs.get("l3"));
+    assertEquals("https://djyuanyo.github.io/Calamar-TV/liga/laliga/",SportsCatalog.leagueLink(slugs.get("l1")));
   }
   @Test public void highlightsMixEventsAndChannelsAndEventsStayChronological() throws Exception {
     JSONObject data=new JSONObject("{\"channels\":[{\"id\":\"c\",\"name\":\"Channel\",\"streams\":[\"https://example.com/a.m3u8\"]}],\"featured\":[\"c\"],\"hidden\":[],\"leagues\":[{\"id\":\"l\",\"name\":\"League\"}],\"events\":[{\"id\":\"b\",\"name\":\"Later\",\"cover\":\"https://example.com/b.jpg\",\"channelId\":\"c\",\"leagueId\":\"l\",\"startAt\":\"2026-12-01T20:00:00Z\",\"featured\":true},{\"id\":\"a\",\"name\":\"Earlier\",\"cover\":\"https://example.com/a.jpg\",\"channelId\":\"c\",\"startAt\":\"2026-11-01T20:00:00Z\"}]}");

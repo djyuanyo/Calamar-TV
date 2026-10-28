@@ -78,11 +78,17 @@ final class SportsCatalog {
     };
     // Imported matches come after the events, so they never change an event's link.
     Collections.sort(list, order); Collections.sort(imported, order); list.addAll(imported);
+    // A name that repeats (the same teams in several competitions) is numbered in every event: -1, -2…
+    Map<String, Integer> times = new HashMap<>();
+    for (JSONObject event : list) { String base = slugify(event.optString("name")); times.put(base, times.containsKey(base) ? times.get(base) + 1 : 1); }
     Map<String, String> out = new LinkedHashMap<>();
     Set<String> used = new HashSet<>();
     for (JSONObject event : list) {
-      String base = slugify(event.optString("name")), slug = base;
-      for (int n = 2; used.contains(slug); n++) slug = base + "-" + n;
+      String base = slugify(event.optString("name"));
+      boolean repeated = times.get(base) > 1;
+      int n = repeated ? 1 : 2;
+      String slug = repeated ? base + "-1" : base;
+      while (used.contains(slug)) slug = base + "-" + (++n);
       used.add(slug);
       out.put(event.optString("id"), slug);
     }
@@ -92,6 +98,24 @@ final class SportsCatalog {
   /** Shared link: the public web publishes evento/<slug>/ with the cover and name for WhatsApp. */
   static final String WEB = "https://djyuanyo.github.io/Calamar-TV/";
   static String link(String slug) { return WEB + "evento/" + slug + "/"; }
+  /** A league's shared link: the public web publishes liga/<slug>/ with its card. */
+  static String leagueLink(String slug) { return WEB + "liga/" + slug + "/"; }
+
+  /** Link name of every league, as leagueSlugs() on the web: its name, repeated names get -2, -3… */
+  static Map<String, String> leagueSlugs(JSONObject data) {
+    Map<String, String> out = new LinkedHashMap<>();
+    Set<String> used = new HashSet<>();
+    JSONArray leagues = data == null ? null : data.optJSONArray("leagues");
+    for (int i = 0; leagues != null && i < leagues.length(); i++) {
+      JSONObject league = leagues.optJSONObject(i);
+      if (league == null) continue;
+      String base = slugify(league.optString("name")), slug = base;
+      for (int n = 2; used.contains(slug); n++) slug = base + "-" + n;
+      used.add(slug);
+      out.put(league.optString("id"), slug);
+    }
+    return out;
+  }
   static void validate(JSONObject data) throws JSONException {
     Map<String, Set<String>> sets = new HashMap<>();
     for (String kind : new String[]{"leagues","teams"}) {

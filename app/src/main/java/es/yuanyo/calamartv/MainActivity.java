@@ -416,6 +416,10 @@ public class MainActivity extends Activity {
       halloweenPage();
       return;
     }
+    if (mode.startsWith(LEAGUE)) {
+      leaguePage(mode.substring(LEAGUE.length()));
+      return;
+    }
     if (mode.startsWith(PLATFORM)) {
       platformPage(mode.substring(PLATFORM.length()));
       return;
@@ -473,8 +477,9 @@ public class MainActivity extends Activity {
       // The same events stay in their league's row too, as copies of the same card.
       // Only this week's events in the league rows: a league whose next matches are in two weeks does not appear yet.
       for (Catalog.EventRow row : Catalog.eventRows(Catalog.thisWeekEvents(events, System.currentTimeMillis()), custom)) {
-        heading(row.name, row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
+        heading(row.id.isEmpty() ? row.name : row.name + "  ›", row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
         if (!row.logo.isEmpty()) leagueLogo(row.logo);
+        if (!row.id.isEmpty()) leagueHeadingOpens(row.id, row.name);
         carousel(row.events, row.events.size());
       }
       if (events.isEmpty()) list.addView(label("Todavía no hay eventos. Abre TV para ver todos los canales.", 15, MUTED));
@@ -2305,6 +2310,79 @@ public class MainActivity extends Activity {
   }
 
   static final String PLATFORM = "Plataforma: ";
+  static final String LEAGUE = "Liga: ";
+
+  /** The heading just added opens the league's page (its name ends in «›»). */
+  void leagueHeadingOpens(final String leagueId, String name) {
+    View heading = list.getChildAt(list.getChildCount() - 1);
+    heading.setFocusable(true);
+    heading.setClickable(true);
+    heading.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
+    heading.setContentDescription("Todos los partidos de " + name);
+    heading.setOnClickListener(v -> { mode = LEAGUE + leagueId; query = ""; home(); });
+  }
+
+  /** A league's page: its logo on its background, «Compartir» and every match of the league with a channel. */
+  void leaguePage(String leagueId) {
+    Button back = Ui.pill(this, "‹ Inicio", Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> { mode = "Inicio"; home(); });
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, dp(44));
+    bp.setMargins(0, dp(10), 0, dp(6));
+    list.addView(back, bp);
+    JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), leagueId);
+    if (league == null) { list.addView(label("Esta liga ya no está en el catálogo.", 15, MUTED)); return; }
+    final String name = league.optString("name");
+    List<Catalog.Channel> matches = Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis());
+    FrameLayout hero = new FrameLayout(this);
+    hero.setBackground(Ui.shape(this, 0xff14261b, 14, 0, 0));
+    hero.setClipToOutline(true);
+    String background = league.optString("background");
+    if (background.startsWith("https://") || background.startsWith("data:image/")) {
+      ImageView art = new ImageView(this);
+      art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      hero.addView(art, new FrameLayout.LayoutParams(-1, -1));
+      image(art, background);
+    }
+    View shade = new View(this);
+    shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x550b0d10, 0x990b0d10, 0xee0b0d10}));
+    hero.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setGravity(Gravity.CENTER_HORIZONTAL);
+    box.setPadding(dp(12), dp(18), dp(12), dp(16));
+    String logo = league.optString("logo");
+    if (logo.startsWith("https://") || logo.startsWith("data:image/")) {
+      ImageView icon = new ImageView(this);
+      icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      box.addView(icon, new LinearLayout.LayoutParams(dp(wide() ? 110 : 88), dp(wide() ? 110 : 88)));
+      logo(icon, logo);
+    }
+    TextView title = label(name, wide() ? 32 : 26, 0xffffffff);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(Gravity.CENTER);
+    title.setShadowLayer(dp(8), 0, dp(2), 0xcc000000);
+    box.addView(title);
+    TextView count = label(matches.size() == 1 ? "1 partido con canal" : matches.size() + " partidos con canal", 14, 0xddffffff);
+    count.setGravity(Gravity.CENTER);
+    box.addView(count);
+    final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
+    Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
+    share.setOnClickListener(v -> {
+      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, name + " · " + SportsCatalog.leagueLink(slug));
+      try { startActivity(Intent.createChooser(send, "Compartir")); }
+      catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
+    });
+    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
+    sp.gravity = Gravity.CENTER_HORIZONTAL;
+    sp.setMargins(0, dp(10), 0, 0);
+    if (slug != null) box.addView(share, sp);
+    hero.addView(box, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+    LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+    hp.setMargins(0, 0, 0, dp(14));
+    list.addView(hero, hp);
+    if (matches.isEmpty()) list.addView(label("Todavía no hay partidos de esta liga con canal asignado.", 15, MUTED));
+    else channelGrid(matches);
+  }
   /** The section a platform's page was opened from, to go back to it. */
   String platformFrom = "Películas";
   HorizontalScrollView browseTrack;
