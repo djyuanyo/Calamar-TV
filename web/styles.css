@@ -1163,3 +1163,12 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .platform-hero-logo { width: clamp(96px, 16vw, 150px); aspect-ratio: 1; object-fit: contain; border-radius: 22px; box-shadow: 0 12px 34px rgba(0,0,0,.6); }
 .platform-hero h1 { margin: 6px 0 0; font-size: clamp(30px, 5vw, 54px); font-weight: 900; text-shadow: 0 3px 14px rgba(0,0,0,.7); }
 .platform-hero p { margin: 0; color: rgba(255,255,255,.85); font-weight: 600; }
+
+/* Admin: platforms with their logo, order and «Ocultar». */
+.platform-row { flex-wrap: wrap; }
+.platform-row .order-logo { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: #1a1c23; }
+.platform-name { display: grid; min-width: 140px; }
+.platform-name small { color: var(--muted); }
+.platform-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1 1 320px; }
+.platform-edit input[type="url"] { flex: 1 1 200px; min-width: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.platform-edit input[type="file"] { max-width: 220px; }

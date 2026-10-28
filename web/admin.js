@@ -423,7 +423,7 @@ export async function render(state) {
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
-      }) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+      }).concat(platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
@@ -437,14 +437,14 @@ export function hasTransparency(rgba) {
   return false;
 }
 
-async function coverFromFile(file) {
+async function coverFromFile(file, sides = [960, 720, 512, 384]) {
   if (!file || !file.type.startsWith('image/')) throw new Error('Elige una imagen.');
   if (file.size > 15 * 1024 * 1024) throw new Error('La imagen supera los 15 MB.');
   const bitmap = await createImageBitmap(file);
   try {
     // An image with transparent parts (a PNG or WebP logo) keeps them: as PNG, or WebP if PNG is too big,
     // smaller each time; JPEG, which has no transparency and turned them black, only for opaque images.
-    for (const side of [960, 720, 512, 384]) {
+    for (const side of sides) {
       const canvas = document.createElement('canvas');
       const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
       canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -730,6 +730,61 @@ function sortable(list, li, handle, changed) {
     window.addEventListener('pointermove', follow); window.addEventListener('pointerup', drop); window.addEventListener('pointercancel', drop);
   });
   numbers();
+}
+
+/**
+ * The platform buttons of Películas, Series and Documentales (web and app): their order, a logo of
+ * their own (uploaded or a link; without one, TMDB's) and which are hidden. Saved as `platforms`.
+ */
+function platformsPanel(rerender, state) {
+  const data = file.data;
+  const list = el('ol', { class: 'order-list platform-order' });
+  const status = el('p', { class: 'note', role: 'status' }, 'Cargando las plataformas de las películas y series…');
+  const changed = () => { status.textContent = 'Cambios sin guardar.'; status.className = 'note'; };
+  const row = (p) => {
+    let logo = p.logo || '';
+    const handle = el('button', { class: 'drag-handle', type: 'button', 'aria-label': `Mover ${p.name}`, title: 'Arrastra para cambiar el orden (o usa las flechas)' }, '⠿');
+    const preview = el('img', { class: 'order-logo', alt: '', src: logo || p.tmdbLogo || undefined, hidden: !(logo || p.tmdbLogo) });
+    const link = el('input', { type: 'url', placeholder: 'Enlace HTTPS del logo', 'aria-label': `Enlace del logo de ${p.name}`, value: logo.startsWith('https://') ? logo : '' });
+    link.addEventListener('input', () => { logo = link.value.trim(); if (!logo || validCover(logo)) { preview.src = logo || p.tmdbLogo || ''; preview.hidden = !(logo || p.tmdbLogo); } changed(); });
+    const upload = el('input', { type: 'file', accept: 'image/*', 'aria-label': `Subir logo de ${p.name}`, onchange: async () => {
+      try { logo = await coverFromFile(upload.files[0], [256, 192, 128]); link.value = ''; preview.src = logo; preview.hidden = false; changed(); }
+      catch (error) { status.textContent = error.message; status.className = 'error'; }
+    } });
+    const clear = el('button', { class: 'btn small secondary', type: 'button', onclick: () => { logo = ''; link.value = ''; preview.src = p.tmdbLogo || ''; preview.hidden = !p.tmdbLogo; changed(); } }, 'Logo de TMDB');
+    const hidden = el('input', { type: 'checkbox', checked: !!p.hidden, onchange: changed });
+    const li = el('li', { class: 'platform-row' }, handle, el('b', { class: 'order-n' }), preview,
+      el('span', { class: 'platform-name' }, el('b', {}, p.name), el('small', {}, p.count === 1 ? '1 título' : `${p.count} títulos`)),
+      el('span', { class: 'platform-edit' }, upload, link, clear, el('label', { class: 'check' }, hidden, ' Ocultar')));
+    li._read = () => ({ name: p.name, ...(logo ? { logo } : {}), ...(hidden.checked ? { hidden: true } : {}) });
+    list.append(li);
+    sortable(list, li, handle, changed);
+  };
+  fetchLibrary().then((library) => {
+    const items = LIBRARY_SECTIONS.flatMap((section) => library.sections[section.key] || []);
+    const counts = new Map(), logos = new Map();
+    for (const item of items) for (const name of item.tmdb?.providers || []) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+      if (!logos.has(name) && item.tmdb?.logos?.[name]) logos.set(name, item.tmdb.logos[name]);
+    }
+    const saved = Array.isArray(data.platforms) ? data.platforms : [];
+    const names = [...saved.map((p) => p.name).filter((n) => counts.has(n)), ...[...counts.keys()].filter((n) => !saved.some((p) => p.name === n)).sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b, 'es'))];
+    for (const name of names) row({ ...(saved.find((p) => p.name === name) || { name }), count: counts.get(name), tmdbLogo: logos.get(name) || '' });
+    status.textContent = names.length ? '' : 'Todavía no hay plataformas: se rellenan desde TMDB con «Actualizar el top y las plataformas con TMDB».';
+  }).catch((error) => { status.textContent = error.message; status.className = 'error'; });
+  return [el('section', { class: 'league-order' },
+    el('div', { class: 'section-head' }, el('h2', {}, 'Plataformas')),
+    el('p', { class: 'note' }, 'Los botones de plataformas de Películas, Series y Documentales (web y app). Arrastra ⠿ para ordenarlos, sube un logo propio (mejor PNG cuadrado con fondo transparente, unos 256×256) o pega su enlace, y marca «Ocultar» para quitar un botón. Sin logo propio se usa el de TMDB.'),
+    list,
+    el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'button', onclick: () => {
+      if (saving) return;
+      const platforms = [...list.children].map((li) => li._read());
+      try { validateCatalog({ ...data, platforms }); }
+      catch (error) { status.textContent = explain(error); status.className = 'error'; return; }
+      data.platforms = platforms;
+      if (state) state.custom = data;
+      guarded(() => saveFile(), rerender);
+    } }, 'Guardar plataformas')), status)];
 }
 
 /** The order of the league rows on the home page (web and app): saved as `leagueOrder`. */

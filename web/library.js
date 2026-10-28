@@ -358,8 +358,12 @@ export function heroTitles(items, now = Date.now(), size = 8) {
   return out.slice(0, size);
 }
 
-/** The platforms of a list of titles (TMDB, in Spain), the one with most titles first: [{ name, logo, count }]. */
-export function platformsOf(items) {
+/**
+ * The platforms of a list of titles (TMDB, in Spain): [{ name, logo, count }]. `settings` is the catalog's
+ * `platforms` list set in the admin page ([{ name, logo, hidden }], in the order chosen): those go first in
+ * that order with their own logo, hidden ones are left out, and the rest follow, the one with most titles first.
+ */
+export function platformsOf(items, settings = []) {
   const found = new Map();
   for (const item of items) for (const name of item.tmdb?.providers || []) {
     const p = found.get(name) || { name, logo: '', count: 0 };
@@ -367,7 +371,11 @@ export function platformsOf(items) {
     p.logo ||= item.tmdb?.logos?.[name] || '';
     found.set(name, p);
   }
-  return [...found.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'es'));
+  const chosen = Array.isArray(settings) ? settings.filter((s) => s && typeof s.name === 'string') : [];
+  const place = (p) => { const i = chosen.findIndex((s) => s.name === p.name); return i < 0 ? chosen.length : i; };
+  return [...found.values()].filter((p) => !chosen.some((s) => s.name === p.name && s.hidden))
+    .map((p) => ({ ...p, logo: chosen.find((s) => s.name === p.name)?.logo || p.logo }))
+    .sort((a, b) => place(a) - place(b) || b.count - a.count || a.name.localeCompare(b.name, 'es'));
 }
 export const PLATFORM_PAGE = 'plataforma';
 export const platformPath = (name) => `#/${PLATFORM_PAGE}/${encodeURIComponent(name)}`;
@@ -398,17 +406,19 @@ export function platformRows(library, name, now = Date.now()) {
  * numbers), 'big' (large posters) or 'continue' (filled by the page with what this browser left half watched).
  */
 export function browseRows(section, items, { now = Date.now(), watchedIds = [], name = '' } = {}) {
+  // kind 'horror': the dark banner of «Especial Halloween».
   const rows = [];
   const add = (key, title, list, kind = 'poster') => { if (kind === 'continue' || list.length) rows.push({ key, title, kind, items: list.slice(0, ROW_LIMIT) }); };
   const used = new Set();
-  const genre = (row) => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest)); };
+  const genre = (row, kind = 'poster') => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest), kind); };
   add('spanish', SPANISH_ROW[section.key] || `${section.label} españolas`, items.filter(isSpanish).sort(byInterest));
   add('today', 'Recomendaciones de hoy para ti', todaysPicks(items, watchedIds, madridDay(now)));
   if (TOP_SECTIONS.includes(section.key)) {
     const top = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend).slice(0, TOP_SIZE);
     add('top', top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`, top, 'top');
   }
-  genre(GENRE_ROWS.terror);
+  // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
+  genre(GENRE_ROWS.terror, 'horror');
   // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
   add('new', 'Novedades en Calamar TV', freshTitles(items, now), 'big');
   add('continue', name ? `Seguir viendo para ${name}` : 'Seguir viendo', [], 'continue');
@@ -487,7 +497,7 @@ export function browseCard(el, section, item, { big = false } = {}) {
  * filter, the poster grid of the titles that pass. `watching` are this browser's «Continuar viendo»
  * entries, `name` the signed-in user's first name.
  */
-export function libraryPage(el, section, library, { watching = [], name = '', open = () => {}, remove = () => {} } = {}) {
+export function libraryPage(el, section, library, { watching = [], name = '', open = () => {}, remove = () => {}, platforms: platformSettings = [] } = {}) {
   const items = library.sections[section.key] || [];
   const query = el('input', { type: 'search', placeholder: `Buscar en ${section.label.toLowerCase()}`, 'aria-label': `Buscar en ${section.label.toLowerCase()}` });
   const body = el('div', { class: 'browse-body' });
@@ -519,12 +529,19 @@ export function libraryPage(el, section, library, { watching = [], name = '', op
     if (!filters.hidden) query.focus();
   } }, '🔍 Buscar y filtrar');
   const watchedIds = watching.filter((entry) => entry.page === section.page).map((entry) => entry.item);
-  const rows = () => [...heroSlider(el, section, heroTitles(items)), ...platformButtons(el, platformsOf(items)), ...browseRows(section, items, { watchedIds, name }).flatMap((row) => {
+  const rows = () => [...heroSlider(el, section, heroTitles(items)), ...platformButtons(el, platformsOf(items, platformSettings)), ...browseRows(section, items, { watchedIds, name }).flatMap((row) => {
     if (row.kind === 'continue') {
       const mine = watching.filter((entry) => entry.page === section.page);
       return mine.length ? continueRow(el, mine, { open, remove }, row.title) : [];
     }
     if (row.kind === 'top') return topRow(el, row.items.map((item) => ({ section, item })), '', row.title);
+    if (row.kind === 'horror') return horrorBanner(el, row.title, row.items.map((item) => ({ section, item })), { onclick: (event) => {
+      // «Descubrir todo»: every horror title of this section, as when «Terror» is chosen in the categories.
+      event.preventDefault();
+      picker.value = [...picker.options].some((o) => o.value === 'Terror') ? 'Terror' : '';
+      draw();
+      picker.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } });
     return [el('div', { class: 'section-head' }, el('h2', {}, row.title)),
       el('div', { class: `rail browse-rail${row.kind === 'big' ? ' big-rail' : ''}` }, row.items.map((item) => browseCard(el, section, item, { big: row.kind === 'big' })))];
   })];
@@ -602,9 +619,10 @@ export function platformButtons(el, platforms) {
  * A platform's page, as on Disney+ (Marvel): the platform's logo over the backdrop of one of its titles
  * (a different one, at random, every time) and its titles in rows: «En primer plano», by section and by genre.
  */
-export function platformPage(el, library, name, random = Math.random) {
+export function platformPage(el, library, name, random = Math.random, settings = []) {
   const { all, rows } = platformRows(library, name);
-  const logo = all.map(({ item }) => item.tmdb?.logos?.[name]).find(Boolean);
+  const own = Array.isArray(settings) ? settings.find((s) => s?.name === name)?.logo : '';
+  const logo = own || all.map(({ item }) => item.tmdb?.logos?.[name]).find(Boolean);
   const backdrops = all.map(({ item }) => item.tmdb?.backdrop).filter(Boolean);
   const backdrop = backdrops[Math.floor(random() * backdrops.length)];
   const nodes = [el('section', { class: 'platform-hero', style: backdrop ? `--platform-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
@@ -634,13 +652,17 @@ export function halloweenPage(el, library) {
 
 /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
 export function halloweenRow(el, library) {
-  const found = horrorTitles(library);
-  if (!found.length) return [];
-  const backdrop = found.find(({ item }) => item.tmdb?.backdrop)?.item.tmdb.backdrop;
-  return [el('section', { class: 'halloween-banner', 'aria-label': 'Especial Halloween', style: backdrop ? `--halloween-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
-    el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h2', {}, 'Especial Halloween'),
-    el('div', { class: 'rail browse-rail' }, found.slice(0, ROW_LIMIT).map(({ section, item }) => browseCard(el, section, item))),
-    el('a', { class: 'halloween-all', href: `#/${HALLOWEEN_PAGE}` }, 'Descubrir todo'))];
+  return horrorBanner(el, 'Especial Halloween', horrorTitles(library), { href: `#/${HALLOWEEN_PAGE}` });
+}
+
+/** The dark horror banner (Especial Halloween, and the horror row of each section): titles and «Descubrir todo». */
+export function horrorBanner(el, title, entries, { href = '#', onclick = null } = {}) {
+  if (!entries.length) return [];
+  const backdrop = entries.find(({ item }) => item.tmdb?.backdrop)?.item.tmdb.backdrop;
+  return [el('section', { class: 'halloween-banner', 'aria-label': title, style: backdrop ? `--halloween-art:url("${backdrop.replace(/"/g, '%22')}")` : null },
+    el('p', { class: 'halloween-kicker' }, 'Colección de terror'), el('h2', {}, title),
+    el('div', { class: 'rail browse-rail' }, entries.slice(0, ROW_LIMIT).map(({ section, item }) => browseCard(el, section, item))),
+    el('a', { class: 'halloween-all', href, onclick }, 'Descubrir todo'))];
 }
 
 const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');

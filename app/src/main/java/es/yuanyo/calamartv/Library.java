@@ -377,7 +377,8 @@ final class Library {
       if (top.size() > 10) top = new ArrayList<>(top.subList(0, 10));
       add(rows, "top", top.size() > 1 ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana" : "La " + one(section) + " más popular de la semana", top, "top");
     }
-    genre(rows, GENRE_ROWS[0], label + " de terror", items, used);
+    // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
+    genre(rows, GENRE_ROWS[0], label + " de terror", items, used, "horror");
     // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
     add(rows, "new", "Novedades en Calamar TV", freshTitles(items, now), "big");
     rows.add(new Row("continue", name.isEmpty() ? "Seguir viendo" : "Seguir viendo para " + name, "continue", new ArrayList<>()));
@@ -404,12 +405,16 @@ final class Library {
   }
 
   private static void genre(List<Row> rows, String[] row, String title, List<Item> items, java.util.Set<String> used) {
+    genre(rows, row, title, items, used, "poster");
+  }
+
+  private static void genre(List<Row> rows, String[] row, String title, List<Item> items, java.util.Set<String> used, String kind) {
     List<String> genres = Arrays.asList(row).subList(2, row.length);
     used.addAll(genres);
     List<Item> list = new ArrayList<>();
     for (Item item : items) for (String g : item.genres) if (genres.contains(g)) { list.add(item); break; }
     Collections.sort(list, INTEREST);
-    add(rows, row[0], title, list, "poster");
+    add(rows, row[0], title, list, kind);
   }
 
   static final int NEW_EPISODE_DAYS = 14;
@@ -464,6 +469,40 @@ final class Library {
 
   /** The platforms of a list of titles, the one with most titles first: [name, logo, count]. */
   static List<String[]> platforms(List<Item> items) {
+    return platforms(items, null);
+  }
+
+  /**
+   * As platformsOf on the web: the catalog's `platforms` (set in the admin page: [{name, logo, hidden}] in
+   * order) go first in that order with their own logo, hidden ones are left out, the rest follow by titles.
+   */
+  static List<String[]> platforms(List<Item> items, JSONArray settings) {
+    List<String[]> all = platformsByTitles(items);
+    final List<String> order = new ArrayList<>();
+    java.util.Set<String> hidden = new java.util.HashSet<>();
+    Map<String, String> logos = new java.util.HashMap<>();
+    for (int i = 0; settings != null && i < settings.length(); i++) {
+      JSONObject p = settings.optJSONObject(i);
+      if (p == null || p.optString("name").isEmpty()) continue;
+      order.add(p.optString("name"));
+      if (p.optBoolean("hidden", false)) hidden.add(p.optString("name"));
+      String logo = p.optString("logo");
+      if (logo.startsWith("https://") || logo.startsWith("data:image/")) logos.put(p.optString("name"), logo);
+    }
+    List<String[]> out = new ArrayList<>();
+    for (String[] p : all) {
+      if (hidden.contains(p[0])) continue;
+      if (logos.containsKey(p[0])) p[1] = logos.get(p[0]);
+      out.add(p);
+    }
+    Collections.sort(out, (a, b) -> {
+      int ia = order.indexOf(a[0]), ib = order.indexOf(b[0]);
+      return Integer.compare(ia < 0 ? order.size() : ia, ib < 0 ? order.size() : ib);
+    });
+    return out;
+  }
+
+  private static List<String[]> platformsByTitles(List<Item> items) {
     final Map<String, String[]> found = new LinkedHashMap<>();
     for (Item item : items)
       for (String name : item.providers) {

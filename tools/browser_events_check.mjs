@@ -496,6 +496,9 @@ try {
   await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
   await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
   assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
+  // The platform buttons are ordered, given a logo and hidden from the same page.
+  await page.getByRole('heading', { name: 'Plataformas', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Guardar plataformas', exact: true }).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/avatarlulu12');
   assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),

@@ -373,3 +373,9 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - La web, la app y `calamar-lulu.php` abren ahora la página de cada vídeo en `https://luluvido.com/e/CÓDIGO` y llaman a la API en `https://luluvido.com/api/`, con `lulustream.com` como respaldo. Los enlaces ya guardados (lulustream.com, luluvdo.com, lulu.st…) siguen valiendo: se reconocen por el código.
 - Los enlaces guardados se cambian a `https://luluvido.com/CÓDIGO`: con el botón **«Cambiar los enlaces a luluvido.com»** (Administración → Pelis y series, junto a «Leer carpetas de LuluStream») de una vez, y en cada publicación los que se peguen con otro nombre.
 - **Hay que volver a subir `hosting/calamar-lulu.php` al hosting** (junto a los demás PHP de Calamar TV): es el que lee las páginas de LuluStream para reproducir en la web y lee las carpetas en el administrador.
+
+## Terror con el banner de Halloween y plataformas desde el administrador (2.20.44)
+
+- En Películas, Series y Documentales (web y app), la fila de **terror** tiene el diseño del «Especial Halloween»: banner oscuro con los títulos y **Descubrir todo**, que muestra todos los títulos de terror de esa sección.
+- **Administración → Pelis y series → Plataformas**: lista de las plataformas de tus títulos (según TMDB) para **ordenar** los botones (arrastrando ⠿), **subir un logo propio** o pegar su enlace (mejor PNG cuadrado y transparente de unos 256×256; sin logo propio se usa el de TMDB) y **ocultar** los que no quieras (por ejemplo «Amazon Prime Video with Ads»). Se guarda en el catálogo (`platforms`) y lo usan la web y la app.
+- Los logos de TMDB aparecen después de pulsar «Actualizar el top y las plataformas con TMDB».

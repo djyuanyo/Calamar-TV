@@ -1147,7 +1147,7 @@ function syncLibraryNav() {
   for (const link of document.querySelectorAll('[data-library]')) link.hidden = !libraryShown();
 }
 // What a section page needs for «Seguir viendo para …»: this browser's unfinished titles and the user's name.
-const browseOptions = () => ({ watching: progressList(loadProgress()), name: userName, open: resumeEntry,
+const browseOptions = () => ({ watching: progressList(loadProgress()), name: userName, open: resumeEntry, platforms: state.custom?.platforms || [],
   remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } });
 async function halloweenRoute(version) {
   if (!libraryShown()) { view.replaceChildren(el('p', { class: 'status' }, 'El Especial Halloween no está disponible ahora.')); return; }
@@ -1163,7 +1163,7 @@ async function platformRoute(name, version) {
   let library;
   try { library = await fetchLibrary(); }
   catch (error) { if (version === routeVersion) view.replaceChildren(el('p', { class: 'error' }, error.message)); return; }
-  if (version === routeVersion) view.replaceChildren(...platformPage(el, library, name || ''));
+  if (version === routeVersion) view.replaceChildren(...platformPage(el, library, name || '', Math.random, state.custom?.platforms || []));
 }
 async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const section = sectionByPage(page);

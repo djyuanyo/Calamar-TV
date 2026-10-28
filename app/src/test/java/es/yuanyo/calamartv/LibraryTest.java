@@ -261,4 +261,22 @@ public class LibraryTest {
     assertEquals("2", platforms.get(0)[2]);
     assertEquals("https://image.tmdb.org/t/p/w154/n.jpg", platforms.get(1)[1]);
   }
+
+  @Test public void platformSettingsFromTheAdminPageMatchTheWeb() throws Exception {
+    Library.Item a = titled("a", "", "", "\"Netflix\",\"Max\",\"Filmin\"", "");
+    Library.Item b = titled("b", "", "", "\"Netflix\",\"Max\"", "");
+    JSONArray settings = new JSONArray("[{\"name\":\"Filmin\",\"logo\":\"https://mio/filmin.png\"},{\"name\":\"Max\",\"hidden\":true}]");
+    List<String[]> out = Library.platforms(Arrays.asList(a, b), settings);
+    assertEquals(2, out.size());
+    assertEquals("Filmin", out.get(0)[0]);
+    assertEquals("https://mio/filmin.png", out.get(0)[1]);
+    assertEquals("Netflix", out.get(1)[0]);
+  }
+
+  @Test public void horrorRowHasTheHalloweenBanner() throws Exception {
+    long now = SportsCatalog.instant("2026-10-28T12:00:00Z");
+    for (Library.Row row : Library.browseRows("movies", Arrays.asList(titled("w", "\"Terror\"", "", "", "")), new HashSet<String>(), "", now))
+      if (row.key.equals("terror")) { assertEquals("horror", row.kind); return; }
+    fail("No horror row");
+  }
 }
