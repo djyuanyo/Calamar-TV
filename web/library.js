@@ -733,7 +733,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     el('div', { class: 'title-backdrop' }, info.backdrop ? el('img', { src: info.backdrop, alt: '', referrerpolicy: 'no-referrer' }) : poster(el, item, 'library-poster'),
       el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹')),
     el('div', { class: 'title-body' },
-      brand ? el('p', { class: 'title-brand' }, brand) : null,
+      brand ? el('p', { class: 'title-brand' }, info.logos?.[brand] ? el('img', { class: 'title-platform-logo', src: info.logos[brand], alt: brand, referrerpolicy: 'no-referrer', onerror: (event) => { event.target.replaceWith(brand); } }) : brand) : null,
       el('h1', {}, itemTitle(item)),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
       action, !series ? soundNote(el, item.file) : null,
@@ -748,7 +748,12 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       allow: 'autoplay; encrypted-media; fullscreen; picture-in-picture', allowfullscreen: true });
     backdrop.insertBefore(frame, backdrop.firstChild.nextSibling);
     // Route changes remove the header; stop YouTube and release its frame immediately.
-    const observer = new MutationObserver(() => { if (!head.isConnected) { frame.remove(); observer.disconnect(); } });
+    const onState = (event) => {
+      if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.type !== 'calamar-trailer') return;
+      frame.classList.toggle('ready', event.data.state === 'playing' || event.data.state === 'blocked');
+    };
+    window.addEventListener('message', onState);
+    const observer = new MutationObserver(() => { if (!head.isConnected) { window.removeEventListener('message', onState); frame.remove(); observer.disconnect(); } });
     queueMicrotask(() => { if (head.isConnected) observer.observe(document.body, { childList: true, subtree: true }); });
     head.addEventListener('click', (event) => { if (event.target.closest('.title-play, .library-actions button')) frame.contentWindow?.postMessage('pause-trailer', location.origin); });
   }

@@ -13,3 +13,8 @@ export function youtubeId(value) {
   } catch { return ''; }
 }
 export const trailerId = (item) => youtubeId(Object.hasOwn(item, 'trailerUrl') ? item.trailerUrl : item.tmdb?.trailer);
+
+// Establish YouTube connections while the visitor browses the catalogue, before opening a title.
+if (typeof document !== 'undefined') for (const href of ['https://www.youtube.com', 'https://www.youtube-nocookie.com', 'https://i.ytimg.com']) {
+  const link = document.createElement('link'); link.rel = 'preconnect'; link.href = href; document.head.append(link);
+}

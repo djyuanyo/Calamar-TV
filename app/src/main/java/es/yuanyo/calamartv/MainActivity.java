@@ -1648,6 +1648,14 @@ public class MainActivity extends Activity {
     if (!item.trailer.isEmpty()) {
       preview = new android.webkit.WebView(this);
       trailerPreview = preview;
+      preview.setAlpha(0f);
+      preview.addJavascriptInterface(new Object() {
+        @android.webkit.JavascriptInterface public void state(String state) {
+          runOnUiThread(() -> {
+            if (trailerPreview == preview) preview.setAlpha("playing".equals(state) || "blocked".equals(state) ? 1f : 0f);
+          });
+        }
+      }, "CalamarTrailer");
       preview.setBackgroundColor(android.graphics.Color.TRANSPARENT);
       preview.getSettings().setJavaScriptEnabled(true);
       preview.getSettings().setDomStorageEnabled(true);
@@ -1687,10 +1695,20 @@ public class MainActivity extends Activity {
     body.setPadding(dp(gutter() + 4), dp(4), dp(gutter() + 4), 0);
     page.addView(body);
     if (!item.providers.isEmpty()) {
-      TextView brand = label(item.providers.get(0).toUpperCase(new Locale("es", "ES")), 18, 0xffe50914);
-      brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      brand.setLetterSpacing(0.04f);
-      body.addView(noPad(brand));
+      String name = item.providers.get(0), logo = item.logos.get(name);
+      JSONArray platforms = custom == null ? null : custom.optJSONArray("platforms");
+      if (platforms != null) for (int i = 0; i < platforms.length(); i++) {
+        JSONObject setting = platforms.optJSONObject(i);
+        if (setting != null && name.equals(setting.optString("name")) && !setting.optString("logo").isEmpty()) logo = setting.optString("logo");
+      }
+      if (logo != null && !logo.isEmpty()) {
+        ImageView brand = new ImageView(this);
+        brand.setContentDescription(name);
+        brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoSize = new LinearLayout.LayoutParams(dp(64), dp(64));
+        logoSize.setMargins(0, 0, 0, dp(8));
+        body.addView(brand, logoSize); image(brand, logo);
+      } else body.addView(noPad(label(name, 18, 0xffe50914)));
     }
     TextView title = text(item.title, wide() ? 36 : 30);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);

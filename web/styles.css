@@ -1218,3 +1218,7 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .title-backdrop:has(.title-preview) { min-height:240px; }
 .title-backdrop:has(.title-preview)::after { display:none; }
 .title-back { z-index:2; }
+
+.title-platform-logo { display:block; width:64px; height:64px; object-fit:contain; margin:0 0 8px; border-radius:10px; }
+.title-preview { opacity:0; pointer-events:none; }
+.title-preview.ready { opacity:1; pointer-events:auto; }
