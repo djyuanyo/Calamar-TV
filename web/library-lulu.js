@@ -68,12 +68,16 @@ export const decodeHtml = (s) => String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/
 });
 const textOf = (...values) => decodeHtml(String(values.find((v) => v != null && v !== '') ?? ''));
 
-/** A folder's subfolders and videos: { folders: [{ id, name }], files: [{ code, title }] }. */
+/** «2026-10-21 18:03:11» → «2026-10-21»: the day LuluStream received the video, or ''. */
+export const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value || '')) ? String(value).slice(0, 10) : '');
+
+/** A folder's subfolders and videos: { folders: [{ id, name }], files: [{ code, title, uploaded }] }. */
 export async function luluFolder(id, key, fetcher) {
   const result = await luluApi('folder/list', { fld_id: String(id), files: '1' }, key, fetcher);
   return {
     folders: (result.folders || []).map((f) => ({ id: textOf(f.fld_id, f.id), name: textOf(f.name, f.title) })).filter((f) => f.id),
-    files: (result.files || []).map((f) => ({ code: textOf(f.file_code, f.filecode, f.code), title: textOf(f.title, f.name, f.file_title) }))
+    files: (result.files || []).map((f) => ({ code: textOf(f.file_code, f.filecode, f.code), title: textOf(f.title, f.name, f.file_title),
+      uploaded: dayOf(textOf(f.uploaded, f.upload_date, f.created, f.file_created)) }))
       .filter((f) => /^[A-Za-z0-9]{8,20}$/.test(f.code)),
   };
 }
@@ -129,15 +133,15 @@ export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
     if (section.section === 'movies') {
       const inside = [];
       for (const sub of content.folders) inside.push(...await videos(sub));
-      for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code) });
+      for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
       continue;
     }
-    if (section.section === 'documentaries') for (const f of content.files) films.push({ section: 'documentaries', ...cleanTitle(f.title), file: f.title, link: link(f.code) });
+    if (section.section === 'documentaries') for (const f of content.files) films.push({ section: 'documentaries', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
     for (const show of content.folders) {
       const episodes = [];
       for (const f of await videos(show)) {
         const at = episodeOf(f.title, f.folder === show.name ? '' : f.folder);
-        if (at) episodes.push({ season: at[0], episode: at[1], file: f.title, link: link(f.code) });
+        if (at) episodes.push({ season: at[0], episode: at[1], file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
         else unknown.push(`${show.name} / ${f.title}: no se sabe qué capítulo es (usa 1x01 o S01E01 en el nombre)`);
       }
       if (episodes.length) series.push({ section: section.section, ...cleanTitle(show.name), folder: show.name, episodes });
@@ -227,16 +231,18 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   for (const f of scan.films) {
     onProgress(++done, total, f.title);
     const known = byLink.get(codeOf(f.link));
-    if (known && known.item.kind !== 'tv') { put(known.section, { ...known.item, url: f.link }); films++; continue; }
+    // The day LuluStream received the video is the day it arrived (for «Recién llegada»).
+    const arrived = (item) => (f.uploaded ? { ...item, addedAt: f.uploaded } : item);
+    if (known && known.item.kind !== 'tv') { put(known.section, arrived({ ...known.item, url: f.link })); films++; continue; }
     const match = await bestMatch(f.title, f.year, f.section === 'movies' ? 'movie' : 'any', key, fetcher);
     if (!match || match.kind !== 'movie') {
-      put(f.section, unmatchedFilm(f)); pending++;
+      put(f.section, arrived(unmatchedFilm(f))); pending++;
       unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
       continue;
     }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
     drop(unmatchedFilm(f).id);
-    put(f.section, movieItem(info, f.link));
+    put(f.section, arrived(movieItem(info, f.link)));
     films++;
   }
   for (const s of scan.series) {
@@ -254,9 +260,11 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     }
     // Links pasted by hand stay; the folder adds or replaces its own episodes.
     const item = await seriesWithLinks(find(`s${info.id}`), info, s.episodes, key, fetcher);
+    // A series arrived with its first uploaded episode.
+    const first = s.episodes.map((e) => e.uploaded).filter(Boolean).sort()[0];
     if (item?.episodes?.length) {
       drop(unmatchedSeries(s).id);
-      put(known?.section || s.section, { ...item, folder: s.folder }); shows++; episodes += s.episodes.length;
+      put(known?.section || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += s.episodes.length;
     }
   }
   for (const k of Object.keys(sections)) sections[k].sort((a, b) => String(a.tmdb?.title || a.title).localeCompare(String(b.tmdb?.title || b.title), 'es', { sensitivity: 'base' }));
