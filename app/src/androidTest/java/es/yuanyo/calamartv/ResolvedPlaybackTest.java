@@ -154,7 +154,7 @@ public class ResolvedPlaybackTest {
             ((Button) button.get(activity)).performClick();
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
-        onView(withText(manualDirect ? "Enlace 2 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText(manualDirect ? "Enlace 1 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
         onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
       } finally {
         releasePage.countDown();
