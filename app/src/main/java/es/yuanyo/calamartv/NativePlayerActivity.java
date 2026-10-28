@@ -489,10 +489,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseDns() {
+    if (!active || isFinishing()) return;
+    final boolean restoreFullscreen = fullscreen;
+    if (restoreFullscreen) setFullscreen(false);
     DnsProvider[] providers = DnsProvider.values();
     String[] names = new String[providers.length];
     for (int i = 0; i < providers.length; i++) names[i] = providers[i].label;
-    new AlertDialog.Builder(this)
+    AlertDialog dnsDialog = new AlertDialog.Builder(this)
         .setTitle("DNS del reproductor")
         .setSingleChoiceItems(
             names,
@@ -513,7 +516,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               resolveFresh();
             })
         .setNegativeButton("Cerrar", null)
-        .show();
+        .create();
+    dnsDialog.setOnDismissListener(dialog -> {
+      if (active && restoreFullscreen) setFullscreen(true);
+    });
+    dnsDialog.show();
   }
 
   @Override
@@ -1187,6 +1194,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     sourceDialog = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
+        // Open after this modal has dismissed and restored its fullscreen state.
+        .setPositiveButton("DNS", (dialog, which) -> handler.post(this::chooseDns))
         .setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic())
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
