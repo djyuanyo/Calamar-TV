@@ -121,8 +121,9 @@ public class ResolvedPlaybackTest {
               ((Button) button.get(activity)).performClick();
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
-          onView(withText("Enlace 1 · bp.zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
-          onView(withText("Enlace 2 · Vídeo directo")).inRoot(isDialog()).perform(click());
+          // «Fuentes» lists the direct IPTV links first and ZicoTV's pages last; the page being read stays checked.
+          onView(withText("Enlace 2 · bp.zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
+          onView(withText("Enlace 1 · Vídeo directo")).inRoot(isDialog()).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + 30000;
