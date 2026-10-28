@@ -51,15 +51,30 @@ public final class VideoResolver {
     for (int i = 0; i < entries.length(); i++) {
       JSONObject entry = entries.optJSONObject(i);
       if (entry == null || entry.optBoolean("locked") || entry.optBoolean("is_premium")) continue;
-      String url = entry.optString("player_url", entry.optString("url"));
-      try {
-        URI u = URI.create(url);
-        if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) continue;
-        boolean duplicate = false; for (Source source : out) if (source.url.equals(url)) duplicate = true;
-        if (!duplicate) out.add(new Source(entry.optString("name", "Fuente del evento"), url));
-      } catch (Exception invalid) { /* Ignore invalid public entries. */ }
+      addEventPlayer(out, entry, entry, false);
+      // Match the web: an event source may be a group with multiple channel players.
+      JSONArray streams = entry.optJSONArray("streams");
+      if (streams != null) for (int n = 0; n < streams.length(); n++)
+        addEventPlayer(out, streams.optJSONObject(n), entry, true);
     }
     return out;
+  }
+
+  private static void addEventPlayer(List<Source> out, JSONObject entry, JSONObject parent, boolean nested) {
+    if (entry == null || entry.optBoolean("locked") || entry.optBoolean("is_premium")) return;
+    String url = entry.optString("player_url");
+    if (url.isEmpty()) url = entry.optString("url");
+    try {
+      URI u = URI.create(url);
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) return;
+      for (Source source : out) if (source.url.equals(url)) return;
+      String name = entry.optString("name");
+      if (name.isEmpty()) name = parent.optString("name");
+      if (name.isEmpty()) name = "Fuente del evento";
+      String language = entry.optString("language");
+      if (nested && !language.isEmpty()) name += " · " + language;
+      out.add(new Source(name, url));
+    } catch (Exception invalid) { /* Ignore invalid public entries. */ }
   }
 
   public static boolean isMedia(String address) {
