@@ -379,3 +379,15 @@ Pruebas: ResolvedPlaybackTest comprueba controles durante un error de consulta y
 - En Películas, Series y Documentales (web y app), la fila de **terror** tiene el diseño del «Especial Halloween»: banner oscuro con los títulos y **Descubrir todo**, que muestra todos los títulos de terror de esa sección.
 - **Administración → Pelis y series → Plataformas**: lista de las plataformas de tus títulos (según TMDB) para **ordenar** los botones (arrastrando ⠿), **subir un logo propio** o pegar su enlace (mejor PNG cuadrado y transparente de unos 256×256; sin logo propio se usa el de TMDB) y **ocultar** los que no quieras (por ejemplo «Amazon Prime Video with Ads»). Se guarda en el catálogo (`platforms`) y lo usan la web y la app.
 - Los logos de TMDB aparecen después de pulsar «Actualizar el top y las plataformas con TMDB».
+
+## Ficha de película o serie al estilo Netflix, tráiler y similares (2.20.45)
+
+- La página de cada película, serie o documental (web y app) se ve como en Netflix:
+  - Imagen de fondo arriba, la plataforma en rojo (NETFLIX…), el título y sus datos (año, temporadas o duración, nota).
+  - Un botón blanco grande **Reproducir**: en las series, el capítulo que dejaste a medias (o el primero), con «Continuar T1:E3 · 12:34».
+  - La sinopsis, **Protagonizada por** (los tres primeros y «más» para ver todo el reparto), **Creada por** (series) o **Dirigida por** (películas), los géneros y **Compartir**.
+  - Las pestañas **Episodios** (series: desplegable «Temporada N» y cada capítulo con su imagen, «1. Título», su duración y su resumen), **Tráileres y más** y **Similares**.
+- **Tráileres y más**: el tráiler en español de TMDB, si lo tiene (primero el de España). En la web se ve dentro de la página; en la app se abre en YouTube.
+- **Similares**: títulos de la misma sección que comparten géneros, primero los más parecidos.
+- El tráiler, los creadores y la duración de los capítulos se guardan al añadir títulos o temporadas. En los que ya estaban, el tráiler y los creadores llegan con «Actualizar el top y las plataformas con TMDB»; la duración de los capítulos ya guardados, al volver a guardar su temporada.
+- **Nuevo episodio** va ahora por la **fecha real de emisión** del capítulo (TMDB), no por el día en que se subió: una serie sale con la etiqueta si tiene en la biblioteca un capítulo emitido en las dos últimas semanas. Una serie antigua subida hoy no la lleva. La fecha llega al guardar la temporada y, para el último capítulo emitido, con la actualización diaria de TMDB.

@@ -239,7 +239,7 @@ public class LibraryTest {
     StringBuilder episodes = new StringBuilder();
     for (int i = 0; i < days.length; i++)
       episodes.append(i > 0 ? "," : "").append("{\"id\":\"").append(id).append(i).append("\",\"season\":1,\"episode\":").append(i + 1)
-          .append(",\"url\":\"https://calamarmenciano.com/").append(id).append(i).append(".mkv\"").append(days[i].isEmpty() ? "" : ",\"addedAt\":\"" + days[i] + "\"").append("}");
+          .append(",\"url\":\"https://calamarmenciano.com/").append(id).append(i).append(".mkv\"").append(days[i].isEmpty() ? "" : ",\"aired\":\"" + days[i] + "\"").append("}");
     return new Library.Item(new JSONObject("{\"id\":\"" + id + "\",\"kind\":\"tv\",\"addedAt\":\"" + added + "\",\"episodes\":[" + episodes
         + "],\"tmdb\":{\"id\":9,\"title\":\"" + id + "\",\"year\":2019,\"providers\":[\"Netflix\"],\"logos\":{\"Netflix\":\"https://image.tmdb.org/t/p/w154/n.jpg\"}}}"));
   }
@@ -250,7 +250,7 @@ public class LibraryTest {
     assertTrue(Library.newEpisode(fresh, now));
     assertEquals("Nuevo episodio", Library.posterLabel(fresh, now));
     assertFalse(Library.newEpisode(show("b", "2026-01-10", "2026-01-10", "2026-10-01"), now));
-    assertFalse(Library.newEpisode(show("c", "2026-10-25", "2026-10-25", "2026-10-25"), now));
+    assertFalse(Library.newEpisode(show("c", "2026-10-27", "2009-03-01", "2009-03-08"), now));
     assertFalse(Library.newEpisode(show("d", "2026-01-10", "", ""), now));
     Library.Item arrived = titled("m", "", "", "\"Disney Plus\"", ",\"year\":2026,\"addedAt\":\"2026-10-20\"");
     Library.Item top = titled("t", "", "", "\"Disney Plus\"", ",\"trend\":1");
@@ -278,5 +278,25 @@ public class LibraryTest {
     for (Library.Row row : Library.browseRows("movies", Arrays.asList(titled("w", "\"Terror\"", "", "", "")), new HashSet<String>(), "", now))
       if (row.key.equals("terror")) { assertEquals("horror", row.kind); return; }
     fail("No horror row");
+  }
+
+  @Test public void titlePageDataMatchesTheWeb() throws Exception {
+    Library.Item a = new Library.Item(new JSONObject("{\"id\":\"a\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/a.mkv\",\"tmdb\":{\"title\":\"A\",\"genres\":[\"Drama\",\"Crimen\"],\"trailer\":\"dQw4w9WgXcQ\",\"creators\":[\"Said Chamie\",\"Claudia Sánchez\"]}}"));
+    Library.Item bad = new Library.Item(new JSONObject("{\"id\":\"x\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/x.mkv\",\"tmdb\":{\"title\":\"X\",\"trailer\":\"<script>\"}}"));
+    assertEquals("dQw4w9WgXcQ", a.trailer);
+    assertEquals("", bad.trailer);
+    assertEquals(Arrays.asList("Said Chamie", "Claudia Sánchez"), a.creators);
+    Library.Data data = new Library.Data(new JSONObject("{\"sections\":{\"movies\":["
+        + "{\"id\":\"a\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/a.mkv\",\"tmdb\":{\"title\":\"A\",\"genres\":[\"Drama\",\"Crimen\"]}},"
+        + "{\"id\":\"b\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/b.mkv\",\"tmdb\":{\"title\":\"B\",\"genres\":[\"Drama\",\"Crimen\"],\"rating\":5}},"
+        + "{\"id\":\"c\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/c.mkv\",\"tmdb\":{\"title\":\"C\",\"genres\":[\"Drama\"],\"rating\":9}},"
+        + "{\"id\":\"d\",\"kind\":\"movie\",\"url\":\"https://calamarmenciano.com/d.mkv\",\"tmdb\":{\"title\":\"D\",\"genres\":[\"Western\"]}}]}}"));
+    List<String> similar = new ArrayList<>();
+    for (Library.Item item : Library.similar(data, "movies", data.items("movies").get(0), 12)) similar.add(item.id);
+    assertEquals(Arrays.asList("b", "c"), similar);
+    Library.Item paco = new Library.Data(new JSONObject(JSON)).items("series").get(0);
+    assertEquals("e3", Library.resumeEpisode(paco, new JSONObject()).id);
+    assertEquals("e2", Library.resumeEpisode(paco, new JSONObject("{\"e1\":{\"at\":5},\"e2\":{\"at\":9}}")).id);
+    assertEquals("documentales", Library.page("documentaries"));
   }
 }
