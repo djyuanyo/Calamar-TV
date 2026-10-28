@@ -121,3 +121,16 @@ test('TheIntroDB gives each episode its intro and credits, unless times were typ
   assert.equal(await withIntroDb(none, source, async () => ({ ok: false, status: 404 })), none);
   assert.equal(await withIntroDb(none, null, ok), none);
 });
+
+test('a TMDB request that fails or is limited is tried once more, then reports an error instead of hanging', async () => {
+  const { searchTmdb } = await import('../web/library-tmdb.js');
+  let calls = 0;
+  const flaky = async () => { calls++; if (calls === 1) throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); return { status: 200, json: async () => ({ results: [{ id: 1, media_type: 'movie', title: 'Avatar', release_date: '2009-12-18' }] }) }; };
+  assert.equal((await searchTmdb('Avatar', 'movie', 'abcdef0123456789abcdef0123456789', flaky))[0].title, 'Avatar');
+  assert.equal(calls, 2);
+  const dead = async () => { throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); };
+  await assert.rejects(searchTmdb('Avatar', 'movie', 'abcdef0123456789abcdef0123456789', dead), /TMDB no responde/);
+  let limited = 0;
+  const busy = async () => { limited++; return limited === 1 ? { status: 429, json: async () => ({}) } : { status: 200, json: async () => ({ results: [] }) }; };
+  assert.deepEqual(await searchTmdb('x', 'movie', 'abcdef0123456789abcdef0123456789', busy), []);
+});

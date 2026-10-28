@@ -5,14 +5,25 @@ export const TMDB_API = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE = 'https://image.tmdb.org/t/p/';
 export const ATTRIBUTION = 'Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.';
 
-async function tmdb(path, params, key, fetcher) {
+// Each request gives up after a while and is tried once more, so a TMDB request that never answers (or a
+// «too many requests») does not leave «Buscando en TMDB…» on screen forever.
+export const TMDB_TIMEOUT_MS = 20000;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function tmdb(path, params, key, fetcher, attempt = 1) {
   const bearer = key.includes('.'); // v4 read token (JWT) or v3 key
   const query = new URLSearchParams({ ...params, language: 'es-ES', ...(bearer ? {} : { api_key: key }) });
-  let response;
-  try { response = await fetcher(`${TMDB_API}${path}?${query}`, { referrerPolicy: 'no-referrer', ...(bearer ? { headers: { Authorization: `Bearer ${key}` } } : {}) }); }
-  catch { throw new Error('Sin conexión con TMDB. Comprueba la red y vuelve a intentarlo.'); }
+  const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) } : {};
+  let response, data;
+  try {
+    response = await fetcher(`${TMDB_API}${path}?${query}`, { referrerPolicy: 'no-referrer', ...signal, ...(bearer ? { headers: { Authorization: `Bearer ${key}` } } : {}) });
+    data = await response.json().catch(() => null);
+  } catch (error) {
+    if (attempt < 2) { await wait(1500); return tmdb(path, params, key, fetcher, attempt + 1); }
+    const late = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    throw new Error(late ? 'TMDB no responde. Vuelve a intentarlo en un rato.' : 'Sin conexión con TMDB. Comprueba la red y vuelve a intentarlo.');
+  }
   if (response.status === 401) throw new Error('TMDB no acepta la clave. Revísala en Pelis y series → Configuración.');
-  const data = await response.json().catch(() => null);
+  if ((response.status === 429 || response.status >= 500) && attempt < 2) { await wait(response.status === 429 ? 3000 : 1500); return tmdb(path, params, key, fetcher, attempt + 1); }
   if (response.status !== 200 || !data) throw new Error('TMDB no responde ahora. Vuelve a intentarlo.');
   return data;
 }
