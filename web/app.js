@@ -4,7 +4,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -23,6 +23,8 @@ const search = document.getElementById('search');
 let sharedStarted = false;
 // Firebase loads on demand so the bundled catalog works even when it cannot be reached.
 let firebase = null;
+// True while the administrator is signed in on this browser (see the library section below).
+let libraryAdmin = false;
 const shared = () => (firebase ||= import('./firebase.js'));
 let sharedValue = null;
 // True once the live catalog arrived, failed or took too long: until then a link to an event or channel
@@ -402,8 +404,9 @@ function home() {
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
-  // Only events on the home page: one row per league, each in date order (soonest first).
-  for (const row of eventRows(matches, state.custom)) {
+  // Only events on the home page: one row per league, each in date order (soonest first), with this
+  // week's events only: a league whose next matches are in two weeks does not appear yet.
+  for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
     nodes.push(sectionHead(el('span', { class: 'league-head' }, row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
   }
@@ -1029,16 +1032,32 @@ function paintMatch() {
   }).filter(Boolean));
   if (focused) document.getElementById(focused)?.focus();
 }
+// The administrator watching an event gets «Seleccionar canal» at the end of its page.
+const eventAdmin = el('section', { class: 'event-admin', hidden: true, 'aria-label': 'Administración del evento' });
+matchPanel.after(eventAdmin);
+function showEventAdmin(c) {
+  eventAdmin.hidden = true; eventAdmin.replaceChildren();
+  if (!c?.event) return;
+  const id = String(c.eventId || c.id);
+  // Only for the administrator signed in on this browser: the admin page's code loads just then.
+  shared().then(async (f) => { await f.ready; return f.administrator() ? import('./admin.js') : null; })
+    .then((admin) => admin && admin.eventChannelPanel(id, state)).then((panel) => {
+    if (!panel || matchShown !== id) return;
+    eventAdmin.replaceChildren(panel); eventAdmin.hidden = false;
+  }).catch(() => {});
+}
 /** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  // Only events with a match link show the match under the video; the rest open in full screen.
-  const key = c?.event && c.matchUrl ? String(c.eventId || c.id) : '';
+  // Only events with a match link show the match under the video; the rest open in full screen
+  // (for the administrator too, so the event page has its «Seleccionar canal» at the end).
+  const key = c?.event && (c.matchUrl || libraryAdmin) ? String(c.eventId || c.id) : '';
   if (key && key === matchShown) return true;
   clearInterval(matchTimer);
   matchShown = key; matchModel = null; matchTab = 'general';
   player.classList.toggle('with-match', !!key);
   matchPanel.hidden = !key;
   player.scrollTop = 0;
+  showEventAdmin(key ? c : null);
   if (!key) { matchPanel.replaceChildren(); return false; }
   const base = eventMatchModel(c, state.custom, eventLabel(c, Date.now(), EVENT_STATES).text);
   const id = c.matchUrl && c.matchId ? String(c.matchId) : '';
@@ -1103,7 +1122,6 @@ shareButton.addEventListener('click', async () => {
 // ---- Films, series and documentaries --------------------------------------------------------------
 // Shown in the menu while the administrator has the catalog switched on (libraryVisible); the
 // administrator, signed in on this browser, always sees it, to prepare it before showing it to everyone.
-let libraryAdmin = false;
 shared().then((f) => f.watchAuth((user) => {
   const was = libraryAdmin;
   libraryAdmin = f.administrator(user);

@@ -134,3 +134,10 @@ test('a match that cannot be read is reported as unavailable', async () => {
   assert.equal(out.has('77'), true);
   assert.equal(out.get('77'), null);
 });
+
+test('when ESPN cannot be reached every card is reported unavailable at once', async () => {
+  const { fetchScores } = await import('../web/match-scores.js');
+  const starts = new Map(['81', '82', '83', '84', '85', '86'].map((id) => [id, '2026-12-15T20:00:00Z'])); // a day no other test cached
+  const out = await fetchScores(starts, async () => { throw new Error('offline'); });
+  assert.deepEqual([...starts.keys()].map((id) => out.has(id) && out.get(id) === null), [true, true, true, true, true, true]);
+});

@@ -310,6 +310,7 @@ try {
   assert.equal(await page.locator('#player-title').textContent(),'Levante vs Athletic');
   await page.locator('#match-center .mc-board').waitFor();
   assert.match(await page.locator('.mc-board').textContent(), /Levante.*2 – 1.*En juego · 74′.*Athletic Club/);
+  // The administrator gets «Seleccionar canal» at the end of the event's page, with a channel search.
   assert.match(await page.locator('.mc-events').textContent(), /12'.*Carlos Álvarez.*Gol.*30'.*Oihan Sancet.*Tarjeta amarilla.*60'.*Nico Williams.*Sale Iñaki Williams/);
   // General: timeline with the goal and the card on each side, key figures as donuts and the icon row, form.
   assert.equal(await page.locator('.mc-line-row.home .mc-mark.goal').count(), 1);
@@ -320,6 +321,11 @@ try {
   assert.match(await page.locator('.mc-facts').textContent(), /LaLiga.*Estadio Ciutat de València.*Valencia, España.*21\.000.*Mateu Lahoz/);
   const screen = await page.evaluate(() => { const v = document.querySelector('.player-screen').getBoundingClientRect(), m = document.querySelector('#match-center').getBoundingClientRect(); return { below: m.top >= v.bottom - 1, ratio: v.width / v.height }; });
   assert.ok(screen.below, 'the match is under the video'); assert.ok(Math.abs(screen.ratio - 16 / 9) < 0.05);
+  // The administrator gets a channel picker with a name search at the end of the event page.
+  await page.locator('.event-admin').getByRole('button', { name: /^Seleccionar canal/ }).click();
+  await page.locator('.event-admin').getByPlaceholder('Buscar canal por nombre').fill('One');
+  await page.locator('.event-admin .channel-options').getByRole('button', { name: /Sports One/ }).waitFor();
+  await page.evaluate(() => { document.querySelector('.player').scrollTop = 0; });
   await page.getByRole('tab', { name: 'Estadísticas' }).click();
   assert.match(await page.locator('.mc-stats').textContent(), /58%.*Posesión.*42%.*14.*Tiros.*9.*6.*Tiros a puerta.*3/);
   await page.getByRole('tab', { name: 'Estadísticas' }).press('ArrowRight');

@@ -55,4 +55,17 @@ public class CatalogEventsTest {
     assertEquals("early", live.get(0).id);
     assertEquals("late", live.get(1).id);
   }
+
+  @Test public void leagueRowsFollowTheAdminOrder() throws Exception {
+    JSONObject data = new JSONObject("{\"channels\":[{\"id\":\"sports\",\"name\":\"Deportes\",\"streams\":[\"https://example.com/one.m3u8\"]}],\"featured\":[],\"hidden\":[],"
+        + "\"leagues\":[{\"id\":\"a\",\"name\":\"A\"},{\"id\":\"b\",\"name\":\"B\"},{\"id\":\"c\",\"name\":\"C\"}],\"leagueOrder\":[\"c\",\"a\"],\"events\":["
+        + "{\"id\":\"1\",\"name\":\"Uno\",\"channelId\":\"sports\",\"leagueId\":\"a\",\"startAt\":\"2026-10-27T18:00:00.000Z\"},"
+        + "{\"id\":\"2\",\"name\":\"Dos\",\"channelId\":\"sports\",\"leagueId\":\"b\",\"startAt\":\"2026-10-27T19:00:00.000Z\"},"
+        + "{\"id\":\"3\",\"name\":\"Tres\",\"channelId\":\"sports\",\"leagueId\":\"c\",\"startAt\":\"2026-10-27T20:00:00.000Z\"}]}");
+    long now = SportsCatalog.instant("2026-10-27T17:00:00Z");
+    List<Catalog.EventRow> rows = Catalog.eventRows(Catalog.events(Catalog.merge(null, data), data, now, false), data);
+    assertEquals("C", rows.get(0).name);
+    assertEquals("A", rows.get(1).name);
+    assertEquals("B", rows.get(2).name);
+  }
 }

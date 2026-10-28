@@ -275,6 +275,21 @@ public final class Catalog {
     return out;
   }
 
+  /**
+   * The league rows of the home page show only this week's events (Monday to Sunday, Madrid), as on the web:
+   * a league with matches in two weeks does not appear yet. Events without a league or a date stay, and a
+   * match from last week still on air too.
+   */
+  public static List<Channel> thisWeekEvents(List<Channel> events, long now) {
+    String week = Competitions.week(now);
+    List<Channel> out = new ArrayList<>();
+    for (Channel e : events) {
+      long at = SportsCatalog.instant(e.startAt);
+      if (e.leagueId.isEmpty() || at == Long.MAX_VALUE || Competitions.week(at).equals(week) || (at <= now && now - at < 4 * 3600000L)) out.add(e);
+    }
+    return out;
+  }
+
   /** A home row: a league with its logo and its events in date order. */
   public static final class EventRow {
     public final String name, logo;
@@ -293,7 +308,19 @@ public final class Catalog {
       if (row == null) rows.put(e.leagueId, row = new EventRow(league.optString("name"), league.optString("logo")));
       row.events.add(e);
     }
-    List<EventRow> out = new ArrayList<>(rows.values());
+    // The order set in Administración → Ligas comes first (as on the web); the rest follow by their next event.
+    final List<String> order = new ArrayList<>();
+    JSONArray saved = custom == null ? null : custom.optJSONArray("leagueOrder");
+    for (int i = 0; saved != null && i < saved.length(); i++) order.add(saved.optString(i));
+    final List<String> ids = new ArrayList<>(rows.keySet());
+    List<String> sorted = new ArrayList<>(ids);
+    Collections.sort(sorted, (a, b) -> {
+      int pa = order.indexOf(a), pb = order.indexOf(b);
+      pa = pa < 0 ? order.size() : pa; pb = pb < 0 ? order.size() : pb;
+      return pa != pb ? Integer.compare(pa, pb) : Integer.compare(ids.indexOf(a), ids.indexOf(b));
+    });
+    List<EventRow> out = new ArrayList<>();
+    for (String id : sorted) out.add(rows.get(id));
     if (!other.events.isEmpty()) out.add(other);
     return out;
   }
