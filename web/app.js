@@ -485,7 +485,8 @@ function leaguePage(slug) {
   const slugs = leagueSlugs(state.custom);
   const league = (state.custom?.leagues || []).find((l) => slugs.get(l.id) === slug);
   if (!league) return [el('p', { class: 'error' }, `No existe la liga «${slug || ''}».`), ...home()];
-  const list = leagueEvents(state.channels, state.custom, league.id);
+  // Only today's matches (Madrid day; one past midnight still on air too), as «Eventos En Directo».
+  const list = liveEvents(leagueEvents(state.channels, state.custom, league.id));
   const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
   const art = image(league.background);
   const status = el('span', { class: 'note', role: 'status' });
@@ -499,10 +500,10 @@ function leaguePage(slug) {
   return [el('section', { class: 'league-hero', style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
       image(league.logo) ? el('img', { class: 'league-hero-logo', src: image(league.logo), alt: '', referrerpolicy: 'no-referrer' }) : null,
       el('h1', {}, league.name),
-      el('p', {}, list.length === 1 ? '1 partido con canal' : `${list.length} partidos con canal`),
+      el('p', {}, list.length === 1 ? '1 partido hoy con canal' : `${list.length} partidos hoy con canal`),
       el('div', { class: 'league-hero-actions' }, share, status)),
     list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
-      : el('p', { class: 'status' }, 'Todavía no hay partidos de esta liga con canal asignado.')];
+      : el('p', { class: 'status' }, 'Hoy no hay partidos de esta liga con canal asignado.')];
 }
 
 function channelsPage(selected) {
