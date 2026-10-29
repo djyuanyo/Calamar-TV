@@ -6,6 +6,7 @@ import { youtubeId, trailerId } from './trailer.js';
 import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
+import { scanFolders, folderReference } from './library-folders.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
 
@@ -1030,6 +1031,47 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
   }
 
+  // Both providers feed the same library, preserving existing films and episode links.
+  const driveKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de Google Drive API' });
+  const saveDrive = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    saveDrive.disabled = true;
+    try {
+      const value = driveKey.value.trim();
+      if (!/^AIza[A-Za-z0-9_-]{35}$/.test(value)) throw Error('Pega una clave válida de Google Drive API.');
+      const next = { ...settings, drive: value };
+      await saveSettings(next); settings = next; driveKey.value = ''; driveKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      say('Clave de Drive guardada. Se comprobará al leer una carpeta.');
+    } catch (error) { say(error.message, true); } finally { saveDrive.disabled = false; }
+  } }, 'Guardar clave de Google Drive');
+  const folderInputs = LIBRARY_SECTIONS.map(section => ({ section,
+    input: el('textarea', { rows: 3, placeholder: 'Un enlace de carpeta por línea, de Google Drive o LuluStream', 'aria-label': `Carpetas de ${section.label}` }) }));
+  const configuredFolders = () => folderInputs.flatMap(({section,input}) => input.value.split(/\r?\n/).map(url=>url.trim()).filter(Boolean)
+    .map(url => { folderReference(url); return { section:section.key, url }; }));
+  const folderNote = el('p', { class: 'note', role: 'status' });
+  const saveFolders = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    saveFolders.disabled = true;
+    try { const next = {...settings, sourceFolders: configuredFolders()}; await saveSettings(next); settings=next; folderNote.textContent='Carpetas guardadas.'; }
+    catch(error) { folderNote.textContent=error.message; } finally { saveFolders.disabled=false; }
+  } }, 'Guardar carpetas');
+  const mixedScan = el('button', { class:'btn', type:'button', onclick: async () => {
+    if (scanButton.disabled) return;
+    mixedScan.disabled = true; scanButton.disabled = true; saveFolders.disabled = true;
+    try {
+      const sources = configuredFolders();
+      if (!sources.length) throw Error('Añade al menos un enlace de carpeta.');
+      const tmdb = tmdbKey();
+      const next = {...settings, sourceFolders:sources}; await saveSettings(next); settings=next;
+      folderNote.textContent='Leyendo carpetas…';
+      const scan = await scanFolders(sources, settings, {onFolder:name=>{folderNote.textContent=`Leyendo «${name}»…`;}});
+      const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
+        onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
+      if (result.added.films || result.added.shows || result.added.pending) await store(result.sections);
+      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.`;
+      scanReport.replaceChildren(...result.unknown.map(line=>el('p',{class:'note'},line)));
+    } catch(error) { folderNote.textContent=error.message; }
+    finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
+  } }, 'Buscar e importar de ambos sitios');
+
   // ---- LuluStream folders: Peliculas/, Series/<Nombre>/Temporada N/, Documentales/ ----
   const scanNote = el('p', { class: 'note', role: 'status' });
   const scanReport = el('div', { class: 'library-scan-report' });
@@ -1042,7 +1084,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const scan = await scanLulu(settings.lulu, { onFolder: (name) => { scanNote.textContent = `Leyendo «${name}» en LuluStream…`; } });
       const found = scan.films.length + scan.series.length;
       if (!found) throw new Error('No hay vídeos en las carpetas Peliculas, Series o Documentales.');
-      const result = await libraryFromScan(scan, current.sections, key, { onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
+      const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
       scanNote.textContent = 'Publicando…';
       await store(result.sections);
       const { films, shows, episodes, pending } = result.added;
@@ -1200,6 +1242,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     try {
       settings = await readSettings();
       if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      if (settings.drive) driveKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key).map(s=>s.url).join('\n');
       if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       current = await fetchLibrary({ fresh: true });
       drawList();
@@ -1233,11 +1277,17 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   });
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: claves de TMDB y LuluStream'),
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB, LuluStream y Google Drive'),
       el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
       field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey),
       el('p', { class: 'note' }, 'La clave de la API de LuluStream (LuluStream → API) sirve para leer tus carpetas. También es privada.'),
-      field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu)),
+      field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu),
+      el('p', {class:'note'}, 'Para Drive, añade una clave de Google Cloud con Google Drive API habilitada. Se guarda solo para el administrador y viaja cifrada en los enlaces de vídeo.'),
+      field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive)),
+    el('h3',{},'Carpetas de Google Drive y LuluStream'),
+    el('p',{class:'note'},'Puedes mezclar los dos sitios. Se conserva el vídeo de los títulos y capítulos que ya existen; solo se añaden los nuevos. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace. Los vídeos se abren en el reproductor de Calamar TV.'),
+    ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
+    el('div',{class:'actions'},saveFolders,mixedScan),folderNote,
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
     el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,

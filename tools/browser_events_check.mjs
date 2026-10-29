@@ -502,15 +502,35 @@ try {
   await page.getByRole('button', { name: 'Guardar clave de LuluStream', exact: true }).click();
   await page.getByText(/Clave de LuluStream guardada \(privada\)\. Carpetas: Películas, Series/).waitFor();
   await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
-  await page.getByText(/^Hecho: 1 película o documental y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
+  await page.getByText(/^Hecho: 0 películas y documentales y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
   assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
+  // Mixed folders preserve the film already on LuluStream and add a missing episode from Drive.
+  await page.getByLabel('Clave de Google Drive',{exact:true}).fill('AIza'+'x'.repeat(35));
+  await page.getByRole('button',{name:'Guardar clave de Google Drive',exact:true}).click();
+  await page.getByText('Clave de Drive guardada. Se comprobará al leer una carpeta.').waitFor();
+  const driveMovie='https://calamarmenciano.com/calamar-drive.php?id=avatar&v='+ 'A'.repeat(80);
+  const driveEpisode='https://calamarmenciano.com/calamar-drive.php?id=paco103&v='+ 'A'.repeat(80);
+  await page.route('https://calamarmenciano.com/calamar-drive.php',route=>{
+    const id=new URLSearchParams(route.request().postData()).get('id');
+    const data=id==='films'?{name:'Películas',files:[{title:'Avatar.El.sentido.del.agua.2022.mp4',link:driveMovie}]}:
+      {name:'Los hombres de Paco',files:[{title:'1x01.mp4',link:driveMovie},{title:'1x03.mp4',link:driveEpisode}]};
+    return route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
+  });
+  await page.getByLabel('Carpetas de Películas',{exact:true}).fill('https://drive.google.com/drive/folders/films');
+  await page.getByLabel('Carpetas de Series',{exact:true}).fill('https://drive.google.com/drive/folders/paco');
+  await page.getByRole('button',{name:'Buscar e importar de ambos sitios',exact:true}).click();
+  await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor();
+  let mixed=await page.evaluate(()=>window.__libraryParts);
+  assert.equal(mixed.parts['movies-0'].items.find(m=>m.id==='m76600').url,'https://luluvido.com/abc123def456');
+  assert.equal(mixed.parts['series-0'].items.find(m=>m.id==='s4500').episodes.find(e=>e.season===1&&e.episode===3).url,driveEpisode);
+  assert.equal(mixed.parts['series-0'].items.find(m=>m.id==='s4500').episodes.find(e=>e.season===1&&e.episode===1).url,'https://luluvido.com/paco1x01aaaa');
   // The platform buttons are ordered, given a logo and hidden from the same page.
   await page.getByRole('heading', { name: 'Plataformas', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Guardar plataformas', exact: true }).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
-  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/avatarlulu12');
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/abc123def456');
   assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),
-    [[1, 1, 'https://luluvido.com/paco1x01aaaa'], [1, 2, 'https://luluvido.com/paco1x02cccc'], [2, 1, 'https://luluvido.com/paco2x01bbbb']]);
+    [[1, 1, 'https://luluvido.com/paco1x01aaaa'], [1, 2, 'https://luluvido.com/paco1x02cccc'], [1, 3, driveEpisode], [2, 1, 'https://luluvido.com/paco2x01bbbb']]);
   // The film TMDB did not find is in the list anyway; its record is chosen by hand and takes its video.
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'unadanada1234').status, 'unmatched');
   const pendingRow = page.locator('.library-item', { hasText: 'Zzzz desconocida' });
