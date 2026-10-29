@@ -17,4 +17,6 @@ jobs:
         run: |
           for file in hosting/calamar-madplay*.php tools/madplay*.php; do php -l "$file"; done
       - name: Probar sesiones, firmas de fragmentos y errores sin acceder al proveedor
-        run: php tools/madplay_session_test.php
+        run: |
+          php tools/madplay_session_test.php
+          php tools/madplay_provider_test.php

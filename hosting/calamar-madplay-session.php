@@ -19,6 +19,7 @@ final class MadplaySession {
         $session = call_user_func($this->resolve, $this->match, $this->source, $offeredSession);
         if (!is_array($session) || !isset($session['url']) || !preg_match('#^https://#', $session['url'])) throw new MadplayPlaybackFailure('El proveedor no entregó una sesión válida.');
         $this->state['url'] = $session['url'];
+        $this->state['generation'] = ($this->state['generation'] ?? 0) + 1;
         // Opaque provider tokens must not be decoded to guess their expiry. Re-resolve at most once/minute.
         $this->state['expires'] = min($this->now() + 60, $session['expiresAt'] ?? ($this->now() + 60));
     }
@@ -76,7 +77,7 @@ final class MadplaySession {
             $this->authorise(true, $headers['rb-session'] ?? null);
             // Re-read current lists: changing only a root token leaves stale signatures on segments.
             $this->playlist('root'); if ($old['parent'] !== 'root') $this->playlist($old['parent']);
-            if (($this->state['assets'][$id]['generation'] ?? '') !== $this->state['url']) throw new MadplayPlaybackFailure('El fragmento ha salido de la ventana del directo.', 410);
+            if (($this->state['assets'][$id]['generation'] ?? 0) !== $this->state['generation']) throw new MadplayPlaybackFailure('El fragmento ha salido de la ventana del directo.', 410);
             $r = $this->request($this->assetUrl($id), $range);
         }
         return $this->checked($r);
@@ -89,7 +90,7 @@ final class MadplaySession {
             foreach (['token','auth','expires','exp','_ver','_ctump','_ctuph','_ctutt','_s1'] as $key) unset($query[$key]);
             ksort($query); $identity = $path . '?' . http_build_query($query);
             $id = substr(hash_hmac('sha256', $this->match . '|' . $this->source . '|' . $parent . '|' . $identity, $this->secret), 0, 32);
-            $this->state['assets'][$id] = ['url'=>$url, 'parent'=>$parent, 'seen'=>$this->now(), 'generation'=>$this->state['url']];
+            $this->state['assets'][$id] = ['url'=>$url, 'parent'=>$parent, 'seen'=>$this->now(), 'generation'=>$this->state['generation']];
             return '/calamar-madplay.php/match/' . $this->match . '/source/' . $this->source . '/asset/' . $id . (preg_match('/\.m3u8$/i', $path) ? '.m3u8' : '.bin');
         };
         $out = [];
