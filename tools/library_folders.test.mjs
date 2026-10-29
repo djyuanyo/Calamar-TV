@@ -58,7 +58,9 @@ test('duplicates across providers keep the current film and existing episodes wh
   const result=await libraryFromScan(scan,current,'tmdb',{skipDuplicates:true,fetcher:async url=>{
     assert.match(url,/\/tv\/2\/season\/1/);return json({episodes:[{episode_number:1,name:'Uno'},{episode_number:2,name:'Dos'}]});
   }});
-  assert.deepEqual(result.sections.movies,current.movies);
+  // The film stays as it was, with both copies of the scan as spare links. Its own link was never read
+  // from a folder (pasted by hand), so it is kept even though the scan does not include it.
+  assert.deepEqual(result.sections.movies,[{...current.movies[0],mirrors:[video('avatar'),video('another')],files:['avatar']}]);
   assert.equal(result.sections.documentaries.length,0);
   assert.deepEqual(result.sections.series[0].episodes.map(e=>[e.episode,e.url]),[[1,video('old')],[2,'https://luluvido.com/new12345678']]);
   assert.deepEqual(result.sections.series[0].skip,current.series[0].skip);
@@ -80,4 +82,21 @@ test('TMDB identity catches alternate titles, remakes remain distinct and unmatc
   assert.ok(result.sections.movies.some(x=>x.id==='m9'));
   assert.deepEqual(result.sections.movies.filter(x=>x.status==='unmatched').map(x=>x.id).sort(),['udrive_unknown1','udrive_unknown2']);
   assert.equal(result.skipped.films,1);
+});
+
+test('an identified film repeated in the other folder is not offered again; a deleted copy hands over to the other',async()=>{
+  const film={id:'m5',kind:'movie',title:'El viaje',year:2020,url:video('drivecopy'),tmdb:{id:5,title:'El viaje',year:2020}};
+  const pending={id:'ulul0000pend',kind:'movie',title:'The Trip',year:2020,file:'The.Trip.2020.1080p.mkv',url:'https://luluvido.com/lul0000pend',status:'unmatched'};
+  const tmdb=async()=>{throw Error('TMDB must not be asked');};
+  const both={films:[{section:'movies',title:'The Trip',year:2020,file:'The.Trip.2020.1080p.mkv',link:video('drivecopy')},
+    {section:'movies',title:'The Trip',year:2020,file:'The.Trip.2020.1080p.mkv',link:'https://luluvido.com/lul0000pend'}],series:[],unknown:[]};
+  const first=await libraryFromScan(both,{movies:[film,pending]},'tmdb',{skipDuplicates:true,fetcher:tmdb});
+  assert.deepEqual(first.sections.movies,[{...film,files:['thetrip2020'],mirrors:['https://luluvido.com/lul0000pend'],fromFolder:true}]);
+  assert.equal(first.added.pending,0);
+  // Deleted from Drive: the LuluStream copy takes over.
+  const onlyLulu={films:[both.films[1]],series:[],unknown:[],providers:['drive','lulu']};
+  const second=await libraryFromScan(onlyLulu,first.sections,'tmdb',{skipDuplicates:true,fetcher:tmdb});
+  assert.equal(second.sections.movies.length,1);
+  assert.equal(second.sections.movies[0].url,'https://luluvido.com/lul0000pend');
+  assert.equal(second.sections.movies[0].mirrors,undefined);
 });

@@ -562,8 +562,10 @@ try {
   await page.getByText(/«Zzzz desconocida» es ahora «Avatar: El sentido del agua», con su vídeo/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
-  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/nadanada1234');
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
+  // The film already in the library keeps its video; the identified file stays as its spare copy.
+  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/abc123def456');
+  assert.ok(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').mirrors.includes('https://luluvido.com/nadanada1234'));
+  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
   await page.getByRole('link', { name: 'Películas · 2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByRole('link', { name: 'Series · 2', exact: true }).click();

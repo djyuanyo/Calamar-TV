@@ -42,7 +42,7 @@ export async function driveFolder(folder, key, fetcher = globalThis.fetch) {
 
 /** One combined scan; publication happens only after every configured folder has been read. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
-  const films = [], series = [], unknown = [], cache = new Map();
+  const films = [], series = [], unknown = [], cache = new Map(), providers = new Set();
   let count = 0;
   const read = async (folder) => {
     const key = `${folder.provider}:${folder.id}`;
@@ -90,6 +90,7 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
   for (const source of sources) {
     if (!['movies', 'series', 'documentaries'].includes(source.section)) throw Error('Sección de carpeta no válida.');
     let ref = folderReference(source.url);
+    providers.add(ref.provider);
     if (ref.provider === 'lulu') ref = await luluId(ref);
     const data = await read(ref);
     if (source.section === 'movies') { for (const f of await videos(ref)) film(f, source.section); continue; }
@@ -103,5 +104,6 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
       else show(child.name, content, source.section);
     }
   }
-  return { films, series, unknown };
+  // Which sites were read: a copy missing from a site read in full was deleted there.
+  return { films, series, unknown, providers: [...providers] };
 }

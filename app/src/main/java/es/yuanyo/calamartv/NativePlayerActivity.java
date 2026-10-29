@@ -831,6 +831,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             .build(),
         true);
     player.setHandleAudioBecomingNoisy(true);
+    if (progressEntry != null) {
+      // Films, series and documentaries (LuluStream's MKV carry several audios): Spanish from Spain,
+      // then any Spanish; subtitles off until chosen with the subtitles button.
+      player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+          .setPreferredAudioLanguages("es-ES", "es")
+          .setPreferredTextLanguages()
+          .setSelectUndeterminedTextLanguage(false)
+          .setIgnoredTextSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT | androidx.media3.common.C.SELECTION_FLAG_FORCED)
+          .build());
+    }
+    // Below the video: subtitles (CC) and, in ⚙, the audio track, for what is not live.
+    playerView.setShowSubtitleButton(progressEntry != null);
     playerView.setPlayer(player);
     final ExoPlayer instance = player;
     player.addAnalyticsListener(

@@ -195,6 +195,21 @@ const namedItem = (sections, wanted, kind) => {
     .map(item => ({ section, item })));
   return candidates.length === 1 ? candidates[0] : null;
 };
+/** A video's file name as a key (title and year), the same in Drive and LuluStream for the same film. */
+export const fileKey = (name) => { const c = cleanTitle(name || ''), t = titleKey(c.title); return t ? t + (c.year || '') : ''; };
+const linksOf = (item) => [item.url, ...(item.mirrors || [])].filter(Boolean).map(codeOf);
+/** A film with one more copy: its file name is remembered and the link kept as a spare (mirrors). */
+const withCopy = (item, file, link) => {
+  const fk = fileKey(file);
+  const files = [...new Set([...(item.files || []), ...(fk ? [fk] : [])])];
+  const mirrors = [...new Set([...(item.mirrors || []), ...(link ? [link] : [])])].filter((l) => codeOf(l) !== codeOf(item.url));
+  const next = { ...item, files, mirrors };
+  // Its own link was found in a folder: when a later scan no longer finds it, it was deleted there.
+  if (link && codeOf(link) === codeOf(item.url)) next.fromFolder = true;
+  if (!files.length) delete next.files;
+  if (!mirrors.length) delete next.mirrors;
+  return next;
+};
 const folderId = (name) => `u${plain(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}`;
 
 /** A film TMDB did not recognise: added with the file's name, to be matched later in the admin page. */
@@ -227,7 +242,13 @@ export async function seriesWithLinks(item, info, links, key, fetcher) {
 export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    return { ...movieItem(info, item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
+    // The film already in the library keeps its link; the identified copy stays as a spare.
+    let next = { ...movieItem(info, existing?.url || item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
+    for (const copy of [existing, item].filter(Boolean)) {
+      for (const k of copy.files || []) next = { ...next, files: [...new Set([...(next.files || []), k])] };
+      for (const link of [copy.url, ...(copy.mirrors || [])]) next = withCopy(next, copy.file || '', link);
+    }
+    return next;
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
   const series = await seriesWithLinks(existing, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
@@ -256,10 +277,40 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   const unknown = [...scan.unknown];
   let films = 0, shows = 0, episodes = 0, pending = 0, done = 0;
   const total = scan.films.length + scan.series.length;
+  // The same film in Drive and in LuluStream is one title: the one already in the library (identified or not)
+  // stays and the other copy is kept as a spare link, never offered again to be identified.
+  const filmEntries = () => Object.entries(sections).flatMap(([section, items]) => items.filter((x) => x.kind !== 'tv').map((item) => ({ section, item })));
+  const keepCopy = (entry, file, link) => {
+    const list = sections[entry.section], at = list.indexOf(entry.item);
+    if (at >= 0) list[at] = withCopy(entry.item, file, link);
+  };
+  const copyOf = (f) => {
+    const fk = fileKey(f.file), code = codeOf(f.link);
+    const hits = filmEntries().filter(({ item }) => linksOf(item).includes(code)
+      || (fk && ((item.files || []).includes(fk) || (item.status === 'unmatched' && fileKey(item.file) === fk))));
+    return hits.find(({ item }) => item.tmdb?.id && item.status !== 'unmatched') || hits[0] || null;
+  };
+  // First the file names of the copies the library already plays, so their twins are recognised.
+  if (skipDuplicates) for (const f of scan.films) {
+    const entry = filmEntries().find(({ item }) => linksOf(item).includes(codeOf(f.link)));
+    if (entry) keepCopy(entry, f.file, f.link);
+  }
   for (const f of scan.films) {
     onProgress(++done, total, f.title);
     const known = byLink.get(codeOf(f.link));
-    if (skipDuplicates && (known || namedItem(sections, f, 'movie'))) { skipped.films++; continue; }
+    const copy = skipDuplicates ? copyOf(f) || namedItem(sections, f, 'movie') : null;
+    if (copy) {
+      // A pending duplicate left by an earlier import goes; its link stays as a spare of the title.
+      for (const e of filmEntries()) {
+        if (e.item === copy.item || e.item.status !== 'unmatched') continue;
+        if (linksOf(e.item).includes(codeOf(f.link)) || (fileKey(f.file) && fileKey(e.item.file) === fileKey(f.file))) {
+          drop(e.item.id);
+          keepCopy(filmEntries().find((x) => x.item.id === copy.item.id) || copy, e.item.file, e.item.url);
+        }
+      }
+      keepCopy(filmEntries().find((x) => x.item.id === copy.item.id) || copy, f.file, f.link);
+      skipped.films++; continue;
+    }
     // The day LuluStream received the video is the day it arrived (for «Recién llegada»).
     const arrived = (item) => (f.uploaded ? { ...item, addedAt: f.uploaded } : item);
     if (known && known.item.kind !== 'tv') { put(known.section, arrived({ ...known.item, url: f.link })); films++; continue; }
@@ -269,11 +320,28 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
       continue;
     }
-    if (skipDuplicates && find(`m${match.id}`)) { skipped.films++; continue; }
+    if (skipDuplicates && find(`m${match.id}`)) {
+      keepCopy(filmEntries().find((x) => x.item.id === `m${match.id}`), f.file, f.link);
+      skipped.films++; continue;
+    }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
     drop(unmatchedFilm(f).id);
     put(f.section, arrived(movieItem(info, f.link)));
     films++;
+  }
+  // A copy deleted from Drive or LuluStream: the title goes on with the copy that is still there.
+  if (skipDuplicates) {
+    const seen = new Set([...scan.films.map((f) => codeOf(f.link)), ...scan.series.flatMap((x) => x.episodes.map((e) => codeOf(e.link)))]);
+    const provider = (code) => code.startsWith('drive_') ? 'drive' : /^[A-Za-z0-9]{8,20}$/.test(code) ? 'lulu' : '';
+    const scanned = new Set(scan.providers || [...seen].map(provider).filter(Boolean));
+    const gone = (link) => { const code = codeOf(link); return scanned.has(provider(code)) && !seen.has(code); };
+    for (const { section, item } of filmEntries()) {
+      if (!item.mirrors?.length) continue;
+      const alive = item.mirrors.filter((l) => !gone(l));
+      const next = item.fromFolder && gone(item.url) && alive.length ? { ...item, url: alive[0], mirrors: alive.slice(1) } : { ...item, mirrors: alive };
+      if (!next.mirrors.length) delete next.mirrors;
+      const list = sections[section]; list[list.indexOf(item)] = next;
+    }
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
