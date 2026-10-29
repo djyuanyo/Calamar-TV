@@ -3,7 +3,7 @@ import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madrid
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, login, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
+import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
@@ -59,24 +59,12 @@ function field(label, input, hint) {
   return el('label', {}, label, input, hint ? el('small', {}, hint) : null);
 }
 
-function loginView(rerender) {
-  const status = el('p', { class: 'note', role: 'status' }, notice);
-  const button = el('button', { class: 'btn', type: 'button', onclick: async () => {
-    button.disabled = true;
-    status.textContent = 'Abriendo Google…';
-    try {
-      await login();
-      if (!administrator()) throw new Error('Esta cuenta de Google no tiene permiso de administración.');
-      await loadFile();
-      notice = '';
-      rerender();
-    } catch (error) {
-      status.textContent = explain(error);
-      status.className = 'error';
-    } finally { button.disabled = false; }
-  } }, 'Continuar con Google');
+/** Administration is not signed into separately: the administrator's own account, signed in from «Entrar», opens it. */
+function loginView() {
+  const signed = !!auth.currentUser;
   return [el('section', { class: 'panel' }, el('h1', {}, 'Administración'),
-    button, auth.currentUser ? el('button', { class: 'ghost', onclick: async () => { await logout(); file = null; rerender(); } }, 'Cerrar sesión') : null, status)];
+    el('p', { class: 'note', role: 'status' }, notice || (signed ? 'Esta cuenta no es de administración. Entra con la cuenta de administración desde «Entrar».' : 'Entra con tu cuenta de administración de Google desde «Entrar»: el panel aparece en tu perfil.')),
+    el('a', { class: 'btn', href: '#/cuenta' }, signed ? 'Ir a mi cuenta' : 'Entrar'))];
 }
 
 function slug(text) {
@@ -416,6 +404,7 @@ export async function render(state) {
       el('div', { class: 'section-head' }, el('h1', {}, 'Administración'), el('button', { class: 'ghost', type: 'button', onclick: async () => { await logout(); file = null; rerender(); } }, 'Cerrar sesión')),
       el('p', { class: 'lead' }, 'Los cambios se guardan en Firebase y se comparten con la web y la app. Tu cuenta de Google es la única autorizada para editar.'),
       shown ? el('p', { class: shown.startsWith('Guardado') ? 'ok' : 'error', role: 'status' }, shown) : null,
+      appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
       el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
@@ -431,6 +420,21 @@ export async function render(state) {
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
   ];
+}
+
+/**
+ * Who the app offers its new versions to: everyone, or only the administrator (to try them before the
+ * others get one more update). Part of the catalog, so the app reads it with the channels.
+ */
+function appUpdatesPanel(rerender) {
+  const mode = file.data.appUpdates === 'admin' ? 'admin' : 'all';
+  const choose = (next) => guarded(async () => { file.data.appUpdates = next; await saveFile(); notice = next === 'admin'
+    ? 'Guardado: las versiones nuevas de la app solo te avisan a ti.' : 'Guardado: todos recibirán el aviso de la versión nueva de la app.'; }, rerender);
+  const option = (value, label) => el('button', { class: `chip${mode === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(mode === value), onclick: () => { if (mode !== value) choose(value); } }, label);
+  return el('div', { class: 'app-updates' }, el('b', {}, 'Actualizaciones de la app'),
+    el('div', { class: 'chips', role: 'group', 'aria-label': 'Quién recibe las actualizaciones de la app' }, option('all', 'Para todos'), option('admin', 'Solo para mí')),
+    el('p', { class: 'note' }, mode === 'admin' ? 'Solo tú (con la cuenta de administración) recibes el aviso de cada versión nueva. Los demás siguen con la suya hasta que elijas «Para todos».'
+      : 'Cada versión nueva de la app avisa a todos los usuarios.'));
 }
 
 /** True when some pixel is not fully opaque (RGBA data of a canvas). */

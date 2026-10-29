@@ -109,7 +109,8 @@ export async function chooseProfile(id, picked = true) {
   write(activeKey(), id);
   // Chosen before Firebase confirmed the sign-in: its data loads once it does.
   if (!user) { early = id; changed(); return; }
-  setProgressScope(id === 'main' ? '' : `${user.uid}:${id}`);
+  // Each account keeps its own row in this browser (the main profile too): another account never sees it.
+  setProgressScope(id === 'main' ? user.uid : `${user.uid}:${id}`);
   await setProgressProfile(id);
   await loadData();
 }

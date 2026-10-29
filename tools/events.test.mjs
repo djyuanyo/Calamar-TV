@@ -114,3 +114,11 @@ test('each league has its link and a page with its matches that have a channel',
   // The imported match without a channel («Canal por confirmar») is left out.
   assert.deepEqual(leagueEvents(channels, custom, 'l1', Date.parse('2026-11-01T00:00:00Z')).map((e) => e.id), ['e1']);
 });
+
+test('the app updates go to everyone or only to the administrator, nothing else', async () => {
+  const { validateCatalog } = await import('../web/shared-catalog.js');
+  const base = { channels: [], featured: [], hidden: [] };
+  assert.equal(validateCatalog({ ...base, appUpdates: 'admin' }).appUpdates, 'admin');
+  assert.equal(validateCatalog({ ...base, appUpdates: 'all' }).appUpdates, 'all');
+  assert.throws(() => validateCatalog({ ...base, appUpdates: 'yes' }), /actualizaciones/);
+});

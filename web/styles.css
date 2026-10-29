@@ -1368,3 +1368,5 @@ body.gate-open { overflow: hidden; }
 .sheet-help p { margin: 10px 0 0; color: rgba(255,255,255,.75); line-height: 1.5; }
 .profile-sheet .profile-grid { margin: 8px 0; }
 .profile-sheet .profile-form { justify-self: center; }
+.app-updates { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
+.app-updates .chips { margin: 0; }

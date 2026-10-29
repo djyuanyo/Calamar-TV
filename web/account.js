@@ -78,8 +78,7 @@ function signIn(el, f, done) {
       note);
   };
   draw();
-  return [card, el('p', { class: 'auth-foot' }, 'Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele. ',
-    el('a', { href: '#/admin' }, 'Administración'))];
+  return [card, el('p', { class: 'auth-foot' }, 'Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.')];
 }
 
 /** A profile's form: name and colour, «Guardar», and «Borrar perfil» (never the main one). */
