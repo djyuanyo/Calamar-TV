@@ -396,7 +396,9 @@ function home() {
   if (live.length) {
     const liveRail = rail(live, { wide: true, limit: live.length });
     liveRail.classList.add('live-rail');
-    nodes.push(sectionHead(LIVE_ROW, el('span', {}, live.length === 1 ? '1 evento' : `${live.length} eventos`)), liveRail);
+    // Its heading opens #/directo: every one of today's events, by competition.
+    nodes.push(sectionHead(el('a', { class: 'league-head', href: '#/directo', title: 'Todos los eventos en directo, por competición' }, LIVE_ROW),
+      el('span', {}, live.length === 1 ? '1 evento' : `${live.length} eventos`)), liveRail);
   }
   // Films and episodes left half watched come right under the featured slider: those of this browser,
   // and with an account signed in, those of its other devices too.
@@ -461,6 +463,21 @@ function titleExtras(section, item) {
   };
   paint();
   return [list, up, down];
+}
+
+/** #/directo: every event of «Eventos En Directo» in a grid per competition, in the order of the leagues. */
+function livePage() {
+  const live = liveEvents(events(state.channels, state.custom));
+  const nodes = [el('section', { class: 'live-page-head' }, el('h1', {}, LIVE_ROW),
+    el('p', { class: 'note' }, live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`))];
+  for (const row of eventRows(live, state.custom)) {
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
+    nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
+      : el('span', { class: 'league-head' }, ...head), el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)),
+      el('div', { class: 'grid league-grid' }, row.events.map((c) => card(c))));
+  }
+  if (!live.length) nodes.push(el('p', { class: 'status' }, 'Ahora mismo no hay eventos en directo. ', el('a', { href: '#/canales' }, 'Ver los canales')));
+  return nodes;
 }
 
 /** A league's page (#/liga/<slug>): its logo on its background, a share button and every match of the league with a channel, in a grid. */
@@ -1394,7 +1411,7 @@ async function route() {
     return;
   }
   const query = search.value.trim();
-  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : home()));
+  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
 }
 
 let typing;
