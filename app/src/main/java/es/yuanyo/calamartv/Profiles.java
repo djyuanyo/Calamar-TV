@@ -68,10 +68,26 @@ final class Profiles {
   }
 
   /** Follows the sign-in once per process: the account's profiles, the one chosen last and its data. */
+  /** True once the account's own copy of its profiles was read (until then, the copy kept on this device). */
+  private static boolean confirmed;
+
   static void start(Context context) {
     if (started) return;
     started = true;
     final Context app = context.getApplicationContext();
+    // A signed-in account: its profiles kept on this device, so «Elige tu perfil» shows at once.
+    FirebaseUser now = user(app);
+    if (now != null) {
+      try {
+        JSONObject cached = new JSONObject(prefs(app).getString("account:" + now.getUid(), "{}"));
+        if (!ProfileData.profiles(cached).isEmpty()) {
+          uid = now.getUid();
+          account = cached;
+          String saved = prefs(app).getString("active:" + uid, null);
+          if (saved != null && active(saved) != null) choose(app, saved, false);
+        }
+      } catch (JSONException broken) { account = null; }
+    }
     try {
       SharedCatalog.auth(app).addAuthStateListener(auth -> load(app, auth));
     } catch (RuntimeException unavailable) { /* Without Google Play services: no accounts on this device. */ }
@@ -80,11 +96,23 @@ final class Profiles {
   private static void load(Context app, FirebaseAuth auth) {
     FirebaseUser user = auth.getCurrentUser();
     String now = user == null ? null : user.getUid();
-    if (now == null ? uid == null : now.equals(uid)) return;
-    uid = now; account = null; activeId = null; pickedThisLaunch = false;
-    Library.Progress.scope = "";
-    data = localData(app);
-    if (user == null) { changed(); return; }
+    if (now == null) {
+      confirmed = true;
+      if (uid == null) return; // Still no account: nothing to tell (nor to draw again).
+      prefs(app).edit().remove("account:" + uid).apply();
+      uid = null; account = null; activeId = null; pickedThisLaunch = false;
+      Library.Progress.scope = "";
+      data = localData(app);
+      changed();
+      return;
+    }
+    if (now.equals(uid) && confirmed) return;
+    if (!now.equals(uid)) {
+      uid = now; account = null; activeId = null; pickedThisLaunch = false;
+      Library.Progress.scope = "";
+      data = localData(app);
+    }
+    confirmed = true;
     db(app).document("calamarUsers/" + uid).get(Source.SERVER).addOnCompleteListener(task -> {
       if (!now.equals(uid)) return;
       JSONObject found = null;
@@ -100,9 +128,12 @@ final class Profiles {
         } catch (JSONException impossible) { return; }
       }
       account = found;
-      String saved = prefs(app).getString("active:" + uid, null);
-      if (saved != null && active(saved) != null) choose(app, saved, false);
-      else if (profiles().size() == 1) choose(app, profiles().get(0).optString("id"), false);
+      prefs(app).edit().putString("account:" + uid, found.toString()).apply();
+      if (activeId == null || active(activeId) == null) {
+        String saved = prefs(app).getString("active:" + uid, null);
+        if (saved != null && active(saved) != null) choose(app, saved, false);
+        else if (profiles().size() == 1) choose(app, profiles().get(0).optString("id"), false);
+      }
       changed();
     });
   }
@@ -211,6 +242,7 @@ final class Profiles {
     try { account = new JSONObject(account == null ? "{}" : account.toString()).put("profiles", array); }
     catch (JSONException impossible) { throw new IllegalStateException(impossible); }
     writeAccount(c.getApplicationContext(), account);
+    prefs(c).edit().putString("account:" + uid, account.toString()).apply();
     changed();
   }
 }

@@ -491,7 +491,12 @@ final class MatchCenter {
     middle.setGravity(Gravity.CENTER_HORIZONTAL);
     boolean scored = !m.home.score.isEmpty() && !m.away.score.isEmpty();
     String kickoff = when(m.date, "HH:mm");
-    middle.addView(text(scored ? m.home.score + " – " + m.away.score : kickoff.isEmpty() ? "vs" : kickoff, scored ? 34 : 24, scored ? Ui.FG : Ui.MUTED, true));
+    // On one line and whole: «0 – 0» was cut down to «0 –» next to long team names.
+    TextView score = text(scored ? m.home.score + "\u00a0–\u00a0" + m.away.score : kickoff.isEmpty() ? "vs" : kickoff, scored ? 32 : 24, scored ? Ui.FG : Ui.MUTED, true);
+    score.setSingleLine(true);
+    score.setGravity(Gravity.CENTER);
+    middle.setMinimumWidth(dp(96));
+    middle.addView(score, new LinearLayout.LayoutParams(-2, -2));
     String label = m.status.replaceFirst("^\\d+ – \\d+ · ", "");
     if (label.isEmpty()) label = when(m.date, "EEE d MMM");
     TextView status = text(label, 11, m.live ? 0xffffffff : Ui.MUTED, true);
@@ -500,7 +505,9 @@ final class MatchCenter {
     LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
     sp.topMargin = dp(6);
     middle.addView(status, sp);
-    b.addView(middle, new LinearLayout.LayoutParams(-2, -2));
+    LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, -2);
+    mp.setMargins(dp(6), 0, dp(6), 0);
+    b.addView(middle, mp);
     b.addView(team(m.away), new LinearLayout.LayoutParams(0, -2, 1));
     return b;
   }
@@ -638,6 +645,12 @@ final class MatchCenter {
     }
   }
 
+  /** «20.4%» as «20%»: three gauges side by side leave no room for decimals on a phone. */
+  static String shortValue(String value) {
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d+)[.,](\\d+)(%?)$").matcher(value == null ? "" : value.trim());
+    return m.matches() ? Math.round(Double.parseDouble(m.group(1) + "." + m.group(2))) + m.group(3) : value;
+  }
+
   View gauge(String label, Stat s) {
     LinearLayout box = card();
     box.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -645,16 +658,19 @@ final class MatchCenter {
     TextView l = text(label, 12, Ui.MUTED, false);
     l.setGravity(Gravity.CENTER);
     l.setSingleLine(true);
-    box.addView(l);
+    box.addView(l, new LinearLayout.LayoutParams(-1, -2));
+    // Home value, ring and away value centred in the card, each value on one line.
     LinearLayout row = new LinearLayout(context);
     row.setGravity(Gravity.CENTER);
     row.setPadding(0, dp(6), 0, 0);
-    row.addView(text(s.home, 14, Ui.FG, true));
-    LinearLayout.LayoutParams ring = new LinearLayout.LayoutParams(dp(40), dp(40));
-    ring.setMargins(dp(6), 0, dp(6), 0);
+    TextView home = text(shortValue(s.home), 14, Ui.FG, true), away = text(shortValue(s.away), 14, Ui.FG, true);
+    for (TextView v : new TextView[] {home, away}) { v.setSingleLine(true); v.setGravity(Gravity.CENTER); }
+    row.addView(home, new LinearLayout.LayoutParams(0, -2, 1));
+    LinearLayout.LayoutParams ring = new LinearLayout.LayoutParams(dp(34), dp(34));
+    ring.setMargins(dp(4), 0, dp(4), 0);
     row.addView(new Donut((float) s.share), ring);
-    row.addView(text(s.away, 14, Ui.FG, true));
-    box.addView(row);
+    row.addView(away, new LinearLayout.LayoutParams(0, -2, 1));
+    box.addView(row, new LinearLayout.LayoutParams(-1, -2));
     box.setContentDescription(label + ": " + s.home + " a " + s.away);
     return box;
   }
@@ -663,27 +679,43 @@ final class MatchCenter {
     LinearLayout c = new LinearLayout(context);
     c.setOrientation(LinearLayout.VERTICAL);
     c.setGravity(Gravity.CENTER_HORIZONTAL);
+    LinearLayout.LayoutParams ip;
+    View top;
     if (icon.isEmpty()) {
-      View cardView = new View(context);
-      cardView.setBackground(Ui.shape(context, iconColor, 2, 0, 0));
-      c.addView(cardView, new LinearLayout.LayoutParams(dp(12), dp(16)));
+      top = new View(context);
+      top.setBackground(Ui.shape(context, iconColor, 2, 0, 0));
+      ip = new LinearLayout.LayoutParams(dp(12), dp(16));
     } else {
       TextView t = text(icon, 16, iconColor, true);
-      c.addView(t, new LinearLayout.LayoutParams(-2, dp(18)));
+      t.setGravity(Gravity.CENTER);
+      t.setIncludeFontPadding(false);
+      top = t;
+      ip = new LinearLayout.LayoutParams(-2, dp(18));
     }
+    ip.gravity = Gravity.CENTER_HORIZONTAL;
+    c.addView(top, ip);
     TextView v = text(value, 15, Ui.FG, true);
+    v.setGravity(Gravity.CENTER);
     v.setPadding(0, dp(6), 0, 0);
-    c.addView(v);
+    c.addView(v, new LinearLayout.LayoutParams(-1, -2));
     return c;
   }
 
+  /** A team's shots: on target big and the total small, both centred in its circle. */
   View shots(String onTarget, String total, int color, int textColor) {
-    LinearLayout c = new LinearLayout(context);
-    c.setOrientation(LinearLayout.VERTICAL);
+    TextView c = new TextView(context);
+    android.text.SpannableStringBuilder t = new android.text.SpannableStringBuilder(onTarget == null || onTarget.isEmpty() ? "–" : onTarget);
+    t.setSpan(new android.text.style.StyleSpan(Typeface.BOLD), 0, t.length(), 0);
+    int from = t.length();
+    t.append("\n").append(total == null || total.isEmpty() ? "–" : total);
+    t.setSpan(new android.text.style.RelativeSizeSpan(0.7f), from, t.length(), 0);
+    c.setText(t);
+    c.setTextSize(16);
+    c.setTextColor(textColor);
     c.setGravity(Gravity.CENTER);
+    c.setLineSpacing(0, 0.9f);
+    c.setIncludeFontPadding(false);
     c.setBackground(Ui.shape(context, color, 999, 0, 0));
-    c.addView(text(onTarget, 16, textColor, true));
-    c.addView(text(total, 11, textColor, false));
     return c;
   }
 
@@ -714,8 +746,8 @@ final class MatchCenter {
       icons.setGravity(Gravity.CENTER_VERTICAL);
       String[] keys = {"wonCorners", "redCards", "yellowCards"};
       for (String k : keys) icons.addView(cellFor(m, k, "home"), new LinearLayout.LayoutParams(0, -2, 1));
-      LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(52), dp(52));
-      sp.setMargins(dp(2), 0, dp(2), 0);
+      LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(48), dp(48));
+      sp.setMargins(dp(4), 0, dp(4), 0);
       icons.addView(shots(value(m, "shotsOnTarget", "home"), value(m, "totalShots", "home"), HOME, 0xffffffff), sp);
       icons.addView(shots(value(m, "shotsOnTarget", "away"), value(m, "totalShots", "away"), AWAY, 0xff1a1200), sp);
       for (int i = keys.length - 1; i >= 0; i--) icons.addView(cellFor(m, keys[i], "away"), new LinearLayout.LayoutParams(0, -2, 1));
