@@ -25,6 +25,9 @@ final class MadplayPlayback {
   static String menu(String page) {
     String id = match(page); return id == null ? null : ENDPOINT + "/match/" + id + "/sources.json";
   }
+  static boolean isRelay(String address) {
+    return address != null && address.matches(Pattern.quote(ENDPOINT) + "/match/[1-9][0-9]{0,9}/source/[1-9][0-9]{0,9}/index\\.m3u8");
+  }
   static List<VideoResolver.Source> parse(String page, String json) throws Exception {
     String id = match(page); if (id == null) throw new IllegalArgumentException("Página de partido no válida.");
     JSONObject data = new JSONObject(json); JSONArray items = data.optJSONArray("items");

@@ -826,7 +826,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     releasePlayer();
     DataSource.Factory http;
     // The signed URL and its media must use the same working system route to our hosting.
-    final boolean hostedSource = hostingPlayback && HostingPlayback.isRelay(source.url);
+    final boolean hostedSource = (hostingPlayback && HostingPlayback.isRelay(source.url)) || MadplayPlayback.isRelay(source.url);
     final boolean requestHttp1 = mediaHttp1 || hostedSource;
     try {
       if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || source.url.startsWith(Library.PLAYER_ENDPOINT)
@@ -1039,7 +1039,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** A failed private DNS must not leave working device connections waiting indefinitely. */
   private boolean retrySystemNetwork(VideoResolver.Source source) {
-    if (hostingPlayback || mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
+    if (hostingPlayback || MadplayPlayback.isRelay(source.url) || mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
     mediaSystemRetry = true;
     mediaHttp1 = true;
     status.setText("Reintentando con la conexión del dispositivo…");

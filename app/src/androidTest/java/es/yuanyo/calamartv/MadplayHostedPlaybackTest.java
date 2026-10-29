@@ -38,11 +38,11 @@ public class MadplayHostedPlaybackTest {
     HandshakeCertificates serverTls=new HandshakeCertificates.Builder().heldCertificate(cert).build();
     HandshakeCertificates tls=new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
     Buffer video=new Buffer();try(java.io.InputStream in=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("live.ts")){byte[] b=new byte[8192];for(int n;(n=in.read(b))!=-1;)video.write(b,0,n);}
-    AtomicInteger roots=new AtomicInteger(),pieces=new AtomicInteger(),provider=new AtomicInteger();AtomicReference<String> signal=new AtomicReference<>("");
+    AtomicInteger menus=new AtomicInteger(),roots=new AtomicInteger(),pieces=new AtomicInteger(),provider=new AtomicInteger();AtomicReference<String> signal=new AtomicReference<>("");
     try(MockWebServer server=new MockWebServer()){
       server.useHttps(serverTls.sslSocketFactory(),false);server.start();
       server.setDispatcher(new Dispatcher(){public MockResponse dispatch(RecordedRequest r){String path=r.getPath();
-        if(path.endsWith("/sources.json"))return available?new MockResponse().setHeader("Content-Type","application/json").setBody("{\"items\":[{\"id\":905919,\"name\":\"VIX ES\",\"url\":\""+BASE+"/source/905919/index.m3u8\"},{\"id\":901559,\"name\":\"English\",\"url\":\""+BASE+"/source/901559/index.m3u8\"}]}"):new MockResponse().setResponseCode(503);
+        if(path.endsWith("/sources.json")){menus.incrementAndGet();return available?new MockResponse().setHeader("Content-Type","application/json").setBody("{\"items\":[{\"id\":905919,\"name\":\"VIX ES\",\"url\":\""+BASE+"/source/905919/index.m3u8\"},{\"id\":901559,\"name\":\"English\",\"url\":\""+BASE+"/source/901559/index.m3u8\"}]}"):new MockResponse().setResponseCode(503);}
         if(path.endsWith("/index.m3u8")){signal.set(path.contains("905919")?"905919":"901559");int generation=roots.incrementAndGet();return new MockResponse().setHeader("Content-Type","application/vnd.apple.mpegurl").setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\nasset/piece.bin?session="+generation+"\n#EXT-X-ENDLIST\n");}
         if(path.contains("/asset/piece.bin")){pieces.incrementAndGet();return new MockResponse().setHeader("Content-Type","video/mp2t").setBody(video.clone());}
         return new MockResponse().setResponseCode(404);
@@ -57,9 +57,9 @@ public class MadplayHostedPlaybackTest {
         boolean tv=(context.getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_TYPE_MASK)==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
         if(tv){androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);}
         else scenario.onActivity(a->{try{Field f=NativePlayerActivity.class.getDeclaredField("sourceButton");f.setAccessible(true);((android.widget.Button)f.get(a)).performClick();}catch(Exception e){throw new AssertionError(e);}});
-        onView(withText("English")).inRoot(isDialog()).perform(click());assertPlays(scenario);assertEquals("901559",signal.get());int before=roots.get();
+        onView(withText("English")).inRoot(isDialog()).perform(click());assertPlays(scenario);assertEquals("901559",signal.get());int before=menus.get();
         scenario.onActivity(a->{try{java.lang.reflect.Method m=NativePlayerActivity.class.getDeclaredMethod("resolveFresh");m.setAccessible(true);m.invoke(a);}catch(Exception e){throw new AssertionError(e);}});
-        long until=SystemClock.elapsedRealtime()+12000;while(roots.get()<=before&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(80);assertTrue(roots.get()>before);assertPlays(scenario);assertEquals("901559",signal.get());assertEquals(0,provider.get());
+        long until=SystemClock.elapsedRealtime()+12000;while(menus.get()<=before&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(80);assertTrue(menus.get()>before);assertPlays(scenario);assertEquals("901559",signal.get());assertEquals(0,provider.get());
       }finally{client.set(transport,original);NetworkTransport.select(context,previous);}
     }
   }
