@@ -6,46 +6,10 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import org.json.JSONObject;
-import org.json.JSONArray;
-import java.util.ArrayList;
-import java.util.List;
 
 /** Obtain a signed HLS URL from the same relay used by the web. Never return a provider URL. */
 final class HostingPlayback {
   private HostingPlayback() {}
-  static final String AUTOMATIC = "0000000000000000";
-
-  static final class Option {
-    final String id, name;
-    Option(String id, String name) { this.id = id; this.name = name; }
-  }
-
-  static String label(String name, String fallback) {
-    String clean = (name == null ? "" : name).replaceAll("(?i)https?://\\S+|(?:[a-z0-9-]+\\.)+(?:com|cc|net|org)\\b\\S*", "")
-        .replaceAll("(?i)zico\\s*tv|zicotv", "").replaceAll("^[\\s·|:-]+|[\\s·|:-]+$", "").trim();
-    return clean.isEmpty() || clean.matches("(?i)(CDN|fuente|opción|servidor)\\s*\\d*") ? fallback : clean;
-  }
-
-  static List<Option> options(String page, String fallback, PlayerDocument.ConnectionFactory network) throws IOException {
-    try {
-      JSONObject menu = new JSONObject(fetch(Library.playerRelay(page) + "&list=1", network));
-      String channel = label(menu.optString("name"), fallback);
-      JSONArray items = menu.optJSONArray("items");
-      List<Option> out = new ArrayList<>();
-      out.add(new Option(AUTOMATIC, channel + " · Automática"));
-      if (items != null) for (int i = 0; i < items.length(); i++) {
-        JSONObject item = items.optJSONObject(i);
-        if (item == null || !item.optString("id").matches("[a-f0-9]{16}") || AUTOMATIC.equals(item.optString("id"))) continue;
-        out.add(new Option(item.getString("id"), label(item.optString("name"), channel + " · Señal " + (i + 1))));
-      }
-      if (items == null) {
-        int count = Math.min(100, menu.optInt("sources", 0));
-        for (int i = 0; i < count; i++) out.add(new Option("legacy-" + i, channel + (count > 1 ? " · Señal " + (i + 1) : "")));
-      }
-      return out;
-    } catch (IOException error) { throw error; }
-    catch (Exception error) { throw new IOException("No se pudieron leer las señales del canal", error); }
-  }
 
   static String request(String page) {
     return Library.playerRelay(page) + "&cast=1";
@@ -73,29 +37,9 @@ final class HostingPlayback {
   }
 
   static String resolve(String page, PlayerDocument.ConnectionFactory connections) throws IOException {
-    return resolve(page, "", connections);
-  }
-
-  static String resolve(String page, String id, PlayerDocument.ConnectionFactory connections) throws IOException {
-    return resolve(page, id, 0, connections);
-  }
-
-  static String resolve(String page, String id, int attempt, PlayerDocument.ConnectionFactory connections) throws IOException {
-    if (!id.isEmpty() && !id.matches("[a-f0-9]{16}|legacy-[0-9]{1,2}")) throw new IOException("Señal no válida");
-    boolean automatic = id.isEmpty() || AUTOMATIC.equals(id);
-    String selection = automatic ? (attempt > 0 ? "&intento=" + Math.min(9, attempt) : "")
-        : id.startsWith("legacy-") ? "&src=" + id.substring(7) : "&source_id=" + id;
-    return signedUrl(fetch(request(page) + selection, connections, 60000));
-  }
-
-  private static String fetch(String address, PlayerDocument.ConnectionFactory connections) throws IOException {
-    return fetch(address, connections, 25000);
-  }
-
-  private static String fetch(String address, PlayerDocument.ConnectionFactory connections, int timeout) throws IOException {
-    HttpURLConnection c = connections.open(URI.create(address).toURL());
+    HttpURLConnection c = connections.open(URI.create(request(page)).toURL());
     try {
-      c.setConnectTimeout(15000); c.setReadTimeout(timeout);
+      c.setConnectTimeout(15000); c.setReadTimeout(25000);
       c.setInstanceFollowRedirects(false); c.setUseCaches(false);
       c.setRequestProperty("User-Agent", PlayerDocument.USER_AGENT);
       c.setRequestProperty("Accept", "application/json");
@@ -115,7 +59,7 @@ final class HostingPlayback {
         try { detail = new JSONObject(body).optString("error", ""); } catch (Exception ignored) { }
         throw new IOException("Hosting HTTP " + code + (detail.isEmpty() ? "" : ": " + detail));
       }
-      return body;
+      return signedUrl(body);
     } finally { c.disconnect(); }
   }
 }

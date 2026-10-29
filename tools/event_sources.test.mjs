@@ -16,7 +16,7 @@ test('only public valid players, deduplicated and named', () => {
 });
 test('manual event expands while existing sources and selection origin are preserved', async () => {
   const result = await expandEventSources(['https://example.com/live.m3u8', page], {fetcher:async (url, options) => {
-    assert.equal(new URL(url).hostname, 'calamarmenciano.com'); assert.equal(new URL(url).searchParams.get('event'), page); assert.equal(options.credentials, 'omit');
+    assert.equal(url, zicoEventApi(page)); assert.equal(options.credentials, 'omit');
     return {ok:true,json:async()=>data};
   }});
   assert.equal(result.length, 2); assert.equal(result[1].url, player); assert.equal(result[1].origin, page);
@@ -26,13 +26,4 @@ test('empty events and failed requests remain retryable with a visible explanati
     const result = await expandEventSources([page, player], {fetcher:async()=>response});
     assert.equal(result[0].url, page); assert.ok(result[0].error); assert.equal(result[1].url, player);
   }
-});
-
-test('source names never show the address of the site the video comes from', () => {
-  const found = eventPlayerSources({ data: { sources: [
-    { name: 'DAZN LaLiga', player_url: 'https://a.example/api/player/1' },
-    { name: 'bp.zicotv.cc', player_url: 'https://a.example/api/player/2' },
-    { name: 'ZicoTV 2', player_url: 'https://a.example/api/player/3' },
-  ] } });
-  assert.deepEqual(found.map(s => s.name), ['DAZN LaLiga', 'Fuente del evento', 'Fuente del evento']);
 });

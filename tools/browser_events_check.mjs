@@ -763,63 +763,56 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // Every public signal is selected by name and stays on the hosting during token renewal.
-  let hostingReady = false, tokenVersion = 0, eventReady = true;
-  const relaySelections = [];
-  await page.route('https://calamarmenciano.com/calamar-player.php?**', route => {
-    const u = new URL(route.request().url());
-    if (u.searchParams.has('event')) return route.fulfill({ json: { data: { sources: eventReady ? [
-      { name: 'Canal A', player_url: 'https://bp.zicotv.cc/api/player/22' },
-      { name: 'Canal B', player_url: 'https://bp.zicotv.cc/api/player/23' }
-    ] : [] } }, headers: { 'Access-Control-Allow-Origin': '*' } });
-    const id = new URL(u.searchParams.get('page')).pathname.split('/').pop();
-    if (!hostingReady && id === '1') return route.fulfill({status:502,json:{error:'Sin señales'},headers:{'Access-Control-Allow-Origin':'*'}});
-    const name = id === '22' ? 'Canal A' : id === '23' ? 'Canal B' : 'Liga de Campeones';
-    if (u.searchParams.has('list')) return route.fulfill({ json: { name, items: id === '1' ? [
-      { id:'0000000000000000', name:name+' · Automática' }, { id:'0123456789abcdef', name:name+' · Señal 1' }, { id:'fedcba9876543210', name:name+' · Señal 2' }
-    ] : [{ id:'0123456789abcdef', name }] }, headers:{'Access-Control-Allow-Origin':'*'} });
-    relaySelections.push(u.searchParams.get('source_id'));
-    return route.fulfill({json:{url:`calamar-player.php?seg=${id==='1'?'fresh'+(++tokenVersion):'event-'+id}&sig=ok`},headers:{'Access-Control-Allow-Origin':'*'}});
-  });
+  // Failed lookup stays in our player and retries; it must never switch to an iframe.
+  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: '<p>Sin fuentes ahora</p>' }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
-    saved.channels.push({ id: 'zico', name: 'Canal Campeones', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
+    saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
-  await page.goto(base + '/?hosted=1#/canal/canal-campeones');
-  await page.getByText('No se pudieron consultar las señales del canal. Pulsa Reintentar.').waitFor();
-  assert.equal(await page.locator('#player-frame').count(),0);
+  await page.goto(base + '/?zico=1#/canal/canal-zico');
+  await page.getByText(/No hay un M3U8 vigente/).waitFor();
+  await page.clock.runFor(90000);
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), false);
+  assert.equal(await page.locator('#player-close').isVisible(), true);
+  assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
-  hostingReady = true;
-  await page.goto(base + '/?hosted=2#/canal/canal-campeones');
-  await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('fresh1')));
-  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Liga de Campeones · Automática','Liga de Campeones · Señal 1','Liga de Campeones · Señal 2']);
-  await page.getByLabel('Cambiar fuente').selectOption('2');
-  await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('fresh2')));
-  assert.equal(relaySelections.at(-1),'fedcba9876543210');
-  await page.clock.runFor(3000);
-  assert.equal(relaySelections.at(-1),'fedcba9876543210');
-  assert.ok((await page.evaluate(()=>window.__hlsSources)).every(url=>new URL(url).hostname==='calamarmenciano.com'));
-  assert.equal(await page.locator('#player-frame').count(),0);
+  // Exposed sources use our HLS player without sending the page through the hosting.
+  let tokenVersion = 0;
+  await page.route('https://zicotv.cc/api/player/1', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: 'var ZT_SOURCES = ' + JSON.stringify([{ url: `https://cdn.example/renew.m3u8?token=fresh${++tokenVersion}` }]) + ';' }));
+  await page.goto(base + '/?zico=2#/canal/canal-zico');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
+  assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
+  // Event page URLs expand into named public players, never an iframe of /events/.
+  let eventReady = true;
+  await page.route('https://bp.zicotv.cc/api/v1/events/98019', route => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ data: { sources: eventReady ? [
+    {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
+    {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'}
+  ] : [] } }) }));
+  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'var ZT_SOURCES = ' + JSON.stringify([{url:`https://cdn.example/event-${route.request().url().split('/').pop()}.m3u8`}]) + ';' }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
-    saved.events.push({id:'manual-zico',name:'Evento Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
+    saved.events.push({id:'manual-zico',name:'Evento Zico Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
-  await page.goto(base + '/?event-hosted=1#/evento/evento-manual');
-  await page.waitForFunction(()=>window.__hlsSources?.some(url=>url.includes('event-22')));
-  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(),['Canal A','Canal B']);
+  await page.goto(base + '/?event-zico=1#/evento/evento-zico-manual');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Canal A','Canal B']);
   await page.getByLabel('Cambiar fuente').selectOption('1');
-  await page.waitForFunction(()=>window.__hlsSources?.some(url=>url.includes('event-23')));
-  assert.equal(await page.locator('#player-source-select').inputValue(),'1');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-23')));
+  assert.equal(await page.locator('#player-source-select').inputValue(), '1');
+  assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
-  eventReady=false;
-  await page.goto(base + '/?event-hosted=2#/evento/evento-manual');
-  await page.getByText('Todavía no hay señales disponibles para este evento.',{exact:false}).waitFor();
-  eventReady=true;
-  await page.getByRole('button',{name:'↻ Consultar de nuevo'}).click();
-  await page.waitForFunction(()=>window.__hlsSources?.some(url=>url.includes('event-22')));
+  eventReady = false;
+  await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
+  await page.getByText('Zico TV todavía no publica fuentes disponibles para este evento.', {exact:false}).waitFor();
+  assert.equal(await page.locator('#player-frame').count(), 0);
+  eventReady = true;
+  await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
   await page.locator('#player-close').click();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');

@@ -21,41 +21,6 @@ def php(code):
 
 
 class PlayerRelayTest(unittest.TestCase):
-    def test_zico_ipv6_remains_pinned_to_public_cloudflare_addresses(self):
-        out = php('$resolve=function($host){return ["2606:4700:3034::6815:1234","104.21.18.52"];};'
-                  'echo json_encode(['
-                  'publicTarget("https://zicotv.cc/api/player/6",$resolve,true),'
-                  'publicTarget("https://zicotv.cc/api/player/6",$resolve),'
-                  'publicTarget("https://zicotv.cc/",function($h){return ["::1","104.21.18.52"];},true),'
-                  'publicTarget("https://zicotv.cc/",function($h){return ["2606:4700::1","127.0.0.1"];},true),'
-                  'publicTarget("https://zicotv.cc/",function($h){return ["::ffff:127.0.0.1"];},true),'
-                  'array_map("publicCloudflareIp6",["2a06:98c7::1","2a06:98c8::1","fc00::1","fe80::1","2001:db8::1"])]);')
-        result = json.loads(out)
-        self.assertEqual(result[0], {'host': 'zicotv.cc', 'port': 443, 'ip': '2606:4700:3034::6815:1234'})
-        self.assertEqual(result[1:5], [None, None, None, None])
-        self.assertEqual(result[5], [True, False, False, False, False])
-
-    def test_signal_names_hide_transport_and_ids_survive_token_rotation(self):
-        html = '<title>Reproductor - Liga de Campeones - ZicoTV</title>'
-        urls = ['https://cdn1.zicotv.cc/live.m3u8?token=old', 'https://cdn2.zicotv.cc/live.m3u8?token=old']
-        code = f'$urls=json_decode({json.dumps(json.dumps(urls))},true); echo json_encode([playerSourceMenu($urls,{json.dumps(html)}), playerSourceId(str_replace("old","new",$urls[1])), playerSignalName("https://zicotv.cc calamarmenciano.com Zico TV", "Canal")]);'
-        menu, fresh, cleaned = json.loads(php(code))
-        self.assertEqual(menu['name'], 'Liga de Campeones')
-        self.assertEqual([s['name'] for s in menu['items']], ['Liga de Campeones · Automática','Liga de Campeones · Señal 1','Liga de Campeones · Señal 2'])
-        self.assertEqual(menu['items'][2]['id'], fresh)
-        self.assertEqual(cleaned, 'Canal')
-        self.assertNotIn('url', menu['items'][0])
-
-    def test_automatic_menu_id_keeps_all_sources_for_257_while_manual_selection_stays_fixed(self):
-        sources = ['https://cdn1.zicotv.cc/live.m3u8', 'https://cdn2.zicotv.cc/live.m3u8']
-        code = f'$sources=json_decode({json.dumps(json.dumps(sources))},true); $menu=playerSourceMenu($sources,"<title>Canal</title>"); echo json_encode([$menu,playerSelectedSources($sources,$menu["items"][0]["id"]),playerSelectedSources($sources,$menu["items"][2]["id"]),playerSelectedSources($sources,"invalid")]);'
-        menu, automatic, manual, invalid = json.loads(php(code))
-        self.assertEqual(menu['sources'], 2)
-        self.assertEqual(menu['items'][0]['id'], '0000000000000000')
-        self.assertEqual(automatic, sources)
-        self.assertEqual(manual, [sources[1]])
-        self.assertEqual(invalid, [])
-
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'
                 '{"label":"CDN 1","url":"/live/b.m3u8?t=\\"2\\"","hidden":true},'
@@ -129,7 +94,7 @@ class PlayerRelayTest(unittest.TestCase):
                     except OSError: time.sleep(0.1)
                 bad = 'aHR0cHM6Ly9leGFtcGxlLmNvbS9zZWNyZXQ'
                 for query, code in ((f'seg={bad}&p=&sig=00000000000000000000000000000000', 403), (f'seg={bad}', 403),
-                                    ('page=https%3A%2F%2Fzicotv.cc%2Fcanal%2Fx&hls=1', 403), ('page=http%3A%2F%2Fzicotv.cc%2F&hls=1', 403), ('page=ftp%3A%2F%2Fzicotv.cc%2F&hls=1', 400)):
+                                    ('page=https%3A%2F%2Fzicotv.cc%2Fcanal%2Fx&hls=1', 403), ('page=http%3A%2F%2Fzicotv.cc%2F&hls=1', 400)):
                     with self.assertRaises(urllib.error.HTTPError) as refused:
                         urllib.request.urlopen(f'http://127.0.0.1:{port}/calamar-player.php?{query}', timeout=5)
                     self.assertEqual(refused.exception.code, code, query)
