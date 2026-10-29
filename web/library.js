@@ -160,12 +160,18 @@ export function recordProgress(store, entry, position, duration, now = Date.now(
 export const removeProgress = (store, key) => { const next = { ...store }; delete next[key]; return next; };
 export const progressList = (store) => Object.values(store || {}).sort((a, b) => b.at - a.at);
 export const progressPath = (entry) => `#/${entry.page}/${encodeURIComponent(entry.item)}/ver${entry.episode ? `/${encodeURIComponent(entry.episode)}` : ''}`;
+// Each profile of an account keeps its own row; the main profile (and no account) keeps the original keys.
+let progressScope = '';
+/** The profile whose row is read and saved from now on ('' for the main profile or no account). */
+export function setProgressScope(scope = '') { progressScope = scope; }
+const progressKey = () => (progressScope ? `${PROGRESS_STORAGE}:${progressScope}` : PROGRESS_STORAGE);
+const removedKey = () => (progressScope ? `${PROGRESS_REMOVED}:${progressScope}` : PROGRESS_REMOVED);
 export function loadProgress() {
-  try { const data = JSON.parse(localStorage.getItem(PROGRESS_STORAGE) || '{}'); return data && typeof data === 'object' ? data : {}; }
+  try { const data = JSON.parse(localStorage.getItem(progressKey()) || '{}'); return data && typeof data === 'object' ? data : {}; }
   catch { return {}; }
 }
 export function loadRemoved() {
-  try { const data = JSON.parse(localStorage.getItem(PROGRESS_REMOVED) || '{}'); return data && typeof data === 'object' ? data : {}; }
+  try { const data = JSON.parse(localStorage.getItem(removedKey()) || '{}'); return data && typeof data === 'object' ? data : {}; }
   catch { return {}; }
 }
 const progressListeners = new Set();
@@ -176,7 +182,7 @@ export function saveProgress(store, { now = Date.now(), quiet = false, removed =
   const before = loadProgress(), gone = removed || loadRemoved();
   if (!removed) for (const key of Object.keys(before)) if (!store[key]) gone[key] = now;
   for (const key of Object.keys(store)) if (gone[key] && gone[key] < (store[key].at || 0)) delete gone[key];
-  try { localStorage.setItem(PROGRESS_STORAGE, JSON.stringify(store)); localStorage.setItem(PROGRESS_REMOVED, JSON.stringify(gone)); } catch {}
+  try { localStorage.setItem(progressKey(), JSON.stringify(store)); localStorage.setItem(removedKey(), JSON.stringify(gone)); } catch {}
   if (!quiet) for (const listener of progressListeners) listener();
 }
 
@@ -729,7 +735,7 @@ export function resumeEpisode(item, saved = () => null) {
  * button, the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», and the tabs «Episodios»
  * (series: the season drop-down and its episodes), «Tráileres y más» (the trailer in Spanish) and «Similares».
  */
-export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null) {
+export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = []) {
   const info = item.tmdb || {};
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
@@ -770,7 +776,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       starring,
       creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
       info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
-      el('div', { class: 'title-actions' }, share)));
+      el('div', { class: 'title-actions' }, ...extras, share)));
   if (trailer) {
     const backdrop = head.querySelector('.title-backdrop');
     const frame = el('iframe', { class: 'title-preview', src: `./trailer.html?v=${trailer}`, title: `Tráiler de ${itemTitle(item)}`,

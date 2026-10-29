@@ -5,7 +5,7 @@
 import { loadProgress, loadRemoved, saveProgress, onProgressSaved, progressToCloud, progressFromCloud, mergeProgress } from './library.js';
 
 const PULL_EVERY = 30000, PUSH_AFTER = 15000;
-let firebase = null, user = null, pulledAt = 0, pushTimer = null, busy = null, changedHere = () => {};
+let firebase = null, user = null, pulledAt = 0, pushTimer = null, busy = null, changedHere = () => {}, profile = 'main';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -14,15 +14,17 @@ async function sync() {
   if (!firebase || !user) return false;
   if (busy) return busy;
   busy = (async () => {
+    const from = profile;
     const local = progressToCloud(loadProgress(), loadRemoved());
-    const cloud = await firebase.readCloudProgress();
+    const cloud = await firebase.readCloudProgress(from);
+    if (from !== profile) return false; // The profile changed meanwhile: its own sync follows.
     const merged = mergeProgress(local, cloud || {});
     pulledAt = Date.now();
     const { store, removed } = progressFromCloud(merged);
     const shown = (row) => Object.keys(row).sort().map((k) => [k, row[k].at, row[k].position]);
     const changed = !same(shown(store), shown(loadProgress()));
     saveProgress(store, { quiet: true, removed });
-    if (!same(merged, cloud)) await firebase.writeCloudProgress(merged);
+    if (!same(merged, cloud)) await firebase.writeCloudProgress(merged, from);
     return changed;
   })().catch(() => false).finally(() => { busy = null; });
   return busy;
@@ -52,4 +54,13 @@ export function startProgressSync(shared, changed) {
 export async function refreshProgress() {
   if (!user || Date.now() - pulledAt < PULL_EVERY) return;
   if (await sync()) changedHere();
+}
+
+/** Another profile of the account was chosen: its row is read from its own copy in the cloud. */
+export async function setProgressProfile(id = 'main') {
+  if (profile === id) return;
+  profile = id;
+  clearTimeout(pushTimer); pushTimer = null; pulledAt = 0;
+  if (busy) await busy;
+  if (user && await sync()) changedHere();
 }

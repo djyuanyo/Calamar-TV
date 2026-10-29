@@ -38,6 +38,14 @@ export const saveLibrarySettings = async (settings) => { window.__librarySetting
 export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; };
 export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
 export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
+export const readAccount = async () => window.__account || null;
+export const writeAccount = async (data) => { window.__account = data; };
+export const readProfileData = async (id) => (window.__profileData || {})[id] || null;
+export const writeProfileData = async (id, data) => { (window.__profileData ||= {})[id] = data; };
+export const deleteProfileData = async (id) => { delete (window.__profileData || {})[id]; };
+export const readCloudProgress = async () => ({ entries: {}, removed: {} });
+export const writeCloudProgress = async () => {};
+export const loginGoogle = async () => {}, registerEmail = async () => {}, loginEmail = async () => {}, resetPassword = async () => {};
 `;
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {

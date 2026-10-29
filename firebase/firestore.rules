@@ -104,6 +104,30 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow list: if false;
     }
+    // Accounts (Google or email and password): the profiles of each account and, per profile, its
+    // «Continuar viendo» (the main profile keeps calamarProgress/<uid>), My list, likes and favourite
+    // channels. Only that account reads or writes them.
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function jsonDoc(limit) {
+      let p = request.resource.data;
+      return p.keys().hasAll(['json', 'updatedAt']) && p.keys().hasOnly(['json', 'updatedAt'])
+        && p.json is string && p.json.size() <= limit && p.updatedAt == request.time;
+    }
+    match /calamarUsers/{uid} {
+      allow get, delete: if owner(uid);
+      allow create, update: if owner(uid) && jsonDoc(20000);
+      allow list: if false;
+      match /profiles/{profile} {
+        allow get, delete: if owner(uid);
+        allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
+        allow list: if false;
+      }
+      match /progress/{profile} {
+        allow get, delete: if owner(uid);
+        allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
+        allow list: if false;
+      }
+    }
     match /{document=**} {
       allow read, write: if false;
     }

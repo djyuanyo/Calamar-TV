@@ -11,3 +11,5 @@ El editor web usa Google en una ventana emergente. El editor nativo usa Credenti
 Solo se incluyen identificadores públicos de cliente. No se necesitan cuentas de servicio, claves privadas ni secretos OAuth en la APK o en GitHub. La firma de distribución se conserva fuera del repositorio y debe mantenerse en futuras APK.
 
 Pruebas: `npm install && npm test` con Node 24/JDK 21 en este directorio. Se ejecutan sobre `demo-calamar-tv`, aisladas de producción.
+
+Cuentas de usuario y perfiles (web): cualquiera puede entrar con Google o con correo y contraseña (hay que activar «Correo electrónico/contraseña» en Authentication → Método de acceso). Cada cuenta guarda sus perfiles en `calamarUsers/<uid>` (`json` de hasta 20 KB), y cada perfil su lista, «Me gusta» y canales favoritos en `calamarUsers/<uid>/profiles/<perfil>` y su «Continuar viendo» en `calamarUsers/<uid>/progress/<perfil>` (hasta 200 KB). El perfil principal sigue usando `calamarProgress/<uid>`, el que lee la app. Solo la propia cuenta lee y escribe sus documentos; las reglas están en `firestore.rules` y hay que publicarlas en la consola de Firebase.

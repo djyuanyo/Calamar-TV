@@ -13,7 +13,9 @@ import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles } from './library.js';
+import { startProfiles, onProfilesChanged, needsProfile, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel } from './profiles.js';
+import { accountPage, paintAccountButton } from './account.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -403,10 +405,15 @@ function home() {
   const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => [libraryTop(library, key), what]);
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
+  // The profile's own rows: «Mi lista» and «Porque te gustó…», as in Netflix.
+  if (libraryShown() && library) nodes.push(...profileRows(library));
   // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
   if (libraryShown() && halloweenOn()) nodes.push(...halloweenRow(el, library));
+  // The favourite channels of the profile watching.
+  const favorites = state.channels.filter((c) => isFavorite(c.id));
+  if (favorites.length) nodes.push(sectionHead('Tus canales favoritos', el('span', {}, favorites.length === 1 ? '1 canal' : `${favorites.length} canales`)), rail(favorites, { limit: favorites.length }));
   // Only events on the home page: one row per league, each in date order (soonest first), with this
   // week's events only: a league whose next matches are in two weeks does not appear yet.
   for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
@@ -418,6 +425,42 @@ function home() {
   }
   if (!matches.length) nodes.push(el('p', { class: 'status' }, 'Todavía no hay eventos. ', el('a', { href: '#/canales' }, 'Ver los canales')));
   return nodes;
+}
+
+/** «Mi lista» and «Porque te gustó «X»» of the profile watching (only titles still in the library). */
+function profileRows(library) {
+  const find = ({ page, item }) => {
+    const section = sectionByPage(page);
+    const found = section && (library.sections?.[section.key] || []).find((i) => i.id === item);
+    return found ? { section, item: found } : null;
+  };
+  const nodes = [];
+  const mine = listEntries(profileData()).map(find).filter(Boolean);
+  if (mine.length) nodes.push(sectionHead('Mi lista', el('span', {}, mine.length === 1 ? '1 título' : `${mine.length} títulos`)),
+    el('div', { class: 'rail browse-rail' }, mine.map(({ section, item }) => browseCard(el, section, item))));
+  const liked = lastLiked(profileData()), title = liked && find(liked);
+  const like = title ? similarTitles(library, title.section, title.item).filter((i) => ratingOf(title.section.page, i.id) >= 0) : [];
+  if (like.length) nodes.push(sectionHead(`Porque te gustó «${itemTitle(title.item)}»`),
+    el('div', { class: 'rail browse-rail' }, like.map((i) => browseCard(el, title.section, i))));
+  return nodes;
+}
+
+/** «+ Mi lista», «Me gusta» and «No me gusta» on a title's page; they change in place. */
+function titleExtras(section, item) {
+  const mark = (button, on, label) => { button.setAttribute('aria-pressed', String(on)); button.lastChild.textContent = label; };
+  const list = el('button', { class: 'title-action', type: 'button', onclick: () => { toggleMyList(section.page, item.id); paint(); } },
+    el('span', { 'aria-hidden': 'true' }, '+'), el('span', {}, 'Mi lista'));
+  const up = el('button', { class: 'title-action', type: 'button', onclick: () => { rateTitle(section.page, item.id, 1); paint(); } },
+    el('span', { 'aria-hidden': 'true' }, '👍'), el('span', {}, 'Me gusta'));
+  const down = el('button', { class: 'title-action', type: 'button', onclick: () => { rateTitle(section.page, item.id, -1); paint(); } },
+    el('span', { 'aria-hidden': 'true' }, '👎'), el('span', {}, 'No me gusta'));
+  const paint = () => {
+    const saved = inMyList(section.page, item.id), rating = ratingOf(section.page, item.id);
+    mark(list, saved, saved ? 'En mi lista' : 'Mi lista'); list.firstChild.textContent = saved ? '✓' : '+';
+    mark(up, rating > 0, 'Me gusta'); mark(down, rating < 0, 'No me gusta');
+  };
+  paint();
+  return [list, up, down];
 }
 
 /** A league's page (#/liga/<slug>): its logo on its background, a share button and every match of the league with a channel, in a grid. */
@@ -888,6 +931,7 @@ function open(c, fromRoute = false) {
   current = c;
   // Channels and events are shared through their preview page; films and episodes are not.
   shareButton.hidden = !!c.vod;
+  paintFavorite();
   // An imported match without a channel has no video: only its match page and the notice.
   player.classList.toggle('pending', !!c.pending);
   playerTitle.textContent = c.name;
@@ -1151,6 +1195,16 @@ function closePlayer() {
 
 document.getElementById('player-close').addEventListener('click', closePlayer);
 // Events and channels are shared through their preview page, so WhatsApp and others show their card.
+// A channel's ♡: the favourite channels of the profile watching (a row on the home page).
+const favoriteButton = document.getElementById('player-favorite');
+function paintFavorite() {
+  favoriteButton.hidden = !current || !!current.vod || !!current.event;
+  const on = !favoriteButton.hidden && isFavorite(current.id);
+  favoriteButton.setAttribute('aria-pressed', String(on));
+  favoriteButton.title = on ? 'Quitar de favoritos' : 'Añadir a favoritos';
+  favoriteButton.setAttribute('aria-label', favoriteButton.title);
+}
+favoriteButton.addEventListener('click', () => { if (current && !current.vod && !current.event) { toggleFavoriteChannel(current.id); paintFavorite(); } });
 const shareButton = document.getElementById('player-share');
 shareButton.addEventListener('click', async () => {
   if (!current || current.vod) return;
@@ -1226,7 +1280,7 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
     const episode = item.episodes?.find((e) => e.id === episodeId);
     if (episode) { view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved)); return; }
   }
-  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null));
+  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item)));
   if (sub === 'ver') {
     const episode = episodeId ? item.episodes?.find((e) => e.id === episodeId) : null;
     const c = playable(section, item, episode);
@@ -1237,6 +1291,18 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
 // ---- Routing ---------------------------------------------------------------------------------
 
 let routeVersion = 0;
+let accountEditing = null;
+// Accounts and profiles: the header button, «¿Quién está viendo?» after signing in, and the pages that
+// show the profile's rows drawn again when the profile or its data change.
+const accountLink = document.getElementById('account-link');
+startProfiles(shared);
+let profileRedraw = 0;
+onProfilesChanged(() => {
+  paintAccountButton(el, accountLink);
+  const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  if (needsProfile() && page !== 'cuenta' && page !== 'admin') { location.hash = '#/cuenta'; return; }
+  if (page === 'cuenta' || (!page && !search.value.trim())) { clearTimeout(profileRedraw); profileRedraw = setTimeout(route, 50); }
+});
 async function route() {
   const version = ++routeVersion;
   stopHighlight();
@@ -1252,6 +1318,18 @@ async function route() {
     const login = await import('./tv-login.js');
     const nodes = await login.render(el, arg, hash.split('/')[2]);
     if (version === routeVersion) view.replaceChildren(...nodes);
+    return;
+  }
+  if (page === 'cuenta') {
+    if (!player.hidden) hidePlayer();
+    try {
+      const f = await shared();
+      if (version !== routeVersion) return;
+      view.replaceChildren(...accountPage(el, f, { rerender: route, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
+        chosen: () => { accountEditing = null; location.hash = '#/'; } }));
+    } catch {
+      view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Comprueba la conexión y recarga.'));
+    }
     return;
   }
   if (page === 'admin') {
