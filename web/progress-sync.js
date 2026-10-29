@@ -5,13 +5,14 @@
 import { loadProgress, loadRemoved, saveProgress, onProgressSaved, progressToCloud, progressFromCloud, mergeProgress } from './library.js';
 
 const PULL_EVERY = 30000, PUSH_AFTER = 15000;
-let firebase = null, user = null, pulledAt = 0, pushTimer = null, busy = null, changedHere = () => {}, profile = 'main';
+let firebase = null, user = null, pulledAt = 0, pushTimer = null, busy = null, changedHere = () => {}, profile = 'main', ready = false;
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Joins the two copies, keeps the result in both, and says whether this browser's row changed. */
 async function sync() {
-  if (!firebase || !user) return false;
+  // Only once a profile is chosen: before that this browser's row is not the account's (a guest's or another account's).
+  if (!firebase || !user || !ready) return false;
   if (busy) return busy;
   busy = (async () => {
     const from = profile;
@@ -43,10 +44,8 @@ export function startProgressSync(shared, changed) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pushTimer) { clearTimeout(pushTimer); pushTimer = null; sync(); } });
   shared().then((f) => {
     firebase = f;
-    f.watchAuth(async (signed) => {
-      user = signed || null;
-      if (user && await sync()) changedHere();
-    });
+    // The profiles (profiles.js) say which row to follow once the account and its profile are known.
+    f.watchAuth((signed) => { user = signed || null; ready = false; });
   }).catch(() => {});
 }
 
@@ -56,11 +55,11 @@ export async function refreshProgress() {
   if (await sync()) changedHere();
 }
 
-/** Another profile of the account was chosen: its row is read from its own copy in the cloud. */
+/** The profile watching was chosen (or another one): its row is read from its own copy in the cloud. */
 export async function setProgressProfile(id = 'main') {
-  if (profile === id) return;
   profile = id;
   clearTimeout(pushTimer); pushTimer = null; pulledAt = 0;
   if (busy) await busy;
+  ready = !!user;
   if (user && await sync()) changedHere();
 }

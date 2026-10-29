@@ -1353,6 +1353,9 @@ function showGate() {
   document.body.classList.add('gate-open');
   gate.querySelector('.gate-profile')?.focus();
 }
+// The administration icon only for the administrator's own account (there is no separate sign-in).
+const adminLink = document.querySelector('.admin-link');
+shared().then((f) => f.watchAuth((user) => { adminLink.hidden = !f.administrator(user); })).catch(() => {});
 onProfilesChanged(() => {
   paintAccountButton(el, accountLink);
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];

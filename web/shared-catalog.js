@@ -50,6 +50,7 @@ export function validateCatalog(data, { checkSize = true } = {}) {
     }
   }
   if (data.libraryVisible !== undefined && typeof data.libraryVisible !== 'boolean') throw new Error('El interruptor de películas y series no es válido.');
+  if (data.appUpdates !== undefined && !['all', 'admin'].includes(data.appUpdates)) throw new Error('El aviso de actualizaciones de la app no es válido.');
   if (data.categories !== undefined) {
     const ids = new Set(), names = new Set();
     if (!Array.isArray(data.categories) || data.categories.length > 200) throw new Error('Las categorías no son válidas.');
