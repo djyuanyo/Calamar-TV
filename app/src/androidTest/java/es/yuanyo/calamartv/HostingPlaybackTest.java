@@ -1,6 +1,12 @@
 package es.yuanyo.calamartv;
 
 import static org.junit.Assert.*;
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
+import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
 import android.content.Intent;
 import android.os.SystemClock;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -25,7 +31,13 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
-  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception {
+  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false); }
+  @Test public void televisionRemoteSelectsAndRenewsHostedSignal() throws Exception {
+    org.junit.Assume.assumeTrue((ApplicationProvider.getApplicationContext().getResources().getConfiguration().uiMode
+        & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION);
+    playback(true);
+  }
+  private void playback(boolean remote) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -35,6 +47,7 @@ public class HostingPlaybackTest {
       byte[] block = new byte[8192]; for (int n; (n = in.read(block)) != -1;) video.write(block, 0, n);
     }
     AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger();
+    java.util.concurrent.atomic.AtomicReference<String> selectedId = new java.util.concurrent.atomic.AtomicReference<>("");
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false); server.start();
       server.setDispatcher(new Dispatcher() {
@@ -42,6 +55,8 @@ public class HostingPlaybackTest {
           String path = r.getPath();
           if (path.startsWith("/api/player/4")) { pages.incrementAndGet(); return new MockResponse().setResponseCode(503); }
           if (path.startsWith("/calamar-player.php?page=")) {
+            if (path.contains("&list=1")) return new MockResponse().setBody("{\"name\":\"LaLiga\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"LaLiga · Señal 1\"},{\"id\":\"fedcba9876543210\",\"name\":\"LaLiga · Señal 2\"}]}");
+            selectedId.set(r.getRequestUrl().queryParameter("source_id"));
             int n = renewals.incrementAndGet();
             return new MockResponse().setHeader("Content-Type", "application/json").setBody(
                 "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
@@ -72,7 +87,36 @@ public class HostingPlaybackTest {
         assertPlays(scenario);
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
-        assertEquals(1, pages.get());
+        assertEquals(0, pages.get());
+        if (remote) {
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);
+          AtomicBoolean focused = new AtomicBoolean();
+          java.util.concurrent.atomic.AtomicReference<String> focusDetail = new java.util.concurrent.atomic.AtomicReference<>("");
+          long focusDeadline = SystemClock.elapsedRealtime() + 5000;
+          while (!focused.get() && SystemClock.elapsedRealtime() < focusDeadline) {
+            scenario.onActivity(activity -> {
+              try {
+                Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true);
+                android.widget.Button source = (android.widget.Button)button.get(activity);
+                focused.set(source.hasFocus());
+                focusDetail.set("focused=" + activity.getCurrentFocus() + ", sourceShown=" + source.isShown() + ", sourceFocusable=" + source.isFocusable());
+              } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            SystemClock.sleep(50);
+          }
+          assertTrue("Up on the TV remote must focus Fuentes: " + focusDetail.get(), focused.get());
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
+        } else scenario.onActivity(activity -> {
+          try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); ((android.widget.Button)button.get(activity)).performClick(); }
+          catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        });
+        onView(withText("LaLiga · Señal 1")).inRoot(isDialog()).check(matches(isChecked()));
+        if (remote) {
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
+        } else onView(withText("LaLiga · Señal 2")).inRoot(isDialog()).perform(click());
+        assertPlays(scenario);
+        assertEquals("fedcba9876543210", selectedId.get());
         int before = renewals.get();
         scenario.onActivity(activity -> {
           try {
@@ -84,7 +128,8 @@ public class HostingPlaybackTest {
         while (renewals.get() <= before && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(100);
         assertTrue(renewals.get() > before);
         assertPlays(scenario);
-        assertEquals("Renewals must not return to the failing provider page", 1, pages.get());
+        assertEquals("Renewals must stay on the selected signal", "fedcba9876543210", selectedId.get());
+        assertEquals("Playback must not contact the provider", 0, pages.get());
       } finally { f.set(network, original); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
     }
   }
