@@ -102,3 +102,23 @@ export function paintAccountButton(el, link) {
   link.title = profile ? `${profile.name} · Cambiar de perfil` : '¿Quién está viendo?';
   link.setAttribute('aria-label', link.title);
 }
+
+/**
+ * «Elige tu perfil», as in Netflix, each time a signed-in account opens the web: the film N.º 1 of the
+ * week behind, the profiles, «Añadir» and «Modificar». `top` is { item } of that film (or null).
+ */
+export function profileGate(el, { top, chosen, manage }) {
+  const info = top?.item?.tmdb || {};
+  const art = info.backdrop || info.poster || '';
+  const tiles = accountProfiles().map((p) => el('button', { class: 'gate-profile', type: 'button', 'aria-label': `Ver como ${p.name}`,
+    onclick: async () => { await chooseProfile(p.id); chosen(); } }, avatar(el, p, 'big'), el('span', {}, p.name)));
+  const tool = (symbol, label, action) => el('button', { class: 'gate-profile gate-tool', type: 'button', onclick: action },
+    el('span', { class: 'profile-avatar big tool', 'aria-hidden': 'true' }, symbol), el('span', {}, label));
+  const tools = [accountProfiles().length < MAX_PROFILES ? tool('+', 'Añadir', () => manage('new')) : null, tool('✎', 'Modificar', () => manage('all'))];
+  return el('div', { class: 'profile-gate', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Elige tu perfil', style: art ? `--gate-art:url("${art.replace(/"/g, '%22')}")` : null },
+    el('div', { class: 'gate-feature' },
+      top ? el('p', { class: 'gate-title' }, top.item.tmdb?.title || top.item.title) : null,
+      top ? el('p', { class: 'gate-rank' }, el('span', { class: 'gate-top', 'aria-hidden': 'true' }, 'TOP', el('b', {}, '10')), 'N.º 1 en películas hoy') : null),
+    el('div', { class: 'gate-panel' }, el('h1', {}, 'Elige tu perfil'),
+      el('div', { class: 'gate-profiles' }, tiles), el('div', { class: 'gate-profiles gate-tools' }, tools.filter(Boolean))));
+}

@@ -13,9 +13,9 @@ import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles } from './library.js';
-import { startProfiles, onProfilesChanged, needsProfile, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel } from './profiles.js';
-import { accountPage, paintAccountButton } from './account.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles } from './library.js';
+import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
+import { accountPage, paintAccountButton, profileGate } from './account.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -440,6 +440,11 @@ function profileRows(library) {
   const mine = listEntries(profileData()).map(find).filter(Boolean);
   if (mine.length) nodes.push(sectionHead('Mi lista', el('span', {}, mine.length === 1 ? '1 título' : `${mine.length} títulos`)),
     el('div', { class: 'rail browse-rail' }, mine.map(({ section, item }) => browseCard(el, section, item))));
+  // «Recomendado para ti»: the categories of what this profile watches and likes.
+  const picks = recommendedTitles(library, { seen: [...watchedEntries(profileData()), ...progressList(loadProgress())],
+    rated: Object.values(profileData().ratings || {}) });
+  if (picks.length) nodes.push(sectionHead('Recomendado para ti'),
+    el('div', { class: 'rail browse-rail' }, picks.map(({ section, item }) => browseCard(el, section, item))));
   const liked = lastLiked(profileData()), title = liked && find(liked);
   const like = title ? similarTitles(library, title.section, title.item).filter((i) => ratingOf(title.section.page, i.id) >= 0) : [];
   if (like.length) nodes.push(sectionHead(`Porque te gustó «${itemTitle(title.item)}»`),
@@ -966,6 +971,8 @@ function open(c, fromRoute = false) {
   // link stay in the page instead, with the match's information, statistics and line-ups under the video.
   const withMatch = showMatchCenter(c);
   if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
+  // What the profile watches feeds «Recomendado para ti».
+  if (c.vod && c.progress?.page) rememberWatched(c.progress.page, c.progress.item);
   // Viewers and visits are counted per channel and event; films and episodes are not.
   // Films and series count in the statistics too (startAudience shows them no «people watching»).
   if (!c.pending) startAudience(c);
@@ -1315,9 +1322,27 @@ let accountEditing = null;
 const accountLink = document.getElementById('account-link');
 startProfiles(shared);
 let profileRedraw = 0;
+let gate = null;
+function closeGate() { gate?.remove(); gate = null; document.body.classList.remove('gate-open'); }
+/** «Elige tu perfil» over the page, once each visit of a signed-in account (not on the admin or account pages). */
+function showGate() {
+  const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  if (!signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
+  const library = libraryShown() ? cachedLibrary() : null;
+  if (libraryShown() && !library) fetchLibrary().then(() => { if (gate) showGate(); }).catch(() => {});
+  const next = profileGate(el, { top: library ? libraryTop(library, 'movies')[0] || null : null,
+    chosen: () => { closeGate(); route(); },
+    manage: (what) => { closeGate(); accountEditing = what; location.hash = '#/cuenta'; } });
+  if (gate) gate.replaceWith(next); else document.body.append(next);
+  gate = next;
+  document.body.classList.add('gate-open');
+  gate.querySelector('.gate-profile')?.focus();
+}
 onProfilesChanged(() => {
   paintAccountButton(el, accountLink);
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  showGate();
+  if (gate) return;
   if (needsProfile() && page !== 'cuenta' && page !== 'admin') { location.hash = '#/cuenta'; return; }
   if (page === 'cuenta' || (!page && !search.value.trim())) { clearTimeout(profileRedraw); profileRedraw = setTimeout(route, 50); }
 });

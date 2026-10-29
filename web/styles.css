@@ -1275,3 +1275,20 @@ a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
 .top-card { grid-template-columns: 32% 1fr; }
 .top-rank { font-size: clamp(100px, 10vw, 150px); }
 @media (max-width: 720px) { .top-rail { grid-auto-columns: 206px; } .top-rank { font-size: 92px; } }
+
+/* «Elige tu perfil» over the page, as in Netflix: the film N.º 1 behind. */
+body.gate-open { overflow: hidden; }
+.profile-gate { position: fixed; inset: 0; z-index: 200; display: grid; grid-template-rows: 1fr auto; overflow-y: auto;
+  background: linear-gradient(180deg, rgba(11,13,16,.15) 0%, rgba(11,13,16,.55) 45%, #0b0d10 78%), var(--gate-art, none) center top / cover no-repeat, #0b0d10; }
+.gate-feature { align-self: end; display: grid; justify-items: center; gap: 10px; padding: 40px 16px 18px; text-align: center; }
+.gate-title { margin: 0; max-width: 16ch; font-size: clamp(34px, 7vw, 64px); line-height: .95; font-weight: 900; color: #ffe000; text-transform: uppercase; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
+.gate-rank { margin: 0; display: inline-flex; align-items: center; gap: 12px; font-size: 17px; color: #fff; }
+.gate-top { display: inline-grid; place-items: center; padding: 2px 5px; border-radius: 3px; background: #e50914; color: #fff; font-size: 9px; font-weight: 800; line-height: 1; }
+.gate-top b { font-size: 15px; }
+.gate-panel { display: grid; justify-items: center; gap: 18px; padding: 20px 16px 40px; border-radius: 50% 50% 0 0 / 28px 28px 0 0; background: linear-gradient(180deg, rgba(60,60,58,.85), rgba(28,28,28,.96)); }
+.gate-panel h1 { margin: 0; font-size: 18px; font-weight: 600; color: rgba(255,255,255,.8); }
+.gate-profiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; }
+.gate-profile { display: grid; justify-items: center; gap: 10px; border: 0; background: none; color: #fff; font: inherit; font-size: 17px; cursor: pointer; }
+.gate-profile .profile-avatar.big { width: 96px; height: 96px; font-size: 44px; border-radius: 14px; box-shadow: 0 8px 22px rgba(0,0,0,.45); }
+.gate-profile:hover .profile-avatar, .gate-profile:focus-visible .profile-avatar { outline: 3px solid #fff; outline-offset: 3px; }
+.profile-avatar.tool { background: rgba(255,255,255,.28); color: #fff; font-weight: 400; }

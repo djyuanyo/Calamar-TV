@@ -7,7 +7,8 @@ import { setProgressProfile } from './progress-sync.js';
 
 export const MAX_PROFILES = 5;
 export const PROFILE_COLORS = ['#e50914', '#f5a623', '#2ea043', '#1f6feb', '#a371f7', '#db61a2'];
-export const emptyData = () => ({ list: {}, ratings: {}, favorites: {}, updatedAt: 0 });
+export const emptyData = () => ({ list: {}, ratings: {}, favorites: {}, watched: {}, updatedAt: 0 });
+export const WATCHED_LIMIT = 200;
 export const titleKey = (page, item) => `${page}/${item}`;
 
 /** A new profile with a short id the rules accept («main» for the first one). */
@@ -38,6 +39,13 @@ export function toggleFavorite(data, channel, now = Date.now()) {
   if (favorites[channel]) delete favorites[channel]; else favorites[channel] = { at: now };
   return { ...data, favorites, updatedAt: now };
 }
+/** What the profile has played (one entry per film or series, the latest 200), for «Recomendado para ti». */
+export function markWatched(data, page, item, now = Date.now()) {
+  const watched = { ...(data.watched || {}), [titleKey(page, item)]: { page, item, at: now } };
+  for (const old of Object.entries(watched).sort((a, b) => b[1].at - a[1].at).slice(WATCHED_LIMIT)) delete watched[old[0]];
+  return { ...data, watched, updatedAt: now };
+}
+export const watchedEntries = (data) => Object.values(data?.watched || {}).sort((a, b) => b.at - a.at);
 export const listEntries = (data) => Object.values(data?.list || {}).sort((a, b) => b.at - a.at);
 /** The title liked last, for «Porque te gustó…». */
 export const lastLiked = (data) => Object.values(data?.ratings || {}).filter((r) => r.value > 0).sort((a, b) => b.at - a.at)[0] || null;
@@ -85,8 +93,12 @@ function saveSoon(delay = 2000) {
 }
 function update(next) { data = next; saveSoon(); changed(); }
 
+/** Chosen in this visit already: «Elige tu perfil» is shown once each time the web is opened. */
+const pickedKey = () => `calamar-profile-picked:${user?.uid}`;
+export const pickedThisVisit = () => { try { return sessionStorage.getItem(pickedKey()) === '1'; } catch { return true; } };
 export async function chooseProfile(id) {
   if (!accountProfiles().some((p) => p.id === id)) return;
+  try { sessionStorage.setItem(pickedKey(), '1'); } catch {}
   activeId = id;
   write(activeKey(), id);
   setProgressScope(id === 'main' ? '' : `${user.uid}:${id}`);
@@ -119,6 +131,7 @@ export async function removeProfile(id) {
 export const toggleMyList = (page, item) => update(toggleList(data, page, item));
 export const rateTitle = (page, item, value) => update(rate(data, page, item, value));
 export const toggleFavoriteChannel = (channel) => update(toggleFavorite(data, channel));
+export const rememberWatched = (page, item) => update(markWatched(data, page, item));
 export const inMyList = (page, item) => !!data.list[titleKey(page, item)];
 export const ratingOf = (page, item) => data.ratings[titleKey(page, item)]?.value || 0;
 export const isFavorite = (channel) => !!data.favorites[channel];

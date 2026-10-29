@@ -713,6 +713,29 @@ export function titleRelation(a, b) {
   return 0;
 }
 
+/**
+ * «Recomendado para ti»: the categories of what the profile watches (+1 each title left half watched or seen),
+ * likes (+2) and dislikes (-2) weigh every title it has not watched yet; the best rated break ties.
+ * `seen` and `rated` are { page, item, value? } entries; returns { section, item } entries.
+ */
+export function recommendedTitles(library, { seen = [], rated = [] } = {}, size = 20) {
+  const all = everyItem(library).filter(({ item }) => !unidentifiedItem(item));
+  const find = ({ page, item }) => all.find(({ section, item: i }) => section.page === page && i.id === item);
+  const weight = new Map(), skip = new Set();
+  const add = (entry, amount) => {
+    const found = find(entry);
+    if (!found) return;
+    skip.add(found.item.id);
+    for (const g of found.item.tmdb?.genres || []) weight.set(g, (weight.get(g) || 0) + amount);
+  };
+  for (const entry of seen) add(entry, 1);
+  for (const entry of rated) add(entry, entry.value > 0 ? 2 : -2);
+  if (![...weight.values()].some((w) => w > 0)) return [];
+  const score = (item) => (item.tmdb?.genres || []).reduce((sum, g) => sum + (weight.get(g) || 0), 0);
+  return all.filter(({ item }) => !skip.has(item.id)).map((entry) => [entry, score(entry.item)]).filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || (b[0].item.tmdb?.rating || 0) - (a[0].item.tmdb?.rating || 0)).slice(0, size).map(([entry]) => entry);
+}
+
 /** «Similares»: first the same saga or a very close title (all of «Torrente»), then the titles sharing genres. */
 export function similarTitles(library, section, item, size = 12) {
   const genres = new Set(item.tmdb?.genres || []);
