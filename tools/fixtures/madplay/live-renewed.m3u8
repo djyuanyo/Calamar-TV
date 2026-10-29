@@ -1,0 +1,9 @@
+#EXTM3U
+#EXT-X-TARGETDURATION:3
+#EXT-X-MEDIA-SEQUENCE:101
+#EXTINF:3,
+101.json?token=new
+#EXTINF:3,
+102.json?token=new
+#EXTINF:3,
+103.json?token=new
