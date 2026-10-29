@@ -594,9 +594,9 @@ try {
   await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
+  // Reset only the library fixture; keep the event-publication state used by later checks.
+  await page.evaluate(async () => { window.__libraryParts = null; await (await import('./library.js')).fetchLibrary({ fresh: true }); });
   await page.goto(base + '/#/');
-  // Restore the original public fixture after testing the published review queue.
-  await page.reload();
   await page.locator('.nav a', { hasText: 'Películas' }).click();
   // Category drop-down (TMDB genres of the section) next to the section search; no channels search here.
   await page.locator('.poster-card').first().waitFor();
