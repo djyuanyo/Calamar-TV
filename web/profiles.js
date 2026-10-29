@@ -60,15 +60,20 @@ const changed = () => { for (const listener of listeners) listener(); };
 const read = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 const dataKey = () => (user && activeId ? `calamar-profile-data:${user.uid}:${activeId}` : 'calamar-profile-data:guest');
-const activeKey = () => `calamar-profile:${user?.uid}`;
+// The account's profiles are remembered in this browser, so «Elige tu perfil» shows at once when the web
+// opens, before Firebase confirms the sign-in (a second later); the account's own copy then replaces them.
+const ACCOUNT_CACHE = 'calamar-account-cache';
+let cachedUid = null, early = null;
+const uidNow = () => user?.uid || cachedUid;
+const activeKey = () => `calamar-profile:${uidNow()}`;
 
 export const onProfilesChanged = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
-export const signedUser = () => user;
+export const signedUser = () => user || (cachedUid ? { uid: cachedUid, pending: true } : null);
 export const accountProfiles = () => account?.profiles || [];
 export const activeProfile = () => accountProfiles().find((p) => p.id === activeId) || null;
 export const profileData = () => data;
 /** Signed in but no profile chosen yet in this browser: «¿Quién está viendo?». */
-export const needsProfile = () => !!user && !!account && !activeProfile();
+export const needsProfile = () => !!signedUser() && !!account && !activeProfile();
 
 async function loadData() {
   const local = validData(read(dataKey()));
@@ -94,13 +99,16 @@ function saveSoon(delay = 2000) {
 function update(next) { data = next; saveSoon(); changed(); }
 
 /** Chosen in this visit already: «Elige tu perfil» is shown once each time the web is opened. */
-const pickedKey = () => `calamar-profile-picked:${user?.uid}`;
+const pickedKey = () => `calamar-profile-picked:${uidNow()}`;
 export const pickedThisVisit = () => { try { return sessionStorage.getItem(pickedKey()) === '1'; } catch { return true; } };
-export async function chooseProfile(id) {
+/** `picked`: chosen by the person in «Elige tu perfil» (not restored from the last visit). */
+export async function chooseProfile(id, picked = true) {
   if (!accountProfiles().some((p) => p.id === id)) return;
-  try { sessionStorage.setItem(pickedKey(), '1'); } catch {}
+  if (picked) try { sessionStorage.setItem(pickedKey(), '1'); } catch {}
   activeId = id;
   write(activeKey(), id);
+  // Chosen before Firebase confirmed the sign-in: its data loads once it does.
+  if (!user) { early = id; changed(); return; }
   setProgressScope(id === 'main' ? '' : `${user.uid}:${id}`);
   await setProgressProfile(id);
   await loadData();
@@ -109,6 +117,7 @@ export async function chooseProfile(id) {
 async function saveAccount(next) {
   await firebase.writeAccount(next);
   account = next;
+  if (user) write(ACCOUNT_CACHE, { uid: user.uid, profiles: next.profiles });
   changed();
 }
 export async function addProfile(name, color) {
@@ -125,7 +134,7 @@ export async function removeProfile(id) {
   if (id === 'main') throw Error('El perfil principal no se puede borrar.');
   await saveAccount({ ...account, profiles: accountProfiles().filter((p) => p.id !== id) });
   await firebase.deleteProfileData(id);
-  if (activeId === id) await chooseProfile('main');
+  if (activeId === id) await chooseProfile('main', false);
 }
 
 export const toggleMyList = (page, item) => update(toggleList(data, page, item));
@@ -138,23 +147,33 @@ export const isFavorite = (channel) => !!data.favorites[channel];
 
 /** Follows the sign-in: the account's profiles, the one chosen in this browser and its data. */
 export function startProfiles(shared) {
+  const cached = read(ACCOUNT_CACHE);
+  if (cached?.uid && Array.isArray(cached.profiles) && cached.profiles.length) { cachedUid = cached.uid; account = { profiles: cached.profiles }; }
   loadData();
   shared().then((f) => {
     firebase = f;
     f.watchAuth(async (signed) => {
       user = signed || null;
-      account = null; activeId = null;
+      const remembered = cachedUid;
+      cachedUid = null;
       setProgressScope('');
-      if (!user) { await setProgressProfile('main'); await loadData(); return; }
-      account = await f.readAccount().catch(() => null);
-      if (!account?.profiles?.length) {
-        const first = newProfile([], String(user.displayName || user.email || 'Yo').split(/[\s@]/)[0] || 'Yo', PROFILE_COLORS[0]);
-        account = { profiles: [first] };
-        await f.writeAccount(account).catch(() => {});
+      if (!user) {
+        account = null; activeId = null; early = null;
+        try { localStorage.removeItem(ACCOUNT_CACHE); } catch {}
+        await setProgressProfile('main'); await loadData(); return;
       }
-      const saved = read(activeKey());
-      if (accountProfiles().some((p) => p.id === saved)) await chooseProfile(saved);
-      else if (accountProfiles().length === 1) await chooseProfile(accountProfiles()[0].id);
+      let fresh = await f.readAccount().catch(() => null);
+      if (!fresh?.profiles?.length) {
+        const first = newProfile([], String(user.displayName || user.email || 'Yo').split(/[\s@]/)[0] || 'Yo', PROFILE_COLORS[0]);
+        fresh = { profiles: [first] };
+        await f.writeAccount(fresh).catch(() => {});
+      }
+      account = fresh;
+      write(ACCOUNT_CACHE, { uid: user.uid, profiles: fresh.profiles });
+      const wanted = early && remembered === user.uid ? early : read(activeKey());
+      early = null; activeId = null;
+      if (accountProfiles().some((p) => p.id === wanted)) await chooseProfile(wanted, false);
+      else if (accountProfiles().length === 1) await chooseProfile(accountProfiles()[0].id, false);
       else changed();
     });
   }).catch(() => {});

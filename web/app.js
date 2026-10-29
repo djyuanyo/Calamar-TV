@@ -13,7 +13,7 @@ import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
 import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate } from './account.js';
 import { initCast } from './cast-player.js';
@@ -1325,14 +1325,29 @@ let profileRedraw = 0;
 let gate = null;
 function closeGate() { gate?.remove(); gate = null; document.body.classList.remove('gate-open'); }
 /** «Elige tu perfil» over the page, once each visit of a signed-in account (not on the admin or account pages). */
+const GATE_SLIDES = 'calamar-gate-slides';
+/** The titles behind «Elige tu perfil»: from the library, or those of the last visit while it loads. */
+function slidesForGate() {
+  const library = cachedLibrary();
+  if (library) {
+    const slides = gateSlides(library);
+    try { localStorage.setItem(GATE_SLIDES, JSON.stringify(slides)); } catch {}
+    return slides;
+  }
+  fetchLibrary().then(() => { if (gate && !gate.dataset.fromLibrary) showGate(); }).catch(() => {});
+  try { return JSON.parse(localStorage.getItem(GATE_SLIDES) || '[]').filter((s) => s && typeof s.image === 'string' && s.image.startsWith('https://')); } catch { return []; }
+}
 function showGate() {
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
   if (!signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
-  const library = libraryShown() ? cachedLibrary() : null;
-  if (libraryShown() && !library) fetchLibrary().then(() => { if (gate) showGate(); }).catch(() => {});
-  const next = profileGate(el, { top: library ? libraryTop(library, 'movies')[0] || null : null,
+  const fromLibrary = !!cachedLibrary();
+  // Already open with the library's titles: only the profiles can have changed.
+  if (gate && gate.dataset.fromLibrary && fromLibrary && gate.dataset.profiles === JSON.stringify(accountProfiles())) return;
+  const next = profileGate(el, { slides: slidesForGate(),
     chosen: () => { closeGate(); route(); },
     manage: (what) => { closeGate(); accountEditing = what; location.hash = '#/cuenta'; } });
+  if (fromLibrary) next.dataset.fromLibrary = '1';
+  next.dataset.profiles = JSON.stringify(accountProfiles());
   if (gate) gate.replaceWith(next); else document.body.append(next);
   gate = next;
   document.body.classList.add('gate-open');
@@ -1346,6 +1361,8 @@ onProfilesChanged(() => {
   if (needsProfile() && page !== 'cuenta' && page !== 'admin') { location.hash = '#/cuenta'; return; }
   if (page === 'cuenta' || (!page && !search.value.trim())) { clearTimeout(profileRedraw); profileRedraw = setTimeout(route, 50); }
 });
+// A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
+showGate();
 async function route() {
   const version = ++routeVersion;
   stopHighlight();
