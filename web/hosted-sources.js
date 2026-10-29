@@ -9,7 +9,8 @@ export function signalName(value, fallback = 'Canal') {
 export function hostedRequest(page, id) {
   const request = new URL(playerPageRelay(page));
   request.searchParams.set('cast', '1');
-  if (id) request.searchParams.set('source_id', id);
+  if (id?.startsWith('legacy-') && /^legacy-[0-9]{1,2}$/.test(id)) request.searchParams.set('src', id.slice(7));
+  else if (id) request.searchParams.set('source_id', id);
   return request.href;
 }
 
@@ -30,7 +31,8 @@ export async function expandHostedSources(streams, { names = {}, fallbackName = 
       if (!response.ok) throw Error(`HTTP ${response.status}`);
       const data = await response.json();
       const channel = signalName(data.name, fallback);
-      const options = (data.items || []).filter(item => /^[a-f0-9]{16}$/.test(item.id)).map((item, i) => ({
+      const items = Array.isArray(data.items) ? data.items : Array.from({length:Math.min(100,Math.max(0,Number(data.sources)||0))},(_,i)=>({id:`legacy-${i}`,name:channel+(data.sources>1?` · Señal ${i+1}`:'')}));
+      const options = items.filter(item => /^(?:[a-f0-9]{16}|legacy-[0-9]{1,2})$/.test(item.id)).map((item, i) => ({
         url: hostedRequest(url, item.id), name: signalName(item.name, `${channel} · Señal ${i + 1}`),
         page: url, sourceId: item.id,
       }));

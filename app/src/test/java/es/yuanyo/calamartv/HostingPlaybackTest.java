@@ -8,6 +8,19 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.Test;
 
 public class HostingPlaybackTest {
+  @Test public void countOnlyRelayStillSelectsEverySignalThroughHosting() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse().setBody("{\"sources\":5}"));
+      server.enqueue(new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=playlist&sig=ok\"}")); server.start();
+      OkHttpClient client = new OkHttpClient();
+      PlayerDocument.ConnectionFactory network = url -> new PlayerHttpConnection(server.url(url.getFile()).url(), client);
+      java.util.List<HostingPlayback.Option> options = HostingPlayback.options("https://zicotv.cc/api/player/6", "LaLiga", network);
+      assertEquals(5, options.size()); assertEquals("LaLiga · Señal 5", options.get(4).name);
+      server.takeRequest(); HostingPlayback.resolve("https://zicotv.cc/api/player/6", options.get(4).id, network);
+      assertEquals("4", server.takeRequest().getRequestUrl().queryParameter("src"));
+    }
+  }
+
   @Test public void everySignalHasAChannelNameAndSelectionId() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse().setBody("{\"name\":\"LaLiga\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"LaLiga · Señal 1\"},{\"id\":\"fedcba9876543210\",\"name\":\"LaLiga · Señal 2\"}]}"));

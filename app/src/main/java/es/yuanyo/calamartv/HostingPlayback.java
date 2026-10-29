@@ -36,6 +36,10 @@ final class HostingPlayback {
         if (item == null || !item.optString("id").matches("[a-f0-9]{16}")) continue;
         out.add(new Option(item.getString("id"), label(item.optString("name"), channel + " · Señal " + (i + 1))));
       }
+      if (items == null) {
+        int count = Math.min(100, menu.optInt("sources", 0));
+        for (int i = 0; i < count; i++) out.add(new Option("legacy-" + i, channel + (count > 1 ? " · Señal " + (i + 1) : "")));
+      }
       if (out.isEmpty()) throw new IOException("No hay señales disponibles para este canal");
       return out;
     } catch (IOException error) { throw error; }
@@ -72,7 +76,9 @@ final class HostingPlayback {
   }
 
   static String resolve(String page, String id, PlayerDocument.ConnectionFactory connections) throws IOException {
-    return signedUrl(fetch(request(page) + (id.isEmpty() ? "" : "&source_id=" + id), connections));
+    if (!id.isEmpty() && !id.matches("[a-f0-9]{16}|legacy-[0-9]{1,2}")) throw new IOException("Señal no válida");
+    String selection = id.startsWith("legacy-") ? "&src=" + id.substring(7) : id.isEmpty() ? "" : "&source_id=" + id;
+    return signedUrl(fetch(request(page) + selection, connections));
   }
 
   private static String fetch(String address, PlayerDocument.ConnectionFactory connections) throws IOException {

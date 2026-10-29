@@ -28,3 +28,10 @@ test('failed lookup stays retryable and never falls back to a direct provider st
   const result=await expandHostedSources([page],{fallbackName:'Mi canal',fetcher:async()=>({ok:false,status:502})});
   assert.equal(result[0].name,'Mi canal'); assert.ok(result[0].error); assert.equal(result[0].sourceId,undefined);
 });
+
+test('the installed count-only relay also exposes every selectable hosted signal',async()=>{
+  const rows=await expandHostedSources([page],{fallbackName:'LaLiga TV Bar',fetcher:async()=>({ok:true,json:async()=>({sources:5})})});
+  assert.equal(rows.length,5); assert.equal(rows[4].name,'LaLiga TV Bar · Señal 5');
+  assert.equal(new URL(rows[4].url).searchParams.get('src'),'4');
+  assert.equal(new URL(rows[4].url).searchParams.get('cast'),'1');
+});
