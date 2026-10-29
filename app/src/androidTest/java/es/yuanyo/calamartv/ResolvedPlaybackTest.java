@@ -44,8 +44,9 @@ public class ResolvedPlaybackTest {
   @Test public void zicoEventApiResolvesAndActuallyPlays() throws Exception { playback(false, false, true); }
   private void playback(boolean rejectFirst, boolean manualDirect) throws Exception { playback(rejectFirst, manualDirect, false); }
   private void playback(boolean rejectFirst, boolean manualDirect, boolean eventPage) throws Exception {
-    HeldCertificate certificate = new HeldCertificate.Builder().commonName("bp.zicotv.cc")
-        .addSubjectAlternativeName("bp.zicotv.cc").build();
+    String fixtureHost = eventPage ? "bp.zicotv.cc" : "player.example";
+    HeldCertificate certificate = new HeldCertificate.Builder().commonName(fixtureHost)
+        .addSubjectAlternativeName(fixtureHost).addSubjectAlternativeName("calamarmenciano.com").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(certificate).build();
     HandshakeCertificates clientTls = new HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate()).build();
     Buffer video = new Buffer();
@@ -60,11 +61,20 @@ public class ResolvedPlaybackTest {
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false);
       server.start();
-      String origin = server.url("/").newBuilder().host("bp.zicotv.cc").build().toString();
+      String origin = server.url("/").newBuilder().host(fixtureHost).build().toString();
       server.setDispatcher(new Dispatcher() {
         @Override public MockResponse dispatch(RecordedRequest request) {
           String path = request.getPath();
-          if (!manualDirect && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
+          if (!manualDirect && !eventPage && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
+          if (path.startsWith("/calamar-player.php?event=")) return new MockResponse().setHeader("Content-Type", "application/json")
+              .setBody("{\"data\":{\"sources\":[{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}");
+          if (path.startsWith("/calamar-player.php?page=")) {
+            if (path.contains("&list=1")) return new MockResponse().setBody("{\"name\":\"Canal del evento\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"Canal del evento\"}]}");
+            pages.incrementAndGet(); return new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=manifest&sig=ok\"}");
+          }
+          if (path.startsWith("/calamar-player.php?seg=manifest")) return new MockResponse()
+              .setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=piece&sig=ok\n#EXT-X-ENDLIST\n");
+          if (path.startsWith("/calamar-player.php?seg=piece")) return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
           if (path.startsWith("/api/v1/events/98019")) return new MockResponse().setHeader("Content-Type", "application/json")
               .setBody("{\"data\":{\"sources\":[{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}");
           if (path.startsWith("/api/player/28")) {
@@ -91,7 +101,8 @@ public class ResolvedPlaybackTest {
       OkHttpClient original = (OkHttpClient) clientField.get(network);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
       OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager())
-          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1"))).build();
+          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
+          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder().url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
       clientField.set(network, local);
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
@@ -122,8 +133,8 @@ public class ResolvedPlaybackTest {
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
           // «Fuentes» lists the direct IPTV links first and ZicoTV's pages last; the page being read stays checked.
-          onView(withText("Enlace 2 · bp.zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
-          onView(withText("Enlace 1 · Vídeo directo")).inRoot(isDialog()).perform(click());
+          onView(withText("Prueba de canal resuelto · Señal 2")).inRoot(isDialog()).check(matches(isChecked()));
+          onView(withText("Prueba de canal resuelto · Señal 1")).inRoot(isDialog()).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + 30000;
@@ -154,7 +165,7 @@ public class ResolvedPlaybackTest {
             ((Button) button.get(activity)).performClick();
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
-        onView(withText(manualDirect ? "Enlace 1 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText(manualDirect ? "Prueba de canal resuelto · Señal 1" : eventPage ? "Canal del evento · Automática" : "CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
         if (!rejectFirst && !manualDirect && !eventPage) {
           int beforeDns = pages.get();
           onView(withText("DNS")).inRoot(isDialog()).perform(click());
