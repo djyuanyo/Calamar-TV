@@ -87,6 +87,8 @@ public class MainActivity extends Activity {
     Profiles.start(this);
     Profiles.listen(profilesChanged);
     home();
+    // A signed-in account: «Elige tu perfil» at once, with the profiles kept on this device.
+    if (Profiles.needsPick()) profileGate();
   }
 
   /** «Elige tu perfil» while it is on screen. */
@@ -113,13 +115,11 @@ public class MainActivity extends Activity {
     if (gate != null && gate.isShowing()) return;
     FrameLayout root = new FrameLayout(this);
     root.setBackgroundColor(Ui.BG);
-    Library.Item top = library == null || library.top("movies").isEmpty() ? null : library.top("movies").get(0);
-    if (top != null && !(top.backdrop.isEmpty() && top.poster.isEmpty())) {
-      ImageView art = new ImageView(this);
-      art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-      root.addView(art, new FrameLayout.LayoutParams(-1, -1));
-      image(art, top.backdrop.isEmpty() ? top.poster : top.backdrop);
-    } else if (libraryShown(custom)) loadLibrary();
+    // Behind it the weekly top, one title after another every 6 seconds (those of the last time while the library loads).
+    final ImageView art = new ImageView(this);
+    art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+    root.addView(art, new FrameLayout.LayoutParams(-1, -1));
+    if (library == null && libraryShown(custom)) loadLibrary();
     View shade = new View(this);
     shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x220b0d10, 0x880b0d10, 0xff0b0d10}));
     root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
@@ -127,16 +127,30 @@ public class MainActivity extends Activity {
     box.setOrientation(LinearLayout.VERTICAL);
     box.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
     box.setPadding(dp(16), dp(24), dp(16), dp(36));
-    if (top != null) {
-      TextView title = label(top.title.toUpperCase(new Locale("es")), wide() ? 44 : 34, 0xffffe000);
-      title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      title.setGravity(Gravity.CENTER);
-      title.setShadowLayer(dp(10), 0, dp(2), 0xcc000000);
-      box.addView(title);
-      TextView rank = label("TOP 10 · N.º 1 en películas hoy", 16, 0xffffffff);
-      rank.setGravity(Gravity.CENTER);
-      box.addView(rank);
-    }
+    final TextView title = label("", wide() ? 44 : 34, 0xffffe000);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(Gravity.CENTER);
+    title.setShadowLayer(dp(10), 0, dp(2), 0xcc000000);
+    box.addView(title);
+    final TextView rank = label("", 16, 0xffffffff);
+    rank.setGravity(Gravity.CENTER);
+    box.addView(rank);
+    final int[] at = {0};
+    gateSlide = new Runnable() { public void run() {
+      if (gate == null || !gate.isShowing()) return;
+      List<String[]> slides = gateSlides();
+      if (!slides.isEmpty()) {
+        String[] slide = slides.get(at[0] % slides.size());
+        at[0]++;
+        art.animate().alpha(0f).setDuration(at[0] == 1 ? 0 : 500).withEndAction(() -> {
+          image(art, slide[1]);
+          title.setText(slide[0].toUpperCase(new Locale("es")));
+          rank.setText("TOP 10 · " + slide[2]);
+          art.animate().alpha(1f).setDuration(700).start();
+        }).start();
+      }
+      handler.postDelayed(this, slides.isEmpty() ? 1500 : 6000);
+    }};
     TextView pick = label("Elige tu perfil", 17, 0xccffffff);
     pick.setGravity(Gravity.CENTER);
     pick.setPadding(0, dp(24), 0, dp(12));
@@ -176,8 +190,32 @@ public class MainActivity extends Activity {
     gate.setContentView(root);
     // Back leaves the app as on Netflix: a profile has to be chosen to go in.
     gate.setOnCancelListener(d -> finish());
+    gate.setOnDismissListener(d -> handler.removeCallbacks(gateSlide));
     gate.show();
+    handler.removeCallbacks(gateSlide);
+    handler.post(gateSlide);
     if (first != null) first.requestFocus();
+  }
+
+  Runnable gateSlide;
+  /** The titles behind «Elige tu perfil»: from the library (kept for next time), or those of the last time. */
+  List<String[]> gateSlides() {
+    List<String[]> slides = new ArrayList<>();
+    if (library != null) {
+      slides = Library.gateSlides(library, 12);
+      JSONArray keep = new JSONArray();
+      for (String[] slide : slides) keep.put(new JSONArray(Arrays.asList(slide)));
+      getSharedPreferences("profiles", MODE_PRIVATE).edit().putString("gate_slides", keep.toString()).apply();
+      return slides;
+    }
+    try {
+      JSONArray kept = new JSONArray(getSharedPreferences("profiles", MODE_PRIVATE).getString("gate_slides", "[]"));
+      for (int i = 0; i < kept.length(); i++) {
+        JSONArray s = kept.optJSONArray(i);
+        if (s != null && s.length() == 3 && s.optString(1).startsWith("https://")) slides.add(new String[] {s.optString(0), s.optString(1), s.optString(2)});
+      }
+    } catch (JSONException broken) { /* Nothing kept yet. */ }
+    return slides;
   }
 
   View gateTile(View picture, String name, int size) {
@@ -1316,6 +1354,8 @@ public class MainActivity extends Activity {
     super.onResume();
     if (trailerPreview != null) trailerPreview.onResume();
     if (updater != null) updater.resume();
+    // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
+    if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
     // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
     if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }

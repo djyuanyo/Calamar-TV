@@ -731,6 +731,39 @@ final class Library {
   }
 
   /**
+   * Behind «Elige tu perfil», as gateSlides on the web: the weekly top of films and series one after the other
+   * (N.º 1 de películas, N.º 1 de series…) and the best rated documentaries. {title, image, label} each.
+   */
+  static List<String[]> gateSlides(Data data, int size) {
+    List<List<String[]>> tops = new ArrayList<>();
+    String[][] kinds = {{"movies", "películas"}, {"series", "series"}};
+    for (String[] kind : kinds) {
+      List<String[]> top = new ArrayList<>();
+      int n = 0;
+      for (Item item : data.top(kind[0])) {
+        String art = item.backdrop.isEmpty() ? item.poster : item.backdrop;
+        if (!art.isEmpty()) top.add(new String[] {item.title, art, "N.º " + (++n) + " en " + kind[1] + " hoy"});
+      }
+      tops.add(top);
+    }
+    List<Item> docs = new ArrayList<>();
+    for (Item item : data.items("documentaries")) if (!(item.backdrop.isEmpty() && item.poster.isEmpty())) docs.add(item);
+    Collections.sort(docs, (a, b) -> Double.compare(b.rating, a.rating));
+    List<String[]> out = new ArrayList<>();
+    for (int i = 0; out.size() < size && (i < tops.get(0).size() || i < tops.get(1).size()); i++) {
+      if (i < tops.get(0).size()) out.add(tops.get(0).get(i));
+      if (i < tops.get(1).size() && out.size() < size) out.add(tops.get(1).get(i));
+      if (i == 1) for (int d = 0; d < Math.min(3, docs.size()) && out.size() < size; d++) {
+        Item doc = docs.get(d);
+        out.add(new String[] {doc.title, doc.backdrop.isEmpty() ? doc.poster : doc.backdrop, "Documental destacado"});
+      }
+    }
+    if (out.isEmpty()) for (int d = 0; d < Math.min(3, docs.size()); d++)
+      out.add(new String[] {docs.get(d).title, docs.get(d).backdrop.isEmpty() ? docs.get(d).poster : docs.get(d).backdrop, "Documental destacado"});
+    return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
+  }
+
+  /**
    * «Recomendado para ti», as recommendedTitles on the web: the categories of what the profile watched
    * (+1 each) and rated (+2 «Me gusta», -2 «No me gusta») weigh every title it has not watched yet.
    */

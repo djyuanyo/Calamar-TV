@@ -339,4 +339,19 @@ public class LibraryTest {
     assertEquals(Arrays.asList("t2", "t1"), ids);
     assertTrue(Library.recommended(data, Collections.<JSONObject>emptyList(), Collections.<JSONObject>emptyList(), 10).isEmpty());
   }
+
+  @Test public void gateSlidesAlternateTheTopOfFilmsAndSeries() throws Exception {
+    JSONArray movies = new JSONArray(), series = new JSONArray();
+    for (int i = 1; i <= 2; i++) {
+      movies.put(new JSONObject().put("id", "m" + i).put("kind", "movie").put("title", "Peli " + i).put("trend", i).put("url", "https://www.googleapis.com/drive/v3/files/m" + i + "?alt=media")
+          .put("tmdb", new JSONObject().put("id", i).put("title", "Peli " + i).put("backdrop", "https://image.tmdb.org/m" + i + ".jpg")));
+      series.put(new JSONObject().put("id", "s" + i).put("kind", "tv").put("title", "Serie " + i).put("trend", i)
+          .put("tmdb", new JSONObject().put("id", 10 + i).put("title", "Serie " + i).put("backdrop", "https://image.tmdb.org/s" + i + ".jpg"))
+          .put("episodes", new JSONArray().put(new JSONObject().put("id", "e" + i).put("season", 1).put("episode", 1).put("url", "https://www.googleapis.com/drive/v3/files/e" + i + "?alt=media"))));
+    }
+    Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("movies", movies).put("series", series)));
+    List<String> labels = new ArrayList<>();
+    for (String[] slide : Library.gateSlides(data, 12)) labels.add(slide[0] + " · " + slide[2]);
+    assertEquals(Arrays.asList("Peli 1 · N.º 1 en películas hoy", "Serie 1 · N.º 1 en series hoy", "Peli 2 · N.º 2 en películas hoy", "Serie 2 · N.º 2 en series hoy"), labels);
+  }
 }
