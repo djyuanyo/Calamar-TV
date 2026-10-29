@@ -134,3 +134,29 @@ test('a TMDB request that fails or is limited is tried once more, then reports a
   const busy = async () => { limited++; return limited === 1 ? { status: 429, json: async () => ({}) } : { status: 200, json: async () => ({ results: [] }) }; };
   assert.deepEqual(await searchTmdb('x', 'movie', 'abcdef0123456789abcdef0123456789', busy), []);
 });
+
+test('TMDB record links resolve directly even when title search has no results', async () => {
+  const { tmdbReference } = await import('../web/library-tmdb.js');
+  for (const link of ['https://www.themoviedb.org/movie/76600-avatar?language=es-ES', 'themoviedb.org/movie/76600', 'https://themoviedb.org/es/movie/76600-avatar/'])
+    assert.deepEqual(tmdbReference(link), { id: 76600, kind: 'movie' });
+  assert.deepEqual(tmdbReference('https://www.themoviedb.org/tv/4500-los-hombres-de-paco'), { id: 4500, kind: 'tv' });
+  for (const link of ['Avatar', 'https://themoviedb.org.evil.test/movie/1', 'https://user@www.themoviedb.org/movie/1', 'https://www.themoviedb.org/movie/0', 'https://www.themoviedb.org/tv/4500/season/1', 'https://www.themoviedb.org/person/1', 'https://www.themoviedb.org/movie/9007199254740992'])
+    assert.equal(tmdbReference(link), null);
+  const calls = [], fetcher = fake({ '/search/movie': { results: [] }, '/movie/76600': { title: 'Avatar: El sentido del agua', release_date: '2022-12-14' },
+    '/tv/4500': { name: 'Los hombres de Paco', first_air_date: '2005-10-09' } }, calls);
+  assert.deepEqual(await searchTmdb('Nombre no encontrado', 'movie', 'key', fetcher), []);
+  assert.equal((await searchTmdb('https://www.themoviedb.org/movie/76600-avatar?language=es-ES', 'movie', 'key', fetcher))[0].title, 'Avatar: El sentido del agua');
+  assert.equal(new URL(calls.at(-1)[0]).pathname, '/3/movie/76600');
+  assert.equal((await searchTmdb('https://www.themoviedb.org/tv/4500', 'any', 'key', fetcher))[0].kind, 'tv');
+  const before = calls.length;
+  await assert.rejects(searchTmdb('https://www.themoviedb.org/tv/4500', 'movie', 'key', fetcher), /corresponde a una serie/);
+  await assert.rejects(searchTmdb('https://evil.test/movie/1', 'movie', 'key', fetcher), /Pega el enlace de una ficha/);
+  assert.equal(calls.length, before, 'invalid links and mismatched types make no network requests');
+});
+
+test('unidentified includes records without a usable TMDB id as well as imported unmatched titles', async () => {
+  const { unidentifiedItem } = await import('../web/library.js');
+  assert.equal(unidentifiedItem({ status: 'unmatched', tmdb: { id: 4 } }), true);
+  for (const tmdb of [undefined, {}, { id: 0 }, { id: -1 }, { id: 'wrong' }]) assert.equal(unidentifiedItem({ status: 'matched', tmdb }), true);
+  for (const id of [4500, '76600']) assert.equal(unidentifiedItem({ tmdb: { id } }), false);
+});
