@@ -414,9 +414,11 @@ try {
   // The library comes from Firestore (index + parts), published by the admin page; no hosting involved.
   const libraryDocs = { index: { sections: { movies: 1, series: 1, documentaries: 1 }, attribution: library.attribution },
     'movies-0': { items: library.sections.movies }, 'series-0': { items: library.sections.series }, 'documentaries-0': { items: [] } };
-  await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', route => {
+  await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', async route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
-    return libraryDocs[name] ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(libraryDocs[name]) } } } }) : route.fulfill({ status: 404, json: {} });
+    const published = await page.evaluate(() => window.__libraryParts || null);
+    const doc = published ? (name === 'index' ? published.index : published.parts[name]) : libraryDocs[name];
+    return doc ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(doc) } } } }) : route.fulfill({ status: 404, json: {} });
   });
   assert.equal(await page.locator('.nav a', { hasText: 'Películas' }).isHidden(), true);
   // While hidden for everyone, the administrator signed in on this browser still sees it, with a note.
@@ -434,7 +436,11 @@ try {
   // The administrator searches TMDB, chooses a title and pastes its LuluStream link; series season by season.
   await page.route('https://api.themoviedb.org/3/**', route => {
     const path = new URL(route.request().url()).pathname;
-    const body = path.endsWith('/search/movie') ? { results: [{ id: 76600, title: 'Avatar: El sentido del agua', release_date: '2022-12-14' }] }
+    const missing = ['Zzzz desconocida', 'Serie pendiente', 'Documental pendiente'].includes(new URL(route.request().url()).searchParams.get('query'));
+    const body = missing ? { results: [] } : path.endsWith('/movie/9001') ? { title: 'Documental identificado', release_date: '2020-01-01', genres: [{ name: 'Documental' }] }
+      : path.endsWith('/tv/9999') ? { name: 'Serie identificada', seasons: [{ season_number: 3, episode_count: 1 }] }
+      : path.endsWith('/tv/9999/season/3') ? { episodes: [{ episode_number: 1, name: 'Capítulo conservado' }] }
+      : path.endsWith('/search/movie') ? { results: [{ id: 76600, title: 'Avatar: El sentido del agua', release_date: '2022-12-14' }] }
       : path.endsWith('/search/tv') ? { results: [{ id: 4500, name: 'Los hombres de Paco', first_air_date: '2005-10-09' }] }
       : path.endsWith('/movie/76600') ? { title: 'Avatar: El sentido del agua', release_date: '2022-12-14', overview: 'Pandora otra vez', genres: [{ name: 'Ciencia ficción' }], credits: { cast: [] } }
       : path.endsWith('/tv/4500') ? { name: 'Los hombres de Paco', first_air_date: '2005-10-09', overview: 'Comisaría', seasons: [{ season_number: 1, name: 'Temporada 1', episode_count: 2 }, { season_number: 2, name: 'Temporada 2', episode_count: 1 }], credits: { cast: [] } }
@@ -444,7 +450,7 @@ try {
   });
   await page.getByLabel('Sección', { exact: true }).first().selectOption('movies');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
-  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
   await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
@@ -458,7 +464,7 @@ try {
   // A series: the season picker, one link per episode; episodes without a link are left out.
   await page.getByLabel('Sección', { exact: true }).first().selectOption('series');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Paco');
-  await page.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Los hombres de Paco' }).click();
   await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco1x01aaaa');
   await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
@@ -531,19 +537,60 @@ try {
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/abc123def456');
   assert.deepEqual(parts.parts['series-0'].items.find((m) => m.id === 's4500').episodes.map((e) => [e.season, e.episode, e.url]),
     [[1, 1, 'https://luluvido.com/paco1x01aaaa'], [1, 2, 'https://luluvido.com/paco1x02cccc'], [1, 3, driveEpisode], [2, 1, 'https://luluvido.com/paco2x01bbbb']]);
-  // The film TMDB did not find is in the list anyway; its record is chosen by hand and takes its video.
-  assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'unadanada1234').status, 'unmatched');
+  // Review queue: real hash pages, all three categories, and exact record URLs when name lookup fails.
+  await page.evaluate((video) => {
+    window.__libraryParts.parts['series-0'].items.push({ id: 'u-review-series', status: 'unmatched', kind: 'tv', title: 'Serie pendiente', folder: 'Serie pendiente',
+      episodes: [{ id: 'u-review-e1', season: 3, episode: 1, url: 'https://luluvido.com/episodiotest1' }] });
+    window.__libraryParts.parts['documentaries-0'].items.push({ id: 'u-review-documentary', status: 'unmatched', kind: 'movie', title: 'Documental pendiente', url: video });
+  }, driveMovie);
+  await page.getByRole('link', { name: /^No identificadas/ }).click();
+  assert.ok(page.url().endsWith('#/admin/biblioteca/no-identificadas'));
+  await page.getByRole('heading', { name: 'No identificadas', exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Todas · 6', exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Películas · 3', exact: true }).click();
+  assert.ok(page.url().endsWith('/no-identificadas/peliculas'));
+  await page.getByRole('heading', { name: 'Películas · 3', exact: true }).waitFor();
+  assert.equal(await page.getByRole('heading', { name: /^Series ·/ }).count(), 0);
   const pendingRow = page.locator('.library-item', { hasText: 'Zzzz desconocida' });
-  assert.match(await pendingRow.textContent(), /Sin ficha de TMDB/);
   await pendingRow.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   assert.equal(await page.getByLabel('Buscar su ficha en TMDB', { exact: true }).inputValue(), 'Zzzz desconocida');
+  await page.locator('.library-editor').getByText(/^Sin resultados/).waitFor();
+  await page.getByLabel('Buscar su ficha en TMDB', { exact: true }).fill('https://www.themoviedb.org/movie/76600-avatar-the-way-of-water?language=es-ES');
+  await page.locator('.library-editor').getByRole('button', { name: 'Buscar', exact: true }).click();
   await page.locator('.library-editor .library-result', { hasText: 'Avatar: El sentido del agua' }).click();
   await page.getByText(/«Zzzz desconocida» es ahora «Avatar: El sentido del agua», con su vídeo/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/nadanada1234');
   assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
+  await page.getByRole('link', { name: 'Películas · 2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('link', { name: 'Series · 2', exact: true }).click();
+  await page.getByRole('heading', { name: 'Series · 2', exact: true }).waitFor();
+  await page.locator('.library-item', { hasText: 'Serie pendiente' }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('.library-editor').getByText(/^Sin resultados/).waitFor();
+  await page.getByLabel('Buscar su ficha en TMDB', { exact: true }).fill('https://www.themoviedb.org/tv/9999-serie-identificada');
+  await page.locator('.library-editor').getByRole('button', { name: 'Buscar', exact: true }).click();
+  await page.locator('.library-editor .library-result', { hasText: 'Serie identificada' }).click();
+  await page.getByText(/«Serie pendiente» es ahora «Serie identificada»/).waitFor();
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['series-0'].items.some((m) => m.id === 'u-review-series'), false);
+  assert.equal(parts.parts['series-0'].items.find((m) => m.id === 's9999').episodes[0].url, 'https://luluvido.com/episodiotest1');
+  await page.getByRole('link', { name: 'Series · 1', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('link', { name: 'Documentales · 1', exact: true }).click();
+  await page.getByRole('heading', { name: 'Documentales · 1', exact: true }).waitFor();
+  await page.locator('.library-item', { hasText: 'Documental pendiente' }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.getByLabel('Buscar su ficha en TMDB', { exact: true }).fill('https://www.themoviedb.org/movie/9001-documental-identificado');
+  await page.locator('.library-editor').getByRole('button', { name: 'Buscar', exact: true }).click();
+  await page.locator('.library-editor .library-result', { hasText: 'Documental identificado' }).click();
+  await page.getByText(/«Documental pendiente» es ahora «Documental identificado»/).waitFor();
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['documentaries-0'].items[0].url, driveMovie);
+  await page.getByRole('link', { name: 'Documentales · 0', exact: true }).waitFor();
+  await page.getByText('No quedan títulos sin identificar en esta sección.', { exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Volver a Pelis y series', exact: true }).click();
+  await page.getByRole('heading', { name: 'Pelis y series', exact: true }).waitFor();
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
