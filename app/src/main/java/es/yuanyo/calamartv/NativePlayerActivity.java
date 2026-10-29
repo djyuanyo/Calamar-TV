@@ -794,13 +794,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     releasePlayer();
     DataSource.Factory http;
+    // The signed URL and its media must use the same working system route to our hosting.
+    final boolean hostedSource = hostingPlayback && HostingPlayback.isRelay(source.url);
+    final boolean requestHttp1 = mediaHttp1 || hostedSource;
     try {
       if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || source.url.startsWith(Library.PLAYER_ENDPOINT)
           || source.url.startsWith(Library.LULU_ENDPOINT))) http = ChromiumNetwork.get(this).mediaFactory(directUrl != null ? null : mediaReferer());
       else {
         http =
-            (mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
-            .mediaFactory(directUrl != null ? null : mediaReferer(), mediaHttp1, source.url,
+            (mediaSystemRetry || hostedSource ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
+            .mediaFactory(directUrl != null ? null : mediaReferer(), requestHttp1, source.url,
                 directUrl == null && pageUrl != null
                     && !source.url.startsWith(Library.LULU_ENDPOINT) && !source.url.startsWith(Library.PLAYER_ENDPOINT));
       }
@@ -809,8 +812,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     mediaProgress =
-        "Esperando la lista y los fragmentos · HTTP " + (mediaHttp1 ? "1.1" : "automático");
-    lastReport += "\nIntento de reproducción: HTTP " + (mediaHttp1 ? "1.1" : "automático");
+        "Esperando la lista y los fragmentos · HTTP " + (requestHttp1 ? "1.1" : "automático");
+    lastReport += "\nIntento de reproducción: HTTP " + (requestHttp1 ? "1.1" : "automático");
     player =
         new ExoPlayer.Builder(this)
             // Up to 30 s ahead (it starts after 2.5 s): with only 5 s, a slow piece from a distant
@@ -1098,7 +1101,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         + page.getHost()
         + (directUrl != null ? "" : page.getPath())
         + "\nMotor: "
-        + (chromiumNetwork ? "Chromium · conexión del dispositivo" : transport.name())
+        + (chromiumNetwork ? "Chromium · conexión del dispositivo" : hostingPlayback ? NetworkTransport.get(DnsProvider.SYSTEM).name() : transport.name())
         + "\nRuta: " + (hostingPlayback ? "servidor de Calamar TV" : "conexión del dispositivo");
   }
 

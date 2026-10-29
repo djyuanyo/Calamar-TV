@@ -80,12 +80,17 @@ public class HostingPlaybackTest {
       NetworkTransport network = NetworkTransport.get(DnsProvider.SYSTEM);
       Field f = NetworkTransport.class.getDeclaredField("client"); f.setAccessible(true);
       OkHttpClient original = (OkHttpClient) f.get(network);
+      NetworkTransport secureNetwork = NetworkTransport.get(DnsProvider.GOOGLE);
+      OkHttpClient originalSecure = (OkHttpClient) f.get(secureNetwork);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
       OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
           .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
           .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
               .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
-      f.set(network, local); NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
+      f.set(network, local);
+      // Reproduce the real distinction that 2.20.57 missed: menu/system DNS works while selected DNS fails.
+      f.set(secureNetwork, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("DNS seguro no disponible"); }).build());
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
@@ -138,7 +143,7 @@ public class HostingPlaybackTest {
         assertPlays(scenario);
         assertEquals("Renewals must stay on the selected signal", "fedcba9876543210", selectedId.get());
         assertEquals("Playback must not contact the provider", 0, pages.get());
-      } finally { f.set(network, original); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
+      } finally { f.set(network, original); f.set(secureNetwork, originalSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
     }
   }
 
