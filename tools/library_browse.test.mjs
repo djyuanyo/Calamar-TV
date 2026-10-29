@@ -188,3 +188,15 @@ test('the home page search finds films, series and documentaries, never titles w
   assert.deepEqual(librarySearch(library, 'matador').map(({ item }) => item.id), ['d1']);
   assert.deepEqual(librarySearch(library, '  '), []);
 });
+
+test('«Recomendado para ti» weighs the categories the profile watches and likes, never what it already watched', async () => {
+  const { recommendedTitles } = await import('../web/library.js');
+  const movie = (id, genres, rating = 5) => ({ id, kind: 'movie', title: id, tmdb: { id: id.length, title: id, genres, rating } });
+  const library = { sections: { movies: [movie('seen', ['Terror']), movie('t1', ['Terror'], 6), movie('t2', ['Terror', 'Suspense'], 7),
+    movie('c1', ['Comedia'], 9), movie('d1', ['Drama'], 8)], series: [], documentaries: [] } };
+  const picks = (seen, rated = []) => recommendedTitles(library, { seen, rated }).map(({ item }) => item.id);
+  assert.deepEqual(picks([{ page: 'peliculas', item: 'seen' }]), ['t2', 't1']);
+  assert.deepEqual(picks([{ page: 'peliculas', item: 'seen' }], [{ page: 'peliculas', item: 'd1', value: 1 }]), ['t2', 't1']);
+  assert.deepEqual(picks([], [{ page: 'peliculas', item: 'c1', value: -1 }]), []);
+  assert.deepEqual(picks([]), []);
+});

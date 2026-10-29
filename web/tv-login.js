@@ -4,7 +4,7 @@ import { deviceKey } from './device-login.js';
 export async function render(el, keyText, codeText) {
   const key = deviceKey(keyText);
   const title = el('h2', {}, 'Iniciar sesión en la app');
-  if (!key) return [title, el('p', { class: 'error' }, 'Este enlace no es válido. Abre el QR o el enlace que muestra la app Calamar TV, en Administración → Iniciar sesión con el móvil.')];
+  if (!key) return [title, el('p', { class: 'error' }, 'Este enlace no es válido. Abre el QR o el enlace que muestra la app Calamar TV, en Mi cuenta (o Administración) → Iniciar sesión con el móvil.')];
   const { publishDeviceLogin, watchDeviceLogin, explain } = await import('./firebase.js');
   const code = el('input', { type: 'text', value: deviceKey(codeText) || '', maxlength: '5', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false',
     class: 'device-code-input', 'aria-label': 'Código que muestra la app', placeholder: 'AB3D' });
@@ -28,5 +28,5 @@ export async function render(el, keyText, codeText) {
       confirm.disabled = false;
     }
   } }, el('label', { class: 'device-code-label' }, 'Código que muestra la app', code), el('div', { class: 'actions' }, confirm), note);
-  return [title, el('p', { class: 'note' }, `Comprueba que el código es el mismo que ves en la app${codeText ? '' : ' y escríbelo'}, y entra con la cuenta de administración.`), form];
+  return [title, el('p', { class: 'note' }, `Comprueba que el código es el mismo que ves en la app${codeText ? '' : ' y escríbelo'}, y entra con tu cuenta de Google.`), form];
 }

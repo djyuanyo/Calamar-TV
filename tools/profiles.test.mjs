@@ -33,3 +33,12 @@ test('«Mi lista», likes and favourite channels toggle, and the newer copy wins
   assert.equal(newerData({ updatedAt: 5 }, { updatedAt: 9 }).updatedAt, 9);
   assert.equal(newerData({ updatedAt: 9 }, null).updatedAt, 9);
 });
+
+test('each profile remembers what it played, the latest 200', async () => {
+  const { markWatched, watchedEntries, WATCHED_LIMIT } = await import('../web/profiles.js');
+  let data = emptyData();
+  for (let i = 0; i < WATCHED_LIMIT + 5; i++) data = markWatched(data, 'peliculas', `m${i}`, i);
+  assert.equal(Object.keys(data.watched).length, WATCHED_LIMIT);
+  assert.equal(watchedEntries(data)[0].item, `m${WATCHED_LIMIT + 4}`);
+  assert.equal(data.watched['peliculas/m0'], undefined);
+});
