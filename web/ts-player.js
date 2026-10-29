@@ -59,7 +59,10 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
       });
       current = player;
       player.on(library.Events.ERROR, (type, detail, info) => {
-        const network = type === library.ErrorTypes?.NETWORK_ERROR || /network/i.test(type);
+        // Some TS signals overflow the browser demuxer's parser. Reconnecting to the same
+        // bytes cannot fix that: let the caller request the hosting's compatible HLS instead.
+        const parserFailure = detail === 'Exception' && /call stack size exceeded/i.test(info?.msg || '');
+        const network = !parserFailure && (type === library.ErrorTypes?.NETWORK_ERROR || /network/i.test(type));
         fail(request, network, { details: network ? 'fragLoadError' : 'codecUnsupported',
           response: { code: Number.isInteger(info?.code) ? info.code : 0 } });
       });

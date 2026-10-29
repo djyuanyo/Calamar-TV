@@ -77,6 +77,23 @@ test('codec failures are reported without indefinite retries', () => {
 });
 
 
+test('a demuxer stack overflow requests compatible HLS instead of repeating the same broken parser', () => {
+  const f = fixture();
+  f.players[0].handlers.error('NetworkError', 'Exception', { msg: 'Maximum call stack size exceeded' });
+  assert.equal(f.failures[0].details, 'codecUnsupported');
+  assert.equal(f.players[0].destroyed, true);
+  assert.equal(f.tasks.size, 0);
+  f.stop();
+});
+
+test('ordinary fetch exceptions retain network recovery', () => {
+  const f = fixture();
+  f.players[0].handlers.error('NetworkError', 'Exception', { msg: 'Failed to fetch' });
+  assert.equal(f.failures.length, 0);
+  assert.equal(f.tasks.size, 1);
+  f.stop();
+});
+
 test('native network errors reconnect and resume instead of showing a premature fatal message', async () => {
   const f = fixture();
   f.video.error = { code: 2 };
