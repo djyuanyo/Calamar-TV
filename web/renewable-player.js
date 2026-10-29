@@ -1,6 +1,5 @@
 import { streamExpiry } from './catalog.js';
 import { autoplay } from './autoplay.js';
-import { hostedRequest, hostedUrl } from './hosted-sources.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
 export function pageSources(html, page) {
@@ -39,7 +38,7 @@ export function renewalDelay(url, now = Date.now()) {
 }
 
 /** Per-viewer resolution and renewal; no tokens are persisted in the catalog or sent to our hosting. */
-export function mountRenewable({ page, sourceId = null, hosted = false, video, Hls, onSource = () => {}, onAttach = () => {}, onStatus = () => {}, onFallback = () => {},
+export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {},
   fetcher = globalThis.fetch, timers = globalThis, now = Date.now }) {
   let stopped = false, request = null, refreshTimer = null, watchdog = null, engine = null;
   let address = '', failures = 0, loaded = false, recovering = false;
@@ -63,7 +62,6 @@ export function mountRenewable({ page, sourceId = null, hosted = false, video, H
     loaded = true;
     destroyEngine();
     address = url;
-    onSource(url);
     if (Hls?.isSupported()) {
       const instance = engine = new Hls({ lowLatencyMode: false });
       instance.on(Hls.Events.ERROR, (_event, data) => {
@@ -83,11 +81,11 @@ export function mountRenewable({ page, sourceId = null, hosted = false, video, H
     const controller = request = new AbortController();
     const timeout = timers.setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetcher(hosted ? hostedRequest(page, sourceId) : page, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+      const response = await fetcher(page, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = hosted ? await response.json() : await response.text();
+      const html = await response.text();
       if (stopped || controller.signal.aborted) return;
-      const sources = hosted ? [hostedUrl(data.url)] : pageSources(data, response.url || page).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
+      const sources = pageSources(html, response.url || page).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
       if (!sources.length) throw new Error('No hay un M3U8 vigente en la respuesta del proveedor.');
       // Preserve the chosen CDN on renewal; after an error try the next CDN from the fresh page.
       let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);

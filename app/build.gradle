@@ -8,8 +8,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 24
         targetSdk 35
-        versionCode 113
-        versionName '2.20.58'
+        versionCode 114
+        versionName '2.20.59'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {
