@@ -714,6 +714,27 @@ export function titleRelation(a, b) {
 }
 
 /**
+ * Behind «Elige tu perfil»: the weekly top of films and series one after the other (N.º 1 de películas, N.º 1 de
+ * series, N.º 2…) and the best rated documentaries, with an image. { title, image, label } each, at most `size`.
+ */
+export function gateSlides(library, size = 12) {
+  const art = (item) => item.tmdb?.backdrop || item.tmdb?.poster || '';
+  const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => libraryTop(library, key)
+    .filter(({ item }) => art(item)).map(({ item }, i) => ({ title: itemTitle(item), image: art(item), label: `N.º ${i + 1} en ${what} hoy` })));
+  const docs = (library?.sections?.documentaries || []).filter((item) => art(item) && !unidentifiedItem(item))
+    .sort((a, b) => (b.trend ? 1000 - b.trend : 0) - (a.trend ? 1000 - a.trend : 0) || (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0))
+    .slice(0, 3).map((item) => ({ title: itemTitle(item), image: art(item), label: 'Documental destacado' }));
+  const out = [];
+  for (let i = 0; out.length < size && (i < tops[0].length || i < tops[1].length); i++) {
+    if (tops[0][i]) out.push(tops[0][i]);
+    if (tops[1][i] && out.length < size) out.push(tops[1][i]);
+    if (i === 1) out.push(...docs.slice(0, Math.max(0, size - out.length)));
+  }
+  if (!out.length) out.push(...docs);
+  return out.slice(0, size);
+}
+
+/**
  * «Recomendado para ti»: the categories of what the profile watches (+1 each title left half watched or seen),
  * likes (+2) and dislikes (-2) weigh every title it has not watched yet; the best rated break ties.
  * `seen` and `rated` are { page, item, value? } entries; returns { section, item } entries.

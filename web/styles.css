@@ -1292,3 +1292,79 @@ body.gate-open { overflow: hidden; }
 .gate-profile .profile-avatar.big { width: 96px; height: 96px; font-size: 44px; border-radius: 14px; box-shadow: 0 8px 22px rgba(0,0,0,.45); }
 .gate-profile:hover .profile-avatar, .gate-profile:focus-visible .profile-avatar { outline: 3px solid #fff; outline-offset: 3px; }
 .profile-avatar.tool { background: rgba(255,255,255,.28); color: #fff; font-weight: 400; }
+
+/* «Elige tu perfil»: the weekly top behind, one title after another. */
+.profile-gate { background: #0b0d10; isolation: isolate; }
+.gate-slides { position: fixed; inset: 0; z-index: -1; }
+.gate-slides::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,13,16,.1) 0%, rgba(11,13,16,.5) 45%, #0b0d10 80%); }
+.gate-slide { position: absolute; inset: 0; background: center top / cover no-repeat; opacity: 0; transform: scale(1.04); transition: opacity 1.2s ease, transform 7s ease; }
+.gate-slide.on { opacity: 1; transform: scale(1); }
+.gate-rank-text { display: inline; }
+@media (prefers-reduced-motion: reduce) { .gate-slide { transition: none; transform: none; } }
+
+/* «Entra»: a card, as the professional sign-in pages. */
+.auth-card { position: relative; width: min(440px, 100% - 32px); margin: 64px auto 16px; padding: 56px 24px 26px; border-radius: 22px;
+  background: linear-gradient(180deg, #151b25, #10151d); border: 1px solid rgba(255,255,255,.07); box-shadow: 0 30px 70px rgba(0,0,0,.45); }
+.auth-brand { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; padding: 6px 22px 6px 6px;
+  border-radius: 999px; background: #1a212c; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.4); white-space: nowrap; }
+.auth-brand img { width: 64px; height: 64px; padding: 5px; border-radius: 50%; object-fit: contain; background: #0b0d10; box-sizing: border-box; }
+.auth-brand b { display: block; font-size: 20px; }
+.auth-brand small { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 5px; border-radius: 14px; background: #0f141b; border: 1px solid rgba(255,255,255,.08); }
+.auth-tab { padding: 12px; border: 0; border-radius: 10px; background: none; color: rgba(255,255,255,.6); font: inherit; font-weight: 600; cursor: pointer; }
+.auth-tab[aria-selected="true"] { background: #1c2430; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.auth-card h1 { margin: 26px 0 4px; font-size: 34px; }
+.auth-lead { margin: 0 0 14px; color: rgba(255,255,255,.65); }
+.auth-provider { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 13px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14); background: #121821; color: #fff; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; }
+.auth-provider:hover, .auth-provider:focus-visible { border-color: var(--accent); }
+.auth-divider { display: flex; align-items: center; gap: 14px; margin: 22px 0 6px; color: rgba(255,255,255,.55); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.12); }
+.auth-method { margin: 8px 0 2px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); width: max-content; color: var(--accent); font-weight: 700; }
+.auth-form { display: grid; gap: 16px; margin-top: 18px; }
+.auth-field { display: grid; gap: 8px; }
+.auth-label { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+.auth-field input { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: #0f141b; color: #fff; font: inherit; font-size: 16px; }
+.auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(214,255,0,.15); }
+.auth-password { position: relative; display: block; }
+.auth-password input { padding-right: 52px; }
+.auth-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 8px; background: none; color: rgba(255,255,255,.6); cursor: pointer; }
+.auth-eye.on { color: var(--accent); }
+.auth-link { border: 0; background: none; padding: 0; color: #8ab4ff; font: inherit; font-size: 13px; letter-spacing: 0; text-transform: none; font-weight: 600; cursor: pointer; }
+.auth-submit { margin-top: 6px; padding: 15px; border: 0; border-radius: 12px; background: var(--accent); color: #0b0d10; font: inherit; font-size: 16px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.auth-submit:disabled { opacity: .6; }
+.auth-note { min-height: 1em; margin: 12px 0 0; text-align: center; color: rgba(255,255,255,.75); }
+.auth-note.error { color: #ff7b72; }
+.auth-foot { width: min(440px, 100% - 32px); margin: 0 auto 40px; text-align: center; font-size: 13px; color: rgba(255,255,255,.55); }
+.auth-foot a { color: rgba(255,255,255,.8); }
+
+/* «Perfil», as the profile sheet of Netflix. */
+.profile-sheet { width: min(560px, 100% - 32px); margin: 24px auto 40px; padding: 8px 18px 24px; border-radius: 22px; background: #232323; display: grid; gap: 16px; }
+.sheet-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 10px 0 0; }
+.sheet-head h1 { margin: 0; text-align: center; font-size: 26px; font-weight: 600; }
+.sheet-close, .sheet-back { width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 20px; cursor: pointer; }
+.sheet-back { background: none; font-size: 30px; }
+.sheet-current { position: relative; display: grid; justify-items: center; gap: 6px; padding: 22px 16px 26px; border-radius: 26px; background: #2e2e2e; }
+.sheet-current .profile-avatar.big { width: 132px; height: 132px; font-size: 62px; border-radius: 16px; }
+.sheet-edit { position: absolute; top: 16px; right: 18px; border: 0; background: none; color: #fff; cursor: pointer; }
+.sheet-name { margin: 6px 0 0; font-size: 22px; }
+.sheet-mail { margin: 0; color: rgba(255,255,255,.6); font-size: 15px; }
+.sheet-profiles { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }
+.sheet-profile { display: grid; justify-items: center; gap: 8px; border: 0; background: none; color: #fff; font: inherit; cursor: pointer; }
+.profile-avatar.mid { width: 76px; height: 76px; font-size: 34px; border-radius: 12px; }
+.sheet-profile .profile-avatar.tool { background: #3a3a3a; }
+.sheet-profile:hover .profile-avatar, .sheet-profile:focus-visible .profile-avatar { outline: 3px solid #fff; outline-offset: 2px; }
+.sheet-manage { justify-self: center; padding: 13px 28px; border: 0; border-radius: 999px; background: #3a3a3a; color: #fff; font: inherit; font-size: 17px; cursor: pointer; }
+.sheet-menu { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; }
+.sheet-item { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 14px; padding: 18px 20px; border: 0; border-radius: 14px;
+  background: #2e2e2e; color: #fff; font: inherit; font-size: 18px; text-align: left; cursor: pointer; }
+.sheet-item:hover, .sheet-item:focus-visible { background: #383838; }
+.sheet-chevron { font-size: 28px; line-height: 1; color: rgba(255,255,255,.8); }
+.sheet-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 18px; margin: 0; padding: 18px; border-radius: 14px; background: #2e2e2e; }
+.sheet-facts dt { color: rgba(255,255,255,.6); }
+.sheet-facts dd { margin: 0; word-break: break-all; }
+.sheet-help { padding: 16px 18px; border-radius: 14px; background: #2e2e2e; }
+.sheet-help summary { cursor: pointer; font-weight: 600; }
+.sheet-help p { margin: 10px 0 0; color: rgba(255,255,255,.75); line-height: 1.5; }
+.profile-sheet .profile-grid { margin: 8px 0; }
+.profile-sheet .profile-form { justify-self: center; }
