@@ -1290,6 +1290,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     });
     sourceDialog.show();
     sourceDialog.getListView().requestFocus();
+    if (checked >= 0) sourceDialog.getListView().setSelection(checked);
   }
 
   private void selectChannelAddress(String address, boolean page) {
@@ -1479,6 +1480,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   public boolean dispatchKeyEvent(KeyEvent event) {
+    if (isTelevision() && active
+        && playerView != null && (sourceDialog == null || !sourceDialog.isShowing())) {
+      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) { chooseSource(); return true; }
+      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP && playerView.hasFocus()) {
+        playerView.showController(); panel.setVisibility(View.VISIBLE); sourceButton.requestFocus(); return true;
+      }
+      // Let the remote activate the focused header button instead of sending its Enter to the video.
+      if (panel.hasFocus()) return super.dispatchKeyEvent(event);
+    }
     return playerView != null
             && playerView.getVisibility() == View.VISIBLE
             && playerView.dispatchKeyEvent(event)

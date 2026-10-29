@@ -31,7 +31,13 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
-  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception {
+  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false); }
+  @Test public void televisionRemoteSelectsAndRenewsHostedSignal() throws Exception {
+    org.junit.Assume.assumeTrue((ApplicationProvider.getApplicationContext().getResources().getConfiguration().uiMode
+        & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION);
+    playback(true);
+  }
+  private void playback(boolean remote) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -82,12 +88,22 @@ public class HostingPlaybackTest {
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
         assertEquals(0, pages.get());
-        scenario.onActivity(activity -> {
+        if (remote) {
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);
+          scenario.onActivity(activity -> {
+            try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); assertTrue(((android.widget.Button)button.get(activity)).hasFocus()); }
+            catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+          });
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
+        } else scenario.onActivity(activity -> {
           try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); ((android.widget.Button)button.get(activity)).performClick(); }
           catch (ReflectiveOperationException e) { throw new AssertionError(e); }
         });
         onView(withText("LaLiga · Señal 1")).inRoot(isDialog()).check(matches(isChecked()));
-        onView(withText("LaLiga · Señal 2")).inRoot(isDialog()).perform(click());
+        if (remote) {
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
+        } else onView(withText("LaLiga · Señal 2")).inRoot(isDialog()).perform(click());
         assertPlays(scenario);
         assertEquals("fedcba9876543210", selectedId.get());
         int before = renewals.get();
