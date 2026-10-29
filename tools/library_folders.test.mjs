@@ -58,9 +58,7 @@ test('duplicates across providers keep the current film and existing episodes wh
   const result=await libraryFromScan(scan,current,'tmdb',{skipDuplicates:true,fetcher:async url=>{
     assert.match(url,/\/tv\/2\/season\/1/);return json({episodes:[{episode_number:1,name:'Uno'},{episode_number:2,name:'Dos'}]});
   }});
-  // The film stays as it was, with both copies of the scan as spare links. Its own link was never read
-  // from a folder (pasted by hand), so it is kept even though the scan does not include it.
-  assert.deepEqual(result.sections.movies,[{...current.movies[0],mirrors:[video('avatar'),video('another')],files:['avatar']}]);
+  assert.deepEqual(result.sections.movies,current.movies);
   assert.equal(result.sections.documentaries.length,0);
   assert.deepEqual(result.sections.series[0].episodes.map(e=>[e.episode,e.url]),[[1,video('old')],[2,'https://luluvido.com/new12345678']]);
   assert.deepEqual(result.sections.series[0].skip,current.series[0].skip);

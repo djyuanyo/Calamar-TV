@@ -198,14 +198,18 @@ const namedItem = (sections, wanted, kind) => {
 /** A video's file name as a key (title and year), the same in Drive and LuluStream for the same film. */
 export const fileKey = (name) => { const c = cleanTitle(name || ''), t = titleKey(c.title); return t ? t + (c.year || '') : ''; };
 const linksOf = (item) => [item.url, ...(item.mirrors || [])].filter(Boolean).map(codeOf);
-/** A film with one more copy: its file name is remembered and the link kept as a spare (mirrors). */
+/**
+ * A film with one more copy. Its own link found in a folder: the file name is remembered (to recognise
+ * its twin in the other site). Another copy: kept as a spare only for a film whose link came from a
+ * folder, the only kind that can be deleted there; links pasted by hand are left exactly as they are.
+ */
 const withCopy = (item, file, link) => {
+  const own = !!link && codeOf(link) === codeOf(item.url);
+  if (!own && !item.fromFolder) return item;
   const fk = fileKey(file);
   const files = [...new Set([...(item.files || []), ...(fk ? [fk] : [])])];
-  const mirrors = [...new Set([...(item.mirrors || []), ...(link ? [link] : [])])].filter((l) => codeOf(l) !== codeOf(item.url));
-  const next = { ...item, files, mirrors };
-  // Its own link was found in a folder: when a later scan no longer finds it, it was deleted there.
-  if (link && codeOf(link) === codeOf(item.url)) next.fromFolder = true;
+  const mirrors = [...new Set([...(item.mirrors || []), ...(link && !own ? [link] : [])])];
+  const next = { ...item, files, mirrors, fromFolder: true };
   if (!files.length) delete next.files;
   if (!mirrors.length) delete next.mirrors;
   return next;
@@ -242,13 +246,7 @@ export async function seriesWithLinks(item, info, links, key, fetcher) {
 export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    // The film already in the library keeps its link; the identified copy stays as a spare.
-    let next = { ...movieItem(info, existing?.url || item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
-    for (const copy of [existing, item].filter(Boolean)) {
-      for (const k of copy.files || []) next = { ...next, files: [...new Set([...(next.files || []), k])] };
-      for (const link of [copy.url, ...(copy.mirrors || [])]) next = withCopy(next, copy.file || '', link);
-    }
-    return next;
+    return { ...movieItem(info, item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
   const series = await seriesWithLinks(existing, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
