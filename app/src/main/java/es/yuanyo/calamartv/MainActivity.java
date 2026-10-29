@@ -83,133 +83,7 @@ public class MainActivity extends Activity {
     updater = createUpdater();
     restore();
     favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet()));
-    // Accounts and profiles: «Elige tu perfil» each time the app opens, and each profile's own rows.
-    Profiles.start(this);
-    Profiles.listen(profilesChanged);
     home();
-  }
-
-  /** «Elige tu perfil» while it is on screen. */
-  Dialog gate;
-  final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
-    if (isFinishing()) return;
-    syncFavorites();
-    if (Profiles.needsPick()) profileGate();
-    else if (gate != null && gate.isShowing()) gate.dismiss();
-    render();
-  });
-
-  /** The favourite channels of the profile watching (those of this device without an account). */
-  void syncFavorites() {
-    if (Profiles.signedIn() && Profiles.active() != null) { favorites.clear(); favorites.addAll(ProfileData.favorites(Profiles.data())); }
-    else { favorites.clear(); favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet())); }
-  }
-
-  /**
-   * «Elige tu perfil», as on Netflix (and on the web): the film N.º 1 of the week behind, the profiles of
-   * the account, «Añadir» and «Modificar». Once each time the app opens.
-   */
-  void profileGate() {
-    if (gate != null && gate.isShowing()) return;
-    FrameLayout root = new FrameLayout(this);
-    root.setBackgroundColor(Ui.BG);
-    Library.Item top = library == null || library.top("movies").isEmpty() ? null : library.top("movies").get(0);
-    if (top != null && !(top.backdrop.isEmpty() && top.poster.isEmpty())) {
-      ImageView art = new ImageView(this);
-      art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-      root.addView(art, new FrameLayout.LayoutParams(-1, -1));
-      image(art, top.backdrop.isEmpty() ? top.poster : top.backdrop);
-    } else if (libraryShown(custom)) loadLibrary();
-    View shade = new View(this);
-    shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x220b0d10, 0x880b0d10, 0xff0b0d10}));
-    root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
-    LinearLayout box = new LinearLayout(this);
-    box.setOrientation(LinearLayout.VERTICAL);
-    box.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
-    box.setPadding(dp(16), dp(24), dp(16), dp(36));
-    if (top != null) {
-      TextView title = label(top.title.toUpperCase(new Locale("es")), wide() ? 44 : 34, 0xffffe000);
-      title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      title.setGravity(Gravity.CENTER);
-      title.setShadowLayer(dp(10), 0, dp(2), 0xcc000000);
-      box.addView(title);
-      TextView rank = label("TOP 10 · N.º 1 en películas hoy", 16, 0xffffffff);
-      rank.setGravity(Gravity.CENTER);
-      box.addView(rank);
-    }
-    TextView pick = label("Elige tu perfil", 17, 0xccffffff);
-    pick.setGravity(Gravity.CENTER);
-    pick.setPadding(0, dp(24), 0, dp(12));
-    box.addView(pick);
-    LinearLayout profiles = new LinearLayout(this);
-    profiles.setGravity(Gravity.CENTER);
-    View first = null;
-    int size = wide() ? 104 : 88;
-    for (JSONObject profile : Profiles.profiles()) {
-      final String id = profile.optString("id");
-      View tile = gateTile(AccountActivity.avatar(this, profile, size), profile.optString("name"), size);
-      tile.setOnClickListener(v -> { Profiles.choose(this, id, true); if (gate != null) gate.dismiss(); });
-      profiles.addView(tile);
-      if (first == null) first = tile;
-    }
-    box.addView(profiles);
-    LinearLayout tools = new LinearLayout(this);
-    tools.setGravity(Gravity.CENTER);
-    if (Profiles.profiles().size() < ProfileData.MAX_PROFILES) {
-      View add = gateTile(gateTool("+", size), "Añadir", size);
-      add.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "new")));
-      tools.addView(add);
-    }
-    View manage = gateTile(gateTool("✎", size), "Modificar", size);
-    manage.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
-    tools.addView(manage);
-    box.addView(tools);
-    ScrollView scroll = new ScrollView(this);
-    scroll.setFillViewport(true);
-    LinearLayout fill = new LinearLayout(this);
-    fill.setOrientation(LinearLayout.VERTICAL);
-    fill.setGravity(Gravity.BOTTOM);
-    fill.addView(box, new LinearLayout.LayoutParams(-1, -2));
-    scroll.addView(fill, new FrameLayout.LayoutParams(-1, -1));
-    root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
-    gate = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-    gate.setContentView(root);
-    // Back leaves the app as on Netflix: a profile has to be chosen to go in.
-    gate.setOnCancelListener(d -> finish());
-    gate.show();
-    if (first != null) first.requestFocus();
-  }
-
-  View gateTile(View picture, String name, int size) {
-    LinearLayout tile = new LinearLayout(this);
-    tile.setOrientation(LinearLayout.VERTICAL);
-    tile.setGravity(Gravity.CENTER_HORIZONTAL);
-    tile.setPadding(dp(6), dp(6), dp(6), dp(6));
-    tile.setFocusable(true);
-    tile.setClickable(true);
-    tile.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, 0xffffffff, 16, 0));
-    Ui.scaleOnFocus(tile, 1.06f);
-    picture.setDuplicateParentStateEnabled(true);
-    tile.addView(picture, new LinearLayout.LayoutParams(dp(size), dp(size)));
-    TextView label = label(name, 15, 0xffffffff);
-    label.setGravity(Gravity.CENTER);
-    label.setPadding(0, dp(8), 0, 0);
-    tile.addView(label);
-    tile.setContentDescription(name);
-    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-    lp.setMargins(dp(8), dp(6), dp(8), dp(6));
-    tile.setLayoutParams(lp);
-    return tile;
-  }
-
-  TextView gateTool(String symbol, int size) {
-    TextView v = new TextView(this);
-    v.setText(symbol);
-    v.setTextColor(0xffffffff);
-    v.setTextSize(size * 0.38f);
-    v.setGravity(Gravity.CENTER);
-    v.setBackground(Ui.shape(this, 0x55ffffff, 12, 0, 0));
-    return v;
   }
 
   // ---- Catalog -------------------------------------------------------------------------------
@@ -380,10 +254,9 @@ public class MainActivity extends Activity {
     ImageButton admin = new ImageButton(this);
     admin.setImageDrawable(Ui.icon(Ui.Icon.ADMIN, Ui.MUTED, dp(22)));
     admin.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
-    admin.setContentDescription("Mi cuenta");
-    if (android.os.Build.VERSION.SDK_INT >= 26) admin.setTooltipText("Mi cuenta");
-    // «Mi cuenta»: sign in, the profiles and, from there, «Administración».
-    admin.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+    admin.setContentDescription("Administración");
+    if (android.os.Build.VERSION.SDK_INT >= 26) admin.setTooltipText("Administración");
+    admin.setOnClickListener(v -> startActivity(new Intent(this, AdminActivity.class)));
     LinearLayout.LayoutParams adminSize = new LinearLayout.LayoutParams(dp(44), dp(44));
     adminSize.setMargins(dp(4), dp(4), dp(4), dp(4));
     mast.addView(admin, adminSize);
@@ -612,7 +485,6 @@ public class MainActivity extends Activity {
       // Films and episodes left half watched come right under the featured slider, then the weekly top.
       if (libraryShown(custom)) {
         continueRow();
-        if (library != null) profileRows();
         if (library != null) {
           topRow(library.top("movies"), "películas");
           topRow(library.top("series"), "series");
@@ -1381,8 +1253,6 @@ public class MainActivity extends Activity {
   }
 
   protected void onDestroy() {
-    Profiles.forget(profilesChanged);
-    if (gate != null && gate.isShowing()) gate.dismiss();
     if (updater != null) updater.close();
     handler.removeCallbacksAndMessages(null);
     imageGeneration++;
@@ -1915,30 +1785,6 @@ public class MainActivity extends Activity {
     if (!item.creators.isEmpty())
       body.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
     if (!item.genres.isEmpty()) body.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
-    // «Mi lista», «Me gusta» and «No me gusta» of the profile watching (in this device without an account).
-    final String titlePage = Library.page(section);
-    LinearLayout mine = row();
-    final Button listButton = Ui.pill(this, "", Ui.Kind.SURFACE, true), up = Ui.pill(this, "", Ui.Kind.SURFACE, true), down = Ui.pill(this, "", Ui.Kind.SURFACE, true);
-    final Runnable paintMine = () -> {
-      JSONObject data = Profiles.data();
-      listButton.setText(ProfileData.inList(data, titlePage, item.id) ? "✓  En mi lista" : "+  Mi lista");
-      int rating = ProfileData.rating(data, titlePage, item.id);
-      up.setText(rating > 0 ? "👍  Te gusta" : "👍  Me gusta");
-      down.setText(rating < 0 ? "👎  No te gusta" : "👎  No me gusta");
-    };
-    paintMine.run();
-    listButton.setOnClickListener(v -> { Profiles.toggleList(this, titlePage, item.id); paintMine.run(); });
-    up.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, 1); paintMine.run(); });
-    down.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, -1); paintMine.run(); });
-    for (Button b : new Button[] {listButton, up, down}) {
-      LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, dp(44));
-      mp.setMargins(0, dp(12), dp(8), 0);
-      mine.addView(b, mp);
-    }
-    HorizontalScrollView mineScroll = new HorizontalScrollView(this);
-    mineScroll.setHorizontalScrollBarEnabled(false);
-    mineScroll.addView(mine);
-    body.addView(mineScroll);
     Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
     share.setOnClickListener(v -> {
       Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -2301,9 +2147,6 @@ public class MainActivity extends Activity {
     String anon = Library.Media.anonmp4(url);
     if (anon != null) { embedPlayer(entry.optString("title"), anon); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
-    // What the profile watches feeds «Recomendado para ti».
-    if (Profiles.signedIn() && Profiles.active() != null && !entry.optString("section").isEmpty())
-      Profiles.markWatched(this, Library.page(entry.optString("section")), entry.optString("item"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
     String embed = Library.Media.embed(url);
     if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
@@ -2883,30 +2726,6 @@ public class MainActivity extends Activity {
   }
 
   /** The first row of the home page: what this device left half watched, most recent first. */
-  /** «Mi lista», «Recomendado para ti» and «Porque te gustó…» of the profile watching (as on the web). */
-  void profileRows() {
-    JSONObject data = Profiles.data();
-    List<Library.Item> mine = new ArrayList<>();
-    for (JSONObject entry : ProfileData.entries(data, "list")) {
-      String[] at = library.locate(entry);
-      if (at != null) mine.add(library.find(at[0], at[1]));
-    }
-    if (!mine.isEmpty()) posterRail("Mi lista", mine, wide() ? 140 : 108);
-    List<JSONObject> seen = new ArrayList<>(ProfileData.entries(data, "watched"));
-    seen.addAll(Library.Progress.list(Library.Progress.load(this)));
-    List<Library.Item> picks = Library.recommended(library, seen, ProfileData.entries(data, "ratings"), 20);
-    if (!picks.isEmpty()) posterRail("Recomendado para ti", picks, wide() ? 140 : 108);
-    JSONObject liked = ProfileData.lastLiked(data);
-    String[] at = liked == null ? null : library.locate(liked);
-    if (at != null) {
-      Library.Item item = library.find(at[0], at[1]);
-      List<Library.Item> like = new ArrayList<>();
-      for (Library.Item other : Library.similar(library, at[0], item, 12))
-        if (ProfileData.rating(data, Library.page(at[0]), other.id) >= 0) like.add(other);
-      if (!like.isEmpty()) posterRail("Porque te gustó «" + item.title + "»", like, wide() ? 140 : 108);
-    }
-  }
-
   void continueRow() {
     continueRow(null, "Continuar viendo");
   }
@@ -2993,9 +2812,7 @@ public class MainActivity extends Activity {
     view.setOnLongClickListener(v -> {
       if (favorites.contains(channel.channelId)) favorites.remove(channel.channelId);
       else favorites.add(channel.channelId);
-      // The profile watching keeps its own favourites; without an account, this device's.
-      if (Profiles.signedIn() && Profiles.active() != null) Profiles.toggleFavorite(this, channel.channelId);
-      else getSharedPreferences("favorites", MODE_PRIVATE).edit().putStringSet("ids", new HashSet<>(favorites)).apply();
+      getSharedPreferences("favorites", MODE_PRIVATE).edit().putStringSet("ids", new HashSet<>(favorites)).apply();
       boolean added = favorites.contains(channel.channelId);
       Toast.makeText(this, added ? "Añadido a favoritos" : "Quitado de favoritos", Toast.LENGTH_SHORT).show();
       if (v instanceof ViewGroup) {

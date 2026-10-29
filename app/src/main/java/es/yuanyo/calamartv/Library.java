@@ -721,46 +721,6 @@ final class Library {
       List<Item> items = sections.get(section);
       return items == null ? Collections.<Item>emptyList() : items;
     }
-
-    /** A title by its web page («peliculas»…) or section key, with the section key it is in (null if gone). */
-    String[] locate(JSONObject entry) {
-      String section = entry.optString("section", "");
-      if (section.isEmpty()) for (String[] s : SECTIONS) if (page(s[0]).equals(entry.optString("page"))) section = s[0];
-      return section.isEmpty() || find(section, entry.optString("item")) == null ? null : new String[] {section, entry.optString("item")};
-    }
-  }
-
-  /**
-   * «Recomendado para ti», as recommendedTitles on the web: the categories of what the profile watched
-   * (+1 each) and rated (+2 «Me gusta», -2 «No me gusta») weigh every title it has not watched yet.
-   */
-  static List<Item> recommended(Data data, List<JSONObject> seen, List<JSONObject> rated, int size) {
-    Map<String, Integer> weight = new java.util.HashMap<>();
-    java.util.Set<Item> skip = new java.util.HashSet<>();
-    List<JSONObject> all = new ArrayList<>(seen);
-    all.addAll(rated);
-    for (int i = 0; i < all.size(); i++) {
-      JSONObject entry = all.get(i);
-      String[] at = data.locate(entry);
-      if (at == null) continue;
-      Item item = data.find(at[0], at[1]);
-      skip.add(item);
-      int amount = i < seen.size() ? 1 : entry.optInt("value") > 0 ? 2 : -2;
-      for (String g : item.genres) weight.put(g, (weight.containsKey(g) ? weight.get(g) : 0) + amount);
-    }
-    boolean any = false;
-    for (int w : weight.values()) if (w > 0) any = true;
-    List<Item> out = new ArrayList<>();
-    if (!any) return out;
-    final Map<Item, Integer> score = new java.util.HashMap<>();
-    for (String[] section : SECTIONS) for (Item item : data.items(section[0])) {
-      if (skip.contains(item)) continue;
-      int n = 0;
-      for (String g : item.genres) n += weight.containsKey(g) ? weight.get(g) : 0;
-      if (n > 0) { score.put(item, n); out.add(item); }
-    }
-    Collections.sort(out, (a, b) -> !score.get(a).equals(score.get(b)) ? Integer.compare(score.get(b), score.get(a)) : Double.compare(b.rating, a.rating));
-    return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
   }
 
   /**
@@ -828,13 +788,9 @@ final class Library {
       }
     }
 
-    /** The profile whose row is read and saved ('' for the main profile or no account), as on the web. */
-    static volatile String scope = "";
-    private static String key(String name) { return scope.isEmpty() ? name : name + ":" + scope; }
-
     static JSONObject load(android.content.Context context) {
       try {
-        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString(key("progress"), "{}"));
+        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString("progress", "{}"));
       } catch (JSONException broken) {
         return new JSONObject();
       }
@@ -842,7 +798,7 @@ final class Library {
 
     static JSONObject loadRemoved(android.content.Context context) {
       try {
-        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString(key("progress_removed"), "{}"));
+        return new JSONObject(context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).getString("progress_removed", "{}"));
       } catch (JSONException broken) {
         return new JSONObject();
       }
@@ -857,7 +813,7 @@ final class Library {
 
     static void write(android.content.Context context, JSONObject store, JSONObject removed) {
       context.getSharedPreferences("library", android.content.Context.MODE_PRIVATE).edit()
-          .putString(key("progress"), store.toString()).putString(key("progress_removed"), removed.toString()).apply();
+          .putString("progress", store.toString()).putString("progress_removed", removed.toString()).apply();
     }
 
     /** The removals after going from `before` to `after`: what left the row now, minus what came back later. */

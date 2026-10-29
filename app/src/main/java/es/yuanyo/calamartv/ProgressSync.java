@@ -6,6 +6,7 @@ import android.os.Looper;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Source;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,9 +30,8 @@ final class ProgressSync {
   private static Runnable pending;
   private static boolean busy;
 
-  /** The profile watching: calamarProgress/<uid> for the main one, calamarUsers/<uid>/progress/<id> for the others. */
   private static DocumentReference document(Context context, FirebaseUser user) {
-    return Profiles.progressDocument(context, user);
+    return FirebaseFirestore.getInstance(SharedCatalog.app(context)).document("calamarProgress/" + user.getUid());
   }
 
   static void pushSoon(Context context) {
@@ -52,12 +52,9 @@ final class ProgressSync {
     }
     busy = true;
     DocumentReference doc = document(app, user);
-    final String scope = Library.Progress.scope;
     doc.get(Source.SERVER).addOnCompleteListener(task -> {
       boolean changed = false;
       try {
-        // Another profile was chosen meanwhile: its own sync follows, this answer is not its row.
-        if (!scope.equals(Library.Progress.scope)) return;
         JSONObject cloud = new JSONObject();
         if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
           String json = task.getResult().getString("json");
