@@ -16,7 +16,7 @@ test('only public valid players, deduplicated and named', () => {
 });
 test('manual event expands while existing sources and selection origin are preserved', async () => {
   const result = await expandEventSources(['https://example.com/live.m3u8', page], {fetcher:async (url, options) => {
-    assert.equal(url, zicoEventApi(page)); assert.equal(options.credentials, 'omit');
+    assert.equal(new URL(url).hostname, 'calamarmenciano.com'); assert.equal(new URL(url).searchParams.get('event'), page); assert.equal(options.credentials, 'omit');
     return {ok:true,json:async()=>data};
   }});
   assert.equal(result.length, 2); assert.equal(result[1].url, player); assert.equal(result[1].origin, page);

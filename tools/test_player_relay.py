@@ -21,6 +21,31 @@ def php(code):
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_zico_ipv6_remains_pinned_to_public_cloudflare_addresses(self):
+        out = php('$resolve=function($host){return ["2606:4700:3034::6815:1234","104.21.18.52"];};'
+                  'echo json_encode(['
+                  'publicTarget("https://zicotv.cc/api/player/6",$resolve,true),'
+                  'publicTarget("https://zicotv.cc/api/player/6",$resolve),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["::1","104.21.18.52"];},true),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["2606:4700::1","127.0.0.1"];},true),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["::ffff:127.0.0.1"];},true),'
+                  'array_map("publicCloudflareIp6",["2a06:98c7::1","2a06:98c8::1","fc00::1","fe80::1","2001:db8::1"])]);')
+        result = json.loads(out)
+        self.assertEqual(result[0], {'host': 'zicotv.cc', 'port': 443, 'ip': '2606:4700:3034::6815:1234'})
+        self.assertEqual(result[1:5], [None, None, None, None])
+        self.assertEqual(result[5], [True, False, False, False, False])
+
+    def test_signal_names_hide_transport_and_ids_survive_token_rotation(self):
+        html = '<title>Reproductor - Liga de Campeones - ZicoTV</title>'
+        urls = ['https://cdn1.zicotv.cc/live.m3u8?token=old', 'https://cdn2.zicotv.cc/live.m3u8?token=old']
+        code = f'$urls=json_decode({json.dumps(json.dumps(urls))},true); echo json_encode([playerSourceMenu($urls,{json.dumps(html)}), playerSourceId(str_replace("old","new",$urls[1])), playerSignalName("https://zicotv.cc calamarmenciano.com Zico TV", "Canal")]);'
+        menu, fresh, cleaned = json.loads(php(code))
+        self.assertEqual(menu['name'], 'Liga de Campeones')
+        self.assertEqual([s['name'] for s in menu['items']], ['Liga de Campeones · Señal 1','Liga de Campeones · Señal 2'])
+        self.assertEqual(menu['items'][1]['id'], fresh)
+        self.assertEqual(cleaned, 'Canal')
+        self.assertNotIn('url', menu['items'][0])
+
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'
                 '{"label":"CDN 1","url":"/live/b.m3u8?t=\\"2\\"","hidden":true},'

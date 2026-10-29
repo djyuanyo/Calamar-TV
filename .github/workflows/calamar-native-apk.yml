@@ -37,6 +37,7 @@ jobs:
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
           python -m unittest discover -s tools -p 'test_match_resolver.py' -v
+          python -m unittest discover -s tools -p 'test_player_relay.py' -v
           if command -v ffmpeg >/dev/null; then
             python -m unittest discover -s tools -p 'test_cast_bridge.py' -v
           fi

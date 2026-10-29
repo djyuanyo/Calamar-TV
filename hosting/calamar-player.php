@@ -121,6 +121,47 @@ function playerSources($html, $page) {
     return $found;
 }
 
+/** Public signal names contain channel names, never transport hosts or provider branding. */
+function playerSignalName($value, $fallback = 'Canal') {
+    $name = trim(preg_replace('/\s+/', ' ', strip_tags(html_entity_decode((string)$value, ENT_QUOTES))));
+    $name = preg_replace('/^Reproductor\s*[-:|·]?\s*/iu', '', $name);
+    $name = preg_replace('~https?://\S+|(?:[a-z0-9-]+\.)+(?:com|cc|net|org)\b\S*~iu', '', $name);
+    $name = trim(preg_replace('/\bzico\s*tv\b|\bzicotv\b/iu', '', $name), " \t\n\r\0\x0B-|·");
+    return $name !== '' ? (preg_replace('/^(.{0,120}).*$/us', '$1', $name) ?: $fallback) : $fallback;
+}
+function playerSourceId($url) {
+    $u = parse_url($url);
+    return substr(hash('sha256', strtolower($u['host'] ?? '') . ($u['path'] ?? '/')), 0, 16);
+}
+function playerSourceMenu($sources, $html) {
+    preg_match('/<title\b[^>]*>(.*?)<\/title>/is', $html, $title);
+    $name = playerSignalName($title[1] ?? 'Canal');
+    $items = array();
+    foreach ($sources as $index => $url) $items[] = array(
+        'id' => playerSourceId($url), 'index' => $index,
+        'name' => $name . (count($sources) > 1 ? ' · Señal ' . ($index + 1) : '')
+    );
+    return array('sources' => count($items), 'name' => $name, 'items' => $items);
+}
+
+/** Public player pages listed by an event, including the channels nested in streams. */
+function playerEventPlayers($data) {
+    $found = array();
+    foreach (($data['data']['sources'] ?? array()) as $source) {
+        if (!is_array($source) || !empty($source['locked']) || !empty($source['is_premium'])) continue;
+        $entries = array_merge(array($source), is_array($source['streams'] ?? null) ? $source['streams'] : array());
+        foreach ($entries as $entry) {
+            if (!is_array($entry) || !empty($entry['locked']) || !empty($entry['is_premium'])) continue;
+            $url = $entry['player_url'] ?? $entry['url'] ?? '';
+            $u = parse_url($url); $host = strtolower($u['host'] ?? '');
+            if (($u['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -strlen('.zicotv.cc')) !== '.zicotv.cc')
+                || isset($u['user']) || isset($u['port']) || !preg_match('#^/api/player/[0-9]+/?$#', $u['path'] ?? '')) continue;
+            if (!isset($found[$url])) $found[$url] = array('name' => playerSignalName($entry['name'] ?? $source['name'] ?? 'Canal'), 'player_url' => $url);
+        }
+    }
+    return array_values($found);
+}
+
 /** The channel addresses of the public catalog; a copy is kept for a minute so pages do not wait for it. */
 function playerCatalogStreams($fetch = null) {
     $cache = sys_get_temp_dir() . '/calamar-player-catalog.json';
@@ -164,16 +205,18 @@ function playerAllowedPage($page, $catalogStreams, $get = null) {
         list($status, $body) = $get ? $get($api) : playerGet($api, '');
         if ($status !== 200 || !is_string($body)) continue;
         $json = json_decode($body, true);
-        foreach (($json['data']['sources'] ?? array()) as $source)
-            if (is_array($source) && empty($source['is_premium']) && empty($source['locked'])
-                && ($source['player_url'] ?? $source['url'] ?? '') === $page) return true;
+        foreach (playerEventPlayers($json) as $source) if ($source['player_url'] === $page) return true;
     }
     return false;
 }
 
 /** cURL for an address on a public server only (never the hosting's own network), as a browser on that page. */
 function playerCurl($url, $page, $timeout, $extra = array()) {
-    $target = publicTarget($url);
+    $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+    // Zico's Cloudflare IPv6 route responds where its IPv4 route may return 403.
+    // Keep DNS validation and pinning: only published public Cloudflare ranges are accepted.
+    $zico = $host === 'zicotv.cc' || substr($host, -strlen('.zicotv.cc')) === '.zicotv.cc';
+    $target = publicTarget($url, null, $zico);
     if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
     $headers = array('Accept: */*');
     if ($page !== '') {
@@ -185,7 +228,8 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     curl_setopt_array($ch, array(
         CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => $timeout,
         CURLOPT_USERAGENT => PLAYER_BROWSER, CURLOPT_HTTPHEADER => array_merge($headers, $extra), CURLOPT_PROXY => '',
-        CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip']),
+        CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':'
+            . (strpos($target['ip'], ':') !== false ? '[' . $target['ip'] . ']' : $target['ip'])),
     ));
     return $ch;
 }
@@ -285,16 +329,7 @@ function playerMain() {
         list($status, $body) = playerGet('https://' . $host . '/api/v1/events/' . $match[1], '');
         if ($status !== 200 || !is_string($body)) playerAnswer(array('error' => 'La API del evento no responde.'), 502);
         $data = json_decode($body, true);
-        $sources = array();
-        foreach (($data['data']['sources'] ?? array()) as $source) {
-            if (!is_array($source) || !empty($source['locked']) || !empty($source['is_premium'])) continue;
-            $url = $source['player_url'] ?? $source['url'] ?? '';
-            $target = parse_url($url);
-            $sourceHost = strtolower($target['host'] ?? '');
-            if (($target['scheme'] ?? '') !== 'https' || ($sourceHost !== 'zicotv.cc' && substr($sourceHost, -strlen('.zicotv.cc')) !== '.zicotv.cc')
-                || isset($target['user']) || isset($target['port']) || !preg_match('#^/api/player/[0-9]+/?$#', $target['path'] ?? '')) continue;
-            $sources[] = array('name' => (string)($source['name'] ?? 'Fuente del evento'), 'player_url' => $url);
-        }
+        $sources = playerEventPlayers($data);
         playerAnswer(array('data' => array('sources' => $sources)));
     }
 
@@ -313,15 +348,22 @@ function playerMain() {
     }
     $sources = playerSources($html, $final);
     if (!$sources) playerAnswer(array('error' => 'No se encontró ningún vídeo en la página del reproductor.'), 404);
+    $menu = playerSourceMenu($sources, $html);
+    if (isset($_GET['list'])) playerAnswer($menu);
+    if (isset($_GET['source_id'])) {
+        $id = (string)$_GET['source_id'];
+        $selected = array_values(array_filter($sources, function($url) use ($id) { return playerSourceId($url) === $id; }));
+        if (!$selected) playerAnswer(array('error' => 'Esta señal ya no está disponible. Actualiza las fuentes.'), 409);
+        $sources = $selected;
+    }
     $pick = $_GET['src'] ?? '';
     if (is_string($pick) && preg_match('/^\d{1,2}$/', $pick) && isset($sources[(int)$pick])) $sources = array($sources[(int)$pick]);
     // A new attempt after the video was cut (intento=1, 2…) starts from another source of the page.
     $round = $_GET['intento'] ?? '';
-    if (is_string($round) && preg_match('/^[1-9]$/', $round) && count($sources) > 1) {
+    if (!isset($_GET['source_id']) && is_string($round) && preg_match('/^[1-9]$/', $round) && count($sources) > 1) {
         $shift = (int)$round % count($sources);
         $sources = array_merge(array_slice($sources, $shift), array_slice($sources, 0, $shift));
     }
-    if (isset($_GET['list'])) playerAnswer(array('sources' => count($sources)));
     // The first source that answers: servers of the same page often fail one at a time.
     foreach ($sources as $video) {
         if (!preg_match('/\.m3u8$/i', parse_url($video, PHP_URL_PATH) ?: '')) continue;

@@ -1,5 +1,6 @@
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
+import { expandHostedSources, signalName } from './hosted-sources.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
@@ -553,13 +554,13 @@ let hls = null;
 let stopTs = null;
 let returnFocus = null;
 let playbackGeneration = 0;
-let currentSourceUrl = '';
+let currentSourceUrl = '', currentMediaUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
 initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  getSource: () => current && currentSourceUrl ? { url: currentMediaUrl || currentSourceUrl, title: current.name, logo: current.logo } : null,
   onSent: stop,
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
@@ -569,6 +570,7 @@ const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 let stopRenewable = null, sourceLookup = null;
 function stop() {
+  currentMediaUrl = '';
   playbackGeneration++;
   if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
@@ -598,6 +600,14 @@ function recoveryRound(c, now = Date.now()) {
 }
 const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
 
+function playbackChoices(c) {
+  return sourceOptions(c.streams).map(s => {
+    const hosted = c.hostedOptions?.[s.url];
+    return { ...s, label: signalName(c.sourceNames?.[s.url], `${signalName(c.channelName || c.name)} · Señal ${s.index + 1}`),
+      ...(hosted ? { how: { ok: true, kind: 'hls', renewable: true, hosted }, available: true } : {}) };
+  });
+}
+
 async function playSource(c, index) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
@@ -624,7 +634,23 @@ async function playSource(c, index) {
       originalStreams: c.streams };
     index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
   }
-  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
+  if (!c.hostedSourcesExpanded && c.streams.some(url => webPlayback(url, { pages: true }).renewable)) {
+    playerStatus.textContent = 'Consultando señales del canal…';
+    const lookup = sourceLookup = new AbortController();
+    const timeout = setTimeout(() => lookup.abort(), 25000);
+    const requested = c.streams[index];
+    const resolved = await expandHostedSources(c.streams, { names: c.sourceNames || {}, fallbackName: c.channelName || c.name, signal: lookup.signal });
+    clearTimeout(timeout);
+    if (generation !== playbackGeneration) return;
+    sourceLookup = null;
+    c = { ...c, streams: resolved.map(s => s.url), hostedSourcesExpanded: true, catalogStreams: c.originalStreams || c.streams,
+      sourceNames: Object.fromEntries(resolved.map(s => [s.url, s.name])),
+      hostedOptions: Object.fromEntries(resolved.filter(s => s.sourceId).map(s => [s.url, s])),
+      sourceErrors: { ...c.sourceErrors, ...Object.fromEntries(resolved.filter(s => s.error).map(s => [s.url, s.error])) } };
+    index = Math.max(0, resolved.findIndex(s => s.url === requested || s.page === requested));
+  }
+  if (c.hostedSourcesExpanded && current?.id === c.id) current = c;
+  const allSources = playbackChoices(c);
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
@@ -676,7 +702,7 @@ async function playSource(c, index) {
       const reason = data?.userMessage || (data ? explainStreamError(failure) : 'No se pudo reproducir esta emisión en el navegador.');
       const report = streamFailureReport(failure);
       const diagnosis = el('details', {}, el('summary', {}, 'Ver detalle del fallo'),
-        el('p', {}, `${report.stage} · ${report.code ? `HTTP ${report.code}` : 'Sin respuesta HTTP'}${report.host ? ` · ${report.host}` : ''}`),
+        el('p', {}, `${report.stage} · ${report.code ? `HTTP ${report.code}` : 'Sin respuesta HTTP'}${libraryAdmin && report.host ? ` · ${report.host}` : ''}`),
         report.mediaCode ? el('p', {}, `Error de vídeo del navegador: ${report.mediaCode === 3 ? 'decodificación' : report.mediaCode === 2 ? 'conexión interrumpida' : 'formato no compatible'} (código ${report.mediaCode}).`) : null,
         report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
@@ -698,9 +724,9 @@ async function playSource(c, index) {
         `${reason} `,
         retry,
         ' ',
-        direct,
-        c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
-        diagnosis,
+        libraryAdmin ? direct : '',
+        libraryAdmin && c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
+        libraryAdmin ? diagnosis : null,
       );
     }
   };
@@ -714,15 +740,16 @@ async function playSource(c, index) {
     controls.attach(null);
     playerStatus.textContent = '';
   };
-  if (source.how.kind === 'event') {
+  if (source.how.kind === 'event' || c.sourceErrors?.[source.url]) {
     const message = c.sourceErrors?.[source.url] || 'No se pudieron obtener las fuentes de este evento.';
     playerStatus.replaceChildren(message, ' ', el('button', { type: 'button', class: 'ghost', onclick: () => {
-      playSource({ ...c, streams: c.originalStreams || c.streams, eventSourcesExpanded: false }, 0);
+      playSource({ ...c, streams: c.catalogStreams || c.originalStreams || c.streams, eventSourcesExpanded: false, hostedSourcesExpanded: false, sourceErrors: {}, hostedOptions: {} }, 0);
     } }, '↻ Consultar de nuevo'));
     return;
   }
   if (source.how.renewable) {
-    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
+    stopRenewable = mountRenewable({ page: source.how.hosted?.page || source.url, sourceId: source.how.hosted?.sourceId, hosted: !!source.how.hosted, video, Hls: window.Hls,
+      onSource: address => { if (generation === playbackGeneration) currentMediaUrl = address; },
       onAttach: (instance) => { hls = instance; controls.attach(instance); },
       onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
       onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
@@ -1298,9 +1325,11 @@ async function route() {
     if (c && (c.playable || c.pending) && (player.hidden || !current || current.id !== c.id)) open(c, true);
     else if (c && !player.hidden) {
       // New links can arrive from the admin while the current video keeps playing.
-      current = c;
-      renderSourcePicker(playerSources, sourceOptions(c.streams), c.streams.indexOf(currentSourceUrl),
-        (chosen) => playSource(c, chosen));
+      const menu = current?.hostedSourcesExpanded && JSON.stringify(current.catalogStreams) === JSON.stringify(c.streams)
+        ? { ...current, ...c, streams: current.streams, sourceNames: current.sourceNames, hostedOptions: current.hostedOptions } : c;
+      current = menu;
+      renderSourcePicker(playerSources, playbackChoices(menu), menu.streams.indexOf(currentSourceUrl),
+        (chosen) => playSource(menu, chosen));
     }
     return;
   }

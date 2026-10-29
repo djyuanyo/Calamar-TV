@@ -20,7 +20,17 @@ function publicIp($ip) {
         && (int)explode('.', $ip)[0] < 224
         && !preg_match('/^100[.](6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])[.]/', $ip);
 }
-function publicTarget($address, $resolver = null) {
+/** Cloudflare's published public IPv6 ranges; never local, mapped, or transition addresses. */
+function publicCloudflareIp6($ip) {
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) return false;
+    $packed = inet_pton($ip);
+    foreach (array('2400:cb00::', '2606:4700::', '2803:f800::', '2405:b500::', '2405:8100::', '2c0f:f248::') as $prefix)
+        if (substr($packed, 0, 4) === substr(inet_pton($prefix), 0, 4)) return true;
+    // 2a06:98c0::/29 (https://www.cloudflare.com/ips-v6/).
+    $word = unpack('N', substr($packed, 0, 4))[1];
+    return ($word & 0xfffffff8) === 0x2a0698c0;
+}
+function publicTarget($address, $resolver = null, $cloudflareIpv6 = false) {
     $u = @parse_url($address);
     if (!is_array($u) || !in_array(strtolower($u['scheme'] ?? ''), array('http', 'https'), true)
         || isset($u['user']) || isset($u['pass']) || preg_match('/[\r\n]/', $address)) return null;
@@ -29,9 +39,15 @@ function publicTarget($address, $resolver = null) {
     $port = $u['port'] ?? ($u['scheme'] === 'https' ? 443 : 80);
     if ($port < 1 || $port > 65535) return null;
     $ips = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? array($host) : ($resolver ? $resolver($host) : @gethostbynamel($host));
+    if ($cloudflareIpv6 && !$resolver && !filter_var($host, FILTER_VALIDATE_IP)) {
+        $ipv6 = array();
+        foreach ((@dns_get_record($host, DNS_AAAA) ?: array()) as $record)
+            if (isset($record['ipv6'])) $ipv6[] = $record['ipv6'];
+        $ips = array_merge($ipv6, $ips ?: array());
+    }
     if (!$ips) return null;
     foreach ($ips as $ip) {
-        if (!publicIp($ip)) return null;
+        if (!publicIp($ip) && !($cloudflareIpv6 && publicCloudflareIp6($ip))) return null;
     }
     // Pin the validated IP so cURL cannot resolve the hostname to an internal address.
     return array('host' => $host, 'port' => $port, 'ip' => $ips[0]);

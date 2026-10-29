@@ -92,6 +92,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean chromiumNetwork;
   private boolean hostingPlayback;
   private String hostingTriedPage;
+  private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
+  private String hostingSourceId = "";
   private AlertDialog sourceDialog;
   private boolean mediaSystemRetry;
   private Runnable bufferingTimeout;
@@ -555,7 +557,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     updateSourceButton();
     selection = Math.min(selection, sources.size() - 1);
     VideoResolver.Source source = sources.get(selection);
-    status.setText("Conectando con " + Uri.parse(source.url).getHost() + "…");
+    status.setText("Conectando con " + HostingPlayback.label(title, "el canal") + "…");
     releasePlayer();
     playSource(source);
   }
@@ -582,14 +584,30 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     final String requestedPage = pageUrl;
+    if (zicoPage()) hostingPlayback = true;
     final boolean throughHosting = hostingPlayback;
+    final String requestedSignal = hostingSourceId;
     worker.execute(
         () -> {
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (throughHosting && eventApi == null) {
-              String address = HostingPlayback.resolve(requestedPage, NetworkTransport.get(DnsProvider.SYSTEM));
+              List<HostingPlayback.Option> menu = HostingPlayback.options(requestedPage,
+                  HostingPlayback.label(eventSourceNames.get(requestedPage), HostingPlayback.label(title, "Canal")), NetworkTransport.get(DnsProvider.SYSTEM));
+              HostingPlayback.Option selectedOption = menu.get(0);
+              if (!requestedSignal.isEmpty()) {
+                selectedOption = null;
+                for (HostingPlayback.Option option : menu) if (option.id.equals(requestedSignal)) selectedOption = option;
+                if (selectedOption == null) throw new java.io.IOException("La señal seleccionada ya no está disponible. Elige otra en Fuentes.");
+              }
+              final HostingPlayback.Option chosen = selectedOption;
+              handler.post(() -> {
+                if (!active || request != generation) return;
+                hostingOptions.clear(); hostingOptions.addAll(menu); hostingSourceId = chosen.id;
+                eventSourceNames.put(requestedPage, chosen.name.replaceAll(" · Señal \\d+$", ""));
+              });
+              String address = HostingPlayback.resolve(requestedPage, chosen.id, NetworkTransport.get(DnsProvider.SYSTEM));
               handler.post(() -> {
                 if (!active || request != generation) return;
                 resolving = false;
@@ -597,7 +615,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 chromiumNetwork = false;
                 lastReport = reportHeader() + "\nHosting: lista HLS firmada recibida";
                 sources.clear();
-                sources.add(new VideoResolver.Source("Por el hosting", address));
+                sources.add(new VideoResolver.Source(chosen.name, address));
                 selection = 0; updateSourceButton(); playSource(sources.get(0));
               });
               return;
@@ -626,7 +644,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   if (!channelPages.contains(source.url)) channelPages.add(Math.min(Math.max(0, at++), channelPages.size()), source.url);
                   eventSourceNames.put(source.url, source.label);
                 }
-                pageUrl = players.get(0).url; pageIndex = channelPages.indexOf(pageUrl); selection = 0;
+                pageUrl = players.get(0).url; pageIndex = channelPages.indexOf(pageUrl); selection = 0; hostingOptions.clear(); hostingSourceId = "";
                 documentUrl = pageUrl; updateSourceButton(); resolveFresh();
               });
               return;
@@ -673,7 +691,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
-                    if (!tryNextZicoSource()) problem("Zico no ha devuelto fuentes de vídeo para este canal.");
+                    if (!tryNextZicoSource()) problem("No hay señales disponibles para este canal.");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -697,7 +715,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     handler.postDelayed(renewal, 15000L);
                   } else if (throughHosting) {
                     hostingPlayback = false;
-                    if (!switchChannelSource()) problem("El hosting no pudo obtener el vídeo: " + failure.getMessage());
+                    if (!switchChannelSource()) problem("No se pudo abrir esta señal. Elige otra en Fuentes o pulsa Reintentar.");
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
@@ -944,7 +962,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (!zicoPage() || hostingPlayback || pageUrl.equals(hostingTriedPage)) return false;
     hostingPlayback = true; hostingTriedPage = pageUrl;
     releasePlayer();
-    status.setText("Probando el vídeo por tu hosting…");
+    status.setText("Conectando con la señal del canal…");
     resolveFresh();
     return true;
   }
@@ -1049,7 +1067,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       pageUrl = null;
       documentUrl = directUrl;
     } else return false;
-    hostingPlayback = false; hostingTriedPage = null;
+    hostingPlayback = false; hostingTriedPage = null; hostingOptions.clear(); hostingSourceId = "";
     automaticAttempts = 0;
     attemptWindow = android.os.SystemClock.elapsedRealtime();
     selection = 0;
@@ -1207,23 +1225,30 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     // The direct IPTV links (M3U8…) first, then the player pages (ZicoTV's last, as AppSources orders them).
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
-      names.add("Enlace " + (++number) + " · Vídeo directo");
+      names.add(HostingPlayback.label(title, "Canal") + (directUrls.size() + pages.size() > 1 ? " · Señal " + (++number) : ""));
       actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
+      if (AppSources.zico(address) && address.equals(pageUrl)) continue;
       if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
-      names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      names.add(HostingPlayback.label(eventSourceNames.get(address), HostingPlayback.label(title, "Canal") + " · Señal " + (++number)));
       actions.add(() -> selectChannelAddress(address, true));
     }
     if (zicoPage()) {
-      if (hostingPlayback) checked = names.size();
-      names.add("Por el hosting · calamarmenciano.com");
-      actions.add(() -> {
-        generation++; resolving = false;
-        handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
-        hostingPlayback = true; hostingTriedPage = pageUrl; automaticAttempts = 0;
-        releasePlayer(); clearWeb(); webMode = false; resolveFresh();
-      });
+      for (HostingPlayback.Option option : hostingOptions) {
+        if (hostingPlayback && option.id.equals(hostingSourceId)) checked = names.size();
+        names.add(option.name);
+        actions.add(() -> {
+          generation++; resolving = false;
+          handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+          hostingPlayback = true; hostingTriedPage = pageUrl; hostingSourceId = option.id; automaticAttempts = 0;
+          releasePlayer(); clearWeb(); webMode = false; resolveFresh();
+        });
+      }
+      if (hostingOptions.isEmpty()) {
+        names.add(HostingPlayback.label(title, "Canal") + " · Consultar señales");
+        actions.add(() -> { if (!resolving) resolveFresh(); });
+      }
     }
     if (directUrl == null) {
       for (int i = 0; i < sources.size(); i++) {
@@ -1231,7 +1256,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         if (HostingPlayback.isRelay(source.url) && zicoPage()) continue;
         final int selected = i;
         if (source.url.equals(currentUrl)) checked = names.size();
-        names.add("CDN · " + source.label);
+        names.add(HostingPlayback.label(source.label, HostingPlayback.label(title, "Canal") + " · Señal " + (i + 1)));
         actions.add(() -> {
           generation++; resolving = false;
           hostingPlayback = false;
@@ -1244,16 +1269,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       names.add("Volver a buscar fuentes");
       actions.add(() -> { if (!resolving) resolveFresh(); });
     }
-    sourceDialog = new AlertDialog.Builder(this)
+    AlertDialog.Builder picker = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
         // Open after this modal has dismissed and restored its fullscreen state.
         .setPositiveButton("DNS", (dialog, which) -> handler.post(this::chooseDns))
-        .setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic())
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
         })
-        .setNegativeButton("Cerrar", null)
-        .create();
+        .setNegativeButton("Cerrar", null);
+    if (SharedCatalog.administrator(com.google.firebase.auth.FirebaseAuth.getInstance(SharedCatalog.app(this)).getCurrentUser()))
+      picker.setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic());
+    sourceDialog = picker.create();
     sourceDialog.setOnDismissListener(dialog -> {
       sourceDialog = null;
       if (active) {
@@ -1270,7 +1296,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     generation++; resolving = false; webMode = false;
     handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
     automaticAttempts = 0; selection = 0;
-    hostingPlayback = false; hostingTriedPage = null;
+    hostingPlayback = false; hostingTriedPage = null; hostingOptions.clear(); hostingSourceId = "";
     keepControlsVisible(true);
     clearWeb(); releasePlayer(); sources.clear();
     if (page) {

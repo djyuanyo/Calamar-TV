@@ -1,3 +1,5 @@
+import { PLAYER_ENDPOINT } from './catalog.js';
+
 /** Zico event pages are not embeddable; the public CORS API exposes their player URLs. */
 export function zicoEventApi(address) {
   try {
@@ -30,13 +32,13 @@ export async function expandEventSources(streams, { fetcher = globalThis.fetch, 
     const api = zicoEventApi(url);
     if (!api) return [{ url }];
     try {
-      const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
-      if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);
+      const response = await fetcher(`${PLAYER_ENDPOINT}?event=${encodeURIComponent(url)}`, { credentials: 'omit', cache: 'no-store', signal });
+      if (!response.ok) throw Error(`La consulta responde HTTP ${response.status}.`);
       const sources = eventPlayerSources(await response.json());
-      if (!sources.length) throw Error('Zico TV todavía no publica fuentes disponibles para este evento.');
+      if (!sources.length) throw Error('Todavía no hay señales disponibles para este evento.');
       return sources.map(source => ({ ...source, origin: url }));
     } catch (error) {
-      return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];
+      return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las señales del evento.' }];
     }
   }));
   const sources = new Map();
