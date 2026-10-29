@@ -125,6 +125,8 @@ final class SharedCatalog {
       }
     if (data.has("libraryVisible") && !(data.opt("libraryVisible") instanceof Boolean))
       throw new JSONException("El interruptor de películas y series no es válido");
+    if (data.has("appUpdates") && !"all".equals(data.opt("appUpdates")) && !"admin".equals(data.opt("appUpdates")))
+      throw new JSONException("El aviso de actualizaciones de la app no es válido");
     if (data.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 500000)
       throw new JSONException("El catálogo es demasiado grande");
     return data;

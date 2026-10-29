@@ -502,9 +502,7 @@ public class AccountActivity extends Activity {
     TextView foot = label("Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.", 13, 0x88ffffff);
     foot.setGravity(Gravity.CENTER);
     outer.addView(foot);
-    Button admin = button("Administración", Ui.Kind.GHOST, () -> startActivity(new Intent(this, AdminActivity.class)));
-    LinearLayout.LayoutParams al = (LinearLayout.LayoutParams) admin.getLayoutParams();
-    al.width = -2; al.gravity = Gravity.CENTER_HORIZONTAL;
+    // No separate administration sign-in: the administrator's own account shows «Administración» in «Perfil».
     (byQr ? google : tabs.getChildAt(creating ? 1 : 0)).requestFocus();
   }
 

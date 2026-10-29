@@ -156,7 +156,8 @@ final class Profiles {
     if (picked) pickedThisLaunch = true;
     activeId = id;
     prefs(app).edit().putString("active:" + uid, id).apply();
-    Library.Progress.scope = id.equals("main") ? "" : uid + ":" + id;
+    // Each account keeps its own row on this device (the main profile too): another account never sees it.
+    Library.Progress.scope = id.equals("main") ? uid : uid + ":" + id;
     data = localData(app);
     changed();
     final String asked = id, owner = uid;

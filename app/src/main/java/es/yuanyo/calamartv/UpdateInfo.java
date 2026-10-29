@@ -31,6 +31,11 @@ final class UpdateInfo {
 
   boolean newerThan(int installed) { return code > installed; }
 
+  /** Chosen in Administración: new versions for everyone («all», the default) or only for the administrator («admin»). */
+  static boolean offered(org.json.JSONObject catalog, boolean administrator) {
+    return administrator || catalog == null || !"admin".equals(catalog.optString("appUpdates", "all"));
+  }
+
   static String digest(File file) throws Exception {
     MessageDigest hash = MessageDigest.getInstance("SHA-256");
     try (FileInputStream in = new FileInputStream(file)) {

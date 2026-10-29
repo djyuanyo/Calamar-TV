@@ -46,7 +46,8 @@ final class ProgressSync {
   static void sync(Context context, Done done) {
     final Context app = context.getApplicationContext();
     FirebaseUser user = SharedCatalog.auth(app).getCurrentUser();
-    if (user == null || busy) {
+    // Only once a profile is chosen: before that this device's row is not the account's (a guest's or another account's).
+    if (user == null || busy || Profiles.activeId() == null) {
       if (done != null) done.changed(false);
       return;
     }
