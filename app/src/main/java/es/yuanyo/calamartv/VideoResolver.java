@@ -51,15 +51,30 @@ public final class VideoResolver {
     for (int i = 0; i < entries.length(); i++) {
       JSONObject entry = entries.optJSONObject(i);
       if (entry == null || entry.optBoolean("locked") || entry.optBoolean("is_premium")) continue;
-      String url = entry.optString("player_url", entry.optString("url"));
-      try {
-        URI u = URI.create(url);
-        if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) continue;
-        boolean duplicate = false; for (Source source : out) if (source.url.equals(url)) duplicate = true;
-        if (!duplicate) out.add(new Source(entry.optString("name", "Fuente del evento"), url));
-      } catch (Exception invalid) { /* Ignore invalid public entries. */ }
+      addEventPlayer(out, entry, entry, false);
+      // Match the web: an event source may be a group with multiple channel players.
+      JSONArray streams = entry.optJSONArray("streams");
+      if (streams != null) for (int n = 0; n < streams.length(); n++)
+        addEventPlayer(out, streams.optJSONObject(n), entry, true);
     }
     return out;
+  }
+
+  private static void addEventPlayer(List<Source> out, JSONObject entry, JSONObject parent, boolean nested) {
+    if (entry == null || entry.optBoolean("locked") || entry.optBoolean("is_premium")) return;
+    String url = entry.optString("player_url");
+    if (url.isEmpty()) url = entry.optString("url");
+    try {
+      URI u = URI.create(url);
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) return;
+      for (Source source : out) if (source.url.equals(url)) return;
+      String name = entry.optString("name");
+      if (name.isEmpty()) name = parent.optString("name");
+      if (name.isEmpty()) name = "Fuente del evento";
+      String language = entry.optString("language");
+      if (nested && !language.isEmpty()) name += " · " + language;
+      out.add(new Source(name, url));
+    } catch (Exception invalid) { /* Ignore invalid public entries. */ }
   }
 
   public static boolean isMedia(String address) {
@@ -195,5 +210,29 @@ public final class VideoResolver {
   public static long renewalDelay(String address, long now) {
     long expiry = expiryMillis(address);
     return expiry > now ? Math.max(1000L, expiry - now - 30000L) : -1;
+  }
+
+  /** Opaque Zico tokens still need periodic page lookup; raw media URLs cannot be renewed. */
+  public static long pageRenewalDelay(String page, String address, long now) {
+    long delay = renewalDelay(address, now);
+    if (delay >= 0) return Math.max(15000L, delay);
+    if (!renewablePage(page)) return -1;
+    return expiryMillis(address) > 0 ? 15000L : 300000L;
+  }
+
+  /** A token or list order change must not silently select another CDN. */
+  public static int renewedSelection(List<Source> sources, String previous, int fallback) {
+    if (previous != null && !previous.isEmpty()) {
+      try {
+        URI old = URI.create(previous);
+        for (int i = 0; i < sources.size(); i++) {
+          URI fresh = URI.create(sources.get(i).url);
+          if (java.util.Objects.equals(old.getScheme(), fresh.getScheme())
+              && java.util.Objects.equals(old.getRawAuthority(), fresh.getRawAuthority())
+              && java.util.Objects.equals(old.getRawPath(), fresh.getRawPath())) return i;
+        }
+      } catch (IllegalArgumentException invalid) { /* Use the previous index if no identity is available. */ }
+    }
+    return Math.max(0, Math.min(fallback, sources.size() - 1));
   }
 }

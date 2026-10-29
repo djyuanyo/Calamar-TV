@@ -6,6 +6,35 @@ import java.util.List;
 import org.junit.Test;
 
 public class VideoResolverTest {
+  @Test public void eventIncludesNestedChannelsWithNamesAndLanguages() throws Exception {
+    String json = "{\"data\":{\"sources\":["
+        + "{\"name\":\"Canales del partido\",\"streams\":["
+        + "{\"name\":\"Canal A\",\"player_url\":\"https://bp.zicotv.cc/api/player/4\",\"language\":\"ES\"},"
+        + "{\"url\":\"https://bp.zicotv.cc/api/player/5\",\"language\":\"EN\"}]},"
+        + "{\"name\":\"Duplicado\",\"url\":\"https://bp.zicotv.cc/api/player/4\"},"
+        + "{\"name\":\"Canal B\",\"url\":\"https://bp.zicotv.cc/api/player/6\"}]}}";
+    List<VideoResolver.Source> sources = VideoResolver.eventPlayers(json);
+    assertEquals(3, sources.size());
+    assertEquals("Canal A · ES", sources.get(0).label);
+    assertEquals("Canales del partido · EN", sources.get(1).label);
+    assertEquals("https://bp.zicotv.cc/api/player/5", sources.get(1).url);
+    assertEquals("Canal B", sources.get(2).label);
+  }
+
+  @Test public void nestedEventChannelsKeepPublicAccessAndUrlValidation() throws Exception {
+    String json = "{\"data\":{\"sources\":["
+        + "{\"locked\":true,\"streams\":[{\"url\":\"https://example.com/locked\"}]},"
+        + "{\"is_premium\":true,\"streams\":[{\"url\":\"https://example.com/premium\"}]},"
+        + "{\"streams\":[null,{\"locked\":true,\"url\":\"https://example.com/private\"},"
+        + "{\"is_premium\":true,\"url\":\"https://example.com/paid\"},"
+        + "{\"url\":\"javascript:alert(1)\"},{\"url\":\"http://example.com/live\"},"
+        + "{\"url\":\"https://u:p@example.com/live\"},{\"url\":\"https://bp.zicotv.cc/events/1\"},"
+        + "{\"url\":\"https://bp.zicotv.cc/api/player/4\"}]}]}}";
+    List<VideoResolver.Source> sources = VideoResolver.eventPlayers(json);
+    assertEquals(1, sources.size());
+    assertEquals("Fuente del evento", sources.get(0).label);
+    assertEquals("https://bp.zicotv.cc/api/player/4", sources.get(0).url);
+  }
   @Test
   public void readsEscapedSourceAndSkipsLockedPremium() throws Exception {
     String html =
@@ -63,6 +92,25 @@ public class VideoResolverTest {
     assertEquals(
         1792066111000L, VideoResolver.expiryMillis("https://cdn.example/a.m3u8?e=1792066111"));
     assertEquals(-1, VideoResolver.expiryMillis("https://cdn.example/a.m3u8?token=opaque"));
+  }
+
+  @Test public void zicoRenewalPollsOpaqueTokensAndBoundsNearExpiryRetries() {
+    String page = "https://zicotv.cc/api/player/4";
+    long now = 1792066051000L;
+    assertEquals(300000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?token=opaque", now));
+    assertEquals(30000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066111", now));
+    assertEquals(15000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066052", now));
+    assertEquals(15000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/a.m3u8?expires=1792066050", now));
+    assertEquals(-1L, VideoResolver.pageRenewalDelay("https://other.example/player", "https://cdn.example/a.m3u8?token=opaque", now));
+  }
+
+  @Test public void renewedSourcesKeepSelectedCdnWhenOrderAndTokensChange() {
+    java.util.List<VideoResolver.Source> sources = java.util.Arrays.asList(
+        new VideoResolver.Source("CDN 2", "https://cdn2.zicotv.cc/live/index.m3u8?token=new"),
+        new VideoResolver.Source("CDN 1", "https://cdn.zicotv.cc/live/index.m3u8?token=new"));
+    assertEquals(1, VideoResolver.renewedSelection(sources, "https://cdn.zicotv.cc/live/index.m3u8?token=old", 0));
+    assertEquals(0, VideoResolver.renewedSelection(sources, "https://cdn2.zicotv.cc/live/index.m3u8?token=old", 1));
+    assertEquals(1, VideoResolver.renewedSelection(sources, "https://missing.example/a.m3u8", 9));
   }
 
   @Test
