@@ -98,3 +98,15 @@ test('an identified film repeated in the other folder is not offered again; a de
   assert.equal(second.sections.movies[0].url,'https://luluvido.com/lul0000pend');
   assert.equal(second.sections.movies[0].mirrors,undefined);
 });
+
+test('a documentaries folder of films stays films even when one name starts with a number',async()=>{
+  const names=['11M (2022) [BluRay Rip][AC3 2.0 Castellano].avi','Afganistan (2025) [HDTV 1080p][Esp].mkv','Topuria Matador (2024).mp4'];
+  const fetcher=async(url,options)=>json({name:'Documentales',files:names.map((title,i)=>({title,link:video('doc'+i)})),folders:[]});
+  const scan=await scanFolders([{section:'documentaries',url:'https://drive.google.com/drive/folders/docs'}],{drive:'AIza'+'x'.repeat(35)},{fetcher});
+  assert.deepEqual(scan.films.map(f=>[f.section,f.title,f.year]),[['documentaries','11M',2022],['documentaries','Afganistan',2025],['documentaries','Topuria Matador',2024]]);
+  assert.equal(scan.series.length,0);
+  // A documentary series in the same folder layout is still read as one series.
+  const episodes=async()=>json({name:'Planeta',files:['Planeta 1x01.mp4','Planeta 1x02.mp4'].map((title,i)=>({title,link:video('ep'+i)})),folders:[]});
+  const show=await scanFolders([{section:'documentaries',url:'https://drive.google.com/drive/folders/docs'}],{drive:'AIza'+'x'.repeat(35)},{fetcher:episodes});
+  assert.deepEqual(show.series.map(s=>[s.title,s.episodes.length]),[['Planeta',2]]);
+});
