@@ -9,7 +9,7 @@ const CAST_PUBLIC_URL = 'https://calamarmenciano.com/calamar-cast.php';
 const CAST_INPUT_URL = 'https://calamarmenciano.com/calamar-tv-relay.php?stream=1';
 
 function castSourceAllowed(string $source): bool {
-    return httpTsSourceAllowed($source);
+    return tsSourceAllowed($source);
 }
 
 function castRoot(): string {

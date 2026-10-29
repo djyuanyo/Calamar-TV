@@ -17,7 +17,7 @@ final class CastAdapter {
       .readTimeout(10, TimeUnit.SECONDS).callTimeout(12, TimeUnit.SECONDS).build();
 
   String prepare(String address) throws Exception {
-    if (!CastSource.needsBridge(address)) throw new IOException("Fuente no admitida por el adaptador.");
+    if (!CastSource.castBridge(address)) throw new IOException("Fuente no admitida por el adaptador.");
     String header = Base64.encodeToString(address.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
     for (int attempt = 0; attempt < 35; attempt++) {
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException();

@@ -40,4 +40,16 @@ public class CastSourceTest {
     assertFalse(CastSource.needsBridge("http://192.168.1.1/Test/Pass/123"));
     assertFalse(CastSource.needsBridge(null));
   }
+
+  @Test public void httpsTsAndM3u8ChannelsCanBeSentThroughTheHosting() {
+    assertTrue(CastSource.castBridge("https://cdn.example/live/canal.ts"));
+    assertTrue(CastSource.castBridge("http://31.43.191.125:8080/Test/Pass/123"));
+    assertFalse(CastSource.castBridge("https://127.0.0.1/live/canal.ts"));
+    assertFalse(CastSource.castBridge("https://cdn.example/canal.m3u8"));
+    assertFalse(CastSource.needsBridge("https://cdn.example/live/canal.ts"));
+    assertTrue(CastSource.list("http://iptv.example/live/canal.m3u8?token=1"));
+    assertFalse(CastSource.list("https://cdn.example/canal.ts"));
+    String relayed = Library.PLAYER_ENDPOINT + "?seg=aHR0cHM6Ly9h&p=aHR0cHM6Ly9i&sig=" + "a".repeat(32) + "&l=1";
+    assertEquals("application/x-mpegURL", CastSource.contentType(relayed));
+  }
 }

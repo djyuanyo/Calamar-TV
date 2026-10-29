@@ -9,6 +9,8 @@ public final class CastSource {
 
   public static String contentType(String address) {
     if (onDemand(address)) return "application/x-mpegURL";
+    // A list already relayed by the hosting (calamar-player.php, signed): it answers any origin.
+    if (address != null && HostingPlayback.isRelay(address) && address.contains("seg=") && address.contains("sig=")) return "application/x-mpegURL";
     try {
       URI u = URI.create(address);
       if (!("http".equalsIgnoreCase(u.getScheme()) || "https".equalsIgnoreCase(u.getScheme()))
@@ -29,6 +31,21 @@ public final class CastSource {
 
   public static boolean live(String type) {
     return "application/x-mpegURL".equals(type) || "application/dash+xml".equals(type);
+  }
+
+  /** M3U8 addresses: an HTTP one cannot load on the receiver's HTTPS page, so the hosting relays it. */
+  public static boolean list(String address) {
+    try {
+      String path = URI.create(address).getPath();
+      return path != null && path.toLowerCase(Locale.ROOT).endsWith(".m3u8");
+    } catch (Exception invalid) { return false; }
+  }
+
+  /** MPEG-TS the hosting converts for the TV (calamar-cast.php): HTTP IPTV and also .ts over HTTPS. */
+  public static boolean castBridge(String address) {
+    if (needsBridge(address)) return true;
+    return address != null && address.regionMatches(true, 0, "https://", 0, 8)
+        && needsBridge("http://" + address.substring(8));
   }
 
   public static boolean needsBridge(String address) {

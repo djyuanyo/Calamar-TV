@@ -788,7 +788,7 @@ try {
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
-  await page.getByText('Zico TV todavía no publica fuentes disponibles para este evento.', {exact:false}).waitFor();
+  await page.getByText('El evento todavía no publica fuentes disponibles.', {exact:false}).waitFor();
   assert.equal(await page.locator('#player-frame').count(), 0);
   eventReady = true;
   await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();

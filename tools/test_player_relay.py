@@ -94,7 +94,7 @@ class PlayerRelayTest(unittest.TestCase):
                     except OSError: time.sleep(0.1)
                 bad = 'aHR0cHM6Ly9leGFtcGxlLmNvbS9zZWNyZXQ'
                 for query, code in ((f'seg={bad}&p=&sig=00000000000000000000000000000000', 403), (f'seg={bad}', 403),
-                                    ('page=https%3A%2F%2Fzicotv.cc%2Fcanal%2Fx&hls=1', 403), ('page=http%3A%2F%2Fzicotv.cc%2F&hls=1', 400)):
+                                    ('page=https%3A%2F%2Fzicotv.cc%2Fcanal%2Fx&hls=1', 403), ('page=http%3A%2F%2Fzicotv.cc%2F&hls=1', 403), ('page=ftp%3A%2F%2Fzicotv.cc%2F&hls=1', 400)):
                     with self.assertRaises(urllib.error.HTTPError) as refused:
                         urllib.request.urlopen(f'http://127.0.0.1:{port}/calamar-player.php?{query}', timeout=5)
                     self.assertEqual(refused.exception.code, code, query)

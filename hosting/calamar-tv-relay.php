@@ -52,7 +52,7 @@ function relayMain() {
     if (!function_exists('curl_init')) failure('cURL no disponible.');
     $source = base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
     if (!is_string($source) || strlen($source) > 2048) failure('Falta el enlace de la prueba.', 400);
-    if (!httpTsSourceAllowed($source) && !relayTestUpstream()) failure('Enlace IPTV HTTP no válido para el puente.', 400);
+    if (!tsSourceAllowed($source) && !relayTestUpstream()) failure('Enlace IPTV HTTP no válido para el puente.', 400);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
     relayServe($source);

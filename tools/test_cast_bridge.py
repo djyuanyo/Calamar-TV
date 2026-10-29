@@ -29,6 +29,9 @@ class CastBridgeTest(unittest.TestCase):
         self.assertEqual(json.loads(result), [True, True, False, True, False, False])
         result = self.php('echo json_encode([castSourceAllowed("http://neospaxy.top:8080/Test/Pass/57476"), castSourceAllowed("http://other.example/live/Test/Pass/1.ts?token=A%2Bb")]);')
         self.assertEqual(json.loads(result), [True, True])
+        # HTTPS .ts channels are converted too; private hosts and credentials stay out.
+        result = self.php('echo json_encode([castSourceAllowed("https://cdn.example/live/canal.ts"), castSourceAllowed("https://127.0.0.1/live/canal.ts"), castSourceAllowed("https://u:p@cdn.example/canal.ts"), castSourceAllowed("https://cdn.example/canal.m3u8")]);')
+        self.assertEqual(json.loads(result), [True, False, False, False])
 
     def test_dns_and_redirects_cannot_reach_private_addresses(self):
         result = self.php('echo json_encode(['

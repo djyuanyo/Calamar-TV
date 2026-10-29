@@ -1,4 +1,5 @@
-import { castPage, needsCastBridge, prepareCastSource } from './cast-adapter.js';
+import { castPage, needsCastBridge, prepareCastSource, relayListCast } from './cast-adapter.js';
+import { webPlayback } from './catalog.js';
 /** Cast loads direct media, a server-produced H.264/AAC playlist or the list of a player page. */
 export function castSource(address) {
   try {
@@ -8,12 +9,19 @@ export function castSource(address) {
     const type = path.endsWith('.m3u8') ? 'application/x-mpegURL'
       : path.endsWith('.mpd') ? 'application/dash+xml'
       : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.webm') ? 'video/webm' : null;
-    return type ? { url: address, type, live: /\.(m3u8|mpd)$/.test(path) } : null;
+    if (type) return { url: address, type, live: /\.(m3u8|mpd)$/.test(path) };
+    // A LuluStream film goes as the hosting's copy (calamar-lulu.php), a Drive film straight from Drive.
+    const how = webPlayback(address);
+    if (how.kind === 'hls' && how.address) return { url: how.address, type: 'application/x-mpegURL', live: false };
+    if (how.kind === 'video') return { url: address, type: 'video/mp4', live: false };
+    return null;
   } catch { return null; }
 }
 
+const isList = (address) => { try { return new URL(address).pathname.toLowerCase().endsWith('.m3u8'); } catch { return false; } };
+
 export function initCast({ button, toggle, disconnect, getSource, onSent, onStatus, onDisconnect,
-  prepareSource = prepareCastSource, win = window }) {
+  prepareSource = prepareCastSource, relayList = relayListCast, win = window }) {
   let context = null, controller = null, remote = null, sending = false;
   const status = (text) => onStatus?.(text);
   const update = () => {
@@ -23,10 +31,25 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
     toggle.hidden = disconnect.hidden = !connected;
     if (connected && remote) toggle.textContent = remote.isPaused ? '▶ TV' : 'Ⅱ TV';
   };
+  const load = async (source, selected, at) => {
+    const api = win.chrome.cast.media;
+    const media = new api.MediaInfo(source.url, source.type);
+    media.streamType = source.live ? api.StreamType.LIVE : api.StreamType.BUFFERED;
+    media.metadata = new api.GenericMediaMetadata();
+    media.metadata.title = selected.title || 'Calamar TV';
+    if (selected.logo?.startsWith('https://')) media.metadata.images = [new win.chrome.cast.Image(selected.logo)];
+    const request = new api.LoadRequest(media);
+    request.autoplay = true;
+    if (!source.live && at > 0) request.currentTime = at;
+    await context.getCurrentSession().loadMedia(request);
+  };
   const send = async () => {
     const selected = getSource();
+    const list = isList(selected?.url);
     let source = castSource(selected?.url);
-    if (!source && !needsCastBridge(selected?.url) && !castPage(selected?.url)) {
+    // An HTTP list cannot load on the receiver's HTTPS page: the hosting hands it out over HTTPS.
+    if (list && selected.url.startsWith('http:')) source = null;
+    if (!source && !list && !needsCastBridge(selected?.url) && !castPage(selected?.url)) {
       status('Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.');
       return;
     }
@@ -34,18 +57,21 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
     sending = true;
     try {
       if (!context.getCurrentSession()) await context.requestSession();
-      if (!source) source = await prepareSource(selected.url, { onStatus: status });
+      if (!source) source = list ? await relayList(selected.url, { onStatus: status }) : await prepareSource(selected.url, { onStatus: status });
       // Do not send a channel that was closed or replaced while the device picker was open.
       if (getSource()?.url !== selected.url) return;
-      const api = win.chrome.cast.media;
-      const media = new api.MediaInfo(source.url, source.type);
-      media.streamType = source.live ? api.StreamType.LIVE : api.StreamType.BUFFERED;
-      media.metadata = new api.GenericMediaMetadata();
-      media.metadata.title = selected.title || 'Calamar TV';
-      if (selected.logo?.startsWith('https://')) media.metadata.images = [new win.chrome.cast.Image(selected.logo)];
-      const request = new api.LoadRequest(media);
-      request.autoplay = true;
-      await context.getCurrentSession().loadMedia(request);
+      // A film is not live, and it goes on on the TV at the minute it was playing here.
+      if (selected.vod) source = { ...source, live: false };
+      const at = selected.vod ? Number(getSource()?.position) || 0 : 0;
+      try { await load(source, selected, at); }
+      catch (error) {
+        // A list whose server does not let the TV read it (no CORS): once more, through the hosting.
+        if (!list || source.url !== selected.url || (typeof error === 'string' ? error : error?.code) === 'cancel') throw error;
+        status('Chromecast no puede leer el canal directamente. Probando a través del hosting…');
+        const relayed = await relayList(selected.url, { onStatus: status });
+        if (getSource()?.url !== selected.url) return;
+        await load(selected.vod ? { ...relayed, live: false } : relayed, selected, at);
+      }
       onSent?.();
       status('Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.');
     } catch (error) {

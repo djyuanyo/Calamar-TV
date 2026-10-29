@@ -20,10 +20,13 @@ import com.google.android.gms.cast.framework.media.RemoteMediaClient;
 /** Native discovery and TV controls; ordinary local playback survives absent Play services. */
 public final class CastControls {
   public interface SourceProvider { String current(); }
+  /** Where a film or episode is playing here, in ms; -1 for live channels. */
+  public interface Position { long ms(); }
   private final FragmentActivity activity;
   private final SourceProvider source;
   private final String title;
   private final Runnable sent;
+  private final Position position;
   private SessionManager sessions;
   private LinearLayout control;
   private String lastSent;
@@ -35,12 +38,17 @@ public final class CastControls {
 
   public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
       String title, Runnable sent) {
-    this.activity = activity; this.source = source; this.title = title; this.sent = sent;
+    this(activity, row, source, title, sent, () -> -1);
+  }
+
+  public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
+      String title, Runnable sent, Position position) {
+    this.activity = activity; this.source = source; this.title = title; this.sent = sent; this.position = position;
     try {
       sessions = CastContext.getSharedInstance(activity).getSessionManager();
       route = new MediaRouteButton(activity) {
         @Override public boolean performClick() {
-          if (!connected() && CastSource.contentType(source.current()) == null && !CastSource.needsBridge(source.current())) {
+          if (!connected() && !castable(source.current())) {
             message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
             return true;
           }
@@ -89,53 +97,72 @@ public final class CastControls {
 
   private void message(String text) { Toast.makeText(activity, text, Toast.LENGTH_LONG).show(); }
 
+  private static boolean castable(String address) {
+    return CastSource.contentType(address) != null || CastSource.castBridge(address) || CastSource.list(address);
+  }
+
   public void send() {
     if (destroyed || preparing) return;
     String address = source.current();
-    String type = CastSource.contentType(address);
-    if (type == null) {
-      if (!CastSource.needsBridge(address)) {
-        message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
-        return;
-      }
-      preparing = true;
-      message("Preparando el canal para la TV…");
-      worker.execute(() -> {
-        try {
-          String url = adapter.prepare(address);
-          activity.runOnUiThread(() -> {
-            preparing = false;
-            if (!destroyed && address.equals(source.current())) load(url, "application/x-mpegURL", address);
-          });
-        } catch (Exception failure) {
-          activity.runOnUiThread(() -> {
-            preparing = false;
-            if (!destroyed) message(failure instanceof java.io.IOException
-                && failure.getMessage() != null && !failure.getMessage().contains("http")
-                ? failure.getMessage() : "No se pudo preparar el vídeo en el hosting.");
-          });
-        }
-      });
+    if (!castable(address)) {
+      message("Esta fuente no contiene un enlace de vídeo compatible para enviar a Chromecast.");
       return;
     }
-    load(address, type, address);
+    long at = position.ms();
+    String type = CastSource.contentType(address);
+    // An HTTP list cannot load on the receiver's HTTPS page: the hosting hands it out over HTTPS.
+    if (type != null && !(CastSource.list(address) && address.regionMatches(true, 0, "http://", 0, 7))) {
+      load(address, type, address, at, CastSource.list(address));
+      return;
+    }
+    prepare(address, at);
   }
 
-  private void load(String address, String type, String original) {
+  /** Through the hosting: the converted TS channel, or the relayed list of an M3U8 channel. */
+  private void prepare(String address, long at) {
+    preparing = true;
+    message("Preparando el canal para la TV…");
+    worker.execute(() -> {
+      try {
+        String url = CastSource.list(address)
+            ? HostingPlayback.resolve(address, NetworkTransport.get(DnsProvider.SYSTEM)) : adapter.prepare(address);
+        activity.runOnUiThread(() -> {
+          preparing = false;
+          if (!destroyed && address.equals(source.current())) load(url, "application/x-mpegURL", address, at, false);
+        });
+      } catch (Exception failure) {
+        activity.runOnUiThread(() -> {
+          preparing = false;
+          if (!destroyed) message(failure instanceof java.io.IOException
+              && failure.getMessage() != null && !failure.getMessage().contains("http")
+              ? failure.getMessage() : "No se pudo preparar el vídeo en el hosting.");
+        });
+      }
+    });
+  }
+
+  /** at: the minute of a film or episode (it goes on there on the TV); -1 for live channels. */
+  private void load(String address, String type, String original, long at, boolean retryRelayed) {
     RemoteMediaClient remote = remote();
     if (remote == null) return;
     MediaMetadata metadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);
     metadata.putString(MediaMetadata.KEY_TITLE, title == null ? "Calamar TV" : title);
+    boolean live = at < 0 && CastSource.live(type) && !CastSource.onDemand(address);
     MediaInfo media = new MediaInfo.Builder(address).setContentType(type)
-        .setStreamType(CastSource.live(type) && !CastSource.onDemand(address) ? MediaInfo.STREAM_TYPE_LIVE : MediaInfo.STREAM_TYPE_BUFFERED)
+        .setStreamType(live ? MediaInfo.STREAM_TYPE_LIVE : MediaInfo.STREAM_TYPE_BUFFERED)
         .setMetadata(metadata).build();
-    remote.load(new MediaLoadRequestData.Builder().setMediaInfo(media).setAutoplay(true).build())
+    MediaLoadRequestData.Builder request = new MediaLoadRequestData.Builder().setMediaInfo(media).setAutoplay(true);
+    if (at > 0) request.setCurrentTime(at);
+    remote.load(request.build())
         .setResultCallback(result -> {
           if (destroyed) return;
           if (result.getStatus().isSuccess()) {
             lastSent = original;
             if (original.equals(source.current())) sent.run();
             message("Reproduciendo en Chromecast. Pulsa Compartir pantalla para pausar o desconectar.");
+          } else if (retryRelayed && original.equals(source.current())) {
+            // The list's server does not let the TV read it (no CORS): once more, through the hosting.
+            prepare(original, at);
           } else message("Chromecast no pudo cargar esta fuente. Comprueba el formato y el acceso del televisor al enlace.");
         });
   }

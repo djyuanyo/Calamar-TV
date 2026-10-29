@@ -559,7 +559,9 @@ initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  // Films and episodes go to the TV at the minute they are playing here.
+  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo,
+    vod: !!current.vod, position: current.vod ? video.currentTime : 0 } : null,
   onSent: stop,
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
@@ -624,7 +626,8 @@ async function playSource(c, index) {
       originalStreams: c.streams };
     index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
   }
-  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
+  // Each source by the channel's name (or the event source's), never by the site it comes from.
+  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || `${c.name} · Fuente ${s.index + 1}` }));
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());

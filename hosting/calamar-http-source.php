@@ -15,6 +15,11 @@ function httpTsSourceAllowed($address) {
     return (bool)preg_match('~[.]ts$~iD', $path)
         || (bool)preg_match('~^/(?:live/)?[^/]+/[^/]+/[0-9]+(?:[.]ts)?$~iD', $path);
 }
+/** MPEG-TS the hosting can read and convert for Chromecast: HTTP IPTV and also .ts addresses over HTTPS. */
+function tsSourceAllowed($address) {
+    if (httpTsSourceAllowed($address)) return true;
+    return is_string($address) && stripos($address, 'https://') === 0 && httpTsSourceAllowed('http://' . substr($address, 8));
+}
 function publicIp($ip) {
     return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
         && (int)explode('.', $ip)[0] < 224

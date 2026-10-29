@@ -174,7 +174,8 @@ function playerAllowedPage($page, $catalogStreams, $get = null) {
 /** cURL for an address on a public server only (never the hosting's own network), as a browser on that page. */
 function playerCurl($url, $page, $timeout, $extra = array()) {
     $target = publicTarget($url);
-    if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
+    // HTTP only for IPTV lists of the catalog (and their pieces), which reach here signed or checked.
+    if ($target === null || !in_array(strtolower(parse_url($url, PHP_URL_SCHEME) ?: ''), array('http', 'https'), true)) return null;
     $headers = array('Accept: */*');
     if ($page !== '') {
         $p = parse_url($page);
@@ -183,7 +184,7 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     }
     $ch = curl_init($url);
     curl_setopt_array($ch, array(
-        CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => $timeout,
         CURLOPT_USERAGENT => PLAYER_BROWSER, CURLOPT_HTTPHEADER => array_merge($headers, $extra), CURLOPT_PROXY => '',
         CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip']),
     ));
@@ -262,7 +263,7 @@ function playerMain() {
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {
         $url = playerUnB64($_GET['seg']); $page = playerUnB64($_GET['p'] ?? '');
-        if (!is_string($url) || !is_string($page) || !preg_match('#^https://#', $url) || !hash_equals(playerSign($url, $page, $secret), (string)($_GET['sig'] ?? '')))
+        if (!is_string($url) || !is_string($page) || !preg_match('#^https?://#', $url) || !hash_equals(playerSign($url, $page, $secret), (string)($_GET['sig'] ?? '')))
             playerAnswer(array('error' => 'Dirección no válida.'), 403);
         // l=1: a list without .m3u8 in its address (a page that is already the list).
         if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '') || ($_GET['l'] ?? '') === '1') {
@@ -299,7 +300,7 @@ function playerMain() {
     }
 
     $page = trim((string)($_GET['page'] ?? ''));
-    if (!preg_match('#^https://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
+    if (!preg_match('#^https?://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
     // Only channels of the catalog: the hosting is not a relay for any page on the internet.
     if (!playerAllowedPage($page, playerCatalogStreams())) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
     // cast=1: the signed address of the list instead of the list, for Chromecast (it cannot send the page).
