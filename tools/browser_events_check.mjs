@@ -776,7 +776,7 @@ try {
     if (!hostingReady && id === '1') return route.fulfill({status:502,json:{error:'Sin señales'},headers:{'Access-Control-Allow-Origin':'*'}});
     const name = id === '22' ? 'Canal A' : id === '23' ? 'Canal B' : 'Liga de Campeones';
     if (u.searchParams.has('list')) return route.fulfill({ json: { name, items: id === '1' ? [
-      { id:'0123456789abcdef', name:name+' · Señal 1' }, { id:'fedcba9876543210', name:name+' · Señal 2' }
+      { id:'0000000000000000', name:name+' · Automática' }, { id:'0123456789abcdef', name:name+' · Señal 1' }, { id:'fedcba9876543210', name:name+' · Señal 2' }
     ] : [{ id:'0123456789abcdef', name }] }, headers:{'Access-Control-Allow-Origin':'*'} });
     relaySelections.push(u.searchParams.get('source_id'));
     return route.fulfill({json:{url:`calamar-player.php?seg=${id==='1'?'fresh'+(++tokenVersion):'event-'+id}&sig=ok`},headers:{'Access-Control-Allow-Origin':'*'}});
@@ -793,8 +793,8 @@ try {
   hostingReady = true;
   await page.goto(base + '/?hosted=2#/canal/canal-campeones');
   await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('fresh1')));
-  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Liga de Campeones · Señal 1','Liga de Campeones · Señal 2']);
-  await page.getByLabel('Cambiar fuente').selectOption('1');
+  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Liga de Campeones · Automática','Liga de Campeones · Señal 1','Liga de Campeones · Señal 2']);
+  await page.getByLabel('Cambiar fuente').selectOption('2');
   await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('fresh2')));
   assert.equal(relaySelections.at(-1),'fedcba9876543210');
   await page.clock.runFor(3000);

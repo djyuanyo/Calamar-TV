@@ -133,15 +133,20 @@ function playerSourceId($url) {
     $u = parse_url($url);
     return substr(hash('sha256', strtolower($u['host'] ?? '') . ($u['path'] ?? '/')), 0, 16);
 }
+function playerSelectedSources($sources, $id) {
+    if ($id === "" || $id === "0000000000000000") return $sources;
+    return array_values(array_filter($sources, function($url) use ($id) { return playerSourceId($url) === $id; }));
+}
 function playerSourceMenu($sources, $html) {
     preg_match('/<title\b[^>]*>(.*?)<\/title>/is', $html, $title);
     $name = playerSignalName($title[1] ?? 'Canal');
-    $items = array();
+    // Compatible with 2.20.57: a valid menu id that preserves the automatic 2.20.55 route.
+    $items = array(array("id" => "0000000000000000", "index" => -1, "name" => $name . " · Automática"));
     foreach ($sources as $index => $url) $items[] = array(
         'id' => playerSourceId($url), 'index' => $index,
         'name' => $name . (count($sources) > 1 ? ' · Señal ' . ($index + 1) : '')
     );
-    return array('sources' => count($items), 'name' => $name, 'items' => $items);
+    return array('sources' => count($sources), 'name' => $name, 'items' => $items);
 }
 
 /** Public player pages listed by an event, including the channels nested in streams. */
@@ -353,7 +358,7 @@ function playerMain() {
     if (isset($_GET['list'])) playerAnswer($menu);
     if (isset($_GET['source_id'])) {
         $id = (string)$_GET['source_id'];
-        $selected = array_values(array_filter($sources, function($url) use ($id) { return playerSourceId($url) === $id; }));
+        $selected = playerSelectedSources($sources, $id);
         if (!$selected) playerAnswer(array('error' => 'Esta señal ya no está disponible. Actualiza las fuentes.'), 409);
         $sources = $selected;
     }
@@ -361,7 +366,7 @@ function playerMain() {
     if (is_string($pick) && preg_match('/^\d{1,2}$/', $pick) && isset($sources[(int)$pick])) $sources = array($sources[(int)$pick]);
     // A new attempt after the video was cut (intento=1, 2…) starts from another source of the page.
     $round = $_GET['intento'] ?? '';
-    if (!isset($_GET['source_id']) && is_string($round) && preg_match('/^[1-9]$/', $round) && count($sources) > 1) {
+    if ((!isset($_GET['source_id']) || $_GET['source_id'] === '0000000000000000') && is_string($round) && preg_match('/^[1-9]$/', $round) && count($sources) > 1) {
         $shift = (int)$round % count($sources);
         $sources = array_merge(array_slice($sources, $shift), array_slice($sources, 0, $shift));
     }

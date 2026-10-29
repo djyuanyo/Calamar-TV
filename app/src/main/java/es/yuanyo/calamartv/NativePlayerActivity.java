@@ -51,6 +51,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private Button sourceButton;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
+  private final ExecutorService sourceMenuWorker = Executors.newSingleThreadExecutor();
   private final List<VideoResolver.Source> sources = new ArrayList<>();
   private ExoPlayer player;
   private PlayerView playerView;
@@ -588,28 +589,22 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     final String requestedPage = pageUrl;
     if (zicoPage()) hostingPlayback = true;
     final boolean throughHosting = hostingPlayback;
-    final String requestedSignal = hostingSourceId;
+    final String requestedSignal = hostingSourceId.isEmpty() ? HostingPlayback.AUTOMATIC : hostingSourceId;
+    final int requestedAttempt = automaticAttempts;
+    final String channelName = HostingPlayback.label(eventSourceNames.get(requestedPage), HostingPlayback.label(title, "Canal"));
+    String signalName = channelName;
+    for (HostingPlayback.Option option : hostingOptions) if (option.id.equals(requestedSignal)) signalName = option.name;
+    final String requestedName = signalName;
+    if (throughHosting && VideoResolver.eventApi(requestedPage) == null) loadHostingMenu(requestedPage, channelName, request);
     worker.execute(
         () -> {
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
             if (throughHosting && eventApi == null) {
-              List<HostingPlayback.Option> menu = HostingPlayback.options(requestedPage,
-                  HostingPlayback.label(eventSourceNames.get(requestedPage), HostingPlayback.label(title, "Canal")), NetworkTransport.get(DnsProvider.SYSTEM));
-              HostingPlayback.Option selectedOption = menu.get(0);
-              if (!requestedSignal.isEmpty()) {
-                selectedOption = null;
-                for (HostingPlayback.Option option : menu) if (option.id.equals(requestedSignal)) selectedOption = option;
-                if (selectedOption == null) throw new java.io.IOException("La señal seleccionada ya no está disponible. Elige otra en Fuentes.");
-              }
-              final HostingPlayback.Option chosen = selectedOption;
-              handler.post(() -> {
-                if (!active || request != generation) return;
-                hostingOptions.clear(); hostingOptions.addAll(menu); hostingSourceId = chosen.id;
-                eventSourceNames.put(requestedPage, chosen.name.replaceAll(" · Señal \\d+$", ""));
-              });
-              String address = HostingPlayback.resolve(requestedPage, chosen.id, NetworkTransport.get(DnsProvider.SYSTEM));
+              // Start exactly as 2.20.55: one request lets the hosting try every available signal.
+              // The optional menu runs independently; it cannot stop a working video from opening.
+              String address = HostingPlayback.resolve(requestedPage, requestedSignal, requestedAttempt, NetworkTransport.get(DnsProvider.SYSTEM));
               handler.post(() -> {
                 if (!active || request != generation) return;
                 resolving = false;
@@ -617,7 +612,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 chromiumNetwork = false;
                 lastReport = reportHeader() + "\nHosting: lista HLS firmada recibida";
                 sources.clear();
-                sources.add(new VideoResolver.Source(chosen.name, address));
+                hostingSourceId = requestedSignal;
+                sources.add(new VideoResolver.Source(requestedName, address));
                 selection = 0; updateSourceButton(); playSource(sources.get(0));
               });
               return;
@@ -753,6 +749,20 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   /** A player page of a catalog channel, which the hosting reads (not LuluStream, it has its own file). */
   private boolean channelPage() {
     return pageUrl != null && channelPages.contains(pageUrl) && Library.Media.hosting(pageUrl) == null;
+  }
+
+  /** Metadata must not delay or reject the automatic hosting route that was used in 2.20.55. */
+  private void loadHostingMenu(String page, String channel, int request) {
+    sourceMenuWorker.execute(() -> {
+      try {
+        List<HostingPlayback.Option> menu = HostingPlayback.options(page, channel, NetworkTransport.get(DnsProvider.SYSTEM));
+        handler.post(() -> {
+          if (!active || generation != request || !page.equals(pageUrl)) return;
+          hostingOptions.clear(); hostingOptions.addAll(menu);
+          updateSourceButton();
+        });
+      } catch (java.io.IOException unavailable) { /* Playback continues through the automatic route. */ }
+    });
   }
 
   /** A LuluStream video through the hosting (calamar-lulu.php), when this device cannot read its page. */
@@ -1261,8 +1271,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
       }
       if (hostingOptions.isEmpty()) {
-        names.add(HostingPlayback.label(title, "Canal") + " · Consultar señales");
-        actions.add(() -> { if (!resolving) resolveFresh(); });
+        if (hostingPlayback) checked = names.size();
+        names.add(HostingPlayback.label(title, "Canal") + " · Automática");
+        actions.add(() -> {
+          hostingSourceId = HostingPlayback.AUTOMATIC;
+          automaticAttempts = 0;
+          if (!resolving) resolveFresh();
+        });
       }
     }
     if (directUrl == null) {
@@ -1532,6 +1547,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(skipTick);
     if (castControls != null) castControls.destroy();
     worker.shutdownNow();
+    sourceMenuWorker.shutdownNow();
     super.onDestroy();
   }
 

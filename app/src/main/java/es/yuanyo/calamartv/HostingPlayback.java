@@ -13,6 +13,7 @@ import java.util.List;
 /** Obtain a signed HLS URL from the same relay used by the web. Never return a provider URL. */
 final class HostingPlayback {
   private HostingPlayback() {}
+  static final String AUTOMATIC = "0000000000000000";
 
   static final class Option {
     final String id, name;
@@ -31,16 +32,16 @@ final class HostingPlayback {
       String channel = label(menu.optString("name"), fallback);
       JSONArray items = menu.optJSONArray("items");
       List<Option> out = new ArrayList<>();
+      out.add(new Option(AUTOMATIC, channel + " · Automática"));
       if (items != null) for (int i = 0; i < items.length(); i++) {
         JSONObject item = items.optJSONObject(i);
-        if (item == null || !item.optString("id").matches("[a-f0-9]{16}")) continue;
+        if (item == null || !item.optString("id").matches("[a-f0-9]{16}") || AUTOMATIC.equals(item.optString("id"))) continue;
         out.add(new Option(item.getString("id"), label(item.optString("name"), channel + " · Señal " + (i + 1))));
       }
       if (items == null) {
         int count = Math.min(100, menu.optInt("sources", 0));
         for (int i = 0; i < count; i++) out.add(new Option("legacy-" + i, channel + (count > 1 ? " · Señal " + (i + 1) : "")));
       }
-      if (out.isEmpty()) throw new IOException("No hay señales disponibles para este canal");
       return out;
     } catch (IOException error) { throw error; }
     catch (Exception error) { throw new IOException("No se pudieron leer las señales del canal", error); }
@@ -76,8 +77,14 @@ final class HostingPlayback {
   }
 
   static String resolve(String page, String id, PlayerDocument.ConnectionFactory connections) throws IOException {
+    return resolve(page, id, 0, connections);
+  }
+
+  static String resolve(String page, String id, int attempt, PlayerDocument.ConnectionFactory connections) throws IOException {
     if (!id.isEmpty() && !id.matches("[a-f0-9]{16}|legacy-[0-9]{1,2}")) throw new IOException("Señal no válida");
-    String selection = id.startsWith("legacy-") ? "&src=" + id.substring(7) : id.isEmpty() ? "" : "&source_id=" + id;
+    boolean automatic = id.isEmpty() || AUTOMATIC.equals(id);
+    String selection = automatic ? (attempt > 0 ? "&intento=" + Math.min(9, attempt) : "")
+        : id.startsWith("legacy-") ? "&src=" + id.substring(7) : "&source_id=" + id;
     return signedUrl(fetch(request(page) + selection, connections));
   }
 
