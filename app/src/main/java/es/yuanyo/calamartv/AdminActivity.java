@@ -106,6 +106,12 @@ public class AdminActivity extends Activity {
       return;
     }
     body.addView(label("Canales · " + catalog.optJSONArray("channels").length() + "   /   Eventos · " + (catalog.optJSONArray("events") == null ? 0 : catalog.optJSONArray("events").length()), 15));
+    // Who the app offers its new versions to: everyone, or only the administrator (to try them first).
+    final boolean updatesForAll = !"admin".equals(catalog.optString("appUpdates", "all"));
+    addButton("Actualizaciones de la app: " + (updatesForAll ? "para todos · Solo para mí" : "solo para ti · Para todos"), () -> {
+      try { JSONObject next = copy(); next.put("appUpdates", updatesForAll ? "admin" : "all"); SharedCatalog.validate(next); publish(next); }
+      catch (Exception error) { fail(error); }
+    });
     final boolean libraryOn = Library.visible(catalog);
     addButton("Películas, Series y Documentales: " + (libraryOn ? "visibles para todos · Ocultar" : "solo los ves tú · Mostrar a todos"), () -> {
       try { JSONObject next = copy(); next.put("libraryVisible", !libraryOn); SharedCatalog.validate(next); publish(next); }

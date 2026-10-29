@@ -1368,7 +1368,7 @@ public class MainActivity extends Activity {
     ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
 
-  AppUpdater createUpdater() { return new AppUpdater(this); }
+  AppUpdater createUpdater() { return new AppUpdater(this, () -> UpdateInfo.offered(custom, SharedCatalog.administrator(Profiles.user(this)))); }
 
   void observeSharedCatalog() {
     final int session = ++sharedSession;

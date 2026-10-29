@@ -36,4 +36,12 @@ public class UpdateInfoTest {
       try { info.verifyFile(file); fail("Truncation accepted"); } catch (IOException expected) {}
     } finally { file.delete(); }
   }
+
+  @Test public void newVersionsGoToEveryoneOrOnlyToTheAdministrator() throws Exception {
+    assertTrue(UpdateInfo.offered(null, false));
+    assertTrue(UpdateInfo.offered(new org.json.JSONObject(), false));
+    assertTrue(UpdateInfo.offered(new org.json.JSONObject().put("appUpdates", "all"), false));
+    assertFalse(UpdateInfo.offered(new org.json.JSONObject().put("appUpdates", "admin"), false));
+    assertTrue(UpdateInfo.offered(new org.json.JSONObject().put("appUpdates", "admin"), true));
+  }
 }

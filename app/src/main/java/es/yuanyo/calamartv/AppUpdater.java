@@ -33,7 +33,14 @@ final class AppUpdater {
   private AlertDialog dialog;
   private final Runnable poll = this::pollDownload;
 
-  AppUpdater(Activity activity) {
+  /** Whether this device is offered new versions now (the administrator may keep them for himself first). */
+  interface Audience { boolean offered(); }
+  private final Audience audience;
+
+  AppUpdater(Activity activity) { this(activity, () -> true); }
+
+  AppUpdater(Activity activity, Audience audience) {
+    this.audience = audience;
     this.activity = activity;
     saved = activity.getSharedPreferences("apk-updates", Activity.MODE_PRIVATE);
   }
@@ -89,7 +96,7 @@ final class AppUpdater {
         checking = false;
         if (!resumed || activity.isDestroyed() || activity.isFinishing()) return;
         if (latest == null) { if (manual) toast("No se pudo comprobar la actualización. Prueba más tarde."); return; }
-        if (!latest.newerThan(BuildConfig.VERSION_CODE)) { if (manual) toast("Ya tienes la última versión: " + BuildConfig.VERSION_NAME); return; }
+        if (!latest.newerThan(BuildConfig.VERSION_CODE) || !audience.offered()) { if (manual) toast("Ya tienes la última versión: " + BuildConfig.VERSION_NAME); return; }
         if (!manual && (offeredCode == latest.code || saved.getLong("snooze-" + latest.code, 0) > System.currentTimeMillis())) return;
         offeredCode = latest.code;
         dialog = new AlertDialog.Builder(activity)
