@@ -21,6 +21,20 @@ def php(code):
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_zico_ipv6_remains_pinned_to_public_cloudflare_addresses(self):
+        out = php('$resolve=function($host){return ["2606:4700:3034::6815:1234","104.21.18.52"];};'
+                  'echo json_encode(['
+                  'publicTarget("https://zicotv.cc/api/player/6",$resolve,true),'
+                  'publicTarget("https://zicotv.cc/api/player/6",$resolve),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["::1","104.21.18.52"];},true),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["2606:4700::1","127.0.0.1"];},true),'
+                  'publicTarget("https://zicotv.cc/",function($h){return ["::ffff:127.0.0.1"];},true),'
+                  'array_map("publicCloudflareIp6",["2a06:98c7::1","2a06:98c8::1","fc00::1","fe80::1","2001:db8::1"])]);')
+        result = json.loads(out)
+        self.assertEqual(result[0], {'host': 'zicotv.cc', 'port': 443, 'ip': '2606:4700:3034::6815:1234'})
+        self.assertEqual(result[1:5], [None, None, None, None])
+        self.assertEqual(result[5], [True, False, False, False, False])
+
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'
                 '{"label":"CDN 1","url":"/live/b.m3u8?t=\\"2\\"","hidden":true},'

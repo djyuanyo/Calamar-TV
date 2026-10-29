@@ -173,7 +173,11 @@ function playerAllowedPage($page, $catalogStreams, $get = null) {
 
 /** cURL for an address on a public server only (never the hosting's own network), as a browser on that page. */
 function playerCurl($url, $page, $timeout, $extra = array()) {
-    $target = publicTarget($url);
+    $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+    // Zico's Cloudflare IPv6 route responds where its IPv4 route may return 403.
+    // Keep DNS validation and pinning: only published public Cloudflare ranges are accepted.
+    $zico = $host === 'zicotv.cc' || substr($host, -strlen('.zicotv.cc')) === '.zicotv.cc';
+    $target = publicTarget($url, null, $zico);
     if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
     $headers = array('Accept: */*');
     if ($page !== '') {
@@ -185,7 +189,8 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     curl_setopt_array($ch, array(
         CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => $timeout,
         CURLOPT_USERAGENT => PLAYER_BROWSER, CURLOPT_HTTPHEADER => array_merge($headers, $extra), CURLOPT_PROXY => '',
-        CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip']),
+        CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':'
+            . (strpos($target['ip'], ':') !== false ? '[' . $target['ip'] . ']' : $target['ip'])),
     ));
     return $ch;
 }
