@@ -675,7 +675,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
-                    if (!tryNextZicoSource()) problem("Zico no ha devuelto fuentes de vídeo para este canal.");
+                    if (!tryNextZicoSource()) problem("La fuente no ha devuelto vídeo para este canal.");
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -1070,7 +1070,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         + (directUrl != null ? "" : page.getPath())
         + "\nMotor: "
         + (chromiumNetwork ? "Chromium · conexión del dispositivo" : transport.name())
-        + "\nRuta: " + (hostingPlayback ? "hosting · lista y fragmentos por calamarmenciano.com" : "conexión del dispositivo");
+        + "\nRuta: " + (hostingPlayback ? "servidor de Calamar TV" : "conexión del dispositivo");
   }
 
   private void diagnose() {
@@ -1195,6 +1195,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         .setNegativeButton("Cerrar", null).show();
   }
 
+  /** A source as viewers see it: its own name, or the channel's with its number; never a site's address. */
+  static String viewerName(String name) {
+    if (name == null || name.trim().isEmpty()
+        || name.matches("(?is).*(zico|calamar|https?:|\\.(cc|com|net|org|tv|top|xyz|sbs|me|io)\\b).*")) return null;
+    return name.trim();
+  }
+
+  private String sourceName(String name, int number) {
+    String own = viewerName(name);
+    if (own != null && !own.matches("(?i)(cdn|por el hosting|vídeo directo).*")) return own;
+    return (title == null || title.trim().isEmpty() ? "Fuente " : title.trim() + " · Fuente ") + number;
+  }
+
   private void chooseSource() {
     if (sourceDialog != null && sourceDialog.isShowing()) return;
     final boolean restoreFullscreen = fullscreen;
@@ -1205,21 +1218,22 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     // Catalog links remain selectable before the remote page responds.
     List<String> pages = new ArrayList<>(channelPages);
     if (pageUrl != null && !pages.contains(pageUrl)) pages.add(pageUrl);
-    int number = 0, checked = -1;
+    int checked = -1;
     // The direct IPTV links (M3U8…) first, then the player pages (ZicoTV's last, as AppSources orders them).
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
-      names.add("Enlace " + (++number) + " · Vídeo directo");
+      names.add(sourceName(null, names.size() + 1));
       actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
       if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
-      names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
+      String event = viewerName(eventSourceNames.get(address));
+      names.add(event != null ? event : sourceName(null, names.size() + 1));
       actions.add(() -> selectChannelAddress(address, true));
     }
     if (zicoPage()) {
       if (hostingPlayback) checked = names.size();
-      names.add("Por el hosting · calamarmenciano.com");
+      names.add(sourceName(null, names.size() + 1));
       actions.add(() -> {
         generation++; resolving = false;
         handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
@@ -1233,7 +1247,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         if (HostingPlayback.isRelay(source.url) && zicoPage()) continue;
         final int selected = i;
         if (source.url.equals(currentUrl)) checked = names.size();
-        names.add("CDN · " + source.label);
+        names.add(sourceName(source.label, names.size() + 1));
         actions.add(() -> {
           generation++; resolving = false;
           hostingPlayback = false;

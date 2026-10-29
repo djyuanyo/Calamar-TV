@@ -626,7 +626,8 @@ async function playSource(c, index) {
       originalStreams: c.streams };
     index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
   }
-  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
+  // Each source by the channel's name (or the event source's), never by the site it comes from.
+  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || `${c.name} · Fuente ${s.index + 1}` }));
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());

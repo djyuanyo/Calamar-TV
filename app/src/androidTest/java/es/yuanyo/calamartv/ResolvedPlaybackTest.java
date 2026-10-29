@@ -121,9 +121,10 @@ public class ResolvedPlaybackTest {
               ((Button) button.get(activity)).performClick();
             } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
           });
-          // «Fuentes» lists the direct IPTV links first and ZicoTV's pages last; the page being read stays checked.
-          onView(withText("Enlace 2 · bp.zicotv.cc")).inRoot(isDialog()).check(matches(isChecked()));
-          onView(withText("Enlace 1 · Vídeo directo")).inRoot(isDialog()).perform(click());
+          // «Fuentes» lists the direct IPTV links first and the player pages last, by the channel's name and
+          // never by a site's address; the page being read stays checked.
+          onView(withText("Prueba de canal resuelto · Fuente 2")).inRoot(isDialog()).check(matches(isChecked()));
+          onView(withText("Prueba de canal resuelto · Fuente 1")).inRoot(isDialog()).perform(click());
         }
         AtomicBoolean playing = new AtomicBoolean();
         long deadline = SystemClock.elapsedRealtime() + 30000;
@@ -154,7 +155,7 @@ public class ResolvedPlaybackTest {
             ((Button) button.get(activity)).performClick();
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
-        onView(withText(manualDirect ? "Enlace 1 · Vídeo directo" : "CDN · CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText(manualDirect ? "Prueba de canal resuelto · Fuente 1" : "Prueba de canal resuelto · Fuente 3")).inRoot(isDialog()).check(matches(isChecked()));
         if (!rejectFirst && !manualDirect && !eventPage) {
           int beforeDns = pages.get();
           onView(withText("DNS")).inRoot(isDialog()).perform(click());
