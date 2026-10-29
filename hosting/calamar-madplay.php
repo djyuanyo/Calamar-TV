@@ -44,6 +44,7 @@ function madplayMain() {
     if(!preg_match('#^/match/([1-9][0-9]{0,9})/source/([0-9]{1,10})/(index\.m3u8|asset/([a-f0-9]{32})\.(m3u8|bin))$#',$path,$m))madplayAnswer(['error'=>'Ruta no válida.'],400);
     $match=(int)$m[1];$source=(int)$m[2];
     if(!in_array($match,$config['matches']??[],true))madplayAnswer(['error'=>'Partido no habilitado.'],403);
+    if(!in_array($source,$config['sources'][$match]??[],true))madplayAnswer(['error'=>'Fuente no habilitada.'],403);
     $secret=$config['secret']??'';if(!is_string($secret)||strlen($secret)<32)madplayAnswer(['error'=>'Configuración incompleta del puente.'],503);
     header('Access-Control-Allow-Origin: *');header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
     if($_SERVER['REQUEST_METHOD']==='OPTIONS') { header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');header('Access-Control-Allow-Headers: Range');http_response_code(204);return; }

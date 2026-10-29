@@ -47,5 +47,17 @@ $tests['HTML errors with HTTP 200 never pass as working video'] = function () {
 $tests['URI resolution and unknown resources reject invalid requests'] = function () {
     check(MadplaySession::resolveUrl('https://media.example/a/b/index.m3u8','../s.ts?q=1')==='https://media.example/a/s.ts?q=1','relative parent');$c=context();try{$c->session->segment(str_repeat('0',32));throw new Exception('must fail');}catch(MadplayPlaybackFailure $e){check($e->upstreamStatus===404,'unknown resource');}check(!$c->requests,'no network on invented asset');
 };
+$tests['proactive renewal rehydrates a secondary playlist before requesting it'] = function () {
+    $c=context(null,function($url){if(strpos($url,'es.m3u8')!==false)return response("#EXTM3U\npart.aac?token=new\n");return response("#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,URI=\"audio/es.m3u8?token=".(strpos($url,'session-2')!==false?'new':'old')."\"\n");});
+    $list=$c->session->playlist();$id=asset($list);$c->time+=61;$c->session->playlist($id);
+    check($c->resolves===2&&strpos(end($c->requests),'es.m3u8?token=new')!==false,'child playlist credential renewed before its request');
+};
+$tests['proactive renewal detects an aged-out fragment even if the API returns the same root URL'] = function () {
+    $c=context(function(){return ['url'=>'https://media.example/index.m3u8'];},function($url,$c){return response($c->resolves>1?fixture('live-renewed'):fixture('live-old'));});
+    $list=$c->session->playlist();$c->time+=61;try{$c->session->segment(asset($list,0));throw new Exception('must fail');}catch(MadplayPlaybackFailure $e){check($e->upstreamStatus===410,'generation checked independently of token URL');}check(count($c->requests)===2,'no request for a stale segment');
+};
+$tests['distinct track queries are not confused when credential query values rotate'] = function () {
+    $c=context(null,function(){return response("#EXTM3U\nplaylist.m3u8?audio=es&token=old\nplaylist.m3u8?audio=en&token=old\n");});$list=$c->session->playlist();check(asset($list,0)!==asset($list,1),'audio query remains part of resource identity');
+};
 foreach($tests as $name=>$test){$test();echo "PASS $name\n";}
 echo count($tests)." offline renewal tests passed; live provider playback is NOT verified.\n";

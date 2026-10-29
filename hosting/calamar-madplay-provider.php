@@ -7,6 +7,14 @@ final class MadplayProvider {
     private const KEY = 'YTc5ODFjYzllYjJmNGQxOWRjZmVhNTdiMTAxZWNkODk=';
     private const IV = 'ODAxN2QzYThmMTQwMGQyZg==';
     public function __construct(callable $fetch) { $this->fetch = $fetch; }
+    /** A page identifies a match; never persist its temporary media address as the catalog entry. */
+    public static function matchFromPage($address) {
+        $p=parse_url(trim($address));$host=strtolower($p['host']??'');
+        if(($p['scheme']??'')!=='https'||isset($p['user'])||isset($p['pass'])||isset($p['port']))return null;
+        if(!($host==='mpanrc4imind.my'||substr($host,-strlen('.mpanrc4imind.my'))==='.mpanrc4imind.my'||$host==='madplay77.ru'||substr($host,-strlen('.madplay77.ru'))==='.madplay77.ru'))return null;
+        return preg_match('#^/(?:[a-z]{2}/)?football/[^/]+-([1-9][0-9]{0,9})/[^/]+\.html$#',$p['path']??'',$m)?(int)$m[1]:null;
+    }
+
     private static function varint($b, &$i) {
         $n=0; $shift=0;
         do { if ($i >= strlen($b) || $shift > 63) throw new MadplayPlaybackFailure('Protobuf incompleto.'); $c=ord($b[$i++]); $n|=($c&127)<<$shift; $shift+=7; } while ($c&128);

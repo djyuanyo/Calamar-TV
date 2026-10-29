@@ -21,4 +21,8 @@ $before=count($requests);try{$provider->resolve(4522835,999999);throw new Except
 foreach(["\x00","\x52\xff","\x52\x08x"] as $bad){try{MadplayProvider::protobuf($bad);throw new Exception('invalid protobuf accepted');}catch(MadplayPlaybackFailure $e){}}echo "PASS truncated and invalid protobuf rejected\n";
 foreach(['127.0.0.1','10.0.0.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','::1','::ffff:127.0.0.1','fc00::1','fe80::1','2001:db8::1','2002:7f00:1::'] as $ip)assertMad(!madplayPublicIp($ip),'nonpublic IP '.$ip);assertMad(madplayPublicIp('1.1.1.1')&&madplayPublicIp('2606:4700:4700::1111'),'public addresses');echo "PASS private, reserved and mapped addresses excluded from transport\n";
 foreach(['http://apis-data10.tcpwe138stya.ru/x','https://evil.example/x','https://apis-data10.tcpwe138stya.ru.evil.example/x','https://user@apis-data10.tcpwe138stya.ru/x','https://apis-data10.tcpwe138stya.ru:444/x'] as $url)assertMad(!madplayAllowedUrl($url),'URL scope');assertMad(madplayAllowedUrl('https://fhlsport954.tm3drop33weeps.ru/index.m3u8'),'observed domain');echo "PASS transport only permits observed HTTPS origins\n";
-echo "7 offline provider tests passed; no real API or media requested.\n";
+assertMad(MadplayProvider::matchFromPage('https://jack21eo.mpanrc4imind.my/es/football/russian-cup-4436876/cska-moscow-vs-lokomotiv-moscow.html?icg=RVM')===4436876,'current requested CSKA match');
+assertMad(MadplayProvider::matchFromPage('https://jack21eo.mpanrc4imind.my/es/football/fifa-u17-womens-world-cup-4522835/china-u17-women-vs-france-u17-women.html?icg=RVM')===4522835,'previous match remains distinct');
+assertMad(MadplayProvider::matchFromPage('https://mpanrc4imind.my.evil.example/es/football/cup-4436876/match.html')===null,'lookalike host rejected');
+echo "PASS page identity keeps the new CSKA match separate from the finished match\n";
+echo "8 offline provider tests passed; no real API or media requested.\n";

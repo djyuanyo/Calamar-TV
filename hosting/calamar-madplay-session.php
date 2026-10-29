@@ -6,6 +6,7 @@ final class MadplayPlaybackFailure extends RuntimeException {
 }
 final class MadplaySession {
     private $state, $resolve, $fetch, $clock, $secret, $match, $source;
+    private $playlistDepth = 0;
     public function __construct($match, $source, &$state, callable $resolve, callable $fetch, callable $clock, $secret) {
         $this->match = $match; $this->source = $source; $this->state =& $state;
         $this->resolve = $resolve; $this->fetch = $fetch; $this->clock = $clock; $this->secret = $secret;
@@ -49,14 +50,18 @@ final class MadplaySession {
         return $r;
     }
     public function playlist($asset = 'root') {
+        if ($this->playlistDepth >= 8) throw new MadplayPlaybackFailure('Demasiados niveles de listas HLS.');
+        $this->playlistDepth++;
+        try { return $this->readPlaylist($asset); } finally { $this->playlistDepth--; }
+    }
+    private function readPlaylist($asset) {
         $this->authorise();
-        $url = $asset === 'root' ? $this->state['url'] : $this->assetUrl($asset);
+        $url = $asset === 'root' ? $this->state['url'] : $this->currentAssetUrl($asset);
         $r = $this->request($url);
         if ($this->expiryResponse($r)) {
             $headers = array_change_key_case($r['headers'] ?? [], CASE_LOWER);
             $this->authorise(true, $headers['rb-session'] ?? null);
-            if ($asset !== 'root') $this->playlist('root');
-            $url = $asset === 'root' ? $this->state['url'] : $this->assetUrl($asset);
+            $url = $asset === 'root' ? $this->state['url'] : $this->currentAssetUrl($asset);
             $r = $this->request($url);
         }
         $this->checked($r);
@@ -67,18 +72,23 @@ final class MadplaySession {
         if (!isset($this->state['assets'][$id]) || $this->state['assets'][$id]['seen'] < $this->now() - 180) throw new MadplayPlaybackFailure('El fragmento ya no está en la ventana del directo.', 410);
         return $this->state['assets'][$id]['url'];
     }
+    private function currentAssetUrl($id) {
+        if (!isset($this->state['assets'][$id])) throw new MadplayPlaybackFailure('Recurso no disponible.', 404);
+        if (($this->state['assets'][$id]['generation'] ?? 0) !== $this->state['generation']) {
+            $this->playlist($this->state['assets'][$id]['parent']);
+            if (($this->state['assets'][$id]['generation'] ?? 0) !== $this->state['generation']) throw new MadplayPlaybackFailure('El fragmento ha salido de la ventana del directo.', 410);
+        }
+        return $this->assetUrl($id);
+    }
     public function segment($id, $range = null) {
-        $old = $this->state['assets'][$id] ?? null;
-        if (!$old) throw new MadplayPlaybackFailure('Recurso no disponible.', 404);
-        if (($this->state['expires'] ?? 0) <= $this->now()) { $this->authorise(); $this->playlist('root'); if ($old['parent'] !== 'root') $this->playlist($old['parent']); }
-        $r = $this->request($this->assetUrl($id), $range);
+        if (!isset($this->state['assets'][$id])) throw new MadplayPlaybackFailure('Recurso no disponible.', 404);
+        $this->authorise();
+        $r = $this->request($this->currentAssetUrl($id), $range);
         if ($this->expiryResponse($r)) {
             $headers = array_change_key_case($r['headers'] ?? [], CASE_LOWER);
             $this->authorise(true, $headers['rb-session'] ?? null);
-            // Re-read current lists: changing only a root token leaves stale signatures on segments.
-            $this->playlist('root'); if ($old['parent'] !== 'root') $this->playlist($old['parent']);
-            if (($this->state['assets'][$id]['generation'] ?? 0) !== $this->state['generation']) throw new MadplayPlaybackFailure('El fragmento ha salido de la ventana del directo.', 410);
-            $r = $this->request($this->assetUrl($id), $range);
+            // Re-read parent lists: changing a root token leaves stale signatures on segments.
+            $r = $this->request($this->currentAssetUrl($id), $range);
         }
         return $this->checked($r);
     }
