@@ -7,7 +7,7 @@ const epoch = 1793040000000;
 const media = (seconds, cdn = 'cdn4') => `https://${cdn}.zicotv.cc/live/index.m3u8?token=aaa-bbb-${seconds}-`;
 const document = (...urls) => `var ZT_SOURCES = ${JSON.stringify(urls.map(url => ({ url })))};`;
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
-function fixture(fetcher, NativeHls = true) {
+function fixture(fetcher, NativeHls = true, extra = {}) {
   let clock = epoch, id = 0;
   const jobs = new Map(), listeners = new Map(), engines = [], statuses = [], fallbacks = [];
   const video = { paused: true, src: '', canPlayType: () => NativeHls ? '' : 'maybe',
@@ -25,7 +25,7 @@ function fixture(fetcher, NativeHls = true) {
   }
   const timers = { setTimeout(fn, delay) { jobs.set(++id, { fn, at: clock + delay }); return id; }, clearTimeout(key) { jobs.delete(key); } };
   const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher, timers, now: () => clock,
-    onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true) });
+    onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true), ...extra });
   return { stop, engines, video, listeners, statuses, fallbacks, jobs,
     async tick(ms) { clock += ms; for (const [key, job] of [...jobs]) if (job.at <= clock && jobs.has(key)) { jobs.delete(key); job.fn(); } await flush(); } };
 }
@@ -148,4 +148,23 @@ test('scheduled token renewal preserves user pause and does not restart unchange
   assert.equal(f.engines.length, 2);
   assert.equal(f.video.paused, true);
   f.stop();
+});
+
+test('hosted playback renews the chosen signal and never sends media requests to its provider', async () => {
+  let calls = 0;
+  const id = 'fedcba9876543210';
+  const f = fixture(async url => {
+    const u = new URL(url);
+    assert.equal(u.hostname, 'calamarmenciano.com');
+    assert.equal(u.searchParams.get('source_id'), id);
+    return { ok:true, json:async()=>({url:`calamar-player.php?seg=token${++calls}&sig=ok`}) };
+  }, true, { hosted:true, sourceId:id });
+  await flush();
+  assert.equal(new URL(f.engines[0].url).hostname, 'calamarmenciano.com');
+  f.engines[0].emitError(403);
+  await f.tick(2000);
+  assert.equal(calls, 2);
+  assert.ok(f.engines[1].url.includes('token2'));
+  f.stop();
+  assert.equal(f.jobs.size, 0);
 });
