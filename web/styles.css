@@ -1270,3 +1270,8 @@ a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
 
 .live-page-head { margin: 22px 0 6px; }
 .live-page-head h1 { margin: 0; font-size: clamp(26px, 5vw, 40px); }
+/* The weekly top stands out: bigger posters, whole (2:3), the same size as in the app (140 px on a phone, 190 px wide). */
+.top-rail { grid-auto-columns: clamp(240px, 22vw, 306px); }
+.top-card { grid-template-columns: 32% 1fr; }
+.top-rank { font-size: clamp(100px, 10vw, 150px); }
+@media (max-width: 720px) { .top-rail { grid-auto-columns: 206px; } .top-rank { font-size: 92px; } }

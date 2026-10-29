@@ -2252,23 +2252,24 @@ public class MainActivity extends Activity {
     h.setClipToPadding(false);
     LinearLayout r = row();
     r.setGravity(Gravity.BOTTOM);
-    int width = wide() ? 150 : 110;
+    // Bigger than the posters of the other rows, and whole (only the picture, at 2:3).
+    int width = wide() ? 190 : 140;
     for (int i = 0; i < items.size(); i++) {
       LinearLayout pair = row();
       pair.setGravity(Gravity.BOTTOM);
       TextView rank = new TextView(this);
       rank.setText(String.valueOf(i + 1));
-      rank.setTextSize(wide() ? 96 : 72);
+      rank.setTextSize(wide() ? 120 : 92);
       rank.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
       rank.setTextColor(0x99ffffff);
       rank.setIncludeFontPadding(false);
       rank.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-2, -2);
-      rp.setMargins(dp(4), 0, dp(-10), dp(32));
+      rp.setMargins(dp(4), 0, dp(-12), dp(6));
       pair.addView(rank, rp);
-      View card = poster(items.get(i), width);
+      View card = poster(items.get(i), width, true);
       card.setContentDescription("Número " + (i + 1) + ": " + items.get(i).title);
-      pair.addView(card);
+      pair.addView(card, card.getLayoutParams());
       r.addView(pair);
     }
     h.addView(r);
@@ -2370,7 +2371,8 @@ public class MainActivity extends Activity {
     JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), leagueId);
     if (league == null) { list.addView(label("Esta liga ya no está en el catálogo.", 15, MUTED)); return; }
     final String name = league.optString("name");
-    List<Catalog.Channel> matches = Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis());
+    // Only today's matches, as «Eventos En Directo» (and the league's page on the web).
+    List<Catalog.Channel> matches = Catalog.liveEvents(Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis()), System.currentTimeMillis());
     FrameLayout hero = new FrameLayout(this);
     hero.setBackground(Ui.shape(this, 0xff14261b, 14, 0, 0));
     hero.setClipToOutline(true);
@@ -2400,7 +2402,7 @@ public class MainActivity extends Activity {
     title.setGravity(Gravity.CENTER);
     title.setShadowLayer(dp(8), 0, dp(2), 0xcc000000);
     box.addView(title);
-    TextView count = label(matches.size() == 1 ? "1 partido con canal" : matches.size() + " partidos con canal", 14, 0xddffffff);
+    TextView count = label(matches.size() == 1 ? "1 partido hoy con canal" : matches.size() + " partidos hoy con canal", 14, 0xddffffff);
     count.setGravity(Gravity.CENTER);
     box.addView(count);
     final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
@@ -2418,7 +2420,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
     hp.setMargins(0, 0, 0, dp(14));
     list.addView(hero, hp);
-    if (matches.isEmpty()) list.addView(label("Todavía no hay partidos de esta liga con canal asignado.", 15, MUTED));
+    if (matches.isEmpty()) list.addView(label("Hoy no hay partidos de esta liga con canal asignado.", 15, MUTED));
     else channelGrid(matches);
   }
   /** The section a platform's page was opened from, to go back to it. */
