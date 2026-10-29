@@ -872,6 +872,32 @@ try {
   await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
   await page.locator('#player-close').click();
+  // MadPlay integration is exercised against a local synthetic menu; never opens the provider.
+  let madplayReady = true;
+  const madplayPrefix = 'https://calamarmenciano.com/calamar-madplay.php/match/4436876';
+  await page.route(madplayPrefix + '/sources.json', route => route.fulfill({status:madplayReady?200:503,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(madplayReady?{items:[
+    {id:905919,name:'VIX ES',url:madplayPrefix+'/source/905919/index.m3u8'},
+    {id:901559,name:'English',url:madplayPrefix+'/source/901559/index.m3u8'}
+  ]}:{error:'La fuente está pendiente de verificar y habilitar.'})}));
+  await page.evaluate(() => {
+    const saved=JSON.parse(sessionStorage.getItem('catalog'));
+    saved.events.push({id:'manual-madplay',name:'CSKA Lokomotiv Prueba',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://jack21eo.mpanrc4imind.my/es/football/russian-cup-4436876/cska-moscow-vs-lokomotiv-moscow.html?icg=RVM']});
+    sessionStorage.setItem('catalog',JSON.stringify(saved));
+  });
+  await page.goto(base+'/?madplay-test=1#/evento/cska-lokomotiv-prueba');
+  await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('/source/905919/index.m3u8')));
+  assert.deepEqual(await page.locator('#player-source-select option').allTextContents(),['VIX ES','English']);
+  await page.getByLabel('Cambiar fuente').selectOption('1');
+  await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('/source/901559/index.m3u8')));
+  assert.equal(await page.locator('#player-frame').count(),0);
+  await page.locator('#player-close').click();madplayReady=false;
+  await page.goto(base+'/?madplay-test=2#/evento/cska-lokomotiv-prueba');
+  await page.getByText('La fuente está pendiente de verificar y habilitar.',{exact:false}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.__hlsSources),[]);
+  assert.equal(await page.locator('#player-frame').count(),0);
+  madplayReady=true;await page.getByRole('button',{name:'↻ Consultar de nuevo'}).click();
+  await page.waitForFunction(() => window.__hlsSources?.some(url=>url.includes('/source/905919/index.m3u8')));
+  await page.locator('#player-close').click();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

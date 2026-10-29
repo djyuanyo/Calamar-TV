@@ -25,4 +25,7 @@ assertMad(MadplayProvider::matchFromPage('https://jack21eo.mpanrc4imind.my/es/fo
 assertMad(MadplayProvider::matchFromPage('https://jack21eo.mpanrc4imind.my/es/football/fifa-u17-womens-world-cup-4522835/china-u17-women-vs-france-u17-women.html?icg=RVM')===4522835,'previous match remains distinct');
 assertMad(MadplayProvider::matchFromPage('https://mpanrc4imind.my.evil.example/es/football/cup-4436876/match.html')===null,'lookalike host rejected');
 echo "PASS page identity keeps the new CSKA match separate from the finished match\n";
-echo "8 offline provider tests passed; no real API or media requested.\n";
+$menu=madplayMenuItems(4436876,[['id'=>905919,'name'=>'VIX ES'],['id'=>901559,'name'=>'English'],['id'=>905919,'name'=>'Duplicate']], [905919]);
+assertMad(count($menu)===1&&$menu[0]['url']==='https://calamarmenciano.com/calamar-madplay.php/match/4436876/source/905919/index.m3u8','menu must stay within match and configured sources');
+echo "PASS public menu only exposes configured stable sources of its match\n";
+echo "9 offline provider tests passed; no real API or media requested.\n";

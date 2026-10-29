@@ -17,6 +17,16 @@ function madplayPublicIp($ip) {
     }
     return true;
 }
+/** Only explicitly scoped, currently available sources receive stable public playback URLs. */
+function madplayMenuItems($match,$sources,$allowed) {
+    $items=[];$seen=[];
+    foreach($sources as $source) {
+        $id=$source['id']??0;
+        if(!is_int($id)||$id<1||!in_array($id,$allowed,true)||isset($seen[$id]))continue;
+        $seen[$id]=true;$items[]=['id'=>$id,'name'=>$source['name'],'url'=>'https://calamarmenciano.com/calamar-madplay.php/match/'.$match.'/source/'.$id.'/index.m3u8'];
+    }
+    return $items;
+}
 /** Pin a public DNS result for every redirect; upstream data cannot request the hosting's own network. */
 function madplayHttp($url,$range=null) {
     for($hop=0;$hop<5;$hop++) {
@@ -36,32 +46,39 @@ function madplayHttp($url,$range=null) {
     throw new MadplayPlaybackFailure('Demasiadas redirecciones en el servidor de vídeo.');
 }
 function madplayMain() {
+    header('Access-Control-Allow-Origin: *');header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
+    if(($_SERVER['REQUEST_METHOD']??'GET')==='OPTIONS'){header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');header('Access-Control-Allow-Headers: Range');http_response_code(204);return;}
     // No public install/configuration endpoint and no probing when the feature is disabled.
     $configFile=dirname(__DIR__).'/calamar-madplay-config.php';
     $config=is_file($configFile)?require $configFile:[];
     if(!is_array($config)||empty($config['enabled']))madplayAnswer(['error'=>'La fuente está pendiente de verificar y habilitar.'],503);
     $path=$_SERVER['PATH_INFO']??'';
-    if(!preg_match('#^/match/([1-9][0-9]{0,9})/source/([0-9]{1,10})/(index\.m3u8|asset/([a-f0-9]{32})\.(m3u8|bin))$#',$path,$m))madplayAnswer(['error'=>'Ruta no válida.'],400);
-    $match=(int)$m[1];$source=(int)$m[2];
+    $isMenu=preg_match('#^/match/([1-9][0-9]{0,9})/sources\.json$#',$path,$menuMatch);
+    if(!$isMenu&&!preg_match('#^/match/([1-9][0-9]{0,9})/source/([0-9]{1,10})/(index\.m3u8|asset/([a-f0-9]{32})\.(m3u8|bin))$#',$path,$m))madplayAnswer(['error'=>'Ruta no válida.'],400);
+    $match=(int)($isMenu?$menuMatch[1]:$m[1]);$source=$isMenu?null:(int)$m[2];
     if(!in_array($match,$config['matches']??[],true))madplayAnswer(['error'=>'Partido no habilitado.'],403);
-    if(!in_array($source,$config['sources'][$match]??[],true))madplayAnswer(['error'=>'Fuente no habilitada.'],403);
+    if(!$isMenu&&!in_array($source,$config['sources'][$match]??[],true))madplayAnswer(['error'=>'Fuente no habilitada.'],403);
     $secret=$config['secret']??'';if(!is_string($secret)||strlen($secret)<32)madplayAnswer(['error'=>'Configuración incompleta del puente.'],503);
-    header('Access-Control-Allow-Origin: *');header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
-    if($_SERVER['REQUEST_METHOD']==='OPTIONS') { header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');header('Access-Control-Allow-Headers: Range');http_response_code(204);return; }
     if(!in_array($_SERVER['REQUEST_METHOD'],['GET','HEAD'],true))madplayAnswer(['error'=>'Método no permitido.'],405);
     if(!function_exists('curl_init')||!function_exists('openssl_encrypt'))madplayAnswer(['error'=>'El hosting necesita cURL y OpenSSL.'],503);
     $directory=dirname(__DIR__).'/calamar-madplay-cache';
     if(!is_dir($directory)&&!mkdir($directory,0700,true))madplayAnswer(['error'=>'No se pudo preparar la caché privada.'],503);
-    $file=$directory.'/'.$match.'-'.$source.'.json';$lock=fopen($file.'.lock','c');
+    $file=$directory.'/'.$match.'-'.($isMenu?'sources':$source).'.json';$lock=fopen($file.'.lock','c');
     if(!$lock||!flock($lock,LOCK_EX))madplayAnswer(['error'=>'No se pudo bloquear la renovación de sesión.'],503);
     @chmod($file.'.lock',0600);$state=is_file($file)?json_decode(file_get_contents($file),true):[];if(!is_array($state))$state=[];
     $body=null;$error=null;
     try {
         $provider=new MadplayProvider('madplayHttp');
+        if($isMenu){
+            if(($state['at']??0)>time()-60&&isset($state['items']))$items=$state['items'];
+            else{$items=$provider->sources($match);$state=['at'=>time(),'items'=>$items];}
+            $body=['status'=>200,'body'=>json_encode(['items'=>madplayMenuItems($match,$items,$config['sources'][$match]??[])],JSON_UNESCAPED_UNICODE),'headers'=>['content-type'=>'application/json; charset=utf-8']];
+        } else {
         $session=new MadplaySession($match,$source,$state,function($match,$source,$offered)use($provider,&$state){$s=$provider->resolve($match,$source?:($state['chosenSource']??0),$offered);$state['chosenSource']=$s['source'];return $s;},'madplayHttp','time',$secret);
         if($m[3]==='index.m3u8')$body=['status'=>200,'body'=>$session->playlist(),'headers'=>['content-type'=>'application/vnd.apple.mpegurl']];
         elseif(($m[5]??'')==='m3u8')$body=['status'=>200,'body'=>$session->playlist($m[4]),'headers'=>['content-type'=>'application/vnd.apple.mpegurl']];
         else $body=$session->segment($m[4],$_SERVER['HTTP_RANGE']??null);
+        }
     } catch(Throwable $e) {$error=$e;}
     // Persist the cooldown on failed requests too. An access denial must not hammer the API.
     $encoded=json_encode($state);if($encoded!==false&&file_put_contents($file,$encoded)!==false)@chmod($file,0600);

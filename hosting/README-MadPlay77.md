@@ -2,10 +2,11 @@
 
 **No desplegado ni verificado con vídeo real.** Las pruebas realizadas el 29-10-2026 desde el hosting obtuvieron las listas HLS de VIX ES y Fubo US, pero sus primeros fragmentos devolvieron 403 sin ofrecer una sesión nueva. El navegador de inspección también fue rechazado por la web. Las pruebas incluidas usan respuestas sintéticas y no acceden al proveedor.
 
-El puente está separado de Zico y deshabilitado por defecto. No cambia la APK, la web publicada, los cambios de audio/subtítulos ni los archivos actuales de reproducción.
+El puente está separado de Zico y deshabilitado por defecto. No se publica una APK ni se cambia la web en producción. El borrador incorpora lectores de menús en web y Android; los cambios de audio/subtítulos y los puentes actuales de Zico permanecen sin modificar.
 
 ## Comportamiento preparado
 
+- Al abrir una página de MadPlay77, la web y Android consultan el menú `/match/<id>/sources.json`. Solo se aceptan direcciones estables del mismo partido; un puente desactivado muestra el error y no intenta abrir la página original.
 - Una dirección estable conserva el partido y la fuente: `/calamar-madplay.php/match/4522835/source/905919/index.m3u8`.
 - El hosting obtiene la sesión emitida por la API pública. La vuelve a consultar cada minuto y ante una caducidad explícita; no se guarda un M3U8 temporal en el catálogo.
 - Tras una renovación, vuelve a leer las listas para actualizar también las firmas de cada fragmento. Mantiene la misma fuente, secuencia, pistas de audio y subtítulos.

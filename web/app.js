@@ -1,3 +1,4 @@
+import { madplayMatch, expandMadplaySources } from './madplay-sources.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
@@ -662,13 +663,20 @@ async function playSource(c, index) {
     return;
   }
   const generation = playbackGeneration;
-  if (c.streams.some(zicoEventApi) && !c.eventSourcesExpanded) {
+  if (c.streams.some(url => zicoEventApi(url) || madplayMatch(url)) && !c.eventSourcesExpanded) {
     playerStatus.textContent = 'Consultando fuentes del evento…';
     renderSourcePicker(playerSources, [], 0, () => {});
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
-    const resolved = await expandEventSources(c.streams, { signal: lookup.signal });
+    let resolved;
+    try {
+      const events = await expandEventSources(c.streams, { signal: lookup.signal });
+      resolved = await expandMadplaySources(events.map(s => ({ ...s, name: c.sourceNames?.[s.url] || s.name })), { signal: lookup.signal });
+    } catch (error) {
+      if (generation !== playbackGeneration) return;
+      resolved = c.streams.map(url => ({ url, name: c.sourceNames?.[url], error: lookup.signal.aborted ? 'La consulta de fuentes tardó demasiado. Pulsa Consultar de nuevo.' : error.message }));
+    }
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
