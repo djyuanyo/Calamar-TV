@@ -13,7 +13,7 @@ import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard } from './library.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -538,7 +538,18 @@ function results(query) {
   const q = query.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const found = [...events(state.channels, state.custom), ...state.channels].filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
-  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : el('p', { class: 'status' }, 'No hay canales con ese nombre.')];
+  // Films, series and documentaries too, under the channels, once the library has loaded.
+  const titles = el('div', { class: 'search-titles' });
+  if (libraryShown()) {
+    const version = routeVersion;
+    fetchLibrary().then((library) => {
+      if (version !== routeVersion) return;
+      const hits = librarySearch(library, query);
+      if (hits.length) titles.replaceChildren(sectionHead('Películas, series y documentales', el('span', {}, `${hits.length} títulos`)),
+        el('div', { class: 'rail browse-rail search-posters' }, hits.map(({ section, item }) => browseCard(el, section, item))));
+    }).catch(() => {});
+  }
+  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : el('p', { class: 'status' }, 'No hay canales con ese nombre.'), titles];
 }
 
 // ---- Player ----------------------------------------------------------------------------------

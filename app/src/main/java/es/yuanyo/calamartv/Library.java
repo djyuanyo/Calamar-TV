@@ -586,20 +586,50 @@ final class Library {
     return rows;
   }
 
-  /** «Similares»: titles of the same section sharing genres with this one, the closest first (as similarTitles on the web). */
+  private static final java.util.Set<String> MINOR_WORDS = new java.util.HashSet<>(java.util.Arrays.asList(
+      "el", "la", "los", "las", "lo", "un", "una", "de", "del", "y", "the", "a", "an", "of", "and"));
+  private static String plainTitle(String title) {
+    return java.text.Normalizer.normalize(title == null ? "" : title, java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+  }
+  /** A title's saga name, as sagaName on the web: «Torrente 2: Misión en Marbella» → «torrente». */
+  static String sagaName(String title) {
+    String first = plainTitle(title).split("\\s*[:,(]\\s*|\\s+[-–—]\\s+", 2)[0];
+    return first.replaceAll("(?i)\\s+(?:\\d{1,2}|[ivx]{1,5}|parte\\s+\\d+|part\\s+\\d+)$", "")
+        .replaceAll("[^a-z0-9ñ ]+", " ").replaceAll("\\s+", " ").trim();
+  }
+  private static List<String> leadWords(String title) {
+    List<String> out = new ArrayList<>();
+    for (String w : plainTitle(title).replaceAll("[^a-z0-9ñ ]+", " ").split("\\s+")) if (!w.isEmpty() && !MINOR_WORDS.contains(w)) out.add(w);
+    return out;
+  }
+  /** 2 the same saga, 1 the same first words («Harry Potter y…»), 0 unrelated (as titleRelation on the web). */
+  static int titleRelation(String a, String b) {
+    String sa = sagaName(a), sb = sagaName(b);
+    if (!sa.isEmpty() && sa.equals(sb)) return 2;
+    List<String> wa = leadWords(a), wb = leadWords(b);
+    if (wa.size() > 1 && wb.size() > 1 && wa.get(0).equals(wb.get(0)) && wa.get(1).equals(wb.get(1))) return 1;
+    if ((sa.length() >= 4 && !wb.isEmpty() && wb.get(0).equals(sa)) || (sb.length() >= 4 && !wa.isEmpty() && wa.get(0).equals(sb))) return 1;
+    return 0;
+  }
+
+  /** «Similares»: first the same saga or a very close title, then titles sharing genres (as similarTitles on the web). */
   static List<Item> similar(Data data, String section, Item item, int size) {
     List<Item> close = new ArrayList<>(), all = new ArrayList<>();
-    final Map<Item, Integer> shared = new java.util.HashMap<>();
+    final Map<Item, Integer> shared = new java.util.HashMap<>(), saga = new java.util.HashMap<>();
     for (Item other : data.items(section)) {
       if (other.id.equals(item.id)) continue;
       int n = 0;
       for (String g : other.genres) if (item.genres.contains(g)) n++;
+      int related = titleRelation(item.title, other.title);
       shared.put(other, n);
+      saga.put(other, related);
       all.add(other);
-      if (n > 0) close.add(other);
+      if (n > 0 || related > 0) close.add(other);
     }
     List<Item> out = close.isEmpty() ? all : close;
-    Collections.sort(out, (a, b) -> !shared.get(a).equals(shared.get(b)) ? Integer.compare(shared.get(b), shared.get(a)) : Double.compare(b.rating, a.rating));
+    Collections.sort(out, (a, b) -> !saga.get(a).equals(saga.get(b)) ? Integer.compare(saga.get(b), saga.get(a))
+        : !shared.get(a).equals(shared.get(b)) ? Integer.compare(shared.get(b), shared.get(a)) : Double.compare(b.rating, a.rating));
     return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
   }
 
@@ -910,6 +940,12 @@ final class Library {
   static final int CREDITS_DEFAULT = 30;
   static final String LULU_ENDPOINT = "https://calamarmenciano.com/calamar-lulu.php";
   /** Player pages of catalog channels read by the hosting (calamar-player.php), as the web plays them. */
+  /** The time left of a film or episode, as in Netflix: «-1:20:10», «-4:05». */
+  static String remainingTime(long ms) {
+    long s = Math.max(0, ms) / 1000, h = s / 3600, m = s % 3600 / 60, sec = s % 60;
+    return h > 0 ? String.format(java.util.Locale.ROOT, "-%d:%02d:%02d", h, m, sec) : String.format(java.util.Locale.ROOT, "-%d:%02d", m, sec);
+  }
+
   static final String PLAYER_ENDPOINT = "https://calamarmenciano.com/calamar-player.php";
 
   static String playerRelay(String page) {

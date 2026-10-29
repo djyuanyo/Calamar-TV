@@ -438,7 +438,15 @@ public class MainActivity extends Activity {
       for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
       for (Catalog.Channel c : channels) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
       channelGrid(found);
-      if (found.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
+      // Films, series and documentaries too, as on the web.
+      List<Library.Item> titles = new ArrayList<>();
+      if (libraryShown(custom)) {
+        if (library == null) loadLibrary();
+        else for (String[] section : Library.SECTIONS) for (Library.Item item : library.items(section[0]))
+          if (titles.size() < 30 && matches(item.title + " " + android.text.TextUtils.join(" ", item.genres))) titles.add(item);
+      }
+      if (!titles.isEmpty()) posterRail("Películas, series y documentales", titles, wide() ? 140 : 108);
+      if (found.isEmpty() && titles.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
       return;
     }
     if (channels.isEmpty()) {
@@ -1455,7 +1463,7 @@ public class MainActivity extends Activity {
         if (result != null) { library = result; libraryAt = System.currentTimeMillis(); }
         libraryError = failure;
         // The home page also draws again the first time, for the titles «En portada» and the top.
-        if (!isFinishing() && (Library.section(mode) != null || (first && result != null && "Inicio".equals(mode)))) render();
+        if (!isFinishing() && (Library.section(mode) != null || (result != null && "Inicio".equals(mode) && (first || !query.trim().isEmpty())))) render();
       });
     }).start();
   }

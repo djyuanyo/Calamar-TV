@@ -495,6 +495,13 @@ export function filterLibrary(items, { q = '', genre = '', year = '', platform =
   return by ? [...found].sort(by) : found;
 }
 
+/** The home page search: films, series and documentaries whose title, category or cast match, by section. */
+export function librarySearch(library, q, size = 30) {
+  if (!norm(String(q || '').trim())) return [];
+  return LIBRARY_SECTIONS.flatMap((section) => filterLibrary((library?.sections?.[section.key] || []).filter((item) => !unidentifiedItem(item)), { q })
+    .map((item) => ({ section, item }))).slice(0, size);
+}
+
 /** A poster of a row: «TOP 10» in the corner for the weekly top and «Recién llegada» under it, as on Netflix. */
 export function browseCard(el, section, item, { big = false } = {}) {
   return el('a', { class: `poster-card browse-card${big ? ' big' : ''}`, href: itemPath(section, item), title: itemTitle(item), 'aria-label': itemTitle(item) },
@@ -682,12 +689,32 @@ const attribution = (el, library) => el('p', { class: 'note library-credit' }, l
  * «Similares»: other titles of the same section that share genres with this one, the closest first
  * (then the best rated); without any in common, the best rated of the section.
  */
+const MINOR_WORDS = new Set(['el', 'la', 'los', 'las', 'lo', 'un', 'una', 'de', 'del', 'y', 'the', 'a', 'an', 'of', 'and']);
+const plainTitle = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** A title's saga name: before «:», «,» or « - », without its number («Torrente 2: Misión en Marbella» → «torrente»). */
+export function sagaName(title) {
+  return plainTitle(title).split(/\s*[:,(]\s*|\s+[-–—]\s+/)[0]
+    .replace(/\s+(?:\d{1,2}|[ivx]{1,5}|parte\s+\d+|part\s+\d+)$/i, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const leadWords = (title) => plainTitle(title).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter((w) => w && !MINOR_WORDS.has(w));
+/** How close two titles are: 2 the same saga, 1 the same first words («Harry Potter y…»), 0 unrelated. */
+export function titleRelation(a, b) {
+  const sa = sagaName(a), sb = sagaName(b);
+  if (sa && sa === sb) return 2;
+  const wa = leadWords(a), wb = leadWords(b);
+  if (wa.length > 1 && wb.length > 1 && wa[0] === wb[0] && wa[1] === wb[1]) return 1;
+  if ((sa && sa.length >= 4 && wb[0] === sa) || (sb && sb.length >= 4 && wa[0] === sb)) return 1;
+  return 0;
+}
+
+/** «Similares»: first the same saga or a very close title (all of «Torrente»), then the titles sharing genres. */
 export function similarTitles(library, section, item, size = 12) {
   const genres = new Set(item.tmdb?.genres || []);
+  const name = item.tmdb?.title || item.title;
   const others = (library?.sections?.[section.key] || []).filter((other) => other.id !== item.id);
-  const scored = others.map((other) => [other, (other.tmdb?.genres || []).filter((g) => genres.has(g)).length]);
-  const close = scored.filter(([, n]) => n > 0);
-  return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
+  const scored = others.map((other) => [other, titleRelation(name, other.tmdb?.title || other.title), (other.tmdb?.genres || []).filter((g) => genres.has(g)).length]);
+  const close = scored.filter(([, saga, n]) => saga > 0 || n > 0);
+  return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || b[2] - a[2] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
 }
 
 /** The episode to play from a series' page: the one left half watched most recently, else the first. */
