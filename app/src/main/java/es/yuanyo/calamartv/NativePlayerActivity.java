@@ -1500,8 +1500,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (isTelevision() && active
         && playerView != null && (sourceDialog == null || !sourceDialog.isShowing())) {
       if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) { chooseSource(); return true; }
-      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP && !panel.hasFocus()) {
-        playerView.showController(); panel.setVisibility(View.VISIBLE); sourceButton.requestFocus(); return true;
+      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
+        playerView.showController(); panel.setVisibility(View.VISIBLE);
+        sourceButton.requestFocus(); panel.post(() -> { if (active && panel.getVisibility() == View.VISIBLE) sourceButton.requestFocus(); });
+        return true;
       }
       // Let the remote activate the focused header button instead of sending its Enter to the video.
       if (panel.hasFocus()) return super.dispatchKeyEvent(event);

@@ -90,10 +90,21 @@ public class HostingPlaybackTest {
         assertEquals(0, pages.get());
         if (remote) {
           androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);
-          scenario.onActivity(activity -> {
-            try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); assertTrue(((android.widget.Button)button.get(activity)).hasFocus()); }
-            catch (ReflectiveOperationException e) { throw new AssertionError(e); }
-          });
+          AtomicBoolean focused = new AtomicBoolean();
+          java.util.concurrent.atomic.AtomicReference<String> focusDetail = new java.util.concurrent.atomic.AtomicReference<>("");
+          long focusDeadline = SystemClock.elapsedRealtime() + 5000;
+          while (!focused.get() && SystemClock.elapsedRealtime() < focusDeadline) {
+            scenario.onActivity(activity -> {
+              try {
+                Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true);
+                android.widget.Button source = (android.widget.Button)button.get(activity);
+                focused.set(source.hasFocus());
+                focusDetail.set("focused=" + activity.getCurrentFocus() + ", sourceShown=" + source.isShown() + ", sourceFocusable=" + source.isFocusable());
+              } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            SystemClock.sleep(50);
+          }
+          assertTrue("Up on the TV remote must focus Fuentes: " + focusDetail.get(), focused.get());
           androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
         } else scenario.onActivity(activity -> {
           try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); ((android.widget.Button)button.get(activity)).performClick(); }
