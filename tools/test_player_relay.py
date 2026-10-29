@@ -41,10 +41,20 @@ class PlayerRelayTest(unittest.TestCase):
         code = f'$urls=json_decode({json.dumps(json.dumps(urls))},true); echo json_encode([playerSourceMenu($urls,{json.dumps(html)}), playerSourceId(str_replace("old","new",$urls[1])), playerSignalName("https://zicotv.cc calamarmenciano.com Zico TV", "Canal")]);'
         menu, fresh, cleaned = json.loads(php(code))
         self.assertEqual(menu['name'], 'Liga de Campeones')
-        self.assertEqual([s['name'] for s in menu['items']], ['Liga de Campeones · Señal 1','Liga de Campeones · Señal 2'])
-        self.assertEqual(menu['items'][1]['id'], fresh)
+        self.assertEqual([s['name'] for s in menu['items']], ['Liga de Campeones · Automática','Liga de Campeones · Señal 1','Liga de Campeones · Señal 2'])
+        self.assertEqual(menu['items'][2]['id'], fresh)
         self.assertEqual(cleaned, 'Canal')
         self.assertNotIn('url', menu['items'][0])
+
+    def test_automatic_menu_id_keeps_all_sources_for_257_while_manual_selection_stays_fixed(self):
+        sources = ['https://cdn1.zicotv.cc/live.m3u8', 'https://cdn2.zicotv.cc/live.m3u8']
+        code = f'$sources=json_decode({json.dumps(json.dumps(sources))},true); $menu=playerSourceMenu($sources,"<title>Canal</title>"); echo json_encode([$menu,playerSelectedSources($sources,$menu["items"][0]["id"]),playerSelectedSources($sources,$menu["items"][2]["id"]),playerSelectedSources($sources,"invalid")]);'
+        menu, automatic, manual, invalid = json.loads(php(code))
+        self.assertEqual(menu['sources'], 2)
+        self.assertEqual(menu['items'][0]['id'], '0000000000000000')
+        self.assertEqual(automatic, sources)
+        self.assertEqual(manual, [sources[1]])
+        self.assertEqual(invalid, [])
 
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'

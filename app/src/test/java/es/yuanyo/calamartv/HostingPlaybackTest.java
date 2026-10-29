@@ -15,8 +15,8 @@ public class HostingPlaybackTest {
       OkHttpClient client = new OkHttpClient();
       PlayerDocument.ConnectionFactory network = url -> new PlayerHttpConnection(server.url(url.getFile()).url(), client);
       java.util.List<HostingPlayback.Option> options = HostingPlayback.options("https://zicotv.cc/api/player/6", "LaLiga", network);
-      assertEquals(5, options.size()); assertEquals("LaLiga · Señal 5", options.get(4).name);
-      server.takeRequest(); HostingPlayback.resolve("https://zicotv.cc/api/player/6", options.get(4).id, network);
+      assertEquals(6, options.size()); assertEquals("LaLiga · Señal 5", options.get(5).name);
+      server.takeRequest(); HostingPlayback.resolve("https://zicotv.cc/api/player/6", options.get(5).id, network);
       assertEquals("4", server.takeRequest().getRequestUrl().queryParameter("src"));
     }
   }
@@ -28,11 +28,30 @@ public class HostingPlaybackTest {
       OkHttpClient client = new OkHttpClient();
       PlayerDocument.ConnectionFactory network = url -> new PlayerHttpConnection(server.url(url.getFile()).url(), client);
       java.util.List<HostingPlayback.Option> options = HostingPlayback.options("https://zicotv.cc/api/player/6", "Canal", network);
-      assertEquals(2, options.size()); assertEquals("LaLiga · Señal 2", options.get(1).name);
+      assertEquals(3, options.size()); assertEquals("LaLiga · Automática", options.get(0).name); assertEquals("LaLiga · Señal 2", options.get(2).name);
       server.takeRequest();
-      HostingPlayback.resolve("https://zicotv.cc/api/player/6", options.get(1).id, network);
+      HostingPlayback.resolve("https://zicotv.cc/api/player/6", options.get(2).id, network);
       assertEquals("fedcba9876543210", server.takeRequest().getRequestUrl().queryParameter("source_id"));
       assertEquals("Canal", HostingPlayback.label("Zico TV · calamarmenciano.com", "Canal"));
+    }
+  }
+
+  @Test public void automaticUsesTheWorking55RouteAndRetriesOtherSignalsWithoutChangingManualChoice() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      for (int i = 0; i < 3; i++) server.enqueue(new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=playlist&sig=ok\"}"));
+      server.start();
+      OkHttpClient client = new OkHttpClient();
+      PlayerDocument.ConnectionFactory network = url -> new PlayerHttpConnection(server.url(url.getFile()).url(), client);
+      String page = "https://zicotv.cc/api/player/6";
+      HostingPlayback.resolve(page, HostingPlayback.AUTOMATIC, 0, network);
+      okhttp3.HttpUrl automatic = server.takeRequest().getRequestUrl();
+      assertNull(automatic.queryParameter("source_id")); assertNull(automatic.queryParameter("src"));
+      assertEquals("1", automatic.queryParameter("cast"));
+      HostingPlayback.resolve(page, HostingPlayback.AUTOMATIC, 2, network);
+      assertEquals("2", server.takeRequest().getRequestUrl().queryParameter("intento"));
+      HostingPlayback.resolve(page, "fedcba9876543210", 2, network);
+      okhttp3.HttpUrl manual = server.takeRequest().getRequestUrl();
+      assertEquals("fedcba9876543210", manual.queryParameter("source_id")); assertNull(manual.queryParameter("intento"));
     }
   }
 

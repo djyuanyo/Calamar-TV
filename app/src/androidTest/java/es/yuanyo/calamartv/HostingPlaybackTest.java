@@ -31,13 +31,14 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
-  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false); }
+  @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false, true); }
   @Test public void televisionRemoteSelectsAndRenewsHostedSignal() throws Exception {
     org.junit.Assume.assumeTrue((ApplicationProvider.getApplicationContext().getResources().getConfiguration().uiMode
         & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION);
-    playback(true);
+    playback(true, true);
   }
-  private void playback(boolean remote) throws Exception {
+  @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
+  private void playback(boolean remote, boolean menuAvailable) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -46,7 +47,7 @@ public class HostingPlaybackTest {
     try (InputStream in = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("live.ts")) {
       byte[] block = new byte[8192]; for (int n; (n = in.read(block)) != -1;) video.write(block, 0, n);
     }
-    AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger();
+    AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger(), rotations = new AtomicInteger(), resolutionFailures = new AtomicInteger();
     java.util.concurrent.atomic.AtomicReference<String> selectedId = new java.util.concurrent.atomic.AtomicReference<>("");
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false); server.start();
@@ -55,8 +56,12 @@ public class HostingPlaybackTest {
           String path = r.getPath();
           if (path.startsWith("/api/player/4")) { pages.incrementAndGet(); return new MockResponse().setResponseCode(503); }
           if (path.startsWith("/calamar-player.php?page=")) {
+            if (path.contains("&list=1") && !menuAvailable) return new MockResponse().setResponseCode(503);
             if (path.contains("&list=1")) return new MockResponse().setBody("{\"name\":\"LaLiga\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"LaLiga · Señal 1\"},{\"id\":\"fedcba9876543210\",\"name\":\"LaLiga · Señal 2\"}]}");
             selectedId.set(r.getRequestUrl().queryParameter("source_id"));
+            if ("0123456789abcdef".equals(selectedId.get())) return new MockResponse().setResponseCode(502).setBody("{\"error\":\"Primera señal no disponible\"}");
+            if (r.getRequestUrl().queryParameter("intento") != null) rotations.incrementAndGet();
+            if (!menuAvailable && resolutionFailures.getAndIncrement() == 0) return new MockResponse().setResponseCode(502).setBody("{\"error\":\"Fallo temporal del hosting\"}");
             int n = renewals.incrementAndGet();
             return new MockResponse().setHeader("Content-Type", "application/json").setBody(
                 "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
@@ -75,12 +80,17 @@ public class HostingPlaybackTest {
       NetworkTransport network = NetworkTransport.get(DnsProvider.SYSTEM);
       Field f = NetworkTransport.class.getDeclaredField("client"); f.setAccessible(true);
       OkHttpClient original = (OkHttpClient) f.get(network);
+      NetworkTransport secureNetwork = NetworkTransport.get(DnsProvider.GOOGLE);
+      OkHttpClient originalSecure = (OkHttpClient) f.get(secureNetwork);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
       OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
           .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
           .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
               .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
-      f.set(network, local); NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
+      f.set(network, local);
+      // Reproduce the real distinction that 2.20.57 missed: menu/system DNS works while selected DNS fails.
+      f.set(secureNetwork, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("DNS seguro no disponible"); }).build());
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
@@ -88,6 +98,8 @@ public class HostingPlaybackTest {
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
         assertEquals(0, pages.get());
+        assertTrue("Automatic recovery must let the hosting try another signal", rotations.get() > 0);
+        if (!menuAvailable) return;
         if (remote) {
           androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);
           AtomicBoolean focused = new AtomicBoolean();
@@ -110,8 +122,9 @@ public class HostingPlaybackTest {
           try { Field button = NativePlayerActivity.class.getDeclaredField("sourceButton"); button.setAccessible(true); ((android.widget.Button)button.get(activity)).performClick(); }
           catch (ReflectiveOperationException e) { throw new AssertionError(e); }
         });
-        onView(withText("LaLiga · Señal 1")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText("LaLiga · Automática")).inRoot(isDialog()).check(matches(isChecked()));
         if (remote) {
+          androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
           androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
           androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
         } else onView(withText("LaLiga · Señal 2")).inRoot(isDialog()).perform(click());
@@ -130,7 +143,7 @@ public class HostingPlaybackTest {
         assertPlays(scenario);
         assertEquals("Renewals must stay on the selected signal", "fedcba9876543210", selectedId.get());
         assertEquals("Playback must not contact the provider", 0, pages.get());
-      } finally { f.set(network, original); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
+      } finally { f.set(network, original); f.set(secureNetwork, originalSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
     }
   }
 

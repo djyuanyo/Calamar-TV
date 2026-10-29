@@ -165,7 +165,7 @@ public class ResolvedPlaybackTest {
             ((Button) button.get(activity)).performClick();
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
-        onView(withText(manualDirect ? "Prueba de canal resuelto · Señal 1" : eventPage ? "Canal del evento" : "CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
+        onView(withText(manualDirect ? "Prueba de canal resuelto · Señal 1" : eventPage ? "Canal del evento · Automática" : "CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
         if (!rejectFirst && !manualDirect && !eventPage) {
           int beforeDns = pages.get();
           onView(withText("DNS")).inRoot(isDialog()).perform(click());
