@@ -89,6 +89,8 @@ public class MainActivity extends Activity {
     home();
   }
 
+  /** «Elige tu perfil» while it is on screen. */
+  Dialog gate;
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
     if (isFinishing()) return;
     syncFavorites();
@@ -103,7 +105,6 @@ public class MainActivity extends Activity {
     else { favorites.clear(); favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet())); }
   }
 
-  Dialog gate;
   /**
    * «Elige tu perfil», as on Netflix (and on the web): the film N.º 1 of the week behind, the profiles of
    * the account, «Añadir» and «Modificar». Once each time the app opens.
