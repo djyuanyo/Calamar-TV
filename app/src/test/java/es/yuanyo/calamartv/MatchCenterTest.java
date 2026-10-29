@@ -78,4 +78,11 @@ public class MatchCenterTest {
     assertEquals("2026 Supercopa de España · Final", m.h2h.get(2).competition); assertEquals("3 – 2", m.h2h.get(2).score);
     assertEquals(2, m.homeForm.size()); assertEquals("W", m.homeForm.get(0).result); assertEquals(1, m.awayForm.size());
   }
+
+  @Test public void gaugeValuesFitOnAPhone() {
+    assertEquals("20%", MatchCenter.shortValue("20.4%"));
+    assertEquals("80%", MatchCenter.shortValue("79,6%"));
+    assertEquals("14", MatchCenter.shortValue("14"));
+    assertEquals("", MatchCenter.shortValue(""));
+  }
 }
