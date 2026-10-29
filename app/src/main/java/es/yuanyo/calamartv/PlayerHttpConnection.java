@@ -64,6 +64,12 @@ public final class PlayerHttpConnection extends HttpURLConnection {
   }
 
   @Override
+  public InputStream getErrorStream() {
+    return response != null && response.code() >= 400 && response.body() != null
+        ? response.body().byteStream() : null;
+  }
+
+  @Override
   public boolean usingProxy() {
     return client.proxy() != null;
   }

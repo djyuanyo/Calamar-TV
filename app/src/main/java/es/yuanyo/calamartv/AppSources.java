@@ -10,7 +10,7 @@ final class AppSources {
   private AppSources() {}
 
   static boolean webOnly(String address) {
-    return false; // Public Zico sources are supported again; resolution stays on the device.
+    return false; // Public Zico sources support device resolution and the catalog hosting relay.
   }
 
   /**

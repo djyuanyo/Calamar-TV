@@ -90,6 +90,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean diagnosing;
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
+  private boolean hostingPlayback;
+  private String hostingTriedPage;
   private AlertDialog sourceDialog;
   private boolean mediaSystemRetry;
   private Runnable bufferingTimeout;
@@ -580,14 +582,32 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     final String requestedPage = pageUrl;
+    final boolean throughHosting = hostingPlayback;
     worker.execute(
         () -> {
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
+            if (throughHosting && eventApi == null) {
+              String address = HostingPlayback.resolve(requestedPage, NetworkTransport.get(DnsProvider.SYSTEM));
+              handler.post(() -> {
+                if (!active || request != generation) return;
+                resolving = false;
+                documentUrl = Library.PLAYER_ENDPOINT;
+                chromiumNetwork = false;
+                lastReport = reportHeader() + "\nHosting: lista HLS firmada recibida";
+                sources.clear();
+                sources.add(new VideoResolver.Source("Por el hosting", address));
+                selection = 0; updateSourceButton(); playSource(sources.get(0));
+              });
+              return;
+            }
             if (eventApi != null) {
               PlayerDocument.Result event;
-              try {
+              if (throughHosting) {
+                String endpoint = Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(requestedPage);
+                event = PlayerDocument.fetch(endpoint, NetworkTransport.get(DnsProvider.SYSTEM));
+              } else try {
                 event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
                     NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
               } catch (java.io.IOException blocked) {
@@ -643,7 +663,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   String previousSource = selection >= 0 && selection < sources.size() ? sources.get(selection).url : null;
                   sources.clear();
                   sources.addAll(found);
-                  // Other channel pages may use the hosting, but Zico always stays on this device.
+                  // Zico has an explicit hosting route in the picker and after device failures.
                   if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                   updateSourceButton();
@@ -668,16 +688,20 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   if (!active || request != generation) return;
                   resolving = false;
                   String reason = ConnectionReport.describe(failure);
+                  if (throughHosting) reason = failure.getMessage();
                   lastReport = reportHeader() + "\nConsulta de página: " + reason;
                   if (player != null && player.isPlaying()) {
                     status.setText(
                         "No se pudo renovar. La emisión actual continúa; reintentando…");
                     handler.removeCallbacks(renewal);
                     handler.postDelayed(renewal, 15000L);
+                  } else if (throughHosting) {
+                    hostingPlayback = false;
+                    if (!switchChannelSource()) problem("El hosting no pudo obtener el vídeo: " + failure.getMessage());
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (zicoPage() && switchChannelSource()) {
+                  } else if (tryHosting() || (zicoPage() && switchChannelSource())) {
                     return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
@@ -912,11 +936,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private boolean tryNextZicoSource() {
-    return zicoPage() && switchChannelSource();
+    return zicoPage() && (tryHosting() || switchChannelSource());
+  }
+
+  /** One hosting attempt per page; renewals continue through the selected route. */
+  private boolean tryHosting() {
+    if (!zicoPage() || hostingPlayback || pageUrl.equals(hostingTriedPage)) return false;
+    hostingPlayback = true; hostingTriedPage = pageUrl;
+    releasePlayer();
+    status.setText("Probando el vídeo por tu hosting…");
+    resolveFresh();
+    return true;
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {
-    if (chromiumNetwork || !VideoResolver.renewablePage(pageUrl)) return false;
+    if (hostingPlayback || chromiumNetwork || !VideoResolver.renewablePage(pageUrl)) return false;
     chromiumNetwork = true;
     status.setText("Reconectando con el motor de red Chromium…");
     lastReport += "\nReintento: Chromium (conexión del dispositivo)";
@@ -927,7 +961,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** A failed private DNS must not leave working device connections waiting indefinitely. */
   private boolean retrySystemNetwork(VideoResolver.Source source) {
-    if (mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
+    if (hostingPlayback || mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
     mediaSystemRetry = true;
     mediaHttp1 = true;
     status.setText("Reintentando con la conexión del dispositivo…");
@@ -963,6 +997,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     if (directUrl == null && VideoResolver.renewablePage(pageUrl)) {
       if (automaticAttempts >= 3) {
+        if (tryHosting()) return;
+        hostingPlayback = false;
         if (switchChannelSource()) return;
         problem("No se pudo conectar con esta fuente desde tu red. Prueba otra fuente en Fuentes.");
         return;
@@ -1013,6 +1049,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       pageUrl = null;
       documentUrl = directUrl;
     } else return false;
+    hostingPlayback = false; hostingTriedPage = null;
     automaticAttempts = 0;
     attemptWindow = android.os.SystemClock.elapsedRealtime();
     selection = 0;
@@ -1030,7 +1067,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         + page.getHost()
         + (directUrl != null ? "" : page.getPath())
         + "\nMotor: "
-        + (chromiumNetwork ? "Chromium · conexión del dispositivo" : transport.name());
+        + (chromiumNetwork ? "Chromium · conexión del dispositivo" : transport.name())
+        + "\nRuta: " + (hostingPlayback ? "hosting · lista y fragmentos por calamarmenciano.com" : "conexión del dispositivo");
   }
 
   private void diagnose() {
@@ -1142,6 +1180,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     List<String> addresses = new ArrayList<>(channelPages);
     if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
     if (directUrl != null) addresses.add(directUrl);
+    if (zicoPage()) addresses.add(VideoResolver.eventApi(pageUrl) != null
+        ? Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(pageUrl) : HostingPlayback.request(pageUrl));
     if (addresses.isEmpty()) return;
     String[] labels = new String[addresses.size()];
     for (int i = 0; i < labels.length; i++) {
@@ -1171,18 +1211,30 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
-      if (directUrl == null && address.equals(pageUrl)) checked = names.size();
+      if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
       names.add(eventSourceNames.containsKey(address) ? eventSourceNames.get(address) : "Enlace " + (++number) + " · " + Uri.parse(address).getHost());
       actions.add(() -> selectChannelAddress(address, true));
+    }
+    if (zicoPage()) {
+      if (hostingPlayback) checked = names.size();
+      names.add("Por el hosting · calamarmenciano.com");
+      actions.add(() -> {
+        generation++; resolving = false;
+        handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
+        hostingPlayback = true; hostingTriedPage = pageUrl; automaticAttempts = 0;
+        releasePlayer(); clearWeb(); webMode = false; resolveFresh();
+      });
     }
     if (directUrl == null) {
       for (int i = 0; i < sources.size(); i++) {
         final VideoResolver.Source source = sources.get(i);
+        if (HostingPlayback.isRelay(source.url) && zicoPage()) continue;
         final int selected = i;
         if (source.url.equals(currentUrl)) checked = names.size();
         names.add("CDN · " + source.label);
         actions.add(() -> {
           generation++; resolving = false;
+          hostingPlayback = false;
           handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
           selection = selected; automaticAttempts = 0; playSource(source);
         });
@@ -1218,6 +1270,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     generation++; resolving = false; webMode = false;
     handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
     automaticAttempts = 0; selection = 0;
+    hostingPlayback = false; hostingTriedPage = null;
     keepControlsVisible(true);
     clearWeb(); releasePlayer(); sources.clear();
     if (page) {
