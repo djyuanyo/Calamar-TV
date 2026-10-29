@@ -712,8 +712,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     handler.removeCallbacks(renewal);
                     handler.postDelayed(renewal, 15000L);
                   } else if (throughHosting) {
-                    hostingPlayback = false;
-                    if (!switchChannelSource()) problem("No se pudo abrir esta señal. Elige otra en Fuentes o pulsa Reintentar.");
+                    if (HostingPlayback.AUTOMATIC.equals(requestedSignal))
+                      refreshAutomatically("El servidor no ha encontrado vídeo todavía. Reintentando con otra señal…");
+                    else problem("No se pudo abrir esta señal. Elige otra en Fuentes o pulsa Reintentar.");
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();

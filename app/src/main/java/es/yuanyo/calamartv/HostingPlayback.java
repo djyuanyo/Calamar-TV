@@ -85,13 +85,17 @@ final class HostingPlayback {
     boolean automatic = id.isEmpty() || AUTOMATIC.equals(id);
     String selection = automatic ? (attempt > 0 ? "&intento=" + Math.min(9, attempt) : "")
         : id.startsWith("legacy-") ? "&src=" + id.substring(7) : "&source_id=" + id;
-    return signedUrl(fetch(request(page) + selection, connections));
+    return signedUrl(fetch(request(page) + selection, connections, 60000));
   }
 
   private static String fetch(String address, PlayerDocument.ConnectionFactory connections) throws IOException {
+    return fetch(address, connections, 25000);
+  }
+
+  private static String fetch(String address, PlayerDocument.ConnectionFactory connections, int timeout) throws IOException {
     HttpURLConnection c = connections.open(URI.create(address).toURL());
     try {
-      c.setConnectTimeout(15000); c.setReadTimeout(25000);
+      c.setConnectTimeout(15000); c.setReadTimeout(timeout);
       c.setInstanceFollowRedirects(false); c.setUseCaches(false);
       c.setRequestProperty("User-Agent", PlayerDocument.USER_AGENT);
       c.setRequestProperty("Accept", "application/json");

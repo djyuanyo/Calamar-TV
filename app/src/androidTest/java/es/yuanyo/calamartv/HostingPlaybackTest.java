@@ -47,7 +47,7 @@ public class HostingPlaybackTest {
     try (InputStream in = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("live.ts")) {
       byte[] block = new byte[8192]; for (int n; (n = in.read(block)) != -1;) video.write(block, 0, n);
     }
-    AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger(), rotations = new AtomicInteger();
+    AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger(), rotations = new AtomicInteger(), resolutionFailures = new AtomicInteger();
     java.util.concurrent.atomic.AtomicReference<String> selectedId = new java.util.concurrent.atomic.AtomicReference<>("");
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false); server.start();
@@ -61,6 +61,7 @@ public class HostingPlaybackTest {
             selectedId.set(r.getRequestUrl().queryParameter("source_id"));
             if ("0123456789abcdef".equals(selectedId.get())) return new MockResponse().setResponseCode(502).setBody("{\"error\":\"Primera señal no disponible\"}");
             if (r.getRequestUrl().queryParameter("intento") != null) rotations.incrementAndGet();
+            if (!menuAvailable && resolutionFailures.getAndIncrement() == 0) return new MockResponse().setResponseCode(502).setBody("{\"error\":\"Fallo temporal del hosting\"}");
             int n = renewals.incrementAndGet();
             return new MockResponse().setHeader("Content-Type", "application/json").setBody(
                 "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
