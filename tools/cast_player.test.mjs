@@ -24,7 +24,7 @@ function fixture(options = {}) {
   const button = node(), toggle = node(), disconnect = node(), logs = [], loads = [];
   let selected = { url: 'https://example.com/a.m3u8?token=A%2Bb', title: 'Canal' };
   let sent = 0, closed = 0, connected = false, paused = 0, ended = 0;
-  const session = { loadMedia: async request => { loads.push(request); } };
+  const session = { loadMedia: async request => { loads.push(request); if (options.refuse?.(request)) throw { code: 'load_failed' }; } };
   const context = { setOptions() {}, getCurrentSession: () => connected ? session : null,
     requestSession: async () => { connected = true; }, addEventListener() {},
     endCurrentSession: () => { ended++; connected = false; } };
@@ -56,7 +56,7 @@ test('local playback stops only after the receiver accepts the source; TV contro
 
 test('unsupported TS keeps local playback running and does not start a receiver session', async () => {
   const f = fixture();
-  f.select({ url: 'https://example.com/a.ts' });
+  f.select({ url: 'https://example.com/a.mkv' });
   await f.button.handlers.click();
   assert.equal(f.loads.length, 0);
   assert.equal(f.state().sent, 0);
@@ -156,4 +156,55 @@ test('a player page answer from another site or an old hosting file is not sent'
     await assert.rejects(prepareCastSource(page, { fetcher: async () => ({ ok: true, json: async () => answer }) }), message);
   }
   await assert.rejects(prepareCastSource(page, { fetcher: async () => ({ ok: false, json: async () => ({ error: 'No se encontró ningún vídeo' }) }) }), /ningún vídeo/);
+});
+
+test('HTTPS .ts channels are converted by the hosting as HTTP IPTV is', async () => {
+  assert.equal(needsCastBridge('https://cdn.example/live/canal.ts'), true);
+  assert.equal(needsCastBridge('https://127.0.0.1/live/canal.ts'), false);
+  let prepared = null;
+  const url = 'https://calamarmenciano.com/calamar-cast.php?action=media&session=' + 'c'.repeat(64) + '&file=live.m3u8';
+  const f = fixture({ prepareSource: async address => { prepared = address; return { url, type: 'application/x-mpegURL', live: true }; } });
+  f.select({ url: 'https://cdn.example/live/canal.ts', title: 'Canal' });
+  await f.button.handlers.click();
+  assert.equal(prepared, 'https://cdn.example/live/canal.ts');
+  assert.equal(f.loads[0].media.contentId, url);
+});
+
+test('HTTP M3U8 goes through the hosting relay; HTTPS M3U8 only after the TV cannot read it', async () => {
+  const relayed = { url: 'https://calamarmenciano.com/calamar-player.php?seg=a&p=b&sig=' + 'd'.repeat(32) + '&l=1', type: 'application/x-mpegURL', live: true };
+  const asked = [];
+  const relayList = async address => { asked.push(address); return relayed; };
+  const http = fixture({ relayList });
+  http.select({ url: 'http://iptv.example/live/canal.m3u8', title: 'Canal' });
+  await http.button.handlers.click();
+  assert.deepEqual(asked, ['http://iptv.example/live/canal.m3u8']);
+  assert.equal(http.loads.length, 1);
+  assert.equal(http.loads[0].media.contentId, relayed.url);
+
+  const cors = fixture({ relayList, refuse: request => !request.media.contentId.includes('calamarmenciano') });
+  cors.select({ url: 'https://cdn.example/canal.m3u8', title: 'Canal' });
+  await cors.button.handlers.click();
+  assert.deepEqual(cors.loads.map(r => r.media.contentId), ['https://cdn.example/canal.m3u8', relayed.url]);
+  assert.equal(cors.state().sent, 1);
+});
+
+test('a film goes to the TV as on-demand video at the minute it was playing', async () => {
+  const f = fixture();
+  f.select({ url: 'https://cdn.example/peli.m3u8', title: 'Peli', vod: true, position: 1234.5 });
+  await f.button.handlers.click();
+  assert.equal(f.loads[0].media.streamType, 'buffered');
+  assert.equal(f.loads[0].currentTime, 1234.5);
+  const live = fixture();
+  live.select({ url: 'https://cdn.example/canal.m3u8', title: 'Canal', position: 50 });
+  await live.button.handlers.click();
+  assert.equal(live.loads[0].currentTime, undefined);
+});
+
+test('LuluStream and Drive films can be sent: the hosting copy and the Drive file', () => {
+  const lulu = castSource('https://luluvido.com/abc123def456');
+  assert.equal(lulu?.type, 'application/x-mpegURL');
+  assert.match(lulu.url, /^https:\/\/calamarmenciano\.com\/calamar-lulu\.php\?code=abc123def456&hls=1$/);
+  assert.equal(lulu.live, false);
+  const drive = 'https://www.googleapis.com/drive/v3/files/AbC_123?alt=media&key=K';
+  assert.deepEqual(castSource(drive), { url: drive, type: 'video/mp4', live: false });
 });

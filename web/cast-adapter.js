@@ -3,10 +3,18 @@ export const CAST_BRIDGE = 'https://calamarmenciano.com/calamar-cast.php';
 import { httpTsSource } from './http-stream.js';
 import { PLAYER_ENDPOINT, webPlayback } from './catalog.js';
 
-export const needsCastBridge = httpTsSource;
+/** MPEG-TS the hosting converts for the TV: HTTP IPTV and also .ts addresses over HTTPS. */
+export const needsCastBridge = (address) => httpTsSource(address)
+  || (/^https:\/\//i.test(String(address || '')) && httpTsSource(String(address).replace(/^https:/i, 'http:')));
 /** Player pages (zicotv and similar): the TV gets the list relayed by calamar-player.php, as the web plays it. */
 export const castPage = (address) => webPlayback(String(address || ''), { pages: true }).kind === 'hls'
   && !!webPlayback(String(address || ''), { pages: true }).page;
+
+/**
+ * An M3U8 channel the TV cannot read straight away (HTTP on an HTTPS receiver, or a server without
+ * CORS): calamar-player.php hands out its list and pieces with CORS, for channels of the catalog only.
+ */
+export const relayListCast = (address, { fetcher = globalThis.fetch, onStatus = () => {} } = {}) => preparePageCast(address, fetcher, onStatus);
 
 async function preparePageCast(address, fetcher, onStatus) {
   onStatus('Preparando el canal para la TV…');

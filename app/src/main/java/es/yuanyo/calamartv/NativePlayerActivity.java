@@ -268,7 +268,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           handler.removeCallbacks(renewal);
           handler.removeCallbacks(renewalRequest);
           status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
-        });
+        },
+        // A film or episode goes on on the TV at the minute it is playing here.
+        () -> progressEntry == null ? -1 : player == null ? 0 : player.getCurrentPosition());
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
     scroll.addView(controls);
