@@ -111,7 +111,9 @@ test('phone sign-in for the app: only the admin hands it over; read with key and
   await assertSucceeds(getDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3D')));
   await assertFails(getDocs(collection(anyone, 'calamarDeviceLogins')));
   await assertFails(setDoc(doc(anyone, 'calamarDeviceLogins/K7Q2AB3E'), login()));
-  await assertFails(setDoc(doc(env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore(), 'calamarDeviceLogins/K7Q2AB3F'), login()));
+  // Any Google account may sign its own app in from the phone; an email and password account has no Google token.
+  await assertSucceeds(setDoc(doc(env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore(), 'calamarDeviceLogins/K7Q2AB3F'), login()));
+  await assertFails(setDoc(doc(env.authenticatedContext('pw', claims({ email: 'pw@example.com', firebase: { sign_in_provider: 'password' } })).firestore(), 'calamarDeviceLogins/K7Q2AB3K'), login()));
   for (const [id, invalid] of [['K7Q2AB3G', { extra: 1 }], ['K7Q2AB3H', { createdAt: new Date(0) }], ['K7Q2AB3J', { idToken: 'x'.repeat(4096) }], ['K7Q2AB', {}], ['K7Q2AB0O', {}], ['k7q2ab3d', {}]]) {
     await assertFails(setDoc(doc(admin(), `calamarDeviceLogins/${id}`), login(invalid)));
   }

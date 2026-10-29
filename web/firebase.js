@@ -78,11 +78,11 @@ export const logout = () => signOut(auth);
  * calamarDeviceLogins/<key><code>, which the app reads once the code is typed there.
  */
 export async function publishDeviceLogin(id) {
+  // Any Google account: the app signs in with it (its profiles, its list…), the administrator's too.
   const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
+  provider.setCustomParameters({ prompt: 'select_account' });
   const result = await signInWithPopup(auth, provider);
   const idToken = GoogleAuthProvider.credentialFromResult(result)?.idToken;
-  if (!administrator(result.user)) throw new Error(`Solo la cuenta de administración (${ADMIN_EMAIL}) puede iniciar sesión en la app.`);
   if (!idToken) throw new Error('Google no ha devuelto la sesión. Vuelve a intentarlo.');
   await setDoc(doc(db, DEVICE_LOGIN_PATH, id), { idToken, createdAt: serverTimestamp() });
 }
