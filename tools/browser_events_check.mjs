@@ -595,6 +595,8 @@ try {
   await page.getByLabel('Mostrar Películas, Series y Documentales a los usuarios (web y app)').check();
   await page.waitForFunction(() => window.__published.libraryVisible === true);
   await page.goto(base + '/#/');
+  // Restore the original public fixture after testing the published review queue.
+  await page.reload();
   await page.locator('.nav a', { hasText: 'Películas' }).click();
   // Category drop-down (TMDB genres of the section) next to the section search; no channels search here.
   await page.locator('.poster-card').first().waitFor();
