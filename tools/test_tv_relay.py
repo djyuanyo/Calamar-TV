@@ -41,6 +41,25 @@ def pcrs(data):
 
 @unittest.skipUnless(shutil.which('php'), 'Requires PHP CLI')
 class SpliceTest(unittest.TestCase):
+    def test_public_endpoint_accepts_iptv_without_missing_validator(self):
+        # Exercise relayMain, not only the splice helpers: the version endpoint never called
+        # tsSourceAllowed, so it could look healthy while every playback returned HTTP 500.
+        program = ('$_SERVER["REQUEST_METHOD"]="GET"; $_GET["stream"]=1;'
+                   '$_SERVER["HTTP_X_CALAMAR_SOURCE"]=base64_encode("http://127.0.0.1/user/pass/256");'
+                   'require ' + json.dumps(str(PHP)) + ';')
+        response = subprocess.run(['php', '-r', program], capture_output=True, text=True, check=True)
+        self.assertEqual(response.stdout, 'Enlace IPTV HTTP no válido para el puente.')
+        self.assertNotIn('undefined function', response.stderr)
+
+    def test_shared_validator_accepts_public_ts_and_keeps_private_addresses_blocked(self):
+        sources = ['http://31.43.191.125:8080/Test/Pass/256', 'https://media.example/live.ts',
+                   'http://127.0.0.1/Test/Pass/256', 'https://192.168.1.1/live.ts',
+                   'http://media.example/player', 'http://user:pass@media.example/live.ts']
+        program = ('require ' + json.dumps(str(ROOT / 'hosting/calamar-http-source.php')) + ';'
+                   'echo json_encode(array_map("tsSourceAllowed", ' + json.dumps(sources) + '));')
+        result = subprocess.check_output(['php', '-r', program], text=True)
+        self.assertEqual(json.loads(result), [True, True, False, False, False, False])
+
     def splice(self, connections, chunk=1000):
         """Tags kept for each connection, cut into chunks that split packets."""
         program = ('define("CALAMAR_RELAY_TEST_ONLY", true); require ' + json.dumps(str(PHP)) + ';'

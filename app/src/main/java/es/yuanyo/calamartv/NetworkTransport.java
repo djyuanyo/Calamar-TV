@@ -93,6 +93,11 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
     }
     // Only complete live IPTV streams use the renewable transport. HLS TS fragments
     // must end normally, even if a playlist points to HTTP segment URLs.
-    return CastSource.needsBridge(rootSource) ? new HttpIptvDataSource.Factory(factory) : factory;
+    if (!CastSource.needsBridge(rootSource)) return factory;
+    // Only IPTV has this fallback. Zico HLS continues through its existing signed-list transport.
+    OkHttpDataSource.Factory relay = new OkHttpDataSource.Factory(
+        SecureDnsClients.forMedia(NetworkTransport.get(DnsProvider.SYSTEM).client, true))
+        .setUserAgent(PlayerDocument.IPTV_USER_AGENT);
+    return new HttpIptvDataSource.Factory(factory, relay);
   }
 }
