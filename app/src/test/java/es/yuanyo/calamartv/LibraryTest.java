@@ -325,4 +325,18 @@ public class LibraryTest {
     assertEquals(1, Library.titleRelation("Harry Potter y la piedra filosofal", "Harry Potter y la cámara secreta"));
     assertEquals(0, Library.titleRelation("La vida es bella", "La vida de Brian"));
   }
+
+  @Test public void recommendedWeighsTheCategoriesWatchedAndLiked() throws Exception {
+    JSONObject movie = new JSONObject();
+    JSONArray items = new JSONArray();
+    String[][] all = {{"seen", "Terror", "5"}, {"t1", "Terror", "6"}, {"t2", "Terror", "7"}, {"c1", "Comedia", "9"}};
+    for (String[] m : all) items.put(new JSONObject().put("id", m[0]).put("kind", "movie").put("title", m[0]).put("url", "https://www.googleapis.com/drive/v3/files/" + m[0] + "?alt=media")
+        .put("tmdb", new JSONObject().put("id", m[0].length()).put("title", m[0]).put("rating", Double.parseDouble(m[2])).put("genres", new JSONArray().put(m[1]))));
+    Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("movies", items)));
+    List<JSONObject> seen = Collections.singletonList(new JSONObject().put("page", "peliculas").put("item", "seen"));
+    List<String> ids = new ArrayList<>();
+    for (Library.Item item : Library.recommended(data, seen, Collections.<JSONObject>emptyList(), 10)) ids.add(item.id);
+    assertEquals(Arrays.asList("t2", "t1"), ids);
+    assertTrue(Library.recommended(data, Collections.<JSONObject>emptyList(), Collections.<JSONObject>emptyList(), 10).isEmpty());
+  }
 }
