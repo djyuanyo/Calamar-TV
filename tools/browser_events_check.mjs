@@ -550,6 +550,7 @@ try {
   await page.getByRole('link', { name: 'Películas · 3', exact: true }).click();
   assert.ok(page.url().endsWith('/no-identificadas/peliculas'));
   await page.getByRole('heading', { name: 'Películas · 3', exact: true }).waitFor();
+  await page.waitForFunction(() => document.querySelector('nav[aria-label="No identificadas por tipo"] a[aria-current="page"]')?.textContent === 'Películas · 3');
   assert.equal(await page.getByRole('heading', { name: /^Series ·/ }).count(), 0);
   const pendingRow = page.locator('.library-item', { hasText: 'Zzzz desconocida' });
   await pendingRow.getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
