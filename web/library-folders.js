@@ -40,6 +40,13 @@ export async function driveFolder(folder, key, fetcher = globalThis.fetch) {
   return { name, files, folders };
 }
 
+const EPISODE_NAME = /S\d{1,2}[ ._-]?E\d{1,3}|(?<!\d)\d{1,2}x\d{1,3}(?!\d)|cap(?:[ií]tulo)?[ ._-]*\d|episodio|episode/iu;
+/** Most videos are episodes: by an explicit episode mark (strict), or as episodeOf reads them with their folder. */
+const mostlyEpisodes = (files, strict = false) => {
+  const marked = files.filter(f => (strict ? EPISODE_NAME.test(f.title) : episodeOf(f.title, f.folder))).length;
+  return marked > 0 && marked * 2 >= files.length;
+};
+
 /** One combined scan; publication happens only after every configured folder has been read. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
   const films = [], series = [], unknown = [], cache = new Map(), providers = new Set();
@@ -94,13 +101,15 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     if (ref.provider === 'lulu') ref = await luluId(ref);
     const data = await read(ref);
     if (source.section === 'movies') { for (const f of await videos(ref)) film(f, source.section); continue; }
-    const isShow = data.files.some(f => episodeOf(f.title)) || data.folders.some(f => /^(?:temporada|season|T\s*\d)/i.test(f.name));
+    // A documentaries folder is one series only when most of its videos name an episode (1x01, S01E01, «Capítulo 3»…)
+    // or it has season folders: a film whose name starts with a number («11M (2022)») does not make it a series.
+    const isShow = (source.section === 'documentaries' ? mostlyEpisodes(data.files, true) : data.files.some(f => episodeOf(f.title))) || data.folders.some(f => /^(?:temporada|season|T\s*\d)/i.test(f.name));
     if (isShow) { show(data.name, await videos(ref), source.section); continue; }
     if (source.section === 'documentaries') for (const f of data.files) film(f, source.section);
     else if (data.files.length) unknown.push(`${data.name}: coloca cada serie en su propia carpeta.`);
     for (const child of data.folders) {
       const content = await videos(child);
-      if (source.section === 'documentaries' && !content.some(f => episodeOf(f.title, f.folder))) for (const f of content) film(f, source.section);
+      if (source.section === 'documentaries' && !mostlyEpisodes(content)) for (const f of content) film(f, source.section);
       else show(child.name, content, source.section);
     }
   }
