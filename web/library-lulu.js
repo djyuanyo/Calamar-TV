@@ -82,7 +82,7 @@ export const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value || '')) 
 export async function luluFolder(id, key, fetcher) {
   const result = await luluApi('folder/list', { fld_id: String(id), files: '1' }, key, fetcher);
   return {
-    folders: (result.folders || []).map((f) => ({ id: textOf(f.fld_id, f.id), name: textOf(f.name, f.title) })).filter((f) => f.id),
+    folders: (result.folders || []).map((f) => ({ id: textOf(f.fld_id, f.id), name: textOf(f.name, f.title), ...(f.code ? { code: String(f.code) } : {}) })).filter((f) => f.id),
     files: (result.files || []).map((f) => ({ code: textOf(f.file_code, f.filecode, f.code), title: textOf(f.title, f.name, f.file_title),
       uploaded: dayOf(textOf(f.uploaded, f.upload_date, f.created, f.file_created)) }))
       .filter((f) => /^[A-Za-z0-9]{8,20}$/.test(f.code)),
@@ -176,7 +176,25 @@ async function bestMatch(title, year, kind, key, fetcher) {
   return sameYear.find((r) => confident(title, r.title)) || (found[0] && confident(title, found[0].title) ? found[0] : null);
 }
 
-const codeOf = (url) => lulustreamEmbed(String(url || ''))?.split('/').pop() || '';
+const codeOf = (url) => {
+  const lulu = lulustreamEmbed(String(url || ''))?.split('/').pop();
+  if (lulu) return lulu;
+  try {
+    const u = new URL(url);
+    const drive = u.hostname === 'www.googleapis.com' ? u.pathname.match(/^\/drive\/v3\/files\/([A-Za-z0-9_-]+)$/)?.[1]
+      : u.hostname === 'calamarmenciano.com' && u.pathname === '/calamar-drive.php' ? u.searchParams.get('id') : null;
+    if (drive) return `drive_${drive}`;
+    return u.href;
+  } catch { return ''; }
+};
+const titleKey = value => plain(decodeHtml(value || '')).replace(/[^a-z0-9]+/g, '');
+const namedItem = (sections, wanted, kind) => {
+  const candidates = Object.entries(sections).flatMap(([section, items]) => items
+    .filter(item => item.kind === kind && titleKey(item.tmdb?.title || item.title) === titleKey(wanted.title)
+      && (!wanted.year || !(item.tmdb?.year || item.year) || Number(wanted.year) === Number(item.tmdb?.year || item.year)))
+    .map(item => ({ section, item })));
+  return candidates.length === 1 ? candidates[0] : null;
+};
 const folderId = (name) => `u${plain(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}`;
 
 /** A film TMDB did not recognise: added with the file's name, to be matched later in the admin page. */
@@ -220,7 +238,8 @@ export async function matchUnmatched(item, tmdbId, existing, key, fetcher = glob
  * Adds what the scan found to the library: films and series matched in TMDB replace the same title,
  * other seasons and the titles added by hand are kept. Returns { sections, added, unknown }.
  */
-export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {} } = {}) {
+export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {}, skipDuplicates = false } = {}) {
+  const skipped = { films: 0, episodes: 0 };
   const sections = Object.fromEntries(Object.entries(current).map(([k, items]) => [k, [...items]]));
   const put = (section, item) => {
     const previous = Object.values(sections).flat().find((x) => x.id === item.id);
@@ -240,6 +259,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   for (const f of scan.films) {
     onProgress(++done, total, f.title);
     const known = byLink.get(codeOf(f.link));
+    if (skipDuplicates && (known || namedItem(sections, f, 'movie'))) { skipped.films++; continue; }
     // The day LuluStream received the video is the day it arrived (for «Recién llegada»).
     const arrived = (item) => (f.uploaded ? { ...item, addedAt: f.uploaded } : item);
     if (known && known.item.kind !== 'tv') { put(known.section, arrived({ ...known.item, url: f.link })); films++; continue; }
@@ -249,6 +269,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
       continue;
     }
+    if (skipDuplicates && find(`m${match.id}`)) { skipped.films++; continue; }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
     drop(unmatchedFilm(f).id);
     put(f.section, arrived(movieItem(info, f.link)));
@@ -256,11 +277,22 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
-    const known = byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
+    const known = (skipDuplicates ? namedItem(sections, s, 'tv') : null) || byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
     let info = known?.item.tmdb;
     if (!info) {
       const match = await bestMatch(s.title, s.year, 'tv', key, fetcher);
       if (!match) {
+        if (skipDuplicates && known) {
+          const before = known.item;
+          const missing = s.episodes.filter(e => !before.episodes.some(old => old.season === e.season && old.episode === e.episode));
+          skipped.episodes += s.episodes.length - missing.length;
+          if (missing.length) {
+            const added = unmatchedSeries({ ...s, episodes: missing });
+            put(known.section, { ...before, episodes: [...before.episodes, ...added.episodes].sort((a,b)=>a.season-b.season || a.episode-b.episode) });
+            shows++; episodes += missing.length;
+          }
+          continue;
+        }
         put(s.section, unmatchedSeries(s)); pending++;
         unknown.push(`${s.folder}: añadida sin ficha de TMDB (${s.episodes.length} capítulos)`);
         continue;
@@ -268,17 +300,25 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
     }
     // Links pasted by hand stay; the folder adds or replaces its own episodes.
-    const linked = await seriesWithLinks(find(`s${info.id}`), info, s.episodes, key, fetcher);
+    const before = find(`s${info.id}`) || (skipDuplicates ? known?.item : null);
+    const incoming = skipDuplicates ? s.episodes.filter((e, i, list) => {
+      const duplicate = before?.episodes?.some(old => old.season === e.season && old.episode === e.episode)
+        || list.slice(0,i).some(old => old.season === e.season && old.episode === e.episode);
+      if (duplicate) skipped.episodes++;
+      return !duplicate;
+    }) : s.episodes;
+    if (skipDuplicates && !incoming.length) continue;
+    const linked = await seriesWithLinks(before, info, incoming, key, fetcher);
     // Each episode arrived the day LuluStream received it (for «Nuevo episodio»).
-    const uploads = new Map(s.episodes.filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
+    const uploads = new Map((skipDuplicates ? incoming : s.episodes).filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
     const item = linked && { ...linked, episodes: (linked.episodes || []).map((e) => (uploads.get(codeOf(e.url)) ? { ...e, addedAt: uploads.get(codeOf(e.url)) } : e)) };
     // A series arrived with its first uploaded episode.
     const first = s.episodes.map((e) => e.uploaded).filter(Boolean).sort()[0];
     if (item?.episodes?.length) {
       drop(unmatchedSeries(s).id);
-      put(known?.section || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += s.episodes.length;
+      put(known?.section || Object.entries(sections).find(([,items])=>items.some(x=>x.id===before?.id))?.[0] || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += incoming.length;
     }
   }
   for (const k of Object.keys(sections)) sections[k].sort((a, b) => String(a.tmdb?.title || a.title).localeCompare(String(b.tmdb?.title || b.title), 'es', { sensitivity: 'base' }));
-  return { sections, added: { films, shows, episodes, pending }, unknown };
+  return { sections, added: { films, shows, episodes, pending }, unknown, ...(skipDuplicates ? { skipped } : {}) };
 }

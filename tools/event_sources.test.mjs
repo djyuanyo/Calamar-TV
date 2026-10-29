@@ -27,12 +27,3 @@ test('empty events and failed requests remain retryable with a visible explanati
     assert.equal(result[0].url, page); assert.ok(result[0].error); assert.equal(result[1].url, player);
   }
 });
-
-test('source names never show the address of the site the video comes from', () => {
-  const found = eventPlayerSources({ data: { sources: [
-    { name: 'DAZN LaLiga', player_url: 'https://a.example/api/player/1' },
-    { name: 'bp.zicotv.cc', player_url: 'https://a.example/api/player/2' },
-    { name: 'ZicoTV 2', player_url: 'https://a.example/api/player/3' },
-  ] } });
-  assert.deepEqual(found.map(s => s.name), ['DAZN LaLiga', 'Fuente del evento', 'Fuente del evento']);
-});

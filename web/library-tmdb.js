@@ -31,8 +31,31 @@ export const checkTmdbKey = (key, fetcher = globalThis.fetch) => tmdb('/configur
 const image = (path, size) => path ? `${TMDB_IMAGE}${size}${path}` : '';
 const yearOf = (date) => date ? Number(String(date).slice(0, 4)) || null : null;
 
+/** A public TMDB record URL (its slug/language are optional); only its type and numeric id are used. */
+export function tmdbReference(value) {
+  const text = String(value || '').trim();
+  try {
+    const u = new URL(/^(?:www\.)?themoviedb\.org\//i.test(text) ? `https://${text}` : text);
+    if (!['https:', 'http:'].includes(u.protocol) || !['themoviedb.org', 'www.themoviedb.org'].includes(u.hostname)
+        || u.username || u.password || u.port) return null;
+    const match = u.pathname.match(/^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(movie|tv)\/([1-9]\d*)(?:-[^/]+)?\/?$/i);
+    if (!match || !Number.isSafeInteger(Number(match[2]))) return null;
+    return { id: Number(match[2]), kind: match[1].toLowerCase() };
+  } catch { return null; }
+}
+
 /** Films ('movie'), series ('tv') or both ('any', for documentaries): [{ id, kind, title, year, poster, overview }]. */
 export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, year = null) {
+  const reference = tmdbReference(query);
+  if (reference) {
+    if (kind !== 'any' && reference.kind !== kind)
+      throw new Error(`El enlace corresponde a ${reference.kind === 'tv' ? 'una serie' : 'una película'}. Elige una ficha de ${kind === 'tv' ? 'serie' : 'película'} para este elemento.`);
+    const d = await tmdb(`/${reference.kind}/${reference.id}`, {}, key, fetcher);
+    return [{ id: reference.id, kind: reference.kind, title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date),
+      poster: image(d.poster_path, 'w185'), overview: (d.overview || '').slice(0, 220) }];
+  }
+  if (/^(?:https?:\/\/|(?:www\.)?themoviedb\.org\/)/i.test(String(query).trim()))
+    throw new Error('Pega el enlace de una ficha de themoviedb.org/movie/… o themoviedb.org/tv/….');
   const path = kind === 'tv' ? '/search/tv' : kind === 'movie' ? '/search/movie' : '/search/multi';
   const dated = year && kind !== 'any' ? { [kind === 'tv' ? 'first_air_date_year' : 'year']: String(year) } : {};
   const data = await tmdb(path, { query, include_adult: 'false', ...dated }, key, fetcher);

@@ -1,9 +1,9 @@
 name: Calamar TV · Eventos en navegador
 on:
   push:
-    paths: ['web/**', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
   pull_request:
-    paths: ['web/**', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
 permissions:
   contents: read
 jobs:
@@ -15,6 +15,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+      - name: Probar carpetas mixtas y puente de Google Drive
+        run: |
+          php -l hosting/calamar-drive.php
+          python -m unittest discover -s tools -p 'test_drive_relay.py' -v
+          node --test tools/library_folders.test.mjs tools/library_lulu.test.mjs
       - run: npm install --prefix /tmp/calamar-ui --no-audit --no-fund playwright@1.58.2
       - name: Probar eventos con catálogo aislado
         env:

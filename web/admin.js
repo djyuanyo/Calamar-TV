@@ -404,6 +404,7 @@ export async function render(state) {
   file.data.events ||= []; file.data.leagues ||= []; file.data.teams ||= [];
   const eventRoute = decodeURIComponent(location.hash).match(/^#\/admin\/(?:evento|editar-evento(?:\/(.+))?)$/);
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
+  const reviewRoute = decodeURIComponent(location.hash).match(/^#\/admin\/biblioteca\/no-identificadas(?:\/(peliculas|series|documentales))?\/?$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
   const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
@@ -419,11 +420,12 @@ export async function render(state) {
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
       el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
       ...(section === 'library' ? libraryAdmin(el, {
+        unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
-      }).concat(platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+      }).concat(reviewRoute ? [] : platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),

@@ -37,6 +37,7 @@ jobs:
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
           python -m unittest discover -s tools -p 'test_match_resolver.py' -v
+          python -m unittest discover -s tools -p 'test_player_relay.py' -v
           if command -v ffmpeg >/dev/null; then
             python -m unittest discover -s tools -p 'test_cast_bridge.py' -v
           fi
@@ -61,13 +62,24 @@ jobs:
           target: google_apis
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Reproducir y cambiar señales con mando en Android TV API 31
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          arch: x86
+          target: android-tv
+          avd-name: calamar-tv-api31
+          disable-animations: true
+          script: |
+            adb shell pm list features | grep -q android.software.leanback
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest
       - name: Mostrar errores del reproductor en el emulador
         if: failure()
         run: |
           python - <<'PYCODE'
           import pathlib, re, html
           root = pathlib.Path('app/build/reports/androidTests/connected')
-          for name in ('ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
+          for name in ('HostingPlaybackTest', 'ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
               for path in root.rglob('*' + name + '.html'):
                   print('Informe:', path)
                   print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])

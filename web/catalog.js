@@ -275,6 +275,9 @@ export function webPlayback(url, { pages = false } = {}) {
   // LuluStream only serves the video to whoever opened its player page, so the hosting reads the page and
   // passes the HLS list and its pieces on (calamar-lulu.php); the video plays in our own player.
   if (embed) return { ok: true, kind: 'hls', address: `${LULU_ENDPOINT}?code=${embed.split('/').pop()}&hls=1` };
+  // Folder imports use an opaque relay link; the Google API key stays encrypted.
+  if (u.protocol === 'https:' && u.hostname === 'calamarmenciano.com' && u.pathname === '/calamar-drive.php'
+      && /^[A-Za-z0-9_-]{1,200}$/.test(u.searchParams.get('id') || '') && /^[A-Za-z0-9_-]{40,2048}$/.test(u.searchParams.get('v') || '')) return { ok: true, kind: 'video' };
   // Films and series from Google Drive play straight from the Drive API (it allows browser video).
   if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };
