@@ -2,6 +2,7 @@
 // and full screen. The video element keeps no native controls, so everything here is accessible
 // through buttons, the keyboard and touch.
 import { soundChosen } from './autoplay.js';
+import { spanishTrack, trackLabel } from './player-tracks.js';
 
 const ICONS = {
   play: '<path d="M8 5.5v13l11-6.5z"/>',
@@ -13,6 +14,7 @@ const ICONS = {
   enter: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   left: '<path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
   right: '<path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  subtitles: '<path d="M3.5 5.5h17v13h-17z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10.5 10.2a2.3 2.3 0 1 0 0 3.6M17 10.2a2.3 2.3 0 1 0 0 3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   exit: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
@@ -59,6 +61,8 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     live: $('ctl-live'),
     quality: $('ctl-quality'),
     menu: $('ctl-menu'),
+    tracks: $('ctl-tracks'),
+    tracksMenu: $('ctl-tracks-menu'),
     pip: $('ctl-pip'),
     full: $('ctl-full'),
     center: $('ctl-center'),
@@ -72,6 +76,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   els.play.replaceChildren(icon('play'));
   els.mute.replaceChildren(icon('volume'));
   els.quality.replaceChildren(icon('settings'));
+  els.tracks.replaceChildren(icon('subtitles'));
   els.pip.replaceChildren(icon('pip'));
   els.full.replaceChildren(icon('enter'));
   els.center.replaceChildren(icon('play'));
@@ -186,7 +191,10 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   const closeMenu = () => {
     els.menu.hidden = true;
     els.quality.setAttribute('aria-expanded', 'false');
+    els.tracksMenu.hidden = true;
+    els.tracks.setAttribute('aria-expanded', 'false');
   };
+  const menusClosed = () => els.menu.hidden && els.tracksMenu.hidden;
   function buildMenu() {
     const levels = hls ? hls.levels || [] : [];
     els.quality.hidden = levels.length < 2;
@@ -215,7 +223,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   }
   els.quality.addEventListener('click', () => {
     const open = els.menu.hidden;
-    if (open) buildMenu();
+    if (open) { closeMenu(); buildMenu(); }
     els.menu.hidden = !open;
     els.quality.setAttribute('aria-expanded', String(open));
     if (open) els.menu.querySelector('[aria-checked="true"]')?.focus();
@@ -227,6 +235,65 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
       els.quality.focus();
     }
   });
+
+  // ---- Audio and subtitles (films, series and documentaries) ----
+  // hls.js tracks, or the browser's own for a direct video. Spanish audio by default, subtitles off.
+  const audioList = () => (hls ? hls.audioTracks || [] : [...(video.audioTracks || [])]);
+  const textList = () => (hls ? hls.subtitleTracks || [] : [...(video.textTracks || [])].filter((t) => /subtitles|captions/.test(t.kind)));
+  const audioNow = () => (hls ? hls.audioTrack : audioList().findIndex((t) => t.enabled));
+  const textNow = () => (hls ? (hls.subtitleDisplay === false ? -1 : hls.subtitleTrack) : textList().findIndex((t) => t.mode === 'showing'));
+  const chooseAudio = (index) => {
+    if (index < 0) return;
+    if (hls) { if (hls.audioTrack !== index) hls.audioTrack = index; }
+    else audioList().forEach((t, i) => { t.enabled = i === index; });
+  };
+  const chooseText = (index) => {
+    if (hls) { hls.subtitleTrack = index; hls.subtitleDisplay = index >= 0; }
+    else textList().forEach((t, i) => { t.mode = i === index ? 'showing' : 'disabled'; });
+  };
+  const defaults = () => {
+    if (!onDemand()) return;
+    chooseAudio(spanishTrack(audioList()));
+    chooseText(-1);
+  };
+  const showTracksButton = () => { els.tracks.hidden = !onDemand(); };
+  function buildTracks() {
+    els.tracksMenu.replaceChildren();
+    const item = (label, checked, choose) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'menu-item';
+      b.setAttribute('role', 'menuitemradio');
+      b.setAttribute('aria-checked', String(checked));
+      b.textContent = label;
+      b.addEventListener('click', () => { choose(); buildTracks(); closeMenu(); els.tracks.focus(); });
+      return b;
+    };
+    const title = (text) => Object.assign(document.createElement('p'), { className: 'menu-title', textContent: text });
+    const audio = audioList(), texts = textList();
+    els.tracksMenu.append(title('Audio'));
+    if (audio.length > 1) audio.forEach((t, i) => els.tracksMenu.append(item(trackLabel(t, i), audioNow() === i, () => chooseAudio(i))));
+    else els.tracksMenu.append(Object.assign(document.createElement('p'), { className: 'menu-note', textContent: audio.length ? trackLabel(audio[0], 0) : 'Este vídeo tiene un solo audio.' }));
+    els.tracksMenu.append(title('Subtítulos'));
+    if (texts.length) {
+      els.tracksMenu.append(item('Desactivados', textNow() < 0, () => chooseText(-1)));
+      texts.forEach((t, i) => els.tracksMenu.append(item(trackLabel(t, i), textNow() === i, () => chooseText(i))));
+    } else els.tracksMenu.append(Object.assign(document.createElement('p'), { className: 'menu-note', textContent: 'Este vídeo no trae subtítulos.' }));
+  }
+  els.tracks.addEventListener('click', () => {
+    const open = els.tracksMenu.hidden;
+    closeMenu();
+    if (open) buildTracks();
+    els.tracksMenu.hidden = !open;
+    els.tracks.setAttribute('aria-expanded', String(open));
+    if (open) els.tracksMenu.querySelector('[aria-checked="true"]')?.focus();
+  });
+  els.tracksMenu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); els.tracks.focus(); }
+  });
+  // A direct video (Drive, MP4) tells its tracks when its data arrives.
+  video.addEventListener('loadedmetadata', () => { if (!hls) defaults(); });
+  video.textTracks?.addEventListener?.('addtrack', () => { if (!hls && onDemand()) chooseText(-1); });
 
   // ---- Picture in picture ----
   const pipSupported = !!document.pictureInPictureEnabled && !video.disablePictureInPicture;
@@ -290,7 +357,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
 
   // ---- Showing and hiding the controls ----
   function hideNow() {
-    if (video.paused || !els.menu.hidden) return;
+    if (video.paused || !menusClosed()) return;
     // Keep the controls while someone uses them: keyboard focus inside them, or a real mouse over them.
     // (A touch screen leaves :hover stuck on the last thing tapped, and the focus given to the Back
     // button when the player opens is not a reason to keep them on screen.)
@@ -357,7 +424,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     const key = e.key.toLowerCase();
     if (e.key === 'Escape') {
       // Full screen is left by the browser itself; only a second Escape closes the player.
-      if (!els.menu.hidden) closeMenu();
+      if (!menusClosed()) closeMenu();
       else if (!fullscreenElement() && canClose()) onClose();
       return;
     }
@@ -393,7 +460,12 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
         });
         instance.on(window.Hls.Events.MANIFEST_PARSED, buildMenu);
         instance.on(window.Hls.Events.LEVEL_SWITCHED, () => els.menu.hidden || buildMenu());
+        // LuluStream's films (MKV with several audios): Spanish audio and no subtitles to start with.
+        instance.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, () => { if (onDemand()) chooseAudio(spanishTrack(audioList())); });
+        instance.on(window.Hls.Events.SUBTITLE_TRACKS_UPDATED, () => { if (onDemand()) chooseText(-1); });
+        instance.on(window.Hls.Events.AUDIO_TRACK_SWITCHED, () => els.tracksMenu.hidden || buildTracks());
       }
+      showTracksButton();
       refreshTime();
       wake();
     },
@@ -402,6 +474,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
       hlsLive = null;
       closeMenu();
       els.quality.hidden = true;
+      els.tracks.hidden = true;
       root.classList.remove('is-buffering', 'idle');
       refreshTime();
     },
