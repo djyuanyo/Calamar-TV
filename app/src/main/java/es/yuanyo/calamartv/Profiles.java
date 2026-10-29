@@ -97,9 +97,10 @@ final class Profiles {
     FirebaseUser user = auth.getCurrentUser();
     String now = user == null ? null : user.getUid();
     if (now == null) {
-      if (uid == null && confirmed) return;
-      if (uid != null) prefs(app).edit().remove("account:" + uid).apply();
-      uid = null; account = null; activeId = null; pickedThisLaunch = false; confirmed = true;
+      confirmed = true;
+      if (uid == null) return; // Still no account: nothing to tell (nor to draw again).
+      prefs(app).edit().remove("account:" + uid).apply();
+      uid = null; account = null; activeId = null; pickedThisLaunch = false;
       Library.Progress.scope = "";
       data = localData(app);
       changed();
