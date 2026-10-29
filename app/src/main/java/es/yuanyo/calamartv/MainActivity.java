@@ -420,6 +420,10 @@ public class MainActivity extends Activity {
       leaguePage(mode.substring(LEAGUE.length()));
       return;
     }
+    if (mode.equals(LIVE)) {
+      livePage();
+      return;
+    }
     if (mode.startsWith(PLATFORM)) {
       platformPage(mode.substring(PLATFORM.length()));
       return;
@@ -468,7 +472,14 @@ public class MainActivity extends Activity {
       // «Eventos En Directo»: today's events with something to play, the first row of all.
       List<Catalog.Channel> live = Catalog.liveEvents(events, System.currentTimeMillis());
       if (!live.isEmpty()) {
-        heading(Catalog.LIVE_ROW, live.size() == 1 ? "1 evento" : live.size() + " eventos");
+        heading(Catalog.LIVE_ROW + "  ›", live.size() == 1 ? "1 evento" : live.size() + " eventos");
+        // Its heading opens every one of today's events, by competition.
+        View liveHeading = list.getChildAt(list.getChildCount() - 1);
+        liveHeading.setFocusable(true);
+        liveHeading.setClickable(true);
+        liveHeading.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
+        liveHeading.setContentDescription("Todos los eventos en directo, por competición");
+        liveHeading.setOnClickListener(v -> { mode = LIVE; query = ""; home(); });
         carousel(live, live.size());
       }
       // Films and episodes left half watched come right under the featured slider, then the weekly top.
@@ -2319,6 +2330,25 @@ public class MainActivity extends Activity {
 
   static final String PLATFORM = "Plataforma: ";
   static final String LEAGUE = "Liga: ";
+  static final String LIVE = "En directo";
+
+  /** Every event of «Eventos En Directo» in a grid per competition, in the order of the leagues (as #/directo on the web). */
+  void livePage() {
+    Button back = Ui.pill(this, "‹ Inicio", Ui.Kind.SURFACE, true);
+    back.setOnClickListener(v -> { mode = "Inicio"; home(); });
+    LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, dp(44));
+    bp.setMargins(0, dp(10), 0, dp(6));
+    list.addView(back, bp);
+    List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(channels, custom), System.currentTimeMillis());
+    heading(Catalog.LIVE_ROW, live.size() == 1 ? "1 evento hoy" : live.size() + " eventos hoy");
+    for (Catalog.EventRow row : Catalog.eventRows(live, custom)) {
+      heading(row.id.isEmpty() ? row.name : row.name + "  ›", row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
+      if (!row.logo.isEmpty()) leagueLogo(row.logo);
+      if (!row.id.isEmpty()) leagueHeadingOpens(row.id, row.name);
+      channelGrid(row.events);
+    }
+    if (live.isEmpty()) list.addView(label("Ahora mismo no hay eventos en directo.", 15, MUTED));
+  }
 
   /** The heading just added opens the league's page (its name ends in «›»). */
   void leagueHeadingOpens(final String leagueId, String name) {

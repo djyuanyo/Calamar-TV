@@ -1267,3 +1267,6 @@ a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
 .top-inner .account-link { margin-left: auto; }
 .top-inner .account-link + .admin-link { margin-left: 10px; }
 .account-card .actions { justify-content: center; }
+
+.live-page-head { margin: 22px 0 6px; }
+.live-page-head h1 { margin: 0; font-size: clamp(26px, 5vw, 40px); }
