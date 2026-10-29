@@ -1,0 +1,27 @@
+name: MadPlay77 · Renovación sin conexión
+on:
+  push:
+    branches: [codex/madplay-hosting]
+    paths: ['hosting/calamar-madplay*.php', 'tools/madplay*', 'web/madplay-sources.js', 'web/catalog.js', 'tools/fixtures/madplay/**', '.github/workflows/madplay-session.yml']
+  pull_request:
+    paths: ['hosting/calamar-madplay*.php', 'tools/madplay*', 'web/madplay-sources.js', 'web/catalog.js', 'tools/fixtures/madplay/**', '.github/workflows/madplay-session.yml']
+permissions:
+  contents: read
+jobs:
+  renewal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validar PHP
+        run: |
+          for file in hosting/calamar-madplay*.php tools/madplay*.php; do php -l "$file"; done
+      - name: Probar sesiones, firmas de fragmentos y errores sin acceder al proveedor
+        run: |
+          php tools/madplay_session_test.php
+          php tools/madplay_provider_test.php
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Probar páginas y menús del partido sin acceder al proveedor
+        run: node --test tools/madplay_sources.test.mjs

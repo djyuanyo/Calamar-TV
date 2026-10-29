@@ -596,7 +596,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     final String requestedPage = pageUrl;
     if (zicoPage()) hostingPlayback = true;
-    final boolean throughHosting = hostingPlayback;
+    final boolean throughHosting = hostingPlayback && MadplayPlayback.menu(requestedPage) == null;
     final String requestedSignal = hostingSourceId.isEmpty() ? HostingPlayback.AUTOMATIC : hostingSourceId;
     final int requestedAttempt = automaticAttempts;
     final String channelName = HostingPlayback.label(eventSourceNames.get(requestedPage), HostingPlayback.label(title, "Canal"));
@@ -609,6 +609,27 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           try {
             NetworkTransport pageTransport = mediaSystemRetry ? NetworkTransport.get(DnsProvider.SYSTEM) : transport;
             String eventApi = VideoResolver.eventApi(requestedPage);
+            String madplayMenu = MadplayPlayback.menu(requestedPage);
+            if (madplayMenu != null) {
+              PlayerDocument.Result menu;
+              try { menu = PlayerDocument.fetch(madplayMenu, NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true)); }
+              catch (PlayerDocument.HttpFailure failure) {
+                if (failure.status == 503) throw new java.io.IOException("Esta fuente está pendiente de verificar y habilitar en el hosting.");
+                throw failure;
+              }
+              List<VideoResolver.Source> found = MadplayPlayback.parse(requestedPage, menu.html);
+              handler.post(() -> {
+                if (!active || request != generation) return;
+                resolving = false; hostingPlayback = false; hostingOptions.clear(); hostingSourceId = "";
+                documentUrl = madplayMenu; chromiumNetwork = false;
+                String previous = selection >= 0 && selection < sources.size() ? sources.get(selection).url : null;
+                sources.clear(); sources.addAll(found);
+                selection = VideoResolver.renewedSelection(sources, previous, selection);
+                lastReport = reportHeader() + "\nHosting: fuentes del partido recibidas; sesiones renovadas por el puente";
+                updateSourceButton(); playSource(sources.get(selection));
+              });
+              return;
+            }
             if (throughHosting && eventApi == null) {
               // Start exactly as 2.20.55: one request lets the hosting try every available signal.
               // The optional menu runs independently; it cannot stop a working video from opening.
@@ -719,6 +740,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                         "No se pudo renovar. La emisión actual continúa; reintentando…");
                     handler.removeCallbacks(renewal);
                     handler.postDelayed(renewal, 15000L);
+                  } else if (MadplayPlayback.menu(requestedPage) != null) {
+                    problem("No se pudo abrir esta emisión: " + failure.getMessage());
                   } else if (throughHosting) {
                     if (HostingPlayback.AUTOMATIC.equals(requestedSignal))
                       refreshAutomatically("El servidor no ha encontrado vídeo todavía. Reintentando con otra señal…");
@@ -803,7 +826,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     releasePlayer();
     DataSource.Factory http;
     // The signed URL and its media must use the same working system route to our hosting.
-    final boolean hostedSource = hostingPlayback && HostingPlayback.isRelay(source.url);
+    final boolean hostedSource = (hostingPlayback && HostingPlayback.isRelay(source.url)) || MadplayPlayback.isRelay(source.url);
     final boolean requestHttp1 = mediaHttp1 || hostedSource;
     try {
       if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || source.url.startsWith(Library.PLAYER_ENDPOINT)
@@ -1016,7 +1039,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** A failed private DNS must not leave working device connections waiting indefinitely. */
   private boolean retrySystemNetwork(VideoResolver.Source source) {
-    if (hostingPlayback || mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
+    if (hostingPlayback || MadplayPlayback.isRelay(source.url) || mediaSystemRetry || transport.provider == DnsProvider.SYSTEM) return false;
     mediaSystemRetry = true;
     mediaHttp1 = true;
     status.setText("Reintentando con la conexión del dispositivo…");

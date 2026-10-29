@@ -72,7 +72,7 @@ jobs:
           disable-animations: true
           script: |
             adb shell pm list features | grep -q android.software.leanback
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest,es.yuanyo.calamartv.MadplayHostedPlaybackTest
       - name: Mostrar errores del reproductor en el emulador
         if: failure()
         run: |
