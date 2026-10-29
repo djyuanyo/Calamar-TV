@@ -1,46 +1,42 @@
 [
  {
-  "url": "https://7qd2b6je78ch5.s3.eu-north-1.amazonaws.com/hls/0/stream.m3u8",
+  "url": "https://calamarmenciano.com/calamar-drive.php",
+  "method": "GET",
   "status": 403,
-  "type": "application/xml",
-  "length": 263,
+  "type": "application/json; charset=utf-8",
   "acao": "*",
-  "lastModified": null,
-  "cache": null,
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>0XVJFM4WR71ZM452</RequestId><HostId>h+SFtFrOlYL8ClHd9+/NudvppGT1TeoLAK7WBgNAmSDJcTAlh1dHRHdwRJ2Ndj8DQcSMcEbJhi12fJZNxU/P1ZSHfoEe/Vcn</HostId></Error>",
-  "firstByte": 60
+  "body": "{\"error\":\"Enlace de v\\u00eddeo no v\\u00e1lido.\"}"
  },
  {
-  "url": "https://7qd2b6je78ch5.s3.eu-north-1.amazonaws.com/hls/0/%3C?xml%20version=%221.0%22%20encoding=%22UTF-8%22?%3E",
-  "status": 403,
-  "type": "application/xml",
-  "length": 263,
-  "acao": "*",
-  "lastModified": null,
-  "cache": null,
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>DFVHW1SFQ7D1VX1E</RequestId><HostId>tRg3KfT+xns+ORSzbpbzIjDQphLOW/UpWMdI0y73dfDDkLR2kfYBO0OOx61PyZYkwGWkEPhPds35Jkgsl70vqwj7+jRXBufT</HostId></Error>",
-  "firstByte": 60
+  "url": "https://calamarmenciano.com/calamar-drive.php",
+  "method": "POST",
+  "status": 502,
+  "type": "application/json; charset=utf-8",
+  "acao": "https://djyuanyo.github.io",
+  "body": "{\"error\":\"Drive no permite leer esta carpeta. Comprueba el enlace compartido y una clave con Google Drive API habilitada (HTTP 400).\"}"
  },
  {
-  "url": "https://7qd2b6je78ch5.s3.eu-north-1.amazonaws.com/hls/0/%3CError%3E%3CCode%3EAccessDenied%3C/Code%3E%3CMessage%3EAccess%20Denied%3C/Message%3E%3CRequestId%3E0XVJFM4WR71ZM452%3C/RequestId%3E%3CHostId%3Eh+SFtFrOlYL8ClHd9+/NudvppGT1TeoLAK7WBgNAmSDJcTAlh1dHRHdwRJ2Ndj8DQcSMcEbJhi12fJZNxU/P1ZSHfoEe/Vcn%3C/HostId%3E%3C/Error%3E",
-  "status": 403,
-  "type": "application/xml",
-  "length": 263,
-  "acao": "*",
-  "lastModified": null,
-  "cache": null,
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>DFVMQ289T84RCWQH</RequestId><HostId>L8z2o5E4BsqrQWMI4lHl5fwolqSfFg65Vo6WqKPWxuZ/kchq7AlxTzS0FuBW0QiuQRPJPEYrsTa+hAzXHv/ckXW15O/94wrl</HostId></Error>",
-  "firstByte": 60
+  "url": "https://calamarmenciano.com/calamar-drive.php",
+  "method": "OPTIONS",
+  "status": 204,
+  "type": "text/html; charset=UTF-8",
+  "acao": "https://djyuanyo.github.io",
+  "body": ""
  },
  {
-  "url": "https://7qd2b6je78ch5.s3.eu-north-1.amazonaws.com/hls/0/stream.m3u8",
+  "url": "https://calamarmenciano.com/calamar-lulu.php?api=1",
+  "method": "GET",
+  "status": 400,
+  "type": "application/json; charset=utf-8",
+  "acao": "https://djyuanyo.github.io",
+  "body": "{\"error\":\"C\\u00f3digo de v\\u00eddeo no v\\u00e1lido.\"}"
+ },
+ {
+  "url": "https://luluvido.com/api/folder/list?key=x&fld_id=0",
+  "method": "GET",
   "status": 403,
-  "type": "application/xml",
-  "length": 243,
+  "type": "text/html; charset=UTF-8",
   "acao": null,
-  "lastModified": null,
-  "cache": null,
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>Q4PSNVDEHW3KM5EB</RequestId><HostId>061oEc6gw8yI9EDZhD7rFMSC7Ecj/2UQ0uJugTwaMOUCpANcDP2sHQnfGio/hoszzRmB/lwbnHs=</HostId></Error>",
-  "firstByte": 60
+  "body": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\"><meta name=\"robots\" content=\"noindex,nofollow\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"content-security-policy\" content=\"default-src &#39;none&#39;; script-src &#39"
  }
 ]
