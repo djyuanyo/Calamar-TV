@@ -1237,3 +1237,33 @@ a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
 .league-hero p { margin: 0; color: rgba(255,255,255,.85); font-weight: 600; }
 .league-hero-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
 .league-grid { grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 26vw, 360px), 1fr)); }
+
+/* ---- Accounts and profiles ---- */
+.account-link { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 999px;
+  background: var(--accent); color: #0b0d10; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.account-link:has(.profile-avatar) { padding: 0; background: transparent; }
+.profile-avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--profile, #e50914);
+  color: #fff; font-weight: 800; font-size: 17px; }
+.profile-avatar.big { width: 112px; height: 112px; border-radius: 14px; font-size: 52px; }
+.profile-avatar.add { background: transparent; border: 2px dashed rgba(255, 255, 255, .45); color: rgba(255, 255, 255, .75); }
+.account-card { max-width: 760px; margin: 32px auto; padding: 24px 20px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+.account-card h1 { margin: 0; font-size: clamp(26px, 5vw, 40px); }
+.account-form, .profile-form { display: grid; gap: 10px; width: min(380px, 100%); }
+.account-form input, .profile-form input { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .06); color: inherit; font-size: 16px; }
+.account-or { margin: 4px 0; color: rgba(255, 255, 255, .6); }
+.google-btn { width: min(380px, 100%); }
+.profile-grid { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; margin: 12px 0; }
+.profile-tile { display: grid; gap: 10px; justify-items: center; background: none; border: 0; color: rgba(255, 255, 255, .75); cursor: pointer; padding: 6px; border-radius: 16px; position: relative; }
+.profile-tile:hover, .profile-tile:focus-visible { color: #fff; }
+.profile-tile:hover .profile-avatar, .profile-tile:focus-visible .profile-avatar { outline: 3px solid #fff; outline-offset: 2px; }
+.profile-tile.current .profile-name { color: #fff; font-weight: 700; }
+.profile-edit { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); font-size: 30px; color: #fff; text-shadow: 0 2px 8px #000; }
+.color-picker { display: flex; gap: 10px; justify-content: center; }
+.color-dot { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; background: var(--profile); cursor: pointer; }
+.color-dot[aria-pressed="true"] { border-color: #fff; }
+.btn.danger { color: #ff7b72; }
+.title-action[aria-pressed="true"] { color: var(--accent); }
+.fav-btn[aria-pressed="true"] { --fav-fill: currentColor; color: #ff5a6e; }
+.top-inner .account-link { margin-left: auto; }
+.top-inner .account-link + .admin-link { margin-left: 10px; }
+.account-card .actions { justify-content: center; }

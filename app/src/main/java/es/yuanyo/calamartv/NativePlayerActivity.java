@@ -133,6 +133,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     paintSkip();
     handler.postDelayed(this, 400);
   }};
+  // Films, series and documentaries, as in Netflix: under the bar the time watched and the time left.
+  private final Runnable remainingTick = new Runnable() { public void run() {
+    TextView left = playerView == null ? null : playerView.findViewById(androidx.media3.ui.R.id.exo_duration);
+    if (left != null && player != null && player.getDuration() > 0)
+      left.setText(Library.remainingTime(player.getDuration() - player.getCurrentPosition()));
+    handler.postDelayed(this, 500);
+  }};
   private final Runnable progressTick = new Runnable() { public void run() {
     rememberPosition();
     handler.postDelayed(this, 10000);
@@ -245,7 +252,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       });
     }
     sourceButton = button(controls, "Fuentes", this::chooseSource);
-    sourceButton.setVisibility(View.VISIBLE);
+    // Films, series and documentaries have no «Fuentes» button: they play their own video.
+    sourceButton.setVisibility(progressEntry != null ? View.GONE : View.VISIBLE);
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
     if (shareUrl != null) {
       ImageButton shareButton = new ImageButton(this);
@@ -366,7 +374,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void updateSourceButton() {
-    if (sourceButton != null) sourceButton.setVisibility(View.VISIBLE);
+    if (sourceButton != null) sourceButton.setVisibility(progressEntry != null ? View.GONE : View.VISIBLE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -844,6 +852,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     // Below the video: subtitles (CC) and, in ⚙, the audio track, for what is not live.
     playerView.setShowSubtitleButton(progressEntry != null);
     playerView.setPlayer(player);
+    if (progressEntry != null) { handler.removeCallbacks(remainingTick); handler.post(remainingTick); }
     final ExoPlayer instance = player;
     player.addAnalyticsListener(
         new androidx.media3.exoplayer.analytics.AnalyticsListener() {
@@ -1561,6 +1570,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override
   protected void onDestroy() {
     handler.removeCallbacks(skipTick);
+    handler.removeCallbacks(remainingTick);
     if (castControls != null) castControls.destroy();
     worker.shutdownNow();
     sourceMenuWorker.shutdownNow();

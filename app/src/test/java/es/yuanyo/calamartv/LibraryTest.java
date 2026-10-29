@@ -316,4 +316,13 @@ public class LibraryTest {
     assertNull(Library.Media.anonmp4("https://anonmp4.art.evil.com/v/ESuKsItGgV4rMAE"));
     assertTrue(Library.Media.allowed("https://anonmp4.art/v/ESuKsItGgV4rMAE"));
   }
+
+  @Test public void similarPutsTheSameSagaFirst() {
+    assertEquals("torrente", Library.sagaName("Torrente 2: Misión en Marbella"));
+    assertEquals("torrente", Library.sagaName("Torrente, el brazo tonto de la ley"));
+    assertEquals("rocky", Library.sagaName("Rocky IV"));
+    assertEquals(2, Library.titleRelation("Torrente 3: El protector", "Torrente 5: Operación Eurovegas"));
+    assertEquals(1, Library.titleRelation("Harry Potter y la piedra filosofal", "Harry Potter y la cámara secreta"));
+    assertEquals(0, Library.titleRelation("La vida es bella", "La vida de Brian"));
+  }
 }

@@ -18,3 +18,11 @@ test('tracks are named by their own name, or by their language in Spanish', () =
   assert.equal(trackLabel({ language: 'fr', label: '' }, 0), 'Francés');
   assert.equal(trackLabel({}, 3), 'Pista 4');
 });
+
+test('films show the time watched and the time left, as in Netflix', async () => {
+  const { elapsedRemaining } = await import('../web/player-controls.js');
+  assert.equal(elapsedRemaining(723, 5533), '12:03 / -1:20:10');
+  assert.equal(elapsedRemaining(0, 95), '0:00 / -1:35');
+  assert.equal(elapsedRemaining(NaN, 60), '0:00 / -1:00');
+  assert.equal(elapsedRemaining(70, 60), '1:10 / -0:00');
+});

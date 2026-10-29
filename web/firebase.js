@@ -4,7 +4,7 @@ import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js'
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
@@ -16,17 +16,61 @@ export const administrator = (user = auth.currentUser) => !!user && user.email =
 export const watchAuth = (changed) => onAuthStateChanged(auth, changed);
 // «Continuar viendo» of the signed-in account (calamarProgress/<uid>), the same document the app uses.
 export const PROGRESS_PATH = 'calamarProgress';
-export async function readCloudProgress() {
+// The main profile keeps it there (the app reads it); every other profile in calamarUsers/<uid>/progress/<profile>.
+export const USERS_PATH = 'calamarUsers';
+const progressDoc = (user, profile) => (!profile || profile === 'main' ? doc(db, PROGRESS_PATH, user.uid) : doc(db, USERS_PATH, user.uid, 'progress', profile));
+const readJson = async (ref, fallback) => {
+  const snapshot = await getDocFromServer(ref);
+  if (!snapshot.exists()) return fallback;
+  try { return JSON.parse(snapshot.data().json); } catch { return fallback; }
+};
+export async function readCloudProgress(profile = 'main') {
   const user = auth.currentUser;
   if (!user) return null;
-  const snapshot = await getDocFromServer(doc(db, PROGRESS_PATH, user.uid));
-  if (!snapshot.exists()) return { entries: {}, removed: {} };
-  try { return JSON.parse(snapshot.data().json); } catch { return { entries: {}, removed: {} }; }
+  return readJson(progressDoc(user, profile), { entries: {}, removed: {} });
 }
-export async function writeCloudProgress(data) {
+export async function writeCloudProgress(data, profile = 'main') {
   const user = auth.currentUser;
   if (!user) return;
-  await setDoc(doc(db, PROGRESS_PATH, user.uid), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
+  await setDoc(progressDoc(user, profile), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
+}
+
+// ---- Accounts and profiles: calamarUsers/<uid> (the profiles) and .../profiles/<id> (My list, likes, favourites) ----
+export const currentUser = () => auth.currentUser;
+/** Any Google account (the admin page asks for the administrator's own). */
+export function loginGoogle() {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return signInWithPopup(auth, provider);
+}
+export async function registerEmail(email, password, name) {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  if (name) await updateProfile(result.user, { displayName: name });
+  return result;
+}
+export const loginEmail = (email, password) => signInWithEmailAndPassword(auth, email, password);
+export const resetPassword = (email) => sendPasswordResetEmail(auth, email);
+export async function readAccount() {
+  const user = auth.currentUser;
+  return user ? readJson(doc(db, USERS_PATH, user.uid), null) : null;
+}
+export async function writeAccount(data) {
+  const user = auth.currentUser;
+  if (user) await setDoc(doc(db, USERS_PATH, user.uid), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
+}
+export async function readProfileData(profile) {
+  const user = auth.currentUser;
+  return user ? readJson(doc(db, USERS_PATH, user.uid, 'profiles', profile), null) : null;
+}
+export async function writeProfileData(profile, data) {
+  const user = auth.currentUser;
+  if (user) await setDoc(doc(db, USERS_PATH, user.uid, 'profiles', profile), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
+}
+export async function deleteProfileData(profile) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await deleteDoc(doc(db, USERS_PATH, user.uid, 'profiles', profile)).catch(() => {});
+  await deleteDoc(doc(db, USERS_PATH, user.uid, 'progress', profile)).catch(() => {});
 }
 export const logout = () => signOut(auth);
 /**
@@ -152,6 +196,15 @@ export function explain(error) {
     'auth/popup-closed-by-user': 'Has cerrado la ventana de Google. Puedes volver a entrar.',
     'auth/popup-blocked': 'Permite las ventanas emergentes para acceder con Google.',
     'auth/unauthorized-domain': 'Este dominio todavía no está autorizado para acceder con Google.',
+    'auth/invalid-email': 'Ese correo no es válido.',
+    'auth/invalid-credential': 'El correo o la contraseña no son correctos.',
+    'auth/wrong-password': 'El correo o la contraseña no son correctos.',
+    'auth/user-not-found': 'No hay ninguna cuenta con ese correo.',
+    'auth/email-already-in-use': 'Ya hay una cuenta con ese correo. Entra con él o recupera la contraseña.',
+    'auth/weak-password': 'La contraseña tiene que tener al menos 6 caracteres.',
+    'auth/too-many-requests': 'Demasiados intentos. Espera un momento y vuelve a probar.',
+    'auth/operation-not-allowed': 'El acceso con correo y contraseña todavía no está activado en Firebase.',
+    'auth/missing-password': 'Escribe la contraseña.',
     'permission-denied': 'Esta cuenta no tiene permiso para administrar los canales.',
     'unavailable': 'No se pudo conectar con el catálogo. Comprueba la conexión y vuelve a intentarlo.',
   };

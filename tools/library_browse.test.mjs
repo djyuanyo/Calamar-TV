@@ -160,3 +160,31 @@ test('manual trailer overrides TMDB, accepts YouTube links and can be cleared', 
   assert.equal(trailerId({trailerUrl:'',tmdb:{trailer:id}}), '');
   assert.equal(trailerId({trailerUrl:'https://youtu.be/12345678901',tmdb:{trailer:id}}), '12345678901');
 });
+
+test('«Similares» puts the same saga first (every «Torrente»), then shared genres', async () => {
+  const { sagaName, titleRelation } = await import('../web/library.js');
+  assert.equal(sagaName('Torrente 2: Misión en Marbella'), 'torrente');
+  assert.equal(sagaName('Torrente, el brazo tonto de la ley'), 'torrente');
+  assert.equal(sagaName('Rocky IV'), 'rocky');
+  assert.equal(titleRelation('Torrente 3: El protector', 'Torrente 5: Operación Eurovegas'), 2);
+  assert.equal(titleRelation('Harry Potter y la piedra filosofal', 'Harry Potter y la cámara secreta'), 1);
+  assert.equal(titleRelation('El señor de los anillos: La comunidad del anillo', 'El señor de los anillos: Las dos torres'), 2);
+  assert.equal(titleRelation('Torrente', 'Torrente 4: Lethal Crisis'), 2);
+  assert.equal(titleRelation('La vida es bella', 'La vida de Brian'), 0);
+  const movie = (id, title, genres, rating = 5) => ({ id, kind: 'movie', title, tmdb: { title, genres, rating } });
+  const library = { sections: { movies: [movie('t1', 'Torrente, el brazo tonto de la ley', ['Comedia']), movie('c1', 'Otra comedia', ['Comedia'], 9),
+    movie('t2', 'Torrente 2: Misión en Marbella', ['Comedia', 'Acción'], 4), movie('d1', 'Un drama', ['Drama'], 8), movie('t4', 'Torrente 4: Lethal Crisis', ['Acción'], 3)] } };
+  assert.deepEqual(similarTitles(library, { key: 'movies' }, library.sections.movies[0]).map((i) => i.id), ['t2', 't4', 'c1']);
+});
+
+test('the home page search finds films, series and documentaries, never titles without a TMDB record', async () => {
+  const { librarySearch } = await import('../web/library.js');
+  const library = { sections: { movies: [{ id: 'm1', kind: 'movie', title: 'Torrente', tmdb: { id: 1, title: 'Torrente, el brazo tonto de la ley', genres: ['Comedia'] } },
+    { id: 'u1', kind: 'movie', title: 'Torrente copia', status: 'unmatched' }],
+    series: [{ id: 's1', kind: 'tv', title: 'Aída', tmdb: { id: 2, title: 'Aída', genres: ['Comedia'] }, episodes: [] }],
+    documentaries: [{ id: 'd1', kind: 'movie', title: 'Topuria', tmdb: { id: 3, title: 'Topuria: Matador', genres: ['Documental'] } }] } };
+  assert.deepEqual(librarySearch(library, 'torrente').map(({ section, item }) => [section.key, item.id]), [['movies', 'm1']]);
+  assert.deepEqual(librarySearch(library, 'aida').map(({ item }) => item.id), ['s1']);
+  assert.deepEqual(librarySearch(library, 'matador').map(({ item }) => item.id), ['d1']);
+  assert.deepEqual(librarySearch(library, '  '), []);
+});

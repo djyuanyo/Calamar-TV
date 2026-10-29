@@ -135,3 +135,22 @@ test('each account reads and writes only its own «Continuar viendo»', async ()
   await assertFails(setDoc(doc(mine, 'calamarProgress/user-a'), progress({ json: 'x'.repeat(200001) })));
   await assertFails(getDocs(collection(mine, 'calamarProgress')));
 });
+test('each account reads and writes only its own profiles, their data and their «Continuar viendo»', async () => {
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const value = (overrides = {}) => ({ json: '{}', updatedAt: serverTimestamp(), ...overrides });
+  for (const path of ['calamarUsers/user-a', 'calamarUsers/user-a/profiles/p2', 'calamarUsers/user-a/progress/p2']) {
+    await assertSucceeds(setDoc(doc(mine, path), value()));
+    await assertSucceeds(getDoc(doc(mine, path)));
+    await assertFails(getDoc(doc(other, path)));
+    await assertFails(setDoc(doc(other, path), value()));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), path)));
+    await assertFails(setDoc(doc(mine, path), value({ extra: 1 })));
+    await assertFails(setDoc(doc(mine, path), value({ updatedAt: new Date(0) })));
+  }
+  await assertFails(setDoc(doc(mine, 'calamarUsers/user-a'), value({ json: 'x'.repeat(20001) })));
+  await assertFails(setDoc(doc(mine, 'calamarUsers/user-a/profiles/Bad-Id'), value()));
+  await assertFails(getDocs(collection(mine, 'calamarUsers')));
+  await assertFails(getDocs(collection(mine, 'calamarUsers/user-a/profiles')));
+  await assertSucceeds(deleteDoc(doc(mine, 'calamarUsers/user-a/profiles/p2')));
+});

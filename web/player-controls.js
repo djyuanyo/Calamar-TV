@@ -40,6 +40,12 @@ const formatTime = (s) => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 };
 
+/** Films, series and documentaries, as in Netflix: the time watched and the time left («12:03 / -1:20:10»). */
+export function elapsedRemaining(current, duration) {
+  const at = Number.isFinite(current) && current > 0 ? current : 0;
+  return `${formatTime(at)} / -${formatTime(Math.max(0, (duration || 0) - at))}`;
+}
+
 function store(key, value) {
   try {
     if (value === undefined) return localStorage.getItem(key);
@@ -162,7 +168,8 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
       els.seek.max = String(video.duration || 0);
       if (!els.seek.matches(':active')) els.seek.value = String(video.currentTime);
       els.seek.style.setProperty('--progress', `${video.duration ? (video.currentTime / video.duration) * 100 : 0}%`);
-      els.time.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+      els.time.textContent = onDemand() ? elapsedRemaining(video.currentTime, video.duration)
+        : `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
     } else {
       els.live.classList.toggle('behind', behindLive() > 12);
     }
