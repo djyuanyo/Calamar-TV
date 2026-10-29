@@ -117,7 +117,9 @@ try {
   assert.equal(await page.locator('main .section-head h2 a.league-head').first().getAttribute('href'), '#/liga/liga-de-prueba');
   await page.locator('main .section-head h2 a.league-head').first().click();
   await page.locator('.league-hero h1', { hasText: 'Liga de prueba' }).waitFor();
-  assert.ok(await page.locator('.league-grid .event-card').count() > 0);
+  // Only today's matches: this one is tomorrow (1 December), so the page says there are none today.
+  assert.equal(await page.locator('.league-grid .event-card').count(), 0);
+  await page.getByText('Hoy no hay partidos de esta liga con canal asignado.').waitFor();
   await page.getByRole('button', { name: '⤴ Compartir' }).waitFor();
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
   await page.locator('.event-card:not(.live-rail *)').waitFor();
