@@ -29,7 +29,9 @@ public class MainActivity extends Activity {
   final List<LazySection> lazySections = new ArrayList<>();
   final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
   final ExecutorService sharedWorker = Executors.newSingleThreadExecutor();
-  final ExecutorService imageWorker = Executors.newFixedThreadPool(2);
+  // Several pictures at a time: a row of posters no longer comes in two by two.
+  final ExecutorService imageWorker = Executors.newFixedThreadPool(6);
+  final ExecutorService prefetchWorker = Executors.newSingleThreadExecutor();
   final Map<String, List<java.lang.ref.WeakReference<ImageView>>> pendingImages = new HashMap<>();
   int imageGeneration;
   long sharedServerAt;
@@ -51,7 +53,7 @@ public class MainActivity extends Activity {
   boolean sharedAvailable = false;
   com.google.firebase.firestore.ListenerRegistration sharedListener;
   final LruCache<String, Bitmap> images =
-      new LruCache<String, Bitmap>(12 * 1024 * 1024) {
+      new LruCache<String, Bitmap>((int) Math.max(12L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)) {
         protected int sizeOf(String k, Bitmap b) {
           return b.getByteCount();
         }
@@ -78,6 +80,9 @@ public class MainActivity extends Activity {
         || ((UiModeManager) getSystemService(UI_MODE_SERVICE)).getCurrentModeType()
             == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
     MatchScores.initialize(this);
+    imageCacheDir = new File(getCacheDir(), "images");
+    if (!imageCacheDir.isDirectory() && !imageCacheDir.mkdirs()) imageCacheDir = null;
+    imageWorker.execute(MainActivity::trimImageCache);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     updater = createUpdater();
@@ -498,7 +503,15 @@ public class MainActivity extends Activity {
     t.setOrientation(LinearLayout.VERTICAL);
     t.setFocusable(true);
     t.setClickable(true);
-    t.setBackground(Ui.focusFill(this, Color.TRANSPARENT, 0x1fffffff, Ui.ACC, 8, 0));
+    // The outline is for the remote of a television (focus); on a touch screen the tab just changes, without
+    // an outline while it is pressed.
+    if (television) t.setBackground(Ui.focusFill(this, Color.TRANSPARENT, 0x1fffffff, Ui.ACC, 8, 0));
+    else {
+      StateListDrawable focusOnly = new StateListDrawable();
+      focusOnly.addState(new int[] {android.R.attr.state_focused}, Ui.shape(this, 0x1fffffff, 8, 2, Ui.ACC));
+      focusOnly.addState(new int[] {}, new ColorDrawable(Color.TRANSPARENT));
+      t.setBackground(focusOnly);
+    }
     TextView tv = new TextView(this);
     tv.setText(label.toUpperCase(new Locale("es", "ES")));
     tv.setTextSize(13);
@@ -1427,6 +1440,7 @@ public class MainActivity extends Activity {
     handler.removeCallbacksAndMessages(null);
     imageGeneration++;
     imageWorker.shutdownNow();
+    prefetchWorker.shutdownNow();
     catalogWorker.shutdownNow();
     sharedWorker.shutdownNow();
     pendingImages.clear();
@@ -1535,8 +1549,75 @@ public class MainActivity extends Activity {
     return BitmapFactory.decodeByteArray(data, 0, data.length, o);
   }
 
+  /** Pictures already downloaded, kept on the device: posters show at once the next time. */
+  static File imageCacheDir;
+
+  static File cachedImage(String address) {
+    if (imageCacheDir == null) return null;
+    try {
+      java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-1");
+      StringBuilder name = new StringBuilder();
+      for (byte b : sha.digest(address.getBytes(java.nio.charset.StandardCharsets.UTF_8))) name.append(String.format(Locale.ROOT, "%02x", b & 255));
+      return new File(imageCacheDir, name.toString());
+    } catch (Exception impossible) { return null; }
+  }
+
+  /** The picture's bytes: from the device when it was downloaded before, else from the network (and kept). */
+  static byte[] imageBytes(String address) {
+    File file = cachedImage(address);
+    if (file != null && file.isFile() && file.length() > 0) {
+      try (FileInputStream in = new FileInputStream(file)) {
+        byte[] data = new byte[(int) file.length()];
+        int read = 0;
+        for (int n; read < data.length && (n = in.read(data, read, data.length - read)) != -1;) read += n;
+        if (read == data.length) { file.setLastModified(System.currentTimeMillis()); return data; }
+      } catch (IOException broken) { file.delete(); }
+    }
+    byte[] data = downloadImage(address);
+    if (data != null && file != null) {
+      File part = new File(file.getPath() + ".part");
+      try (FileOutputStream out = new FileOutputStream(part)) { out.write(data); }
+      catch (IOException full) { part.delete(); return data; }
+      if (!part.renameTo(file)) part.delete();
+    }
+    return data;
+  }
+
+  /** Keeps the pictures kept on the device under 80 MB, the oldest used go first. */
+  static void trimImageCache() {
+    File[] files = imageCacheDir == null ? null : imageCacheDir.listFiles();
+    if (files == null) return;
+    long total = 0;
+    for (File f : files) total += f.length();
+    if (total < 80L * 1024 * 1024) return;
+    Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+    for (File f : files) { if (total < 60L * 1024 * 1024) break; total -= f.length(); f.delete(); }
+  }
+
+  /** The posters of the library downloaded ahead (one at a time, in the background), for the rows to show at once. */
+  void prefetchPosters(Library.Data data) {
+    final List<String> urls = new ArrayList<>();
+    for (String[] section : Library.SECTIONS) for (Library.Item item : data.items(section[0]))
+      if (item.poster.startsWith("https://") && urls.size() < 400) urls.add(item.poster);
+    prefetchWorker.execute(() -> {
+      for (String url : urls) {
+        if (Thread.currentThread().isInterrupted()) return;
+        File file = cachedImage(url);
+        if (file != null && !file.isFile()) imageBytes(url);
+      }
+    });
+  }
+
   /** An image read from the network, scaled down when large; null when it cannot be read. */
   static Bitmap readBitmap(String address) {
+    byte[] data = imageBytes(address);
+    Bitmap bitmap = data == null ? null : decodeBitmap(data);
+    // A broken copy on the device is dropped, so the next time it is downloaded again.
+    if (data != null && bitmap == null) { File file = cachedImage(address); if (file != null) file.delete(); }
+    return bitmap;
+  }
+
+  static byte[] downloadImage(String address) {
     try {
       HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
       c.setConnectTimeout(6000);
@@ -1552,8 +1633,7 @@ public class MainActivity extends Activity {
           out.write(buf, 0, n);
         }
         in.close();
-        byte[] data = out.toByteArray();
-        return decodeBitmap(data);
+        return out.toByteArray();
       } finally {
         c.disconnect();
       }
@@ -1641,7 +1721,7 @@ public class MainActivity extends Activity {
       final String failure = error;
       runOnUiThread(() -> {
         libraryBusy = false;
-        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); }
+        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); prefetchPosters(result); }
         libraryError = failure;
         // The home page also draws again the first time, for the titles «En portada» and the top.
         if (!isFinishing() && (Library.section(mode) != null || (result != null && "Inicio".equals(mode) && (first || !query.trim().isEmpty())))) render();
