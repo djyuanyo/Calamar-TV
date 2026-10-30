@@ -161,8 +161,9 @@ export async function readAccess(uid = auth.currentUser?.uid) {
 }
 /** Registration is mandatory by default; only the administrator may change it. */
 const settingsRef = doc(db, 'calamarSettings', 'access');
-export const watchAccessSettings = (next, failed) => onSnapshot(settingsRef, s => next({ requireRegistration: !s.exists() || s.data().requireRegistration !== false }), failed);
-export const watchAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarAccess', uid), s => {
+export const watchAccessSettings = (next, failed) => onSnapshot(settingsRef, {includeMetadataChanges:true}, s => { if (!s.metadata.fromCache) next({ requireRegistration: !s.exists() || s.data().requireRegistration !== false }); }, failed);
+export const watchAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarAccess', uid), {includeMetadataChanges:true}, s => {
+  if (s.metadata.fromCache) return;
   const v = s.exists() ? s.data() : {};
   next({ expires: millis(v.expires), screens: Number.isInteger(v.screens) ? v.screens : 1 });
 }, failed);

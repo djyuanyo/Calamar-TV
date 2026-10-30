@@ -78,7 +78,10 @@ export function startWatching(title, profile = '', count = 1) {
     if (!accessKnown()) await Promise.race([firstAnswer, new Promise(resolve => setTimeout(resolve, 12000))]);
     if (request !== claimGeneration) return { ok: false, reason: 'Reproducción cancelada.' };
     if (!accessKnown() || !firebase) return { ok: false, reason: 'No se pudo comprobar tu cuenta. Revisa la conexión y vuelve a intentarlo.' };
-    if (!user) return required ? { ok: false, reason: 'Entra con tu cuenta para ver Calamar TV.' } : { ok: true };
+    if (!user) {
+      if (required) return { ok: false, reason: 'Entra con tu cuenta para ver Calamar TV.' };
+      watching = true; return { ok: true };
+    }
     if (expiredSince()) return { ok: false, reason: 'Tu acceso ha caducado. Habla con el administrador para renovarlo.' };
     const holder = newHolder();
     try {

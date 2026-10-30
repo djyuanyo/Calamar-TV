@@ -33,6 +33,24 @@ public class AccountAccessPlaybackTest {
     public void beat(AccountAccess.Lease lease,AccountAccess.Completion<Void> done){done.done(null,null);}
     public void release(AccountAccess.Lease lease){released++;}
   }
+  @Test public void cachedUnknownStateWaitsAndSigningInReservesTheExistingAnonymousPlayer(){
+    Authority authority=new Authority(new AccountAccess.State(false,false,false,"",0,1));
+    AccountAccess.factory=context->authority;
+    try{
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+        int[] plays={0};List<String> reasons=new ArrayList<>();
+        AccountAccess.Playback playback=new AccountAccess.Playback(ApplicationProvider.getApplicationContext(),"Canal",1,()->plays[0]++,reasons::add);
+        playback.start();assertFalse(playback.allowed());assertEquals(0,plays[0]);
+        authority.update(new AccountAccess.State(true,false,false,"",0,1));
+        assertTrue(playback.allowed());assertEquals(1,plays[0]);assertEquals(0,authority.claims);
+        authority.update(new AccountAccess.State(true,false,true,"viewer",0,1));
+        assertTrue(playback.allowed());assertEquals(2,plays[0]);assertEquals(1,authority.claims);
+        authority.update(new AccountAccess.State(true,true,false,"",0,1));
+        assertFalse(playback.allowed());assertEquals(1,authority.released);
+        playback.close();assertEquals(1,authority.released);
+      });
+    }finally{AccountAccess.factory=context->CalamarTestRunner.LOCAL;}
+  }
   @Test public void anonymousAccountCannotRequestAnyMedia()throws Exception{deny(new AccountAccess.State(true,true,false,"",0,1),null,false);}
   @Test public void expiredAccountCannotRequestAnyMedia()throws Exception{deny(new AccountAccess.State(true,true,true,"viewer",System.currentTimeMillis()-1000,1),null,false);}
   @Test public void fullAccountCannotLoadTheDailymotionPlayerEither()throws Exception{deny(new AccountAccess.State(true,true,true,"viewer",0,1),"Se ha superado el límite de reproducciones simultáneas de tu cuenta (1 pantalla).",true);}
@@ -62,7 +80,8 @@ public class AccountAccessPlaybackTest {
       byte[] block=new byte[8192];for(int n;(n=in.read(block))!=-1;)video.write(block,0,n);
     }
     try(MockWebServer server=new MockWebServer()){
-      server.enqueue(new MockResponse().setHeader("Content-Type","video/mp2t").setBody(video));server.start();
+      server.enqueue(new MockResponse().setHeader("Content-Type","video/mp2t").setChunkedBody(video,1316));server.start();
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(),DnsProvider.CLOUDFLARE);
       Intent intent=new Intent(ApplicationProvider.getApplicationContext(),NativePlayerActivity.class).putExtra("media_url",server.url("/live.ts").toString()).putExtra("title","Acceso");
       try(ActivityScenario<NativePlayerActivity> scenario=ActivityScenario.launch(intent)){
         AtomicBoolean playing=new AtomicBoolean();long until=SystemClock.elapsedRealtime()+20000;
@@ -70,7 +89,11 @@ public class AccountAccessPlaybackTest {
           scenario.onActivity(activity->{try{Field f=NativePlayerActivity.class.getDeclaredField("player");f.setAccessible(true);ExoPlayer p=(ExoPlayer)f.get(activity);playing.set(p!=null&&p.isPlaying()&&p.getVideoSize().width>0&&p.getCurrentPosition()>300);}catch(Exception e){throw new AssertionError(e);}});
           SystemClock.sleep(100);
         }
-        assertTrue("The reserved screen must play actual video",playing.get());assertEquals(1,authority.claims);
+        if(!playing.get())scenario.onActivity(activity->{try{
+          Field f=NativePlayerActivity.class.getDeclaredField("status");f.setAccessible(true);
+          fail("The reserved screen must play actual video; claims="+authority.claims+", requests="+server.getRequestCount()+", status="+((android.widget.TextView)f.get(activity)).getText());
+        }catch(ReflectiveOperationException e){throw new AssertionError(e);}});
+        assertEquals(1,authority.claims);
         scenario.onActivity(activity->authority.update(new AccountAccess.State(true,true,true,"viewer",System.currentTimeMillis()-1000,1)));
         scenario.onActivity(activity->{try{Field f=NativePlayerActivity.class.getDeclaredField("player");f.setAccessible(true);assertNull("Expiry must release the media player",f.get(activity));}catch(Exception e){throw new AssertionError(e);}});
         assertEquals(1,authority.released);

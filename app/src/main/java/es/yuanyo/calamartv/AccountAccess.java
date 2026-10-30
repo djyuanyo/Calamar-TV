@@ -75,6 +75,7 @@ final class AccountAccess {
       running=true;rejected=false;
       unwatch=authority.watch(next -> {
         if(state==null || !Objects.equals(state.uid,next.uid) || state.screens!=next.screens || state.expires!=next.expires || state.required!=next.required) rejected=false;
+        if (state!=null && (!Objects.equals(state.uid,next.uid) || state.signed!=next.signed) && (allowed || pending)) revoke("La cuenta ha cambiado. Comprobando el acceso…");
         state=next; check();
       });
     }
@@ -139,9 +140,10 @@ final class AccountAccess {
     long expires;
     int screens=1, authGeneration;
     ListenerRegistration rights;
+    com.google.android.gms.tasks.Task<Void> releaseTail=com.google.android.gms.tasks.Tasks.forResult(null);
     FirebaseAuthority(Context context) {
       this.context=context;this.db=database(context);
-      db.document("calamarSettings/access").addSnapshotListener((snapshot,error)->{
+      db.document("calamarSettings/access").addSnapshotListener(MetadataChanges.INCLUDE,(snapshot,error)->{
         settingsReady=error==null && snapshot!=null && !snapshot.getMetadata().isFromCache();
         if(settingsReady)required=!snapshot.exists() || !Boolean.FALSE.equals(snapshot.getBoolean("requireRegistration"));
         changed();
@@ -154,7 +156,7 @@ final class AccountAccess {
           Map<String,Object> member=new HashMap<>();member.put("email",user.getEmail()==null?"":user.getEmail());
           member.put("name",user.getDisplayName()==null?"":user.getDisplayName().substring(0,Math.min(100,user.getDisplayName().length())));member.put("seenAt",FieldValue.serverTimestamp());
           db.document("calamarMembers/"+uid).set(member);
-          rights=db.document("calamarAccess/"+uid).addSnapshotListener((snapshot,error)->{
+          rights=db.document("calamarAccess/"+uid).addSnapshotListener(MetadataChanges.INCLUDE,(snapshot,error)->{
             if(request!=authGeneration)return;
             rightsReady=error==null && snapshot!=null && !snapshot.getMetadata().isFromCache();
             if(rightsReady){expires=snapshot.exists()?millis(snapshot.get("expires")):0;Long count=snapshot.getLong("screens");screens=count==null?1:Math.max(1,Math.min(10,count.intValue()));}
@@ -173,6 +175,10 @@ final class AccountAccess {
       String profile=Profiles.active()==null?"":Profiles.active().optString("name","");
       String device=(context.getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_TYPE_MASK)==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION?"tv":"android";
       final Lease candidate=new Lease(account,owner,title==null?"Contenido":title.substring(0,Math.min(title.length(),120)),profile.substring(0,Math.min(profile.length(),40)),device,new ArrayList<>());
+      releaseTail.addOnCompleteListener(previous -> claimNow(candidate,count,done));
+    }
+    private void claimNow(Lease candidate,int count,Completion<Lease> done){
+      final String account=candidate.uid;
       db.runTransaction(tx->{
         if(count<1||count>MAX_SCREENS)throw new IllegalStateException("Número de reproducciones no válido.");
         DocumentSnapshot access=tx.get(db.document("calamarAccess/"+account));
@@ -198,11 +204,11 @@ final class AccountAccess {
       }).addOnSuccessListener(value->done.done(null,null)).addOnFailureListener(error->done.done(null,error));
     }
     public void release(Lease lease){
-      db.runTransaction(tx->{
+      releaseTail=releaseTail.continueWithTask(previous -> db.<Void>runTransaction(tx->{
         List<DocumentReference> refs=new ArrayList<>();List<DocumentSnapshot> slots=new ArrayList<>();
         for(int slot:lease.slots){DocumentReference ref=db.document("calamarStreams/"+lease.uid+"/sessions/"+slot);refs.add(ref);slots.add(tx.get(ref));}
         for(int i=0;i<refs.size();i++)if(slots.get(i).exists()&&lease.holder.equals(slots.get(i).getString("holder")))tx.delete(refs.get(i));return null;
-      });
+      }));
     }
   }
 }
