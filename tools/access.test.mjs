@@ -54,6 +54,7 @@ test('expiry releases the existing lease; a rejected renewal stops the media',as
   const lost=[];access.onPlaybackAccessLost(reason=>lost.push(reason));
   assert.equal((await access.startWatching('Película','Perfil 2',1)).ok,true);
   callbacks.rights({expires:Date.now()-1,screens:1});
+  await new Promise(setImmediate);
   assert.equal(access.playbackAllowed(),false);assert.equal(ended.length,1);assert.match(lost[0],/caducado/);
   callbacks.rights({expires:null,screens:1});
   assert.equal((await access.startWatching('Canal')).ok,true);
@@ -82,5 +83,20 @@ test('replacement waits for release and reserves the actual Multipantalla size',
   release();assert.equal((await next).ok,true);assert.equal(claims.length,2);
   assert.equal(claims[1].details.count,3);assert.equal(claims[1].details.profile,'Perfil 2');
   assert.notEqual(claims[0].holder,claims[1].holder);
+  service.endSession=async()=>{};
+});
+
+
+test('opening another video waits for an earlier close to finish releasing its slot',async t=>{
+  const {access,service,claims}=await controller(t);
+  assert.equal((await access.startWatching('A')).ok,true);
+  let finishRelease;
+  service.endSession=()=>new Promise(resolve=>{finishRelease=resolve;});
+  const closed=access.stopWatching();
+  const opened=access.startWatching('B');
+  await new Promise(setImmediate);
+  assert.equal(claims.length,1);assert.equal(access.playbackAllowed(),false);
+  finishRelease();await closed;
+  assert.equal((await opened).ok,true);assert.equal(claims.length,2);
   service.endSession=async()=>{};
 });

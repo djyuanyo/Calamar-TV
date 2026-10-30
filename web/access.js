@@ -10,7 +10,7 @@ const newHolder = () => {
   const id = new Uint8Array(16); crypto.getRandomValues(id);
   return Array.from(id, n => n.toString(16).padStart(2, '0')).join('');
 };
-let activeHolder = null, claimTail = Promise.resolve();
+let activeHolder = null, claimTail = Promise.resolve(), releaseTail = Promise.resolve();
 const changed = () => {
   if (accessKnown()) answered();
   for (const listener of listeners) listener();
@@ -65,10 +65,12 @@ export function startAccess(shared) {
   if (typeof addEventListener !== 'undefined') addEventListener('pagehide', stopWatching);
 }
 /** One claim covers the actual number of players, including Multipantalla. No media starts before it succeeds. */
-async function releaseActive() {
+function releaseActive() {
   clearInterval(beating); beating = null;
   const holder = activeHolder; activeHolder = null; watching = false;
-  if (holder && firebase) await firebase.endSession(holder).catch(() => {});
+  const release = async () => { if (holder && firebase) await firebase.endSession(holder).catch(() => {}); };
+  releaseTail = releaseTail.then(release, release);
+  return releaseTail;
 }
 export function startWatching(title, profile = '', count = 1) {
   const request = ++claimGeneration;
