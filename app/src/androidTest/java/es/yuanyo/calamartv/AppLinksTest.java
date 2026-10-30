@@ -19,6 +19,7 @@ public class AppLinksTest {
     try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(initial)) {
       InstrumentationRegistry.getInstrumentation().waitForIdleSync();
       scenario.onActivity(activity -> {
+        try {
         assertEquals(MainActivity.LIVE, activity.mode);
         activity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://djyuanyo.github.io/Calamar-TV/liga/liga-nueva/")));
         activity.openPendingAppLink();
@@ -31,7 +32,13 @@ public class AppLinksTest {
         activity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://djyuanyo.github.io/Calamar-TV/#/canales")));
         activity.openPendingAppLink();
         assertEquals("TV", activity.mode);
+        } finally {
+          // ActivityScenario identifies lifecycle callbacks by the launch Intent.
+          // Restore it after testing onNewIntent so closing the fixture can be observed.
+          activity.setIntent(initial);
+        }
       });
     }
   }
 }
+
