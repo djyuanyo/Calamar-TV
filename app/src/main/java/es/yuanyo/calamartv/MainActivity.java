@@ -2618,7 +2618,7 @@ public class MainActivity extends Activity {
     bp.setMargins(0, dp(10), 0, dp(6));
     list.addView(back, bp);
     List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(channels, custom), System.currentTimeMillis());
-    heading(Catalog.LIVE_ROW, live.size() == 1 ? "1 evento hoy" : live.size() + " eventos hoy");
+    sportsHero(Catalog.LIVE_ROW, "", "", live.size() == 1 ? "1 evento hoy, ordenado por competición" : live.size() + " eventos hoy, ordenados por competición", SportsCatalog.liveLink(), true);
     for (Catalog.EventRow row : Catalog.eventRows(live, custom)) {
       heading(row.id.isEmpty() ? row.name : row.name + "  ›", row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
       if (!row.logo.isEmpty()) leagueLogo(row.logo);
@@ -2650,10 +2650,19 @@ public class MainActivity extends Activity {
     final String name = league.optString("name");
     // Only today's matches, as «Eventos En Directo» (and the league's page on the web).
     List<Catalog.Channel> matches = Catalog.liveEvents(Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis()), System.currentTimeMillis());
+    final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
+    sportsHero(name, league.optString("logo"), league.optString("background"),
+        matches.size() == 1 ? "1 partido hoy con canal" : matches.size() + " partidos hoy con canal",
+        slug == null ? null : SportsCatalog.leagueLink(slug), false);
+    if (matches.isEmpty()) list.addView(label("Hoy no hay partidos de esta liga con canal asignado.", 15, MUTED));
+    else channelGrid(matches);
+  }
+
+  /** Shared league/live header, with the app's bundled logo for mixed competitions. */
+  void sportsHero(String name, String logo, String background, String subtitle, String shareUrl, boolean branded) {
     FrameLayout hero = new FrameLayout(this);
     hero.setBackground(Ui.shape(this, 0xff14261b, 14, 0, 0));
     hero.setClipToOutline(true);
-    String background = league.optString("background");
     if (background.startsWith("https://") || background.startsWith("data:image/")) {
       ImageView art = new ImageView(this);
       art.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -2667,39 +2676,38 @@ public class MainActivity extends Activity {
     box.setOrientation(LinearLayout.VERTICAL);
     box.setGravity(Gravity.CENTER_HORIZONTAL);
     box.setPadding(dp(12), dp(18), dp(12), dp(16));
-    String logo = league.optString("logo");
-    if (logo.startsWith("https://") || logo.startsWith("data:image/")) {
+    if (branded || logo.startsWith("https://") || logo.startsWith("data:image/")) {
       ImageView icon = new ImageView(this);
       icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
       box.addView(icon, new LinearLayout.LayoutParams(dp(wide() ? 110 : 88), dp(wide() ? 110 : 88)));
-      logo(icon, logo);
+      if (branded) icon.setImageResource(R.drawable.calamar_menciano_tv);
+      else logo(icon, logo);
+      icon.setContentDescription(branded ? "Calamar TV" : name);
     }
     TextView title = label(name, wide() ? 32 : 26, 0xffffffff);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setGravity(Gravity.CENTER);
     title.setShadowLayer(dp(8), 0, dp(2), 0xcc000000);
     box.addView(title);
-    TextView count = label(matches.size() == 1 ? "1 partido hoy con canal" : matches.size() + " partidos hoy con canal", 14, 0xddffffff);
+    TextView count = label(subtitle, 14, 0xddffffff);
     count.setGravity(Gravity.CENTER);
     box.addView(count);
-    final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
     Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
     share.setOnClickListener(v -> {
-      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, name + " · " + SportsCatalog.leagueLink(slug));
+      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, name + " · " + shareUrl);
       try { startActivity(Intent.createChooser(send, "Compartir")); }
       catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });
     LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
     sp.gravity = Gravity.CENTER_HORIZONTAL;
     sp.setMargins(0, dp(10), 0, 0);
-    if (slug != null) box.addView(share, sp);
+    if (shareUrl != null) box.addView(share, sp);
     hero.addView(box, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
     LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
     hp.setMargins(0, 0, 0, dp(14));
     list.addView(hero, hp);
-    if (matches.isEmpty()) list.addView(label("Hoy no hay partidos de esta liga con canal asignado.", 15, MUTED));
-    else channelGrid(matches);
   }
+
   /** The section a platform's page was opened from, to go back to it. */
   String platformFrom = "Películas";
   HorizontalScrollView browseTrack;

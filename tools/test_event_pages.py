@@ -137,6 +137,11 @@ class SharePreviewTest(unittest.TestCase):
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/canal/la-1"', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             self.assertIn('Deportes · En directo en Calamar TV', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             # Each league has its own page to share: its logo large in the middle, opening #/liga/<slug>.
+            live = (root / 'directo/index.html').read_text(encoding='utf-8')
+            self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/directo"', live)
+            self.assertIn('content="https://djyuanyo.github.io/Calamar-TV/directo/"', live)
+            self.assertIn('Eventos En Directo', live)
+            self.assertTrue((root / 'directo/vista.jpg').is_file())
             league = (root / 'liga/laliga/index.html').read_text(encoding='utf-8')
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/liga/laliga"', league)
             self.assertIn('Todos los partidos de LaLiga con canal, en Calamar TV', league)

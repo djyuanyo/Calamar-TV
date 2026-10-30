@@ -14,7 +14,9 @@
     var path = location.pathname, tv = path.match(/^(.*\/)tv\/([A-Za-z0-9]{4})\/?$/);
     var code = (location.search.match(/[?&]c=([A-Za-z0-9]{4})/) || [])[1];
     if (tv) { location.replace(tv[1] + '#/tv/' + tv[2].toUpperCase() + (code ? '/' + code.toUpperCase() : '')); return; }
-    var found = path.match(/^(.*\/)(evento|canal)\/([^/]+)/);
+    var live = path.match(/^(.*\/)directo\/?$/);
+    if (live) { location.replace(live[1] + '#/directo'); return; }
+    var found = path.match(/^(.*\/)(evento|canal|liga)\/([^/]+)/);
     var base = found ? found[1] : '/' + (path.split('/')[1] || '') + '/';
     location.replace(base + (found ? '#/' + found[2] + '/' + found[3] : ''));
   })();

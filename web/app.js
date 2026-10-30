@@ -5,7 +5,7 @@ import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras,
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
 import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, eventShareLink, channelShareLink, leagueShareLink, EVENT_STATES } from './sports.js';
+import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
@@ -473,8 +473,8 @@ function titleExtras(section, item) {
 /** #/directo: every event of «Eventos En Directo» in a grid per competition, in the order of the leagues. */
 function livePage() {
   const live = liveEvents(events(state.channels, state.custom));
-  const nodes = [el('section', { class: 'live-page-head' }, el('h1', {}, LIVE_ROW),
-    el('p', { class: 'note' }, live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`))];
+  const nodes = [sportsHero({ name: LIVE_ROW, logo: './assets/calamar-menciano-tv.png', live: true,
+    count: live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`, url: liveShareLink() })];
   for (const row of eventRows(live, state.custom)) {
     const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
     nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
@@ -492,23 +492,27 @@ function leaguePage(slug) {
   if (!league) return [el('p', { class: 'error' }, `No existe la liga «${slug || ''}».`), ...home()];
   // Only today's matches (Madrid day; one past midnight still on air too), as «Eventos En Directo».
   const list = liveEvents(leagueEvents(state.channels, state.custom, league.id));
+  return [sportsHero({ name: league.name, logo: league.logo, background: league.background,
+      count: list.length === 1 ? '1 partido hoy con canal' : `${list.length} partidos hoy con canal`, url: leagueShareLink(slug) }),
+    list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
+      : el('p', { class: 'status' }, 'Hoy no hay partidos de esta liga con canal asignado.')];
+}
+
+/** The same branded header and sharing controls for a league and the mixed live schedule. */
+function sportsHero({ name, logo, background, count, url, live = false }) {
   const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
-  const art = image(league.background);
+  const art = image(background);
   const status = el('span', { class: 'note', role: 'status' });
   const share = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
-    const url = leagueShareLink(slug);
     try {
-      if (navigator.share) await navigator.share({ title: league.name, url });
+      if (navigator.share) await navigator.share({ title: name, url });
       else { await navigator.clipboard.writeText(url); status.textContent = 'Enlace copiado.'; }
     } catch (error) { if (error?.name !== 'AbortError') status.textContent = `Copia este enlace: ${url}`; }
   } }, '⤴ Compartir');
-  return [el('section', { class: 'league-hero', style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
-      image(league.logo) ? el('img', { class: 'league-hero-logo', src: image(league.logo), alt: '', referrerpolicy: 'no-referrer' }) : null,
-      el('h1', {}, league.name),
-      el('p', {}, list.length === 1 ? '1 partido hoy con canal' : `${list.length} partidos hoy con canal`),
-      el('div', { class: 'league-hero-actions' }, share, status)),
-    list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
-      : el('p', { class: 'status' }, 'Hoy no hay partidos de esta liga con canal asignado.')];
+  return el('section', { class: `league-hero${live ? ' live-hero' : ''}`, style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
+    live || image(logo) ? el('img', { class: 'league-hero-logo', src: logo, alt: live ? 'Calamar TV' : '', referrerpolicy: 'no-referrer' }) : null,
+    el('h1', {}, name), el('p', {}, count),
+    el('div', { class: 'league-hero-actions' }, share, status));
 }
 
 function channelsPage(selected) {

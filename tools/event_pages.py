@@ -143,7 +143,9 @@ def summary(event, catalog):
 
 
 def page(event, catalog, slug, base, image, kind='evento', text=None):
-    target = f'{base}#/{kind}/{slug}'
+    route = f'{kind}/{slug}' if slug else kind
+    public_path = f'{route}/'
+    target = f'{base}#/{route}'
     title, text = event.get('name') or 'Calamar TV', summary(event, catalog) if text is None else text
     e = lambda value: html.escape(str(value), quote=True)
     tags = [
@@ -151,7 +153,7 @@ def page(event, catalog, slug, base, image, kind='evento', text=None):
         '<meta property="og:site_name" content="Calamar TV">',
         f'<meta property="og:title" content="{e(title)}">',
         f'<meta property="og:description" content="{e(text)}">',
-        f'<meta property="og:url" content="{e(base)}{kind}/{e(slug)}/">',
+        f'<meta property="og:url" content="{e(base)}{e(public_path)}">',
         f'<meta name="twitter:card" content="{"summary_large_image" if image else "summary"}">',
         f'<meta name="twitter:title" content="{e(title)}">',
         f'<meta name="twitter:description" content="{e(text)}">',
@@ -257,6 +259,7 @@ def publish(site, base, catalog, download=download_cover, images=None, tdt=None)
             alias = site / 'evento' / old
             alias.mkdir(parents=True, exist_ok=True)
             (alias / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+    publish_live(site, base, catalog, images)
     publish_leagues(site, base, catalog, images)
     if tdt is not None:
         publish_channels(site, base, catalog, tdt, images)
@@ -274,6 +277,21 @@ def league_slugs(catalog):
         used.add(slug)
         out[league['id']] = slug
     return out
+
+
+def publish_live(site, base, catalog, images=None):
+    """The shared mixed live schedule uses Calamar TV's own logo."""
+    folder = pathlib.Path(site) / 'directo'
+    folder.mkdir(parents=True, exist_ok=True)
+    image = f'{base}assets/calamar-menciano-tv.png'
+    if images:
+        import share_images
+        from PIL import Image
+        with Image.open(ROOT / 'web/assets/calamar-menciano-tv.png') as logo:
+            (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.league_card(None, logo.convert('RGBA'))))
+        image = f'{base}directo/vista.jpg'
+    (folder / 'index.html').write_text(page({'name': 'Eventos En Directo'}, catalog, '', base, image,
+        kind='directo', text='Todos los eventos de hoy, ordenados por competición, en Calamar TV'), encoding='utf-8')
 
 
 def publish_leagues(site, base, catalog, images=None):

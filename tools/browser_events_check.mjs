@@ -121,6 +121,15 @@ try {
   assert.equal(await page.locator('.league-grid .event-card').count(), 0);
   await page.getByText('Hoy no hay partidos de esta liga con canal asignado.').waitFor();
   await page.getByRole('button', { name: '⤴ Compartir' }).waitFor();
+  // The mixed live page has the same hero, using Calamar TV even with no live events.
+  await page.goto(base + '/#/directo');
+  await page.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
+  assert.equal(await page.locator('.live-hero .league-hero-logo').getAttribute('src'), './assets/calamar-menciano-tv.png');
+  await page.getByText('Ahora mismo no hay eventos en directo.', { exact: false }).waitFor();
+  await page.evaluate(() => { navigator.share = async (data) => { window.__liveShared = data; }; });
+  await page.getByRole('button', { name: '⤴ Compartir' }).click();
+  assert.equal(await page.evaluate(() => window.__liveShared.url), 'https://djyuanyo.github.io/Calamar-TV/directo/');
+
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
   await page.locator('.event-card:not(.live-rail *)').waitFor();
   const dimensions = await page.evaluate(() => {
@@ -931,6 +940,26 @@ try {
   assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 2);
   assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
   await syncPage.close();
+  // Several competitions keep their own groups under one Calamar TV header.
+  const livePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await livePage.clock.install({ time: new Date('2026-11-30T12:00:00Z') });
+  await livePage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await livePage.addInitScript(seed => sessionStorage.setItem('catalog', JSON.stringify(seed)), {
+    ...fixture, leagues: [{ id: 'l1', name: 'Liga Uno' }, { id: 'l2', name: 'Liga Dos' }],
+    events: [{ id: 'e1', name: 'Partido Uno', leagueId: 'l1', channelId: 'sport-one', startAt: '2026-11-30T11:00:00Z' },
+      { id: 'e2', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' }],
+  });
+  livePage.on('pageerror', error => errors.push(error.message));
+  await livePage.goto(base + '/');
+  await livePage.locator('a[href="#/directo"]').click();
+  await livePage.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
+  assert.equal(await livePage.locator('.live-hero img').getAttribute('src'), './assets/calamar-menciano-tv.png');
+  assert.deepEqual(await livePage.locator('main .section-head h2').allTextContents(), ['Liga Uno', 'Liga Dos']);
+  assert.equal(await livePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await livePage.setViewportSize({ width: 1440, height: 900 });
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
+  await livePage.close();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
