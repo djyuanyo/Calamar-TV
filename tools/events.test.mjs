@@ -112,7 +112,26 @@ test('each league has its link and a page with its matches that have a channel',
   assert.deepEqual([...leagueSlugs(custom)], [['l1', 'laliga'], ['l2', 'premier-league'], ['l3', 'laliga-2']]);
   const channels = [{ id: 'c1', name: 'Canal', streams: ['https://x.example/a.m3u8'], playable: true }];
   // The imported match without a channel («Canal por confirmar») is left out.
-  assert.deepEqual(leagueEvents(channels, custom, 'l1', Date.parse('2026-11-01T00:00:00Z')).map((e) => e.id), ['e1']);
+  assert.deepEqual(leagueEvents(channels, custom, 'l1', Date.parse('2026-11-30T12:00:00Z')).map((e) => e.id), ['e1']);
+});
+
+test('league pages show only linked matches of the current Madrid week, including earlier days', async () => {
+  const { rememberMatch } = await import('../web/match-scores.js');
+  const now = Date.parse('2026-10-30T12:00:00Z');
+  const base = { leagueId: 'l', cover: 'https://x.example/c.jpg', channelId: 'c', name: 'Partido' };
+  const custom = { leagues: [{ id: 'l', name: 'Liga' }], events: [
+    { ...base, id: 'previous', startAt: '2026-10-25T22:59:59Z' },
+    { ...base, id: 'monday', startAt: '2026-10-25T23:00:00Z', matchId: 'weekly-ended', matchUrl: 'https://www.google.com/search?q=Local+Visitante' },
+    { ...base, id: 'tomorrow', startAt: '2026-10-31T19:00:00Z', channelId: '', streams: ['https://x.example/manual.m3u8'] },
+    { ...base, id: 'sunday', startAt: '2026-11-01T22:59:59Z' },
+    { ...base, id: 'next', startAt: '2026-11-01T23:00:00Z' },
+    { ...base, id: 'undated', startAt: '' },
+    { ...base, id: 'without-link', startAt: '2026-10-31T19:00:00Z', channelId: '' },
+  ] };
+  const channels = [{ id: 'c', playable: true, streams: ['https://x.example/live.m3u8'] }];
+  rememberMatch('weekly-ended', { state: 'finished', finishedAt: now - 3600000 }, now);
+  assert.deepEqual(leagueEvents(channels, custom, 'l', now).map(e => e.id), ['monday', 'tomorrow', 'sunday']);
+  assert.deepEqual(leagueEvents(channels, custom, 'l', Date.parse('2026-11-01T23:00:00Z')).map(e => e.id), ['next']);
 });
 
 test('the app updates go to everyone or only to the administrator, nothing else', async () => {

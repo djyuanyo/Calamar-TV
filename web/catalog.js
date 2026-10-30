@@ -338,9 +338,11 @@ export function leagueSlugs(custom) {
   return out;
 }
 
-/** A league's page: its matches of every week that already have a channel or video, soonest first (not finished ones). */
+/** A league's page: every linked match in the current Monday-to-Sunday week in Madrid, in date order. */
 export function leagueEvents(channels, custom, leagueId, now = Date.now()) {
-  return events(channels, custom, now, { allWeeks: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending);
+  const week = madridWeek(new Date(now).toISOString());
+  return events(channels, custom, now, { allWeeks: true, finished: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending
+    && Number.isFinite(Date.parse(e.startAt || '')) && madridWeek(e.startAt) === week);
 }
 
 /** The event of a link name: its own, or for an old link without number («local-vs-visitante») the first of that name («…-1»). */

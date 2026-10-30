@@ -214,11 +214,15 @@ public final class Catalog {
    * next match (all of them with allWeeks, for links); without a channel they say «Canal por confirmar».
    */
   public static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks) {
+    return events(channels, custom, now, allWeeks, false);
+  }
+
+  static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks, boolean includeFinished) {
     List<Channel> out = new ArrayList<>();
     if (custom == null) return out;
     List<JSONObject> all = new ArrayList<>(), imported = new ArrayList<>();
     for (JSONObject event : Competitions.all(custom)) {
-      if (!event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"), now)) continue;
+      if (!includeFinished && !event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"), now)) continue;
       all.add(event);
       if (event.optBoolean("imported")) imported.add(event);
     }
@@ -298,10 +302,14 @@ public final class Catalog {
     EventRow(String id, String name, String logo) { this.id = id; this.name = name; this.logo = logo; }
   }
 
-  /** A league's page: its matches of every week that already have a channel or video (as leagueEvents on the web). */
+  /** A league's page: all linked matches of the current Monday-to-Sunday week in Madrid. */
   public static List<Channel> leagueEvents(List<Channel> channels, JSONObject custom, String leagueId, long now) {
     List<Channel> out = new ArrayList<>();
-    for (Channel e : events(channels, custom, now, true)) if (e.leagueId.equals(leagueId) && e.playable() && !e.pending) out.add(e);
+    String week = Competitions.week(now);
+    for (Channel e : events(channels, custom, now, true, true)) {
+      long start = SportsCatalog.instant(e.startAt);
+      if (e.leagueId.equals(leagueId) && e.playable() && !e.pending && start != Long.MAX_VALUE && Competitions.week(start).equals(week)) out.add(e);
+    }
     return out;
   }
 

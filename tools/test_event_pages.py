@@ -159,7 +159,7 @@ class SharePreviewTest(unittest.TestCase):
             self.assertTrue((root / 'directo/vista.jpg').is_file())
             league = (root / 'liga/laliga/index.html').read_text(encoding='utf-8')
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/liga/laliga"', league)
-            self.assertIn('Todos los partidos de LaLiga con canal, en Calamar TV', league)
+            self.assertIn('Los partidos de LaLiga con enlace de esta semana, en Calamar TV', league)
             with Image.open(root / 'liga/laliga/vista.jpg') as opened:
                 self.assertGreater(min(opened.convert('RGB').getpixel((600, 315))), 200)
             # The background that does not answer is left out; each image is read once.

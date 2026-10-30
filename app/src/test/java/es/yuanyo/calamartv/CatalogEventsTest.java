@@ -31,6 +31,29 @@ public class CatalogEventsTest {
     event.put("streams", new JSONArray().put("javascript:alert(1)"));
     try { SharedCatalog.validate(data); fail("Invalid link accepted"); } catch (JSONException expected) {}
   }
+  @Test public void leaguePageIncludesOnlyLinkedMatchesOfCurrentMadridWeek() throws Exception {
+    JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
+    base.put("leagueId", "l");
+    JSONArray entries = new JSONArray();
+    String[] dates = {"2026-10-25T22:59:59Z", "2026-10-25T23:00:00Z", "2026-10-31T19:00:00Z", "2026-11-01T22:59:59Z", "2026-11-01T23:00:00Z", ""};
+    for (int i = 0; i < dates.length; i++) entries.put(new JSONObject(base.toString()).put("id", "week-" + i).put("startAt", dates[i]));
+    entries.getJSONObject(1).put("matchUrl", "https://www.google.com/search?q=Local+Visitante").put("matchId", "weekly-ended-native");
+    entries.getJSONObject(2).put("channelId", "").put("streams", new JSONArray().put("https://example.com/manual.m3u8"));
+    entries.put(new JSONObject(base.toString()).put("id", "no-link").put("channelId", "").put("startAt", dates[2]));
+    data.put("events", entries);
+    long now = SportsCatalog.instant("2026-10-30T12:00:00Z");
+    MatchScores.Result ended = new MatchScores.Result("Final", "Local", "Visitante", "finished");
+    ended.finishedAt = now - 3600000;
+    MatchScores.remember("weekly-ended-native", ended, now);
+    try {
+      List<Catalog.Channel> shown = Catalog.leagueEvents(Catalog.merge(null, data), data, "l", now);
+      List<String> ids = new ArrayList<>();
+      for (Catalog.Channel match : shown) ids.add(match.id);
+      assertEquals(Arrays.asList("week-1", "week-2", "week-3"), ids);
+      shown = Catalog.leagueEvents(Catalog.merge(null, data), data, "l", SportsCatalog.instant("2026-11-01T23:00:00Z"));
+      assertEquals(1, shown.size()); assertEquals("week-4", shown.get(0).id);
+    } finally { MatchScores.remember("weekly-ended-native", new MatchScores.Result("", "", "", "scheduled"), now); }
+  }
   @Test public void legacyCatalogNeedsNoEvents() throws Exception {
     JSONObject data = catalog(); data.remove("events"); SharedCatalog.validate(data);
     assertTrue(Catalog.events(Catalog.merge(null, data), data).isEmpty());

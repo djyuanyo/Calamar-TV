@@ -2648,13 +2648,13 @@ public class MainActivity extends Activity {
     JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), leagueId);
     if (league == null) { list.addView(label("Esta liga ya no está en el catálogo.", 15, MUTED)); return; }
     final String name = league.optString("name");
-    // Only today's matches, as «Eventos En Directo» (and the league's page on the web).
-    List<Catalog.Channel> matches = Catalog.liveEvents(Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis()), System.currentTimeMillis());
+    // All linked matches of the current week, Monday to Sunday in Madrid.
+    List<Catalog.Channel> matches = Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis());
     final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
     sportsHero(name, league.optString("logo"), league.optString("background"),
-        matches.size() == 1 ? "1 partido hoy con canal" : matches.size() + " partidos hoy con canal",
+        matches.size() == 1 ? "1 partido esta semana con enlace" : matches.size() + " partidos esta semana con enlace",
         slug == null ? null : SportsCatalog.leagueLink(slug), false);
-    if (matches.isEmpty()) list.addView(label("Hoy no hay partidos de esta liga con canal asignado.", 15, MUTED));
+    if (matches.isEmpty()) list.addView(label("Esta semana no hay partidos de esta liga con enlace.", 15, MUTED));
     else channelGrid(matches);
   }
 

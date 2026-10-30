@@ -491,12 +491,12 @@ function leaguePage(slug) {
   const slugs = leagueSlugs(state.custom);
   const league = (state.custom?.leagues || []).find((l) => slugs.get(l.id) === slug);
   if (!league) return [el('p', { class: 'error' }, `No existe la liga «${slug || ''}».`), ...home()];
-  // Only today's matches (Madrid day; one past midnight still on air too), as «Eventos En Directo».
-  const list = liveEvents(leagueEvents(state.channels, state.custom, league.id));
+  // All linked matches of the current week (Monday to Sunday in Madrid).
+  const list = leagueEvents(state.channels, state.custom, league.id);
   return [sportsHero({ name: league.name, logo: league.logo, background: league.background,
-      count: list.length === 1 ? '1 partido hoy con canal' : `${list.length} partidos hoy con canal`, url: leagueShareLink(slug) }),
+      count: list.length === 1 ? '1 partido esta semana con enlace' : `${list.length} partidos esta semana con enlace`, url: leagueShareLink(slug) }),
     list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
-      : el('p', { class: 'status' }, 'Hoy no hay partidos de esta liga con canal asignado.')];
+      : el('p', { class: 'status' }, 'Esta semana no hay partidos de esta liga con enlace.')];
 }
 
 /** The same branded header and sharing controls for a league and the mixed live schedule. */

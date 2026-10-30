@@ -117,9 +117,9 @@ try {
   assert.equal(await page.locator('main .section-head h2 a.league-head').first().getAttribute('href'), '#/liga/liga-de-prueba');
   await page.locator('main .section-head h2 a.league-head').first().click();
   await page.locator('.league-hero h1', { hasText: 'Liga de prueba' }).waitFor();
-  // Only today's matches: this one is tomorrow (1 December), so the page says there are none today.
-  assert.equal(await page.locator('.league-grid .event-card').count(), 0);
-  await page.getByText('Hoy no hay partidos de esta liga con canal asignado.').waitFor();
+  // Tomorrow's linked match belongs to this week, so it is visible on the league page.
+  assert.equal(await page.locator('.league-grid .event-card').count(), 1);
+  await page.getByText('1 partido esta semana con enlace', { exact: true }).waitFor();
   await page.getByRole('button', { name: '⤴ Compartir' }).waitFor();
   // The mixed live page has the same hero, using Calamar TV even with no live events.
   await page.goto(base + '/#/directo');

@@ -313,7 +313,7 @@ def publish_leagues(site, base, catalog, images=None):
                 print(f'::warning::No se pudo dibujar la vista previa de {league.get("name")} ({error})')
         elif str(league.get('background') or league.get('logo') or '').startswith('https://'):
             image = league.get('background') or league.get('logo')
-        text = f'Todos los partidos de {league.get("name")} con canal, en Calamar TV'
+        text = f'Los partidos de {league.get("name")} con enlace de esta semana, en Calamar TV'
         (folder / 'index.html').write_text(page(league, catalog, slug, base, image, kind='liga', text=text), encoding='utf-8')
 
 
