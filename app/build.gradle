@@ -5,11 +5,11 @@ android {
     buildFeatures { buildConfig true }
     defaultConfig {
         applicationId 'es.yuanyo.calamartv'
-        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        testInstrumentationRunner 'es.yuanyo.calamartv.CalamarTestRunner'
         minSdk 24
         targetSdk 35
-        versionCode 124
-        versionName '2.20.69'
+        versionCode 125
+        versionName '2.20.70'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {

@@ -137,7 +137,7 @@ service cloud.firestore {
       allow list, delete: if administrator();
       allow create, update: if owner(uid)
         && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt'])
-        && request.resource.data.email is string && request.resource.data.email == request.auth.token.email && request.resource.data.email.size() <= 200
+        && request.resource.data.email is string && request.resource.data.email == request.auth.token.email && request.resource.data.email.size() <= 320
         && request.resource.data.name is string && request.resource.data.name.size() <= 100
         && request.resource.data.seenAt == request.time;
     }

@@ -101,7 +101,8 @@ try {
   await page.locator('.user-row').getByRole('button', { name: 'Guardar', exact: true }).click();
   await page.waitForFunction(() => window.__savedAccess?.u1?.screens === 2);
   const savedAccess = await page.evaluate(() => window.__savedAccess.u1);
-  assert.equal(new Date(savedAccess.expires).getDate(), 24);
+  assert.equal(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid'}).format(new Date(savedAccess.expires)), '2026-12-24');
+  assert.equal(new Date(savedAccess.expires).toISOString(), '2026-12-23T23:00:00.000Z');
   await page.locator('.admin-stats a').filter({ hasText: 'Ligas' }).click();
   await page.locator('.admin-stats a').filter({ hasText: 'Equipos' }).click();
   await page.getByLabel('Nombre de equipo', { exact: true }).fill('Local');

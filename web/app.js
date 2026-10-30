@@ -644,11 +644,11 @@ let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
-initCast({
+const casting = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  getSource: () => playbackAllowed() && current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
   onSent: stop,
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
@@ -1208,6 +1208,7 @@ function showMatchCenter(c) {
 
 /** Plays once the account may: not expired, and a screen free within its limit (access.js). */
 async function beginWatching(c) {
+  if(c.pending){stopWatching();playSource(c,0);return;}
   player.classList.remove('blocked');
   playerStatus.textContent = 'Comprobando tu cuenta…';
   const check = await startWatching(c.name, activeProfile()?.name || '');
@@ -1223,6 +1224,7 @@ async function beginWatching(c) {
 }
 
 function hidePlayer() {
+  casting.stop();
   stopWatching();
   showMatchCenter(null);
   rememberPosition(true);
@@ -1354,6 +1356,7 @@ startProfiles(shared);
 startAccess(shared);
 // The page is drawn again only when what it may show changes: signed in or not, expired or not.
 onPlaybackAccessLost(reason => {
+  casting.stop();
   endMulti();
   if (!player.hidden) {
     stop();

@@ -179,6 +179,11 @@ public final class CastControls {
     @Override public void onSessionSuspended(CastSession session, int reason) { update(); }
   };
 
+  /** Expiry or a released playback reservation also stops the receiver, not only the local picture. */
+  public void stopForAccess() {
+    adapter.cancel();lastSent=null;
+    if(sessions!=null)try{sessions.endCurrentSession(true);}catch(RuntimeException ignored){}
+  }
   public void destroy() {
     destroyed = true;
     adapter.cancel();

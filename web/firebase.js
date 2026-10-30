@@ -149,7 +149,7 @@ const millis = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : nu
 export async function registerMember() {
   const user = auth.currentUser;
   if (!user) return;
-  await setDoc(doc(db, 'calamarMembers', user.uid), { email: String(user.email || '').slice(0, 200), name: String(user.displayName || '').slice(0, 100), seenAt: serverTimestamp() });
+  await setDoc(doc(db, 'calamarMembers', user.uid), { email: String(user.email || '').slice(0, 320), name: String(user.displayName || '').slice(0, 100), seenAt: serverTimestamp() });
 }
 /** { expires: ms or null, screens: number or null } set by the administrator for this account (nothing set: no limit of date). */
 export async function readAccess(uid = auth.currentUser?.uid) {
@@ -217,6 +217,7 @@ export async function usersOverview() {
   const now = Date.now();
   const live = new Map();
   for (const d of sessions.docs) {
+    if (!d.ref.path.startsWith('calamarStreams/')) continue;
     const uid = d.ref.parent.parent?.id, at = millis(d.data().at);
     if (uid && at && now - at < 90000) live.set(uid, [...(live.get(uid) || []), { ...d.data(), at }]);
   }
