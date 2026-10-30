@@ -45,5 +45,19 @@ class LogoMirrorTest(unittest.TestCase):
         self.assertEqual(asked.count('https://docdog.top/a.png'), 1)
 
 
+class RecoveredCrestsTest(unittest.TestCase):
+    def test_recovered_crests_publish_under_the_original_urls(self):
+        import share_images
+        images = share_images.Images(opener=lambda url: self.fail('Recovered crests must work offline'))
+        urls = list(images.backups)
+        self.assertEqual(len(urls), 2)
+        with tempfile.TemporaryDirectory() as output:
+            copies = mirror.publish(output, {'teams': [{'logo': url} for url in urls]}, images)
+            self.assertEqual(set(copies), set(urls))
+            for url, path in copies.items():
+                self.assertTrue((pathlib.Path(output) / path).is_file())
+                self.assertTrue(images.image(url).width > 0)
+
+
 if __name__ == '__main__':
     unittest.main()

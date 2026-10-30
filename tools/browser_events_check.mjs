@@ -956,7 +956,7 @@ try {
   await livePage.locator('a[href="#/directo"]').click();
   await livePage.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
   assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
-  assert.equal(await livePage.locator('.league-grid .event-generic .crest').count(), 2);
+  assert.equal(await livePage.locator('.league-grid .event-generic img.crest').count(), 2);
   assert.equal(await livePage.locator('.league-grid .event-generic').first().evaluate(n => getComputedStyle(n).backgroundImage.startsWith('url("data:image/png;base64,')), true);
   assert.equal(await livePage.locator('.live-hero img').getAttribute('src'), './assets/calamar-menciano-tv.png');
   assert.deepEqual(await livePage.locator('main .section-head h2').allTextContents(), ['Liga Uno', 'Liga Dos']);
@@ -965,7 +965,7 @@ try {
   assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
   await livePage.locator('main a[href="#/liga/liga-uno"]').click();
   await livePage.locator('.league-hero h1', { hasText: 'Liga Uno' }).waitFor();
-  assert.equal(await livePage.locator('.league-grid .crest').count(), 2);
+  assert.equal(await livePage.locator('.league-grid img.crest').count(), 2);
   await livePage.close();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
