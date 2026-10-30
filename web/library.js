@@ -1372,7 +1372,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         'aria-current': unidentifiedSection === s.page ? 'page' : null }, `${s.label} · ${s.count}`)));
     list.replaceChildren(...LIBRARY_SECTIONS.filter((s) => !unidentified || !unidentifiedSection || s.page === unidentifiedSection).flatMap((section) => {
       const items = (current.sections[section.key] || []).filter((item) => !unidentified || unidentifiedItem(item));
-      return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item' },
+      return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item', 'data-library-id': item.id },
         el('div', { class: 'library-item-row' },
           item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
           el('span', { class: 'meta' }, el('b', {}, `${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}`),

@@ -521,15 +521,15 @@ try {
   assert.equal(await page.getByRole('link', { name: 'Descargar aplicación' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
   assert.equal(await page.locator('#download-app svg').count(), 1);
   assert.equal(await page.locator('#open-in-app').count(), 0);
-  for (const name of ['Avatar: El sentido del agua', 'Los hombres de Paco']) {
-    await page.locator('.library-item', { hasText: name }).getByRole('button', { name: 'Editar', exact: true }).click();
+  for (const id of ['m76600', 's4500']) {
+    await page.locator(`[data-library-id="${id}"]`).getByRole('button', { name: 'Editar', exact: true }).click();
     await page.getByLabel('Enlace de carátula', { exact: true }).fill('https://img.example/poster.jpg');
     await page.getByLabel('Subir imagen de portada', { exact: true }).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') });
     await page.getByText('Imagen preparada. Pulsa Guardar cambios para publicarla.').waitFor();
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
     await page.getByText('Carátula y portada guardadas y publicadas.').waitFor();
     await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
-    await page.locator('.library-item', { hasText: name }).getByRole('button', { name: 'Editar', exact: true }).click();
+    await page.locator(`[data-library-id="${id}"]`).getByRole('button', { name: 'Editar', exact: true }).click();
     assert.equal(await page.getByLabel('Enlace de carátula', { exact: true }).inputValue(), 'https://img.example/poster.jpg');
     assert.equal(await page.getByLabel('Enlace de imagen de portada', { exact: true }).inputValue(), '');
     assert.match(await page.getByRole('img', { name: 'Vista previa de imagen de portada', exact: true }).getAttribute('src'), /^data:image\/(png|jpeg|webp);base64,/);
