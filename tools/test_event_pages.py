@@ -111,6 +111,21 @@ class SharePreviewTest(unittest.TestCase):
         self.assertEqual(python, web)
         self.assertEqual([x[1] for x in python], ['la-1', 'la-1-2', 'solo-web'])
 
+    def test_manual_match_cover_keeps_registered_team_crests(self):
+        import io
+        import sys
+        from PIL import Image
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import share_images
+        images = share_images.Images(opener=lambda url: png({'cover': (10, 10, 10, 255),
+            'home': (0, 150, 70, 255), 'away': (200, 20, 40, 255)}[url.rsplit('/', 1)[-1]]))
+        event = {'cover': 'https://img.example/cover', 'homeTeamId': 'h', 'awayTeamId': 'a'}
+        catalog = {'teams': [{'id': 'h', 'logo': 'https://img.example/home'}, {'id': 'a', 'logo': 'https://img.example/away'}]}
+        with Image.open(io.BytesIO(pages.event_preview(event, catalog, images))) as rendered:
+            self.assertGreater(rendered.getpixel((270, 315))[1], 120)
+            self.assertGreater(rendered.getpixel((930, 315))[0], 170)
+            self.assertLess(max(rendered.getpixel((50, 50))), 25)
+
     def test_every_page_gets_its_card_as_preview_image(self):
         import sys
         from PIL import Image

@@ -210,13 +210,14 @@ def event_preview(event, catalog, images):
     """The card of an event as a JPEG: its cover, or the league's background with both crests."""
     import share_images
     cover = images.image(event.get('cover')) if event.get('cover') else None
-    if cover:
-        return share_images.jpeg(share_images.cover_crop(cover))
     find = lambda group, key: next((x for x in catalog.get(group) or [] if x.get('id') == event.get(key)), {})
     league = find('leagues', 'leagueId')
+    home, away = find('teams', 'homeTeamId'), find('teams', 'awayTeamId')
+    if cover and not (home.get('logo') or away.get('logo')):
+        return share_images.jpeg(share_images.cover_crop(cover))
     pick = lambda value: images.image(value) if value else None
-    return share_images.jpeg(share_images.match_card(pick(league.get('background')), pick(find('teams', 'homeTeamId').get('logo')),
-                                                     pick(find('teams', 'awayTeamId').get('logo')), pick(league.get('logo'))))
+    return share_images.jpeg(share_images.match_card(cover if cover is not None else pick(league.get('background')), pick(home.get('logo')),
+                                                     pick(away.get('logo')), pick(league.get('logo'))))
 
 
 def publish(site, base, catalog, download=download_cover, images=None, tdt=None):

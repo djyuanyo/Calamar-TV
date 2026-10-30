@@ -116,13 +116,14 @@ function card(c, pick = null) {
 }
 
 /**
- * The cover of an event; without one, the league's background with the home and away crests on top
- * and the league's logo between them (imported matches all share it).
+ * Teams' crests stay on top of the event's cover (or the league's background), including manual
+ * matches. Events without registered crests keep their full photo.
  */
 function eventCover(c, cls) {
-  if (c.cover) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+  if (c.cover && !c.homeLogo && !c.awayLogo) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
   const crest = (src, side) => src ? el('img', { class: `crest ${side}`, src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: `crest ${side} crest-empty` });
-  return el('span', { class: `${cls} event-generic`, style: c.background ? `background-image:url("${c.background}")` : null, 'aria-hidden': 'true' },
+  const background = c.cover || c.background;
+  return el('span', { class: `${cls} event-generic`, style: background ? `background-image:url("${background.replace(/"/g, '%22')}")` : null, 'aria-hidden': 'true' },
     crest(c.homeLogo, 'home'),
     c.leagueLogo ? el('span', { class: 'crest-league' }, el('img', { src: c.leagueLogo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })) : el('span', { class: 'crest-vs' }, 'VS'),
     crest(c.awayLogo, 'away'));

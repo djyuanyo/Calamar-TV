@@ -999,17 +999,17 @@ public class MainActivity extends Activity {
   }
 
   /**
-   * The cover of an event; without one (imported matches), the league's background with the home and
-   * away crests on top. `shift` moves the crests right, past the hero's text.
+   * Registered teams' crests stay on top of a manual or imported match's artwork. Events without
+   * crests keep their full photo. `shift` moves the crests right, past the hero's text.
    */
   View eventArt(Catalog.Channel c, float shift) {
     FrameLayout art = new FrameLayout(this);
     ImageView cover = new ImageView(this);
     cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
     art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-    if (!c.cover.isEmpty()) { image(cover, c.cover); return art; }
+    if (!c.cover.isEmpty() && c.homeLogo.isEmpty() && c.awayLogo.isEmpty()) { image(cover, c.cover); return art; }
     art.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xff10261a, 0xff1d4029, 0xff0b1410}));
-    image(cover, c.background);
+    image(cover, c.cover.isEmpty() ? c.background : c.cover);
     // Each crest gets 30% of the width and keeps its shape (FIT_CENTER), whatever the card's size.
     LinearLayout crests = new LinearLayout(this);
     crests.setGravity(Gravity.CENTER);
