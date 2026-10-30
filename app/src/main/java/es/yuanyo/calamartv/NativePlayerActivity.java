@@ -993,13 +993,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void armBufferingTimeout(ExoPlayer instance, VideoResolver.Source source) {
     cancelBufferingTimeout();
-    // The hosting fetches a master list, its variant and the first media piece in sequence.
-    // A healthy relay can need more than 25 s to finish those separate upstream requests.
-    final long waitMs = hostingPlayback && HostingPlayback.isRelay(source.url) ? 60000 : 25000;
     bufferingTimeout = () -> {
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
-      lastReport += "\nVídeo: " + (waitMs / 1000) + " segundos sin completar el búfer.\n" + mediaProgress;
+      lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
       if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
@@ -1010,7 +1007,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         refreshAutomatically("Probando otra conexión…");
       }
     };
-    handler.postDelayed(bufferingTimeout, waitMs);
+    handler.postDelayed(bufferingTimeout, 25000);
   }
 
   private boolean zicoPage() {
