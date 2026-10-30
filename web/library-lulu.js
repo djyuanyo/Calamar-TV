@@ -403,7 +403,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     const uploads = new Map((skipDuplicates ? incoming : s.episodes).filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
     const item = linked && { ...linked, episodes: (linked.episodes || []).map(e => {
       let next = uploads.get(codeOf(e.url)) ? { ...e, addedAt: uploads.get(codeOf(e.url)) } : e;
-      if (skipDuplicates && scan.complete) next = s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
+      if (skipDuplicates && scan.complete && managedByScan(next, s.section, scan)) next = s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
         .reduce((old, f) => withCopy(old, f.file, f.link), { ...next, fromFolder: true });
       return next;
     }) };

@@ -172,6 +172,18 @@ test('an update of one root never removes tracked copies in another root of the 
   assert.equal(output.changed, false);
 });
 
+test('adding an imported episode does not adopt or delete manual episodes elsewhere in the same season', async () => {
+  const series = { id: 's2', kind: 'tv', title: 'Serie', folder: 'Serie', tmdb: { id: 2, title: 'Serie' }, episodes: [
+    { id: 'e2x1x1', season: 1, episode: 1, name: 'Manual', file: '', url: 'https://luluvido.com/manual123456' }] };
+  const scan = complete([], [{ section: 'series', title: 'Serie', folder: 'Serie', episodes: [{ season: 1, episode: 2, link: 'https://luluvido.com/imported1234' }] }],
+    [{ id: 'lulu:series', provider: 'lulu', section: 'series' }]);
+  const result = await libraryFromScan(scan, { series: [series] }, 'tmdb', { skipDuplicates: true,
+    fetcher: async () => json({ episodes: [{ episode_number: 1, name: 'Manual' }, { episode_number: 2, name: 'Importado' }] }) });
+  assert.deepEqual(result.sections.series[0].episodes.map(e => [e.episode, e.url, e.fromFolder]),
+    [[1, 'https://luluvido.com/manual123456', undefined], [2, 'https://luluvido.com/imported1234', true]]);
+  assert.equal(result.removed.episodes, 0);
+});
+
 test('empty LuluStream root is authoritative, while errors, malformed lists and partial pagination abort the update', async () => {
   const empty = await scanLulu('lulu', { fetcher: async () => json({ status: 200, result: { folders: [], files: [] } }) });
   const result = await libraryFromScan(empty, { movies: [{ id: 'm1', kind: 'movie', title: 'Borrada', fromFolder: true, url: 'https://luluvido.com/deleted12345' }] }, 'tmdb');
