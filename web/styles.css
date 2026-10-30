@@ -1371,3 +1371,6 @@ body.gate-open { overflow: hidden; }
 .profile-sheet .profile-form { justify-self: center; }
 .app-updates { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
 .app-updates .chips { margin: 0; }
+
+.open-in-app { display: block; width: fit-content; margin: 12px auto; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: #0b0d10; font-weight: 800; text-decoration: none; }
+.open-in-app[hidden] { display: none; }

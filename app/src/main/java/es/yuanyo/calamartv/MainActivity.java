@@ -74,6 +74,8 @@ public class MainActivity extends Activity {
         }
       };
 
+  AppLink pendingAppLink;
+
   public void onCreate(Bundle b) {
     super.onCreate(b);
     television = getPackageManager().hasSystemFeature("android.software.leanback")
@@ -92,8 +94,69 @@ public class MainActivity extends Activity {
     Profiles.start(this);
     Profiles.listen(profilesChanged);
     home();
+    receiveAppLink(getIntent());
     // A signed-in account: «Elige tu perfil» at once, with the profiles kept on this device.
     if (Profiles.needsPick()) profileGate();
+  }
+
+  @Override protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    receiveAppLink(intent);
+  }
+
+  void receiveAppLink(Intent intent) {
+    if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+    AppLink link = AppLink.parse(intent.getData().toString());
+    if (link == null) return;
+    pendingAppLink = link;
+    handler.post(this::openPendingAppLink);
+    handler.postDelayed(() -> {
+      if (pendingAppLink == link && !Profiles.needsPick()) {
+        pendingAppLink = null;
+        Toast.makeText(this, "No se ha encontrado esta página. Actualiza el catálogo y vuelve a abrir el enlace.", Toast.LENGTH_LONG).show();
+      }
+    }, 30000);
+  }
+
+  /** Keep a new shared page pending while the catalog loads or the viewer chooses a profile. */
+  void openPendingAppLink() {
+    if (pendingAppLink == null || !resumed || Profiles.needsPick() || isFinishing()) return;
+    AppLink link = pendingAppLink;
+    String destination = null;
+    Catalog.Channel selected = null;
+    if ("liga".equals(link.page)) {
+      for (java.util.Map.Entry<String, String> entry : SportsCatalog.leagueSlugs(custom).entrySet())
+        if (link.slug.equals(entry.getValue()) || link.slug.equals(entry.getKey())) { destination = LEAGUE + entry.getKey(); break; }
+    } else if ("evento".equals(link.page)) {
+      java.util.Map<String, String> slugs = SportsCatalog.slugs(custom);
+      for (Catalog.Channel channel : Catalog.events(channels, custom, System.currentTimeMillis(), true, true)) {
+        String slug = slugs.get(channel.id);
+        if (link.slug.equals(slug) || (link.slug + "-1").equals(slug) || link.slug.equals(channel.id)) { selected = channel; break; }
+      }
+    } else if ("canal".equals(link.page)) {
+      java.util.Map<String, String> slugs = Catalog.slugs(channels);
+      for (Catalog.Channel channel : channels)
+        if (link.slug.equals(slugs.get(channel.id)) || link.slug.equals(channel.id)) { selected = channel; break; }
+    } else {
+      switch (link.page) {
+        case "inicio": destination = "Inicio"; break;
+        case "directo": destination = LIVE; break;
+        case "canales": destination = "TV"; break;
+        case "peliculas": destination = "Películas"; break;
+        case "series": destination = "Series"; break;
+        case "documentales": destination = "Documentales"; break;
+        default: return;
+      }
+    }
+    if (destination == null && selected == null) return;
+    pendingAppLink = null;
+    query = "";
+    if (destination != null) { mode = destination; home(); }
+    else if (selected.event && MatchScores.expired(selected.matchId, System.currentTimeMillis())) {
+      startActivity(new Intent(this, MatchActivity.class).putExtra("title", selected.name)
+          .putExtra("match_id", selected.matchId).putExtra("event_info", eventInfo(selected).toString()));
+    } else open(selected);
   }
 
   /** «Elige tu perfil» while it is on screen. */
@@ -104,6 +167,7 @@ public class MainActivity extends Activity {
     if (Profiles.needsPick()) profileGate();
     else if (gate != null && gate.isShowing()) gate.dismiss();
     render();
+    openPendingAppLink();
   });
 
   /** The favourite channels of the profile watching (those of this device without an account). */
@@ -357,6 +421,7 @@ public class MainActivity extends Activity {
           renderFilters();
           render();
         } else if (message != null) message.setText(status());
+        openPendingAppLink();
         if (focusId != View.NO_ID && root != null) {
           View replacement = root.findViewById(focusId);
           if (replacement != null) replacement.requestFocus();
@@ -1377,6 +1442,7 @@ public class MainActivity extends Activity {
     handler.removeCallbacks(refresh);
     handler.post(refresh);
     observeSharedCatalog();
+    handler.post(this::openPendingAppLink);
     // «Continuar viendo» of the signed-in account: what its other devices left half watched.
     ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
@@ -1427,6 +1493,7 @@ public class MainActivity extends Activity {
         int focusId = focused == null ? View.NO_ID : focused.getId();
         if (menuChanged) home();
         else { renderFilters(); render(); }
+        openPendingAppLink();
         View replacement = focusId == View.NO_ID ? null : root.findViewById(focusId);
         if (replacement != null) replacement.requestFocus();
       });

@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "es.yuanyo.calamartv",
+      "sha256_cert_fingerprints": [
+        "4D:0E:B1:FC:AB:14:A0:AB:51:1F:44:C1:B7:D5:93:DF:2C:F4:D9:6B:40:46:B8:BF:7B:5A:BB:FE:4D:D3:AF:F2"
+      ]
+    }
+  }
+]
