@@ -61,8 +61,14 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          disk-size: 2048M
+          emulator-boot-timeout: 300
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Liberar el emulador móvil antes de probar Android TV
+        run: |
+          rm -rf "$HOME/.android/avd/test.avd" "$HOME/.android/avd/test.ini"
+          df -h /
       - name: Reproducir y cambiar señales con mando en Android TV API 31
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -70,6 +76,8 @@ jobs:
           arch: x86
           target: android-tv
           avd-name: calamar-tv-api31
+          disk-size: 2048M
+          emulator-boot-timeout: 300
           disable-animations: true
           script: |
             adb shell pm list features | grep -q android.software.leanback
