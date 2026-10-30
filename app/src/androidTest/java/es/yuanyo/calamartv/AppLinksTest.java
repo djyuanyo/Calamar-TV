@@ -46,7 +46,8 @@ public class AppLinksTest {
       InstrumentationRegistry.getInstrumentation().waitForIdleSync();
       scenario.onActivity(activity -> {
         try {
-          activity.library = new Library.Data(new JSONObject("{\"sections\":{\"movies\":[{\"id\":\"m42\",\"kind\":\"movie\",\"title\":\"Portada compartida\",\"url\":\"https://example.com/video.mp4\"}]}}"));
+          activity.library = new Library.Data(new JSONObject("{\"sections\":{\"movies\":[{\"id\":\"m42\",\"kind\":\"movie\",\"title\":\"Portada compartida\",\"url\":\"https://calamarmenciano.com/PELIS/prueba.mp4\"}]}}"));
+          assertNotNull("Fixture title must be playable in the catalog", activity.library.find("movies", "m42"));
           activity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://djyuanyo.github.io/Calamar-TV/peliculas/m42/")));
           activity.openPendingAppLink();
           assertNull(activity.pendingAppLink);
