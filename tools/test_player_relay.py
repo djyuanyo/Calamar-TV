@@ -1,5 +1,7 @@
 """calamar-player.php: player pages read like the app, lists relayed with signed addresses, catalog channels only."""
 import json
+import http.server
+import threading
 import os
 import pathlib
 import socket
@@ -21,6 +23,36 @@ def php(code):
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_first_valid_hls_wins_without_waiting_for_a_silent_first_source(self):
+        requests = []
+        class Origin(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                requests.append(self.path)
+                if self.path.startswith('/slow'): time.sleep(2)
+                if self.path.startswith('/fast'): time.sleep(0.15)
+                body = b'<html>Error</html>' if self.path.startswith('/html') else b'#EXTM3U\n' if self.path.startswith('/empty') else b'#EXTM3U\r\n#EXTINF:6,\r\nvideo.ts\r\n'
+                self.send_response(200); self.end_headers()
+                try: self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError): pass
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Origin)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            port = server.server_address[1]
+            # Injection is local to this test function; production always validates DNS and pins public IPs.
+            factory = '$factory=function($url,$page){$ch=curl_init("http://127.0.0.1:%d".parse_url($url,PHP_URL_PATH));curl_setopt($ch,CURLOPT_TIMEOUT,4);return $ch;};' % port
+            before = time.monotonic()
+            out = php(factory + 'echo json_encode(playerFirstList(["https://slow.example/slow.m3u8","https://bad.example/html.m3u8","https://empty.example/empty.m3u8","https://fast.example/fast.m3u8"], "https://zicotv.cc/api/player/4", $factory));')
+            elapsed = time.monotonic() - before
+            status, body, url = json.loads(out)
+            self.assertEqual(status, 200); self.assertIn('#EXTINF:6', body)
+            self.assertEqual(url, 'https://fast.example/fast.m3u8')
+            self.assertLess(elapsed, 1.5, 'must cancel the losing two-second source')
+            self.assertEqual(set(requests), {'/slow.m3u8', '/html.m3u8', '/empty.m3u8', '/fast.m3u8'})
+            self.assertEqual(json.loads(php('echo json_encode(playerFirstList(["https://127.0.0.1/private.m3u8"], "https://zicotv.cc/api/player/4"));')), [0, None, ''])
+        finally:
+            server.shutdown(); server.server_close()
+
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'
                 '{"label":"CDN 1","url":"/live/b.m3u8?t=\\"2\\"","hidden":true},'

@@ -212,6 +212,54 @@ function playerGet($url, $page, $limit = 3145728) {
 function playerIsList($body) { return is_string($body) && strncmp(ltrim($body, "\xEF\xBB\xBF \r\n\t"), '#EXTM3U', 7) === 0; }
 function playerList($body) { header('Content-Type: application/vnd.apple.mpegurl'); echo $body; exit; }
 
+/** Race HLS lists: a silent first CDN must never hold up another CDN that is already responding. */
+function playerFirstList($sources, $page, $factory = null) {
+    $queue = array();
+    foreach (array_unique($sources) as $url)
+        if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '')) $queue[] = array($url, 0);
+    $multi = curl_multi_init(); $active = array(); $bodies = array(); $serial = 0;
+    $deadline = microtime(true) + 18;
+    $add = function ($url, $hops) use (&$active, &$bodies, &$serial, $multi, $page, $factory) {
+        $ch = $factory ? $factory($url, $page) : playerCurl($url, $page, 15);
+        if (!$ch) return;
+        $id = ++$serial; $bodies[$id] = '';
+        curl_setopt_array($ch, array(CURLOPT_ENCODING => '', CURLOPT_HEADER => false,
+            CURLOPT_PRIVATE => (string)$id, CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$bodies, $id) {
+                if (strlen($bodies[$id]) + strlen($chunk) > 2097152) return 0;
+                $bodies[$id] .= $chunk; return strlen($chunk);
+            }));
+        $active[$id] = array($ch, $url, $hops); curl_multi_add_handle($multi, $ch);
+    };
+    try {
+        while (($queue || $active) && microtime(true) < $deadline && !connection_aborted()) {
+            while ($queue && count($active) < 16) { list($url, $hops) = array_shift($queue); $add($url, $hops); }
+            do { $code = curl_multi_exec($multi, $running); } while ($code === CURLM_CALL_MULTI_PERFORM);
+            if ($code !== CURLM_OK) break;
+            while ($done = curl_multi_info_read($multi)) {
+                $ch = $done['handle']; $id = (int)curl_getinfo($ch, CURLINFO_PRIVATE);
+                list($_, $url, $hops) = $active[$id];
+                $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                $location = curl_getinfo($ch, CURLINFO_REDIRECT_URL); $body = $bodies[$id];
+                curl_multi_remove_handle($multi, $ch); curl_close($ch); unset($active[$id], $bodies[$id]);
+                if ($done['result'] === CURLE_OK && $status === 200 && playerIsList($body)
+                    && preg_match('/^#EXT(?:INF|-X-STREAM-INF):/m', $body) && preg_match('/(?:^|\n)[^#\s][^\r\n]*/', $body))
+                    return array($status, $body, $url);
+                // Every redirect is revalidated and pinned by playerCurl, just like playerGet.
+                if ($status >= 300 && $status < 400 && $hops < 4 && is_string($location) && $location !== '') {
+                    $next = redirectTarget($url, $location);
+                    if ($next) $queue[] = array($next, $hops + 1);
+                }
+            }
+            if ($active && curl_multi_select($multi, 0.05) === -1) usleep(1000);
+        }
+    } finally {
+        // Stop losing probes immediately; no background downloads remain after selecting a signal.
+        foreach ($active as $entry) { curl_multi_remove_handle($multi, $entry[0]); curl_close($entry[0]); }
+        curl_multi_close($multi);
+    }
+    return array(0, null, '');
+}
+
 /** Streams one piece of the video to the browser as it arrives, without storing it. */
 function playerStream($url, $page) {
     @set_time_limit(300);
@@ -327,14 +375,10 @@ function playerMain() {
         $sources = array_merge(array_slice($sources, $shift), array_slice($sources, 0, $shift));
     }
     if (isset($_GET['list'])) playerAnswer(array('sources' => count($sources)));
-    // The first source that answers: servers of the same page often fail one at a time.
-    foreach ($sources as $video) {
-        if (!preg_match('/\.m3u8$/i', parse_url($video, PHP_URL_PATH) ?: '')) continue;
-        list($status, $body, $at) = playerGet($video, $final, 2097152);
-        if ($status === 200 && playerIsList($body)) {
-            if ($cast) playerAnswer(array('url' => playerRelayed($at, $final, $secret) . '&l=1'));
-            playerList(playerRewrite($body, $at, $final, $secret));
-        }
+    list($status, $body, $at) = playerFirstList($sources, $final);
+    if ($status === 200) {
+        if ($cast) playerAnswer(array('url' => playerRelayed($at, $final, $secret) . '&l=1'));
+        playerList(playerRewrite($body, $at, $final, $secret));
     }
     playerAnswer(array('error' => 'Ninguna fuente HLS de la página del reproductor responde.'), 502);
 }

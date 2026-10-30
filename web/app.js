@@ -1,5 +1,5 @@
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { mountRenewable } from './renewable-player.js';
+import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
@@ -800,6 +800,17 @@ async function playSource(c, index) {
   }
   if (source.how.renewable) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
+      onSources: options => {
+        if (generation !== playbackGeneration) return;
+        const page = hostedPage(source.url), first = c.streams.findIndex(url => hostedPage(url) === page);
+        const other = c.streams.filter(url => hostedPage(url) !== page);
+        const name = c.sourceNames?.[page] || c.name;
+        const rows = [{ url: page, name: `${name} · Automática` }, ...options.map((option, i) => ({ ...option, name: `${name} · Señal ${i + 1}` }))];
+        const streams = [...other.slice(0, first), ...rows.map(row => row.url), ...other.slice(first)];
+        c = { ...c, streams, sourceNames: { ...c.sourceNames, ...Object.fromEntries(rows.map(row => [row.url, row.name])) } };
+        renderSourcePicker(playerSources, sourceOptions(streams).map(row => ({ ...row, label: c.sourceNames[row.url] || row.label })),
+          streams.indexOf(source.url), chosen => playSource(c, chosen));
+      },
       onAttach: (instance) => { hls = instance; controls.attach(instance); },
       onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
       onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
