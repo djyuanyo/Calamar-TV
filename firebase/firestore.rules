@@ -129,6 +129,45 @@ service cloud.firestore {
         allow list: if false;
       }
     }
+    // Access: each account registers itself (email, name, last seen); the administrator sets its expiry and
+    // screens (only he writes them); each open screen says it is watching every 30 s. An expired account
+    // cannot open a screen.
+    match /calamarMembers/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list, delete: if administrator();
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt'])
+        && request.resource.data.email is string && request.resource.data.email.size() <= 200
+        && request.resource.data.name is string && request.resource.data.name.size() <= 100
+        && request.resource.data.seenAt == request.time;
+    }
+    match /calamarAccess/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list, delete: if administrator();
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasOnly(['expires', 'screens', 'updatedAt'])
+        && (request.resource.data.expires == null || request.resource.data.expires is timestamp)
+        && request.resource.data.screens is int && request.resource.data.screens >= 1 && request.resource.data.screens <= 10
+        && request.resource.data.updatedAt == request.time;
+    }
+    function notExpired(uid) {
+      let access = /databases/$(database)/documents/calamarAccess/$(uid);
+      return !exists(access) || get(access).data.expires == null || get(access).data.expires > request.time;
+    }
+    match /calamarStreams/{uid}/sessions/{session} {
+      allow read: if owner(uid) || administrator();
+      allow delete: if owner(uid) || administrator();
+      allow create, update: if owner(uid) && session.matches('^[A-Za-z0-9]{12,40}$') && notExpired(uid)
+        && request.resource.data.keys().hasOnly(['profile', 'title', 'device', 'at'])
+        && request.resource.data.profile is string && request.resource.data.profile.size() <= 40
+        && request.resource.data.title is string && request.resource.data.title.size() <= 120
+        && request.resource.data.device in ['web', 'android', 'tv']
+        && request.resource.data.at == request.time;
+    }
+    // Administración → Usuarios: the screens watching now of every account.
+    match /{path=**}/sessions/{session} {
+      allow read: if administrator();
+    }
     match /{document=**} {
       allow read, write: if false;
     }

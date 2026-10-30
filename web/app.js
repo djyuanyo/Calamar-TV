@@ -14,8 +14,9 @@ import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
-import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
+import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate } from './account.js';
+import { startAccess, onAccessChanged, accessKnown, expiredSince, startWatching, stopWatching } from './access.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -592,8 +593,14 @@ function showMulti(arg) {
   const items = multiItems(arg.split('+').map(decodeURIComponent));
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
+  // Several channels on this screen count as one screen of the account.
+  startWatching('Multipantalla', activeProfile()?.name || '').then((check) => {
+    if (check.ok) return;
+    closeMulti();
+    view.replaceChildren(el('p', { class: 'error', role: 'alert' }, check.reason), ...multiPage());
+  });
   openMulti(items, {
-    onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
+    onClose: () => { stopWatching(); if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
     onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
       .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
   });
@@ -978,7 +985,7 @@ function open(c, fromRoute = false) {
   if (!c.pending) startAudience(c);
   // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
-  playSource(c, 0);
+  beginWatching(c);
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
   if (resume > 0) video.addEventListener('loadedmetadata', () => {
@@ -1193,7 +1200,24 @@ function showMatchCenter(c) {
   return true;
 }
 
+/** Plays once the account may: not expired, and a screen free within its limit (access.js). */
+async function beginWatching(c) {
+  player.classList.remove('blocked');
+  playerStatus.textContent = 'Comprobando tu cuenta…';
+  const check = await startWatching(c.name, activeProfile()?.name || '');
+  // A catalog refresh meanwhile rebuilds the channel object: compare ids, and play the newest one.
+  if (!current || current.id !== c.id || player.hidden) { if (check.ok && player.hidden) stopWatching(); return; }
+  if (!check.ok) {
+    player.classList.add('blocked');
+    playerStatus.textContent = check.reason;
+    return;
+  }
+  playerStatus.textContent = '';
+  playSource(current, 0);
+}
+
 function hidePlayer() {
+  stopWatching();
   showMatchCenter(null);
   rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
@@ -1321,6 +1345,16 @@ let accountEditing = null;
 // show the profile's rows drawn again when the profile or its data change.
 const accountLink = document.getElementById('account-link');
 startProfiles(shared);
+startAccess(shared);
+// The page is drawn again only when what it may show changes: signed in or not, expired or not.
+let accessShown = '';
+onAccessChanged(() => {
+  const now = `${accessKnown()}|${!!signedUser()}|${expiredSince() || ''}`;
+  if (now === accessShown) return;
+  accessShown = now;
+  const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  if (!['admin', 'tv'].includes(page)) route();
+});
 let profileRedraw = 0;
 let gate = null;
 function closeGate() { gate?.remove(); gate = null; document.body.classList.remove('gate-open'); }
@@ -1405,6 +1439,27 @@ async function route() {
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el acceso de Google. Comprueba la conexión y recarga.'));
     }
+    return;
+  }
+  // Every viewer has an account: without one, «Entra»; an account past its date, the notice to renew it.
+  if (!signedUser()) {
+    if (!player.hidden) hidePlayer();
+    closeMulti();
+    if (!accessKnown()) { view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando tu cuenta…')); return; }
+    const f = await shared().catch(() => null);
+    if (version !== routeVersion) return;
+    view.replaceChildren(el('p', { class: 'auth-required' }, 'Para ver Calamar TV, entra con tu cuenta o créala gratis.'),
+      ...(f ? accountPage(el, f, { rerender: route, chosen: () => { location.hash = '#/'; } }) : [el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Recarga la página.')]));
+    return;
+  }
+  const expired = expiredSince();
+  if (expired) {
+    if (!player.hidden) hidePlayer();
+    closeMulti();
+    view.replaceChildren(el('section', { class: 'auth-card expired' },
+      el('h1', {}, 'Tu acceso ha caducado'),
+      el('p', { class: 'auth-lead' }, `Tu cuenta pudo ver Calamar TV hasta el ${new Date(expired).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}. Habla con el administrador para renovarla.`),
+      el('button', { class: 'auth-submit', type: 'button', onclick: async () => { const f = await shared(); await f.logout(); route(); } }, 'Cerrar sesión')));
     return;
   }
   if (!state.tdt) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp, increment, query, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, collectionGroup, setDoc, deleteDoc, serverTimestamp, increment, query, where } from 'firebase/firestore';
 let env;
 const path = 'calamarCatalog/custom';
 const data = { json: '{"channels":[],"featured":[],"hidden":[]}', revision: 1 };
@@ -155,4 +155,36 @@ test('each account reads and writes only its own profiles, their data and their 
   await assertFails(getDocs(collection(mine, 'calamarUsers')));
   await assertFails(getDocs(collection(mine, 'calamarUsers/user-a/profiles')));
   await assertSucceeds(deleteDoc(doc(mine, 'calamarUsers/user-a/profiles/p2')));
+});
+test('accounts register themselves; only the administrator sets their expiry and screens and sees everyone', async () => {
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const member = (overrides = {}) => ({ email: 'a@example.com', name: 'Ana', seenAt: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(mine, 'calamarMembers/user-a'), member()));
+  await assertFails(setDoc(doc(mine, 'calamarMembers/user-a'), member({ screens: 9 })));
+  await assertFails(setDoc(doc(other, 'calamarMembers/user-a'), member()));
+  await assertFails(getDocs(collection(mine, 'calamarMembers')));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarMembers')));
+  const access = (overrides = {}) => ({ expires: null, screens: 2, updatedAt: serverTimestamp(), ...overrides });
+  await assertFails(setDoc(doc(mine, 'calamarAccess/user-a'), access({ screens: 10 })));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarAccess/user-a'), access()));
+  await assertFails(setDoc(doc(admin(), 'calamarAccess/user-a'), access({ screens: 11 })));
+  await assertSucceeds(getDoc(doc(mine, 'calamarAccess/user-a')));
+  await assertFails(getDoc(doc(other, 'calamarAccess/user-a')));
+});
+test('each account opens its own screens while it has not expired; the administrator sees them all', async () => {
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const screen = (overrides = {}) => ({ profile: 'main', title: 'La 1', device: 'web', at: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(mine, 'calamarStreams/user-a/sessions/abcdefghijkl'), screen()));
+  await assertSucceeds(getDocs(collection(mine, 'calamarStreams/user-a/sessions')));
+  await assertFails(getDocs(collection(other, 'calamarStreams/user-a/sessions')));
+  await assertFails(setDoc(doc(other, 'calamarStreams/user-a/sessions/abcdefghijkm'), screen()));
+  await assertFails(setDoc(doc(mine, 'calamarStreams/user-a/sessions/abcdefghijkn'), screen({ device: 'pc' })));
+  await assertSucceeds(getDocs(collectionGroup(admin(), 'sessions')));
+  await assertFails(getDocs(collectionGroup(mine, 'sessions')));
+  // Expired yesterday: no screen opens.
+  await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'calamarAccess/user-a'), { expires: new Date(Date.now() - 86400000), screens: 1, updatedAt: new Date() }));
+  await assertFails(setDoc(doc(mine, 'calamarStreams/user-a/sessions/abcdefghijko'), screen()));
+  await assertSucceeds(deleteDoc(doc(mine, 'calamarStreams/user-a/sessions/abcdefghijkl')));
 });

@@ -5,7 +5,7 @@ import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } f
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, collectionGroup, query, where, documentId, getDocs, getCountFromServer, Timestamp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -136,6 +136,62 @@ export async function publishCatalog(data, expectedRevision) {
   });
   Object.assign(data, prepared);
   return expectedRevision + 1;
+}
+
+// ---- Access: every account is registered (calamarMembers), with the expiry and screens the administrator
+// sets (calamarAccess), and the screens it is watching now (calamarStreams/<uid>/sessions/<tab>) ----
+const millis = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null);
+/** The account says who it is (email, name) each time it signs in, so it appears in Administración → Usuarios. */
+export async function registerMember() {
+  const user = auth.currentUser;
+  if (!user) return;
+  await setDoc(doc(db, 'calamarMembers', user.uid), { email: String(user.email || '').slice(0, 200), name: String(user.displayName || '').slice(0, 100), seenAt: serverTimestamp() });
+}
+/** { expires: ms or null, screens: number or null } set by the administrator for this account (nothing set: no limit of date). */
+export async function readAccess(uid = auth.currentUser?.uid) {
+  if (!uid) return null;
+  const snapshot = await getDocFromServer(doc(db, 'calamarAccess', uid));
+  if (!snapshot.exists()) return { expires: null, screens: null };
+  const v = snapshot.data();
+  return { expires: millis(v.expires), screens: Number.isInteger(v.screens) ? v.screens : null };
+}
+/** The screens of this account that said they were watching less than `fresh` ms ago (other than `except`). */
+export async function liveSessions(except = '', fresh = 90000) {
+  const user = auth.currentUser;
+  if (!user) return [];
+  const snapshot = await getDocs(collection(db, 'calamarStreams', user.uid, 'sessions'));
+  const now = Date.now();
+  return snapshot.docs.filter((d) => d.id !== except).map((d) => ({ id: d.id, ...d.data(), at: millis(d.data().at) }))
+    .filter((s) => s.at && now - s.at < fresh);
+}
+export async function beatSession(id, { profile = '', title = '', device = 'web' } = {}) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await setDoc(doc(db, 'calamarStreams', user.uid, 'sessions', id), { profile: String(profile).slice(0, 40), title: String(title).slice(0, 120), device, at: serverTimestamp() });
+}
+export async function endSession(id) {
+  const user = auth.currentUser;
+  if (user) await deleteDoc(doc(db, 'calamarStreams', user.uid, 'sessions', id)).catch(() => {});
+}
+/** Administración → Usuarios: every registered account, its access and the screens watching now. */
+export async function usersOverview() {
+  if (!administrator()) throw new Error('Entra con la cuenta de administración.');
+  const [members, access, sessions] = await Promise.all([getDocs(collection(db, 'calamarMembers')), getDocs(collection(db, 'calamarAccess')), getDocs(collectionGroup(db, 'sessions'))]);
+  const now = Date.now();
+  const live = new Map();
+  for (const d of sessions.docs) {
+    const uid = d.ref.parent.parent?.id, at = millis(d.data().at);
+    if (uid && at && now - at < 90000) live.set(uid, [...(live.get(uid) || []), { ...d.data(), at }]);
+  }
+  const rights = new Map(access.docs.map((d) => [d.id, { expires: millis(d.data().expires), screens: Number.isInteger(d.data().screens) ? d.data().screens : null }]));
+  return members.docs.map((d) => ({ uid: d.id, email: d.data().email || '', name: d.data().name || '', seenAt: millis(d.data().seenAt),
+    ...(rights.get(d.id) || { expires: null, screens: null }), live: live.get(d.id) || [] }))
+    .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0));
+}
+/** `expires`: ms or null (no end); `screens`: 1 to 10. */
+export async function saveAccess(uid, { expires, screens }) {
+  if (!administrator()) throw new Error('Entra con la cuenta de administración.');
+  await setDoc(doc(db, 'calamarAccess', uid), { expires: expires ? Timestamp.fromMillis(expires) : null, screens, updatedAt: serverTimestamp() });
 }
 
 // ---- Films, series and documentaries ----------------------------------------------------------------

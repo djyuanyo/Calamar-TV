@@ -1370,3 +1370,15 @@ body.gate-open { overflow: hidden; }
 .profile-sheet .profile-form { justify-self: center; }
 .app-updates { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
 .app-updates .chips { margin: 0; }
+.users-list { display: grid; gap: 10px; margin-top: 12px; }
+.user-row { display: grid; grid-template-columns: minmax(200px, 2fr) auto auto auto; gap: 12px 16px; align-items: end; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
+.user-row.expired { outline: 1px solid #ff7b72; }
+.user-who { display: grid; gap: 2px; min-width: 0; }
+.user-who span, .user-who small { color: rgba(255,255,255,.65); overflow-wrap: anywhere; }
+.user-field { display: grid; gap: 6px; font-size: 13px; color: rgba(255,255,255,.75); }
+.user-field input { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: #0f141b; color: #fff; font: inherit; }
+.user-field input[type=number] { width: 80px; }
+.user-save { display: flex; align-items: center; gap: 10px; }
+.auth-required { width: min(440px, 100% - 32px); margin: 24px auto 0; text-align: center; color: rgba(255,255,255,.8); }
+.player.blocked .player-status { color: #ffb4ab; font-size: 17px; }
+@media (max-width: 760px) { .user-row { grid-template-columns: 1fr 1fr; } .user-who { grid-column: 1 / -1; } }

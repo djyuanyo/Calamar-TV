@@ -1,5 +1,6 @@
 // «Mi cuenta» (#/cuenta): sign in with Google or with email and password, «¿Quién está viendo?» and
 // the profiles of the account (add, rename, colour, delete), as in Netflix.
+import { accessExpires, screenLimit, accessAdmin } from './access.js';
 import { MAX_PROFILES, PROFILE_COLORS, signedUser, accountProfiles, activeProfile, chooseProfile, addProfile, editProfile, removeProfile } from './profiles.js';
 
 export const profileInitial = (profile) => String(profile?.name || '?').trim().charAt(0).toLocaleUpperCase('es') || '?';
@@ -143,7 +144,9 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
     const provider = (user.providerData || []).some((p) => p.providerId === 'google.com') ? 'Google' : 'Email y contraseña';
     return [el('section', { class: 'profile-sheet' }, head('Cuenta', 'perfil'),
       el('dl', { class: 'sheet-facts' }, el('dt', {}, 'Email'), el('dd', {}, user.email || '—'), el('dt', {}, 'Acceso'), el('dd', {}, provider),
-        el('dt', {}, 'Perfiles'), el('dd', {}, `${profiles.length} de ${MAX_PROFILES}`)),
+        el('dt', {}, 'Perfiles'), el('dd', {}, `${profiles.length} de ${MAX_PROFILES}`),
+        el('dt', {}, 'Pantallas a la vez'), el('dd', {}, accessAdmin() ? 'Sin límite' : String(screenLimit())),
+        el('dt', {}, 'Acceso hasta'), el('dd', {}, accessExpires() ? new Date(accessExpires()).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Sin fecha de fin')),
       provider === 'Google' ? null : el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
         try { await f.resetPassword(user.email); say(`Te hemos enviado un correo a ${user.email} para cambiar la contraseña.`); } catch (error) { say(f.explain(error), true); }
       } }, 'Cambiar la contraseña'), note)];

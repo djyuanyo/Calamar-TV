@@ -3,7 +3,7 @@ import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madrid
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
+import { auth, ready, administrator, watchAuth, logout, usersOverview, saveAccess, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
@@ -394,7 +394,7 @@ export async function render(state) {
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const reviewRoute = decodeURIComponent(location.hash).match(/^#\/admin\/biblioteca\/no-identificadas(?:\/(peliculas|series|documentales))?\/?$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
-  const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const section = location.hash.startsWith('#/admin/usuarios') ? 'users' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -407,8 +407,8 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'library' ? libraryAdmin(el, {
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca'], ['users','Usuarios','#/admin/usuarios']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : key === 'users' ? el('b', {}, '👤') : el('b', {}, file.data[key].length), label))),
+      ...(section === 'users' ? usersPanel() : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
@@ -420,6 +420,53 @@ export async function render(state) {
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
     ),
   ];
+}
+
+/**
+ * Administración → Usuarios: every registered account, the day it stops being able to watch (none: no end),
+ * how many screens it may watch at a time (one when not set) and the screens watching now.
+ */
+function usersPanel() {
+  const list = el('div', { class: 'users-list' }, el('p', { class: 'status', role: 'status' }, 'Cargando usuarios…'));
+  const search = el('input', { type: 'search', placeholder: 'Buscar por email o nombre', 'aria-label': 'Buscar usuarios' });
+  const day = (ms) => new Date(ms).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+  const iso = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  let users = [];
+  const draw = () => {
+    const q = search.value.trim().toLocaleLowerCase('es');
+    const shown = users.filter((u) => !q || `${u.email} ${u.name}`.toLocaleLowerCase('es').includes(q));
+    list.replaceChildren(...(shown.length ? shown.map((u) => {
+      const expires = el('input', { type: 'date', value: u.expires ? iso(u.expires) : '', 'aria-label': `Caduca (${u.email})` });
+      const screens = el('input', { type: 'number', min: '1', max: '10', value: String(u.screens || 1), 'aria-label': `Pantallas a la vez (${u.email})` });
+      const note = el('span', { class: 'note', role: 'status' });
+      const expired = u.expires && u.expires <= Date.now();
+      const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
+        save.disabled = true; note.textContent = '';
+        try {
+          const count = Number(screens.value);
+          if (!Number.isInteger(count) || count < 1 || count > 10) throw Error('Las pantallas van de 1 a 10.');
+          // The whole chosen day can be watched: it ends at midnight (Madrid) at its end.
+          const until = expires.value ? new Date(`${expires.value}T23:59:59`).getTime() : null;
+          await saveAccess(u.uid, { expires: until, screens: count });
+          Object.assign(u, { expires: until, screens: count });
+          note.textContent = 'Guardado';
+        } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+      } }, 'Guardar');
+      return el('div', { class: `user-row${expired ? ' expired' : ''}` },
+        el('div', { class: 'user-who' }, el('b', {}, u.name || u.email || u.uid), el('span', {}, u.email),
+          el('small', {}, `${u.seenAt ? `Última vez: ${day(u.seenAt)}` : 'Sin entrar todavía'}${u.live.length ? ` · Viendo ahora en ${u.live.length} ${u.live.length === 1 ? 'pantalla' : 'pantallas'}: ${u.live.map((s) => s.title).filter(Boolean).join(', ')}` : ''}${expired ? ' · Caducada' : ''}`)),
+        el('label', { class: 'user-field' }, el('span', {}, 'Caduca'), expires,
+          el('button', { class: 'ghost', type: 'button', onclick: () => { expires.value = ''; } }, 'Sin fecha')),
+        el('label', { class: 'user-field' }, el('span', {}, 'Pantallas a la vez'), screens),
+        el('div', { class: 'user-save' }, save, note));
+    }) : [el('p', { class: 'status' }, users.length ? 'Ningún usuario con ese nombre.' : 'Todavía no hay usuarios registrados.')]));
+  };
+  search.addEventListener('input', draw);
+  usersOverview().then((found) => { users = found; draw(); })
+    .catch((error) => list.replaceChildren(el('p', { class: 'error' }, explain(error))));
+  return [el('div', { class: 'section-head' }, el('h2', {}, 'Usuarios'), el('span', {}, 'Caducidad y pantallas a la vez')),
+    el('p', { class: 'note' }, 'Sin fecha de caducidad, la cuenta puede ver siempre. Llegado ese día, deja de ver nada. Las pantallas son las reproducciones a la vez de toda la cuenta (sus perfiles incluidos); si no cambias nada, es 1.'),
+    search, list];
 }
 
 /**
