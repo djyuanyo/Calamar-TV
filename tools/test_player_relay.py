@@ -17,12 +17,43 @@ PHP = str(ROOT / 'hosting/calamar-player.php')
 SECRET = 'secreto-de-prueba-0123456789abcdef'
 
 
-def php(code):
+def php(code, disabled=()):
     env = {**os.environ, 'CALAMAR_PLAYER_SECRET': SECRET}
-    return subprocess.check_output(['php', '-r', f'require {json.dumps(PHP)}; {code}'], text=True, env=env)
+    args = ['php'] + (['-d', 'disable_functions=' + ','.join(disabled)] if disabled else [])
+    return subprocess.check_output(args + ['-r', f'require {json.dumps(PHP)}; {code}'], text=True, env=env)
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_shared_host_without_curl_multi_exec_uses_bounded_safe_fallback(self):
+        requests = []
+        class Origin(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                requests.append(self.path)
+                if self.path.startswith('/silent'): time.sleep(4)
+                if self.path.startswith('/redirect'):
+                    self.send_response(302); self.send_header('Location', 'https://fast.example/fast.m3u8'); self.end_headers(); return
+                body = b'<html>Error</html>' if self.path.startswith('/html') else b'#EXTM3U\n' if self.path.startswith('/empty') else b'#EXTM3U\n#EXTINF:6,\nvideo.ts\n'
+                self.send_response(200); self.end_headers()
+                try: self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError): pass
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Origin)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            factory = '$factory=function($url,$page){return curl_init("http://127.0.0.1:%d".parse_url($url,PHP_URL_PATH));};' % server.server_address[1]
+            for disabled in [('curl_multi_exec',), ('curl_multi_init', 'curl_multi_exec')]:
+                with self.subTest(disabled=disabled):
+                    before = time.monotonic()
+                    out = php(factory + 'echo json_encode(playerFirstList(["https://slow.example/silent.m3u8","https://bad.example/html.m3u8","https://empty.example/empty.m3u8","https://redirect.example/redirect.m3u8"], "https://zicotv.cc/api/player/4", $factory));', disabled)
+                    status, body, url = json.loads(out)
+                    self.assertEqual(status, 200); self.assertIn('#EXTINF:6', body)
+                    self.assertEqual(url, 'https://fast.example/fast.m3u8')
+                    self.assertLess(time.monotonic() - before, 3.5, 'a silent source must be abandoned after two seconds')
+                    self.assertEqual(json.loads(php('echo json_encode(playerFirstList(["https://127.0.0.1/private.m3u8"], "https://zicotv.cc/api/player/4"));', disabled)), [0, None, ''])
+            self.assertIn('/fast.m3u8', requests)
+        finally:
+            server.shutdown(); server.server_close()
+
     def test_first_valid_hls_wins_without_waiting_for_a_silent_first_source(self):
         requests = []
         class Origin(http.server.BaseHTTPRequestHandler):
