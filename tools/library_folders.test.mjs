@@ -166,7 +166,7 @@ test('series keep episode copies and metadata, remove deleted episodes, then dis
 
 test('an update of one root never removes tracked copies in another root of the same provider', async () => {
   const movie = { id: 'm1', kind: 'movie', title: 'Fuera', url: video('outside'), fromFolder: true, folderSources: { drive_outside: ['drive:other'] } };
-  const input = { movies: [movie, { id: 'manual', kind: 'movie', title: 'Manual', url: 'https://luluvido.com/manual123456' }] };
+  const input = { movies: [movie, { id: 'manual', kind: 'movie', title: 'Manual', file: 'Manual.mp4', url: 'https://luluvido.com/manual123456' }] };
   const output = await libraryFromScan(complete(), input, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
   assert.deepEqual(output.sections.movies, input.movies);
   assert.equal(output.changed, false);

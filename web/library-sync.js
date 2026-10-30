@@ -28,7 +28,7 @@ function coverage(scan) {
 export function managedByScan(record, section, scan) {
   const code = videoKey(record.url);
   const { codes, sections } = coverage(scan);
-  return codes.has(code) || (!!(record.fromFolder || record.file || record.files?.length) && sections.has(`${providerOf(code)}:${section}`));
+  return codes.has(code) || (!!(record.fromFolder || (record.status === 'unmatched' && record.file) || record.files?.length) && sections.has(`${providerOf(code)}:${section}`));
 }
 
 /** Remove missing copies only after a complete scan, keeping copies in folders not being read. */
