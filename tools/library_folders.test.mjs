@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { folderReference, driveFolder, scanFolders, DRIVE_ENDPOINT } from '../web/library-folders.js';
-import { libraryFromScan } from '../web/library-lulu.js';
+import { libraryFromScan, scanLulu, matchUnmatched } from '../web/library-lulu.js';
 import { webPlayback } from '../web/catalog.js';
 
 const key = 'AIza' + 'x'.repeat(35);
@@ -109,4 +109,105 @@ test('a documentaries folder of films stays films even when one name starts with
   const episodes=async()=>json({name:'Planeta',files:['Planeta 1x01.mp4','Planeta 1x02.mp4'].map((title,i)=>({title,link:video('ep'+i)})),folders:[]});
   const show=await scanFolders([{section:'documentaries',url:'https://drive.google.com/drive/folders/docs'}],{drive:'AIza'+'x'.repeat(35)},{fetcher:episodes});
   assert.deepEqual(show.series.map(s=>[s.title,s.episodes.length]),[['Planeta',2]]);
+});
+
+const complete = (films = [], series = [], sources = [{ id: 'drive:movies', provider: 'drive', section: 'movies' }, { id: 'lulu:movies', provider: 'lulu', section: 'movies' }]) => ({
+  films, series, unknown: [], complete: true,
+  inventory: sources.map(source => ({ ...source, links: [...films.filter(f => f.section === source.section).map(f => f.link),
+    ...series.filter(s => s.section === source.section).flatMap(s => s.episodes.map(e => e.link))].filter(link => source.provider === (link.includes('calamar-drive.php') ? 'drive' : 'lulu')) })),
+});
+const noTmdb = async () => { throw Error('Existing titles should not need TMDB'); };
+
+test('refresh removes the deleted movie and documentary, including an empty result, but keeps another copy', async () => {
+  const movie = { id: 'm5', kind: 'movie', title: 'El viaje', year: 2020, url: video('trip'), tmdb: { id: 5, title: 'El viaje' }, featured: true, trailerUrl: '' };
+  const f = link => ({ section: 'movies', title: 'El viaje', file: 'El viaje (2020).mp4', year: 2020, link });
+  const first = await libraryFromScan(complete([f(movie.url), f('https://luluvido.com/lulutrip1234')]), { movies: [movie], documentaries: [] }, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.deepEqual(first.sections.movies[0].mirrors, ['https://luluvido.com/lulutrip1234']);
+  // No new titles: the mirror switch alone must still be published by the admin.
+  const second = await libraryFromScan(complete([f('https://luluvido.com/lulutrip1234')]), first.sections, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(second.changed, true);
+  assert.equal(second.added.films, 0);
+  assert.equal(second.sections.movies[0].url, 'https://luluvido.com/lulutrip1234');
+  assert.equal(second.sections.movies[0].featured, true);
+  assert.equal(second.sections.movies[0].trailerUrl, '');
+  const third = await libraryFromScan(complete(), second.sections, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.deepEqual(third.sections.movies, []);
+  assert.deepEqual(third.removed, { films: 1, shows: 0, episodes: 0 });
+  assert.equal(third.changed, true);
+  const oldDocumentary = { ...movie, id: 'm6', url: video('doc'), fromFolder: true };
+  const docs = await libraryFromScan(complete([], [], [{ id: 'drive:docs', provider: 'drive', section: 'documentaries' }]), { documentaries: [oldDocumentary] }, 'tmdb');
+  assert.deepEqual(docs.sections.documentaries, []);
+  assert.equal(docs.removed.films, 1);
+});
+
+test('series keep episode copies and metadata, remove deleted episodes, then disappear after the last deletion', async () => {
+  const show = { id: 's2', kind: 'tv', title: 'Mi serie', folder: 'Mi serie', tmdb: { id: 2, title: 'Mi serie' }, featured: true, skip: { intro: [5, 30] },
+    episodes: [{ id: 'e2x1x1', season: 1, episode: 1, name: 'Uno', url: video('ep1'), addedAt: '2026-01-01' },
+      { id: 'e2x1x2', season: 1, episode: 2, name: 'Dos', url: video('ep2') }] };
+  const sources = [{ id: 'drive:series', provider: 'drive', section: 'series' }, { id: 'lulu:series', provider: 'lulu', section: 'series' }];
+  const series = links => links.map(episodes => ({ section: 'series', title: show.title, folder: show.folder, episodes }));
+  const e = (episode, link) => ({ season: 1, episode, link, file: `Mi serie 1x0${episode}.mp4` });
+  const scan = complete([], series([[e(1, video('ep1')), e(2, video('ep2'))], [e(1, 'https://luluvido.com/episode10001')]]), sources);
+  const original = JSON.stringify(show);
+  const first = await libraryFromScan(scan, { series: [show] }, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(JSON.stringify(show), original, 'the current catalog remains unchanged until publication succeeds');
+  assert.deepEqual(first.sections.series[0].episodes[0].mirrors, ['https://luluvido.com/episode10001']);
+  const second = await libraryFromScan(complete([], series([[e(1, 'https://luluvido.com/episode10001')]]), sources), first.sections, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(second.sections.series[0].episodes.length, 1);
+  assert.equal(second.sections.series[0].episodes[0].url, 'https://luluvido.com/episode10001');
+  assert.equal(second.sections.series[0].episodes[0].name, 'Uno');
+  assert.equal(second.sections.series[0].episodes[0].addedAt, '2026-01-01');
+  assert.deepEqual(second.sections.series[0].skip, show.skip);
+  assert.equal(second.removed.episodes, 1);
+  const third = await libraryFromScan(complete([], [], sources), second.sections, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.deepEqual(third.sections.series, []);
+  assert.deepEqual(third.removed, { films: 0, shows: 1, episodes: 1 });
+});
+
+test('an update of one root never removes tracked copies in another root of the same provider', async () => {
+  const movie = { id: 'm1', kind: 'movie', title: 'Fuera', url: video('outside'), fromFolder: true, folderSources: { drive_outside: ['drive:other'] } };
+  const input = { movies: [movie, { id: 'manual', kind: 'movie', title: 'Manual', file: 'Manual.mp4', url: 'https://luluvido.com/manual123456' }] };
+  const output = await libraryFromScan(complete(), input, 'tmdb', { skipDuplicates: true, fetcher: noTmdb });
+  assert.deepEqual(output.sections.movies, input.movies);
+  assert.equal(output.changed, false);
+});
+
+test('adding an imported episode does not adopt or delete manual episodes elsewhere in the same season', async () => {
+  const series = { id: 's2', kind: 'tv', title: 'Serie', folder: 'Serie', tmdb: { id: 2, title: 'Serie' }, episodes: [
+    { id: 'e2x1x1', season: 1, episode: 1, name: 'Manual', file: '', url: 'https://luluvido.com/manual123456' }] };
+  const scan = complete([], [{ section: 'series', title: 'Serie', folder: 'Serie', episodes: [{ season: 1, episode: 2, link: 'https://luluvido.com/imported1234' }] }],
+    [{ id: 'lulu:series', provider: 'lulu', section: 'series' }]);
+  const result = await libraryFromScan(scan, { series: [series] }, 'tmdb', { skipDuplicates: true,
+    fetcher: async () => json({ episodes: [{ episode_number: 1, name: 'Manual' }, { episode_number: 2, name: 'Importado' }] }) });
+  assert.deepEqual(result.sections.series[0].episodes.map(e => [e.episode, e.url, e.fromFolder]),
+    [[1, 'https://luluvido.com/manual123456', undefined], [2, 'https://luluvido.com/imported1234', true]]);
+  assert.equal(result.removed.episodes, 0);
+});
+
+test('empty LuluStream root is authoritative, while errors, malformed lists and partial pagination abort the update', async () => {
+  const empty = await scanLulu('lulu', { fetcher: async () => json({ status: 200, result: { folders: [], files: [] } }) });
+  const result = await libraryFromScan(empty, { movies: [{ id: 'm1', kind: 'movie', title: 'Borrada', fromFolder: true, url: 'https://luluvido.com/deleted12345' }] }, 'tmdb');
+  assert.deepEqual(result.sections.movies, []);
+  for (const result of [{}, { files: {}, folders: [] }, { files: [], folders: [], has_more: true }])
+    await assert.rejects(scanLulu('lulu', { fetcher: async () => json({ status: 200, result }) }), /incompleta|válida/);
+  for (const data of [{}, { files: {}, folders: [] }, { files: [], folders: [], incompleteSearch: true }])
+    await assert.rejects(driveFolder({ id: 'movies' }, key, async () => json(data)), /incompleta|válida/);
+  let calls = 0;
+  await assert.rejects(scanFolders([{ section: 'movies', url: 'https://drive.google.com/drive/folders/movies' }], { drive: key }, { fetcher: async () => {
+    if (++calls === 1) return json({ files: [{ title: 'Uno.mp4', link: video('one') }], folders: [], nextPageToken: 'page2' });
+    return json({ error: 'Falló la segunda página' }, 502);
+  } }), /segunda página/);
+});
+
+test('identifying a pending film or series retains folder ownership and spare copies for later deletion', async () => {
+  const movie = { id: 'u1', kind: 'movie', title: 'Pendiente', url: video('film'), fromFolder: true, mirrors: ['https://luluvido.com/film12345678'], folderSources: { drive_film: ['drive:movies'], film12345678: ['lulu:movies'] } };
+  const series = { id: 'userie', kind: 'tv', title: 'Serie', folder: 'Serie', status: 'unmatched', episodes: [{ id: 'e1', season: 1, episode: 1, url: video('episode'), fromFolder: true, mirrors: ['https://luluvido.com/episode12345'], folderSources: { drive_episode: ['drive:series'] } }] };
+  const tmdb = async address => new URL(address).pathname.includes('/season/') ? json({ episodes: [{ episode_number: 1, name: 'Uno' }] })
+    : json({ id: 8, title: 'Identificada', name: 'Identificada', seasons: [{ season_number: 1 }] });
+  const identified = await matchUnmatched(movie, 8, null, 'tmdb', tmdb);
+  assert.deepEqual(identified.folderSources, movie.folderSources);
+  assert.deepEqual(identified.mirrors, movie.mirrors);
+  const matched = await matchUnmatched(series, 8, null, 'tmdb', tmdb);
+  assert.deepEqual(matched.episodes[0].folderSources, series.episodes[0].folderSources);
+  assert.deepEqual(matched.episodes[0].mirrors, series.episodes[0].mirrors);
 });
