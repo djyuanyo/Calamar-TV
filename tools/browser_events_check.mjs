@@ -535,7 +535,10 @@ try {
   await page.getByLabel('Carpetas de Películas',{exact:true}).fill('https://drive.google.com/drive/folders/films');
   await page.getByLabel('Carpetas de Series',{exact:true}).fill('https://drive.google.com/drive/folders/paco');
   await page.getByRole('button',{name:'Buscar e importar de ambos sitios',exact:true}).click();
-  await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor();
+  await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor().catch(async error => {
+    console.log('Mixed folder status', await page.locator('[role=status]').allTextContents());
+    throw error;
+  });
   let mixed=await page.evaluate(()=>window.__libraryParts);
   assert.equal(mixed.parts['movies-0'].items.find(m=>m.id==='m76600').url,'https://luluvido.com/abc123def456');
   assert.equal(mixed.parts['series-0'].items.find(m=>m.id==='s4500').episodes.find(e=>e.season===1&&e.episode===3).url,driveEpisode);
