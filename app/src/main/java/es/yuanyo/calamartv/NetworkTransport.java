@@ -81,11 +81,8 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
    *     only serve the same browser, coming from that page.
    */
   public DataSource.Factory mediaFactory(String referer, boolean http1, String rootSource, boolean browser) {
-    OkHttpClient mediaClient = SecureDnsClients.forMedia(client, http1);
-    if (rootSource != null && HostingPlayback.isRelay(rootSource))
-      mediaClient = mediaClient.newBuilder().readTimeout(45, java.util.concurrent.TimeUnit.SECONDS).build();
     OkHttpDataSource.Factory factory =
-        new OkHttpDataSource.Factory(mediaClient)
+        new OkHttpDataSource.Factory(SecureDnsClients.forMedia(client, http1))
             .setUserAgent(browser ? PlayerDocument.BROWSER_USER_AGENT
                 : CastSource.needsBridge(rootSource) ? PlayerDocument.IPTV_USER_AGENT : PlayerDocument.USER_AGENT);
     if (referer != null && !referer.isEmpty()) {

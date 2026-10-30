@@ -39,14 +39,8 @@ public class HostingPlaybackTest {
   }
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
-  @Test public void slowHostingStillPlaysWithoutRestartingResolution() throws Exception {
-    playback(false, true, true, true);
-  }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception {
-    playback(remote, menuAvailable, legacyMenu, false);
-  }
-  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean slowHosting) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -73,14 +67,12 @@ public class HostingPlaybackTest {
             if (!menuAvailable && resolutionFailures.getAndIncrement() == 0) return new MockResponse().setResponseCode(502).setBody("{\"error\":\"Fallo temporal del hosting\"}");
             int n = renewals.incrementAndGet();
             return new MockResponse().setHeader("Content-Type", "application/json").setBody(
-                "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}")
-                .setBodyDelay(slowHosting ? 37 : 0, java.util.concurrent.TimeUnit.SECONDS);
+                "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
           }
           if (path.startsWith("/calamar-player.php?seg=manifest")) {
-            if (path.contains("sig=1&") && !slowHosting) return new MockResponse().setResponseCode(403);
+            if (path.contains("sig=1&")) return new MockResponse().setResponseCode(403);
             return new MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
-                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n")
-                .setBodyDelay(slowHosting ? 28 : 0, java.util.concurrent.TimeUnit.SECONDS);
+                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
           }
           if (path.startsWith("/calamar-player.php?seg=video")) {
             segments.incrementAndGet(); return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
@@ -105,13 +97,7 @@ public class HostingPlaybackTest {
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
-        assertPlays(scenario, slowHosting ? 100000 : 30000);
-        if (slowHosting) {
-          assertEquals("Slow valid responses must not restart signed resolution", 1, renewals.get());
-          assertTrue("The hosting must deliver actual media", segments.get() > 0);
-          assertEquals("The app must stay on the hosting", 0, pages.get());
-          return;
-        }
+        assertPlays(scenario);
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
         assertEquals(0, pages.get());
@@ -164,9 +150,8 @@ public class HostingPlaybackTest {
     }
   }
 
-  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) { assertPlays(scenario, 30000); }
-  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario, long waitMs) {
-    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + waitMs;
+  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) {
+    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + 30000;
     while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {
       scenario.onActivity(activity -> {
         try {
