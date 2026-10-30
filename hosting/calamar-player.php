@@ -211,9 +211,45 @@ function playerGet($url, $page, $limit = 3145728) {
 }
 function playerIsList($body) { return is_string($body) && strncmp(ltrim($body, "\xEF\xBB\xBF \r\n\t"), '#EXTM3U', 7) === 0; }
 function playerList($body) { header('Content-Type: application/vnd.apple.mpegurl'); echo $body; exit; }
+function playerHasMedia($body) {
+    return playerIsList($body) && preg_match('/^#EXT(?:INF|-X-STREAM-INF):/m', $body)
+        && preg_match('/(?:^|\n)[^#\s][^\r\n]*/', $body);
+}
+
+/** Shared hosts may disable curl_multi_exec. Keep the same public-target checks, with short bounded probes. */
+function playerFirstListSequential($sources, $page, $factory = null) {
+    $deadline = microtime(true) + 18;
+    foreach (array_unique($sources) as $url) {
+        if (!preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '')) continue;
+        for ($hop = 0; $hop < 5 && microtime(true) < $deadline && !connection_aborted(); $hop++) {
+            $ch = $factory ? $factory($url, $page) : playerCurl($url, $page, 2);
+            if (!$ch) break;
+            $body = '';
+            curl_setopt_array($ch, array(CURLOPT_ENCODING => '', CURLOPT_HEADER => false,
+                CURLOPT_TIMEOUT_MS => max(1, min(2000, (int)(($deadline - microtime(true)) * 1000))),
+                CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$body) {
+                    if (strlen($body) + strlen($chunk) > 2097152) return 0;
+                    $body .= $chunk; return strlen($chunk);
+                }));
+            curl_exec($ch); $error = curl_errno($ch);
+            $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); $location = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+            if (!$error && $status === 200 && playerHasMedia($body)) return array($status, $body, $url);
+            if ($status >= 300 && $status < 400 && is_string($location) && $location !== '') {
+                $next = redirectTarget($url, $location);
+                if ($next) { $url = $next; continue; }
+            }
+            break;
+        }
+    }
+    return array(0, null, '');
+}
 
 /** Race HLS lists: a silent first CDN must never hold up another CDN that is already responding. */
 function playerFirstList($sources, $page, $factory = null) {
+    foreach (array('curl_multi_init', 'curl_multi_add_handle', 'curl_multi_exec', 'curl_multi_info_read',
+        'curl_multi_remove_handle', 'curl_multi_select', 'curl_multi_close') as $function)
+        if (!function_exists($function)) return playerFirstListSequential($sources, $page, $factory);
     $queue = array();
     foreach (array_unique($sources) as $url)
         if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '')) $queue[] = array($url, 0);
@@ -241,8 +277,7 @@ function playerFirstList($sources, $page, $factory = null) {
                 $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
                 $location = curl_getinfo($ch, CURLINFO_REDIRECT_URL); $body = $bodies[$id];
                 curl_multi_remove_handle($multi, $ch); curl_close($ch); unset($active[$id], $bodies[$id]);
-                if ($done['result'] === CURLE_OK && $status === 200 && playerIsList($body)
-                    && preg_match('/^#EXT(?:INF|-X-STREAM-INF):/m', $body) && preg_match('/(?:^|\n)[^#\s][^\r\n]*/', $body))
+                if ($done['result'] === CURLE_OK && $status === 200 && playerHasMedia($body))
                     return array($status, $body, $url);
                 // Every redirect is revalidated and pinned by playerCurl, just like playerGet.
                 if ($status >= 300 && $status < 400 && $hops < 4 && is_string($location) && $location !== '') {
