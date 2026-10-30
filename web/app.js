@@ -16,7 +16,7 @@ import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryP
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
 import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate } from './account.js';
-import { startAccess, onAccessChanged, accessKnown, expiredSince, startWatching, stopWatching } from './access.js';
+import { startAccess, onAccessChanged, accessKnown, registrationRequired, expiredSince, startWatching, stopWatching, onPlaybackAccessLost, playbackAllowed } from './access.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -589,20 +589,25 @@ function multiPage() {
     el('p', { class: 'note multi-note' }, 'Elige varios canales o eventos para verlos a la vez. Con 2 se reparten arriba y abajo; con más, en cuadrícula en horizontal.'),
     el('div', { class: 'multi-actions' }, el('label', { class: 'search multi-search' }, query), watch, clear), grid];
 }
+let multiWatching = false;
+let multiRequest = 0;
+function endMulti() { ++multiRequest; closeMulti(); if (multiWatching) stopWatching(); multiWatching = false; }
 function showMulti(arg) {
   const items = multiItems(arg.split('+').map(decodeURIComponent));
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
-  // Several channels on this screen count as one screen of the account.
-  startWatching('Multipantalla', activeProfile()?.name || '').then((check) => {
-    if (check.ok) return;
-    closeMulti();
-    view.replaceChildren(el('p', { class: 'error', role: 'alert' }, check.reason), ...multiPage());
-  });
-  openMulti(items, {
-    onClose: () => { stopWatching(); if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
+  const requestedRoute = location.hash, request = ++multiRequest;
+  startWatching('Multipantalla', activeProfile()?.name || '', items.length).then(check => {
+    if (request !== multiRequest || location.hash !== requestedRoute) { if (check.ok && request === multiRequest) stopWatching(); return; }
+    if (!check.ok) {
+      closeMulti(); view.replaceChildren(el('p', { class: 'error', role: 'alert' }, check.reason), ...multiPage()); return;
+    }
+    multiWatching = true;
+    openMulti(items, {
+    onClose: () => { endMulti(); if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
     onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
       .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
+    });
   });
   return true;
 }
@@ -684,6 +689,7 @@ const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 
 
 async function playSource(c, index) {
   stop();
+  if (!c.pending && !playbackAllowed()) { playerStatus.textContent = 'Comprueba tu cuenta y vuelve a abrir el contenido.'; return; }
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
     renderSourcePicker(playerSources, [], 0, () => {});
@@ -792,7 +798,7 @@ async function playSource(c, index) {
   const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
-      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture; web-share', allowfullscreen: '' });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
     controls.attach(null);
@@ -1347,9 +1353,16 @@ const accountLink = document.getElementById('account-link');
 startProfiles(shared);
 startAccess(shared);
 // The page is drawn again only when what it may show changes: signed in or not, expired or not.
+onPlaybackAccessLost(reason => {
+  endMulti();
+  if (!player.hidden) {
+    stop();
+    player.classList.add('blocked'); playerStatus.textContent = reason;
+  }
+});
 let accessShown = '';
 onAccessChanged(() => {
-  const now = `${accessKnown()}|${!!signedUser()}|${expiredSince() || ''}`;
+  const now = `${accessKnown()}|${registrationRequired()}|${!!signedUser()}|${expiredSince() || ''}`;
   if (now === accessShown) return;
   accessShown = now;
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
@@ -1442,9 +1455,9 @@ async function route() {
     return;
   }
   // Every viewer has an account: without one, «Entra»; an account past its date, the notice to renew it.
-  if (!signedUser()) {
+  if (!accessKnown() || (registrationRequired() && !signedUser())) {
     if (!player.hidden) hidePlayer();
-    closeMulti();
+    endMulti();
     if (!accessKnown()) { view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando tu cuenta…')); return; }
     const f = await shared().catch(() => null);
     if (version !== routeVersion) return;
@@ -1455,7 +1468,7 @@ async function route() {
   const expired = expiredSince();
   if (expired) {
     if (!player.hidden) hidePlayer();
-    closeMulti();
+    endMulti();
     view.replaceChildren(el('section', { class: 'auth-card expired' },
       el('h1', {}, 'Tu acceso ha caducado'),
       el('p', { class: 'auth-lead' }, `Tu cuenta pudo ver Calamar TV hasta el ${new Date(expired).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}. Habla con el administrador para renovarla.`),
@@ -1477,7 +1490,7 @@ async function route() {
   syncLibraryNav();
   const watching = sectionByPage(page) && hash.split('/')[2] === 'ver';
   if (!['canal', 'evento'].includes(page) && !watching && !player.hidden) hidePlayer();
-  if (page !== 'multipantalla' || !arg) closeMulti();
+  if (page !== 'multipantalla' || !arg) endMulti();
   if (page === 'multipantalla') {
     if (arg && showMulti(arg)) { view.replaceChildren(...multiPage()); return; }
     view.replaceChildren(...multiPage());

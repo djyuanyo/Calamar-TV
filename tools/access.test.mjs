@@ -11,3 +11,13 @@ test('one screen by default; a new screen beyond the limit is told why, with wha
   assert.match(message, /Real Madrid vs Barcelona/);
   assert.match(limitMessage(2, [{ title: 'A' }, { title: 'B' }]), /2 pantallas/);
 });
+
+import { claimPlan, LEASE_MS } from '../web/access-lease.js';
+test('atomic claim planning counts profiles together and reserves every player of Multipantalla', () => {
+  const now = 1000000, live = {holder:'other',title:'Film',at:now-1000};
+  assert.deepEqual(claimPlan([live,null],'mine',1,2,now),[1]);
+  assert.throws(()=>claimPlan([live,null],'mine',2,2,now),/límite/);
+  assert.throws(()=>claimPlan([], 'mine',2,1,now),/límite/);
+  assert.deepEqual(claimPlan([{...live,at:now-LEASE_MS}], 'mine',1,1,now),[0]);
+  assert.deepEqual(claimPlan([{...live,holder:'mine'}], 'mine',1,1,now),[0]);
+});

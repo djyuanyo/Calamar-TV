@@ -1,3 +1,4 @@
+import { dailymotionEmbed } from './dailymotion.js';
 import { zicoEventApi } from './event-sources.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
@@ -269,6 +270,8 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const daily = dailymotionEmbed(url);
+  if (daily) return { ok: true, kind: 'frame', address: daily, page: true, provider: 'dailymotion' };
   const anon = anonmp4Embed(url);
   if (anon) return { ok: true, kind: 'frame', address: anon };
   const embed = lulustreamEmbed(url);

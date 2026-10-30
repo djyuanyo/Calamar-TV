@@ -1,3 +1,4 @@
+import { claimPlan, LEASE_MS, MAX_SCREENS } from './access-lease.js';
 import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
@@ -72,7 +73,10 @@ export async function deleteProfileData(profile) {
   await deleteDoc(doc(db, USERS_PATH, user.uid, 'profiles', profile)).catch(() => {});
   await deleteDoc(doc(db, USERS_PATH, user.uid, 'progress', profile)).catch(() => {});
 }
-export const logout = () => signOut(auth);
+export const logout = async () => {
+  for (const holder of [...claims.keys()]) await endSession(holder);
+  return signOut(auth);
+};
 /**
  * Signs in with Google again to hand the session to an app: the Google ID token goes to
  * calamarDeviceLogins/<key><code>, which the app reads once the code is typed there.
@@ -155,23 +159,56 @@ export async function readAccess(uid = auth.currentUser?.uid) {
   const v = snapshot.data();
   return { expires: millis(v.expires), screens: Number.isInteger(v.screens) ? v.screens : null };
 }
-/** The screens of this account that said they were watching less than `fresh` ms ago (other than `except`). */
-export async function liveSessions(except = '', fresh = 90000) {
-  const user = auth.currentUser;
-  if (!user) return [];
-  const snapshot = await getDocs(collection(db, 'calamarStreams', user.uid, 'sessions'));
-  const now = Date.now();
-  return snapshot.docs.filter((d) => d.id !== except).map((d) => ({ id: d.id, ...d.data(), at: millis(d.data().at) }))
-    .filter((s) => s.at && now - s.at < fresh);
+/** Registration is mandatory by default; only the administrator may change it. */
+const settingsRef = doc(db, 'calamarSettings', 'access');
+export const watchAccessSettings = (next, failed) => onSnapshot(settingsRef, s => next({ requireRegistration: !s.exists() || s.data().requireRegistration !== false }), failed);
+export const watchAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarAccess', uid), s => {
+  const v = s.exists() ? s.data() : {};
+  next({ expires: millis(v.expires), screens: Number.isInteger(v.screens) ? v.screens : 1 });
+}, failed);
+export async function saveAccessSettings(requireRegistration) {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+  await setDoc(settingsRef, { requireRegistration: !!requireRegistration, updatedAt: serverTimestamp() });
 }
-export async function beatSession(id, { profile = '', title = '', device = 'web' } = {}) {
+const claims = new Map();
+/** One transaction reads every slot before it writes: two devices cannot both take the last screen. */
+export async function claimSessions(holder, { profile = '', title = '', device = 'web', count = 1 } = {}) {
   const user = auth.currentUser;
-  if (!user) return;
-  await setDoc(doc(db, 'calamarStreams', user.uid, 'sessions', id), { profile: String(profile).slice(0, 40), title: String(title).slice(0, 120), device, at: serverTimestamp() });
+  if (!user) throw Error('Entra con tu cuenta para ver Calamar TV.');
+  const uid = user.uid;
+  const slots = await runTransaction(db, async tx => {
+    const rights = await tx.get(doc(db, 'calamarAccess', uid));
+    const access = rights.exists() ? rights.data() : {};
+    if (millis(access.expires) && millis(access.expires) <= Date.now()) throw Error('Tu acceso ha caducado. Habla con el administrador para renovarlo.');
+    const refs = Array.from({length: MAX_SCREENS}, (_, i) => doc(db, 'calamarStreams', uid, 'sessions', String(i)));
+    const snapshots = await Promise.all(refs.map(ref => tx.get(ref)));
+    const current = snapshots.map(s => s.exists() ? { ...s.data(), at: millis(s.data().at) } : null);
+    const chosen = claimPlan(current, holder, count, access.screens);
+    for (const slot of chosen) tx.set(refs[slot], { holder, profile: String(profile).slice(0,40), title: String(title).slice(0,120), device, at: serverTimestamp() });
+    for (let i = 0; i < current.length; i++) if (current[i]?.holder === holder && !chosen.includes(i)) tx.delete(refs[i]);
+    return chosen;
+  });
+  const lease = { uid, holder, slots, profile: String(profile).slice(0,40), title: String(title).slice(0,120), device };
+  claims.set(holder, lease); return lease;
 }
-export async function endSession(id) {
-  const user = auth.currentUser;
-  if (user) await deleteDoc(doc(db, 'calamarStreams', user.uid, 'sessions', id)).catch(() => {});
+export async function beatSession(holder) {
+  const lease = claims.get(holder);
+  if (!lease || auth.currentUser?.uid !== lease.uid) throw Error('La sesión ha terminado.');
+  await runTransaction(db, async tx => {
+    const refs = lease.slots.map(i => doc(db, 'calamarStreams', lease.uid, 'sessions', String(i)));
+    const current = await Promise.all(refs.map(ref => tx.get(ref)));
+    if (current.some(s => !s.exists() || s.data().holder !== holder)) throw Error('Esta reproducción ya no dispone de una pantalla.');
+    for (const ref of refs) tx.set(ref, { holder, profile: lease.profile, title: lease.title, device: lease.device, at: serverTimestamp() });
+  });
+}
+export async function endSession(holder) {
+  const lease = claims.get(holder); claims.delete(holder);
+  if (!lease || auth.currentUser?.uid !== lease.uid) return;
+  await runTransaction(db, async tx => {
+    const refs = lease.slots.map(i => doc(db, 'calamarStreams', lease.uid, 'sessions', String(i)));
+    const current = await Promise.all(refs.map(ref => tx.get(ref)));
+    for (let i = 0; i < refs.length; i++) if (current[i].exists() && current[i].data().holder === holder) tx.delete(refs[i]);
+  }).catch(() => {});
 }
 /** Administración → Usuarios: every registered account, its access and the screens watching now. */
 export async function usersOverview() {

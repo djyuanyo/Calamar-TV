@@ -3,7 +3,7 @@ import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madrid
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
 import { validCover, validateCatalog } from './shared-catalog.js';
-import { auth, ready, administrator, watchAuth, logout, usersOverview, saveAccess, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
+import { auth, ready, administrator, watchAuth, logout, usersOverview, saveAccess, watchAccessSettings, saveAccessSettings, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
@@ -428,9 +428,20 @@ export async function render(state) {
  */
 function usersPanel() {
   const list = el('div', { class: 'users-list' }, el('p', { class: 'status', role: 'status' }, 'Cargando usuarios…'));
+  const accessNote = el('span', { class: 'note', role: 'status' });
+  const requireAccount = el('input', { type: 'checkbox', checked: true, 'aria-label': 'Exigir registro para ver contenido' });
+  requireAccount.addEventListener('change', async () => {
+    requireAccount.disabled = true;
+    try { await saveAccessSettings(requireAccount.checked); accessNote.textContent = 'Guardado para la web y la app.'; }
+    catch (error) { requireAccount.checked = !requireAccount.checked; accessNote.textContent = error.message; }
+    finally { requireAccount.disabled = false; }
+  });
+  const unwatch = watchAccessSettings(value => { requireAccount.checked = value.requireRegistration; }, error => { accessNote.textContent = error.message; });
+  let mounted = false;
+  const cleanup = setInterval(() => { if (requireAccount.isConnected) mounted = true; else if (mounted) { unwatch(); clearInterval(cleanup); } }, 1000);
   const search = el('input', { type: 'search', placeholder: 'Buscar por email o nombre', 'aria-label': 'Buscar usuarios' });
   const day = (ms) => new Date(ms).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-  const iso = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const iso = ms => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid' }).format(new Date(ms));
   let users = [];
   const draw = () => {
     const q = search.value.trim().toLocaleLowerCase('es');
@@ -445,8 +456,8 @@ function usersPanel() {
         try {
           const count = Number(screens.value);
           if (!Number.isInteger(count) || count < 1 || count > 10) throw Error('Las pantallas van de 1 a 10.');
-          // The whole chosen day can be watched: it ends at midnight (Madrid) at its end.
-          const until = expires.value ? new Date(`${expires.value}T23:59:59`).getTime() : null;
+          // Access ends when the selected day begins, in Madrid, independent of the administrator's device timezone.
+          const until = expires.value ? Date.parse(madridInstant(`${expires.value}T00:00`)) : null;
           await saveAccess(u.uid, { expires: until, screens: count });
           Object.assign(u, { expires: until, screens: count });
           note.textContent = 'Guardado';
@@ -466,7 +477,8 @@ function usersPanel() {
     .catch((error) => list.replaceChildren(el('p', { class: 'error' }, explain(error))));
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Usuarios'), el('span', {}, 'Caducidad y pantallas a la vez')),
     el('p', { class: 'note' }, 'Sin fecha de caducidad, la cuenta puede ver siempre. Llegado ese día, deja de ver nada. Las pantallas son las reproducciones a la vez de toda la cuenta (sus perfiles incluidos); si no cambias nada, es 1.'),
-    search, list];
+    el('label', { class: 'user-access-toggle' }, requireAccount, 'Exigir registro para ver contenido'), accessNote,
+    el('p', { class: 'note' }, 'La caducidad se aplica al comenzar el día seleccionado, en horario de España.'), search, list];
 }
 
 /**

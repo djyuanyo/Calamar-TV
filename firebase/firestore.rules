@@ -137,7 +137,7 @@ service cloud.firestore {
       allow list, delete: if administrator();
       allow create, update: if owner(uid)
         && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt'])
-        && request.resource.data.email is string && request.resource.data.email.size() <= 200
+        && request.resource.data.email is string && request.resource.data.email == request.auth.token.email && request.resource.data.email.size() <= 200
         && request.resource.data.name is string && request.resource.data.name.size() <= 100
         && request.resource.data.seenAt == request.time;
     }
@@ -154,15 +154,34 @@ service cloud.firestore {
       let access = /databases/$(database)/documents/calamarAccess/$(uid);
       return !exists(access) || get(access).data.expires == null || get(access).data.expires > request.time;
     }
+    match /calamarSettings/access {
+      allow get: if true;
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasOnly(['requireRegistration', 'updatedAt'])
+        && request.resource.data.requireRegistration is bool && request.resource.data.updatedAt == request.time;
+      allow delete, list: if false;
+    }
+    function screens(uid) {
+      let access = /databases/$(database)/documents/calamarAccess/$(uid);
+      return exists(access) ? get(access).data.screens : 1;
+    }
+    function validPlayback(uid, session) {
+      let p = request.resource.data;
+      return owner(uid) && session.matches('^[0-9]$') && int(session) < screens(uid) && notExpired(uid)
+        && p.keys().hasAll(['holder', 'profile', 'title', 'device', 'at'])
+        && p.keys().hasOnly(['holder', 'profile', 'title', 'device', 'at'])
+        && p.holder is string && p.holder.matches('^[A-Za-z0-9]{20,40}$')
+        && p.profile is string && p.profile.size() <= 40
+        && p.title is string && p.title.size() <= 120
+        && p.device in ['web', 'android', 'tv'] && p.at == request.time;
+    }
     match /calamarStreams/{uid}/sessions/{session} {
       allow read: if owner(uid) || administrator();
       allow delete: if owner(uid) || administrator();
-      allow create, update: if owner(uid) && session.matches('^[A-Za-z0-9]{12,40}$') && notExpired(uid)
-        && request.resource.data.keys().hasOnly(['profile', 'title', 'device', 'at'])
-        && request.resource.data.profile is string && request.resource.data.profile.size() <= 40
-        && request.resource.data.title is string && request.resource.data.title.size() <= 120
-        && request.resource.data.device in ['web', 'android', 'tv']
-        && request.resource.data.at == request.time;
+      allow create: if validPlayback(uid, session);
+      // A live slot belongs to its first viewer. Concurrent claims conflict and retry transactionally.
+      allow update: if validPlayback(uid, session)
+        && (resource.data.holder == request.resource.data.holder || resource.data.at <= request.time - duration.value(90, 's'));
     }
     // Administración → Usuarios: the screens watching now of every account.
     match /{path=**}/sessions/{session} {

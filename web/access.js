@@ -1,84 +1,98 @@
-// Who may watch: every viewer has an account (registered in calamarMembers), until the date the administrator
-// sets (calamarAccess.expires; none: no end), on as many screens at a time as he allows (calamarAccess.screens;
-// none: one). Each tab that plays says so every 30 seconds (calamarStreams/<uid>/sessions/<tab>); a new screen
-// beyond the limit gets «Se ha superado el límite de reproducciones simultáneas». The administrator has no limits.
-export const DEFAULT_SCREENS = 1;
-const FRESH = 90000, BEAT = 30000;
-
-let firebase = null, user = null, admin = false, access = null, known = false, beating = null, watching = false;
-const listeners = new Set();
+import { DEFAULT_SCREENS, HEARTBEAT_MS, limitMessage } from './access-lease.js';
+export { DEFAULT_SCREENS, limitMessage };
+let firebase = null, user = null, admin = false, access = null;
+let settingsKnown = false, authKnown = false, rightsKnown = false, required = true;
+let stopRights = null, generation = 0, beating = null, expiryTimer = null, watching = false, claimGeneration = 0;
+const listeners = new Set(), lostListeners = new Set();
 let answered;
-// The first answer of the sign-in: a channel opened from a link before it comes waits for it.
-const firstAnswer = new Promise((resolve) => { answered = resolve; });
-const changed = () => { answered(); for (const listener of listeners) listener(); };
-const tab = (() => {
-  const letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-  let id = '';
-  for (let i = 0; i < 20; i++) id += letters[Math.floor(Math.random() * letters.length)];
-  return id;
-})();
-
-export const onAccessChanged = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
-/** The sign-in has been answered at least once (signed in or not). */
-export const accessKnown = () => known;
+const firstAnswer = new Promise(resolve => { answered = resolve; });
+const newHolder = () => {
+  const id = new Uint8Array(16); crypto.getRandomValues(id);
+  return Array.from(id, n => n.toString(16).padStart(2, '0')).join('');
+};
+let activeHolder = null, claimTail = Promise.resolve();
+const changed = () => {
+  if (accessKnown()) answered();
+  for (const listener of listeners) listener();
+};
+export const accessKnown = () => settingsKnown && authKnown && rightsKnown;
+export const registrationRequired = () => required;
+export const playbackAllowed = () => accessKnown() && !expiredSince() && (watching || (!required && !user));
 export const accessAdmin = () => admin;
-export const screenLimit = () => (admin ? Infinity : access?.screens || DEFAULT_SCREENS);
-/** The day the account stopped being able to watch (ms), or null while it can. */
-export function expiredSince(now = Date.now()) {
-  return !admin && access?.expires && access.expires <= now ? access.expires : null;
+export const screenLimit = () => access?.screens || DEFAULT_SCREENS;
+export const accessExpires = () => access?.expires || null;
+export const expiredSince = (now = Date.now()) => access?.expires && access.expires <= now ? access.expires : null;
+export const onAccessChanged = listener => { listeners.add(listener); return () => listeners.delete(listener); };
+export const onPlaybackAccessLost = listener => { lostListeners.add(listener); return () => lostListeners.delete(listener); };
+function lose(reason) {
+  const wasWatching = watching;
+  stopWatching();
+  if (wasWatching) for (const listener of lostListeners) listener(reason);
 }
-export const accessExpires = () => (admin ? null : access?.expires || null);
-
-/** «Se ha superado el límite…» with the screens watching now, or null when one more fits. */
-export function limitMessage(limit, live) {
-  if (live.length < limit) return null;
-  const where = [...new Set(live.map((s) => s.title).filter(Boolean))].slice(0, 3).join(', ');
-  return `Se ha superado el límite de reproducciones simultáneas de tu cuenta (${limit} ${limit === 1 ? 'pantalla' : 'pantallas'}).`
-    + (where ? ` Ahora se está viendo: ${where}.` : '') + ' Cierra la otra reproducción y vuelve a intentarlo.';
+function scheduleExpiry() {
+  clearTimeout(expiryTimer);
+  const expires = accessExpires();
+  if (!expires) return;
+  const wait = expires - Date.now();
+  if (wait <= 0) { lose('Tu acceso ha caducado. Habla con el administrador para renovarlo.'); return; }
+  expiryTimer = setTimeout(() => { scheduleExpiry(); changed(); }, Math.min(wait, 2147483647));
 }
-
 export function startAccess(shared) {
-  shared().then((f) => {
+  shared().then(f => {
     firebase = f;
-    f.watchAuth(async (signed) => {
-      user = signed || null;
-      admin = !!user && f.administrator(user);
-      access = null;
+    f.watchAccessSettings(value => { required = value.requireRegistration; settingsKnown = true; if (required && !user) lose('Entra con tu cuenta para ver Calamar TV.'); changed(); }, () => {
+      settingsKnown = false; lose('No se pudo comprobar el acceso. Revisa la conexión.'); changed();
+    });
+    f.watchAuth(signed => {
+      const request = ++generation;
+      stopRights?.(); stopRights = null;
+      if ((user?.uid || '') !== (signed?.uid || '')) lose('La cuenta ha cambiado. Vuelve a abrir el contenido.');
+      user = signed || null; admin = !!user && f.administrator(user); access = null;
+      authKnown = true; rightsKnown = !user;
       if (user) {
         f.registerMember().catch(() => {});
-        access = await f.readAccess().catch(() => null);
+        stopRights = f.watchAccess(user.uid, rights => {
+          if (request !== generation) return;
+          access = rights; rightsKnown = true; scheduleExpiry(); changed();
+        }, () => {
+          if (request !== generation) return;
+          rightsKnown = false; lose('No se pudo comprobar tu cuenta. Revisa la conexión.'); changed();
+        });
       }
-      known = true;
-      changed();
+      scheduleExpiry(); changed();
     });
-  }).catch(() => { known = true; changed(); });
-  // A closed tab frees its screen at once (otherwise after 90 seconds).
-  addEventListener('pagehide', () => { if (watching) firebase?.endSession(tab); });
+  }).catch(() => { settingsKnown = false; lose('No se pudo conectar con las cuentas.'); changed(); });
+  if (typeof addEventListener !== 'undefined') addEventListener('pagehide', stopWatching);
 }
-
-/** Before playing: { ok } or { ok: false, reason } (expired, or no screen left). Keeps the screen until stopWatching(). */
-export async function startWatching(title, profile = '') {
-  await firstAnswer;
-  if (!firebase || !user) return { ok: false, reason: 'Entra con tu cuenta para ver Calamar TV.' };
-  if (!admin) {
-    access = await firebase.readAccess().catch(() => access);
-    const since = expiredSince();
-    if (since) return { ok: false, reason: `Tu acceso caducó el ${new Date(since).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}. Habla con el administrador para renovarlo.` };
-    const live = await firebase.liveSessions(tab, FRESH).catch(() => []);
-    const blocked = limitMessage(screenLimit(), live);
-    if (blocked) return { ok: false, reason: blocked };
-  }
-  try { await firebase.beatSession(tab, { profile, title }); }
-  catch { if (!admin) return { ok: false, reason: 'No se pudo comprobar tu cuenta. Revisa la conexión y vuelve a intentarlo.' }; }
-  watching = true;
-  clearInterval(beating);
-  beating = setInterval(() => firebase.beatSession(tab, { profile, title }).catch(() => {}), BEAT);
-  return { ok: true };
+/** One claim covers the actual number of players, including Multipantalla. No media starts before it succeeds. */
+async function releaseActive() {
+  clearInterval(beating); beating = null;
+  const holder = activeHolder; activeHolder = null; watching = false;
+  if (holder && firebase) await firebase.endSession(holder).catch(() => {});
 }
-
-export function stopWatching() {
-  clearInterval(beating);
-  beating = null;
-  if (watching && firebase) firebase.endSession(tab);
-  watching = false;
+export function startWatching(title, profile = '', count = 1) {
+  const request = ++claimGeneration;
+  const run = async () => {
+    if (request !== claimGeneration) return { ok: false, reason: 'Reproducción cancelada.' };
+    await releaseActive();
+    if (!accessKnown()) await Promise.race([firstAnswer, new Promise(resolve => setTimeout(resolve, 12000))]);
+    if (request !== claimGeneration) return { ok: false, reason: 'Reproducción cancelada.' };
+    if (!accessKnown() || !firebase) return { ok: false, reason: 'No se pudo comprobar tu cuenta. Revisa la conexión y vuelve a intentarlo.' };
+    if (!user) return required ? { ok: false, reason: 'Entra con tu cuenta para ver Calamar TV.' } : { ok: true };
+    if (expiredSince()) return { ok: false, reason: 'Tu acceso ha caducado. Habla con el administrador para renovarlo.' };
+    const holder = newHolder();
+    try {
+      await firebase.claimSessions(holder, { title, profile, count });
+      if (request !== claimGeneration) { await firebase.endSession(holder); return { ok: false, reason: 'Reproducción cancelada.' }; }
+    } catch (error) {
+      return { ok: false, reason: error.code === 'screens-limit' ? error.message : /caducad/.test(error.message || '') ? error.message
+        : 'No se pudo reservar una pantalla. Revisa la conexión y vuelve a intentarlo.' };
+    }
+    watching = true; activeHolder = holder;
+    beating = setInterval(() => firebase.beatSession(holder).catch(() => { if (activeHolder === holder) lose('Esta reproducción ya no dispone de acceso. Revisa la caducidad y el límite de pantallas.'); }), HEARTBEAT_MS);
+    scheduleExpiry();
+    return { ok: true };
+  };
+  const result = claimTail.then(run, run); claimTail = result.catch(() => {}); return result;
 }
+export function stopWatching() { ++claimGeneration; return releaseActive(); }

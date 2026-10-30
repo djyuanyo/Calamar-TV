@@ -28,7 +28,10 @@ const answer = () => { if (answered || location.hash.startsWith('#/admin')) retu
 addEventListener('hashchange', answer);
 export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); if (answered) setTimeout(() => changed(window.__signedOut ? null : viewer), 0); else answer(); return () => {}; };
 export const registerMember = async () => {}, readAccess = async () => ({ expires: null, screens: null });
-export const liveSessions = async () => [], beatSession = async () => {}, endSession = async () => {};
+export const claimSessions = async () => ({slots:[0]}), beatSession = async () => {}, endSession = async () => {};
+export const watchAccessSettings = next => { next({requireRegistration: window.__requireRegistration !== false}); return () => {}; };
+export const watchAccess = (uid, next) => { next({expires:null,screens:1}); return () => {}; };
+export const saveAccessSettings = async value => { window.__requireRegistration = value; };
 export const usersOverview = async () => window.__users || [], saveAccess = async (uid, value) => { (window.__savedAccess ||= {})[uid] = value; };
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
