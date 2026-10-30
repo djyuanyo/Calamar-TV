@@ -138,6 +138,7 @@ jobs:
           mkdir -p dist
           if [ -n "$CALAMAR_KEYSTORE_PATH" ]; then
             cp app/build/outputs/apk/release/app-release.apk "dist/Calamar-TV-$version.apk"
+            cp app/build/outputs/apk/release/app-release.apk dist/Calamar-TV.apk
           else
             cp app/build/outputs/apk/release/*.apk "dist/Calamar-TV-$version-sin-firmar.apk"
           fi

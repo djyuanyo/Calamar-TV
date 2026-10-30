@@ -1,3 +1,5 @@
+import { coverFromFile } from './image-file.js';
+import { withArtwork, keepArtwork } from './library-art.js';
 import { youtubeId, trailerId } from './trailer.js';
 // Films, series and documentaries chosen in TMDB by the administrator, each with its video link
 // (LuluStream or a direct video), with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the whole catalog (catalog field
@@ -806,7 +808,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   }
   const creators = (info.creators || []).filter(Boolean);
   const share = el('button', { class: 'title-action', type: 'button', onclick: async () => {
-    const url = new URL(itemPath(section, item), location.href).href;
+    const url = new URL(`${section.page}/${encodeURIComponent(item.id)}/`, new URL('./', location.href)).href;
     try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.lastChild.textContent = 'Enlace copiado'; } } catch {}
   } }, el('span', { 'aria-hidden': 'true' }, '⤴'), el('span', {}, 'Compartir'));
   const head = el('section', { class: 'title-page' },
@@ -943,9 +945,11 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const store = async (sections) => {
     // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
     // LuluStream links are saved on its current site (luluvido.com), whatever name they were pasted with.
-    const next = stampAdded(luluvidoLinks(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]))).sections, current.sections);
+    const prepared = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (sections[s.key] || []).map((item) => keepArtwork(Object.values(current.sections).flat().find((old) => old.id === item.id), item))]));
+    const next = stampAdded(luluvidoLinks(prepared).sections, current.sections);
     await publish(libraryParts(next));
     current = { ...current, sections: next };
+    cached = current; cachedAt = Date.now();
     drawList();
   };
   const sectionOf = (id) => LIBRARY_SECTIONS.find((s) => (current.sections[s.key] || []).some((item) => item.id === id))?.key || null;
@@ -1219,7 +1223,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       found.replaceChildren(); note.textContent = 'Pasando los enlaces a la ficha de TMDB…';
       try {
         const existing = Object.values(current.sections).flat().find((x) => x.id === `${kind === 'tv' ? 's' : 'm'}${r.id}`);
-        const next = await matchUnmatched(item, r.id, existing, tmdbKey());
+        const next = keepArtwork(item, await matchUnmatched(item, r.id, existing, tmdbKey()));
         const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id && x.id !== next.id)]));
         const where = existing ? sectionOf(existing.id) : sectionKey;
         sections[where] = [...sections[where], next].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
@@ -1236,6 +1240,56 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       found, el('div', { class: 'actions' }, del, close), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
     search();
+  }
+
+  function openTitleEditor(sectionKey, item) {
+    editor.hidden = false;
+    const note = el('p', { class: 'note', role: 'status' });
+    const fields = {};
+    let preparing = 0;
+    const artwork = (key, title, hint) => {
+      let chosen = (item.tmdb?.[key] || '').startsWith('data:image/') ? item.tmdb[key] : '';
+      const url = el('input', { type: 'url', value: chosen ? '' : item.tmdb?.[key] || '', placeholder: 'https://…', 'aria-label': `Enlace de ${title.toLowerCase()}` });
+      const upload = el('input', { type: 'file', accept: 'image/*', 'aria-label': `Subir ${title.toLowerCase()}` });
+      const preview = el('img', { class: `library-art-preview ${key}`, alt: `Vista previa de ${title.toLowerCase()}`, referrerpolicy: 'no-referrer' });
+      let request = 0;
+      const paint = () => { const value = chosen || url.value; preview.hidden = !value; if (value) preview.src = value; else preview.removeAttribute('src'); };
+      url.addEventListener('input', () => { request++; chosen = ''; paint(); }); paint();
+      upload.addEventListener('change', async () => {
+        if (!upload.files[0]) return;
+        const currentRequest = ++request; preparing++;
+        try { note.textContent = 'Preparando imagen…'; const data = await coverFromFile(upload.files[0]); if (request === currentRequest) { chosen = data; url.value = ''; paint(); note.textContent = 'Imagen preparada. Pulsa Guardar cambios para publicarla.'; } }
+        catch (error) { note.textContent = error.message; }
+        finally { preparing--; }
+      });
+      const clear = el('button', { type: 'button', class: 'ghost', onclick: () => { request++; chosen = ''; url.value = ''; upload.value = ''; paint(); } }, 'Quitar imagen');
+      fields[key] = () => chosen || url.value.trim();
+      return el('div', { class: 'library-art-field' }, field(`Subir ${title.toLowerCase()}`, upload, hint), field(`Enlace de ${title.toLowerCase()}`, url), preview, clear);
+    };
+    const save = el('button', { type: 'button', class: 'btn', onclick: async () => {
+      try {
+        if (preparing) throw new Error('Espera a que termine de prepararse la imagen.');
+        const latest = current.sections[sectionKey]?.find((x) => x.id === item.id);
+        if (!latest) throw new Error('Este título ya no está en el catálogo.');
+        const next = withArtwork(latest, Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input()])));
+        save.disabled = true; note.textContent = 'Guardando…';
+        await upsert(sectionKey, next); item = next;
+        note.textContent = 'Carátula y portada guardadas y publicadas.';
+      } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+    } }, 'Guardar cambios');
+    const del = el('button', { type: 'button', class: 'btn danger', onclick: async () => {
+      if (!confirm(`¿Eliminar «${itemTitle(item)}» del catálogo?`)) return;
+      del.disabled = true;
+      try { await remove(item.id); say(`«${itemTitle(item)}» eliminada del catálogo.`); editor.hidden = true; editor.replaceChildren(); }
+      catch (error) { note.textContent = error.message; del.disabled = false; }
+    } }, 'Eliminar del catálogo');
+    editor.replaceChildren(el('h3', {}, `Editar · ${itemTitle(item)}`),
+      el('div', { class: 'library-art-grid' }, artwork('poster', 'Carátula', 'Imagen vertical para las tarjetas del catálogo.'), artwork('backdrop', 'Imagen de portada', 'Imagen horizontal para la cabecera y el enlace compartido.')),
+      el('div', { class: 'actions' }, save, del,
+        unidentifiedItem(item) ? el('button', { type: 'button', class: 'ghost', onclick: () => openMatcher(sectionKey, item) }, 'Buscar en TMDB')
+          : el('button', { type: 'button', class: 'ghost', onclick: () => openEditor(sectionKey, item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar enlaces y temporadas'),
+        el('button', { type: 'button', class: 'ghost', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
+    editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function editTrailer(sectionKey, item) {
@@ -1328,8 +1382,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             item.featured ? '★ En portada' : '☆ Destacar'),
           el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
           unidentifiedItem(item)
-            ? el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')
-            : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openEditor(section.key, item.tmdb?.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar')))) : [el('p', { class: 'note' }, unidentified ? 'No quedan títulos sin identificar en esta sección.' : 'Todavía no hay ninguno.')])];
+            ? [el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar'), el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')]
+            : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar')))) : [el('p', { class: 'note' }, unidentified ? 'No quedan títulos sin identificar en esta sección.' : 'Todavía no hay ninguno.')])];
     }));
   }
 

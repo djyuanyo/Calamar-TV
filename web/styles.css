@@ -1372,5 +1372,17 @@ body.gate-open { overflow: hidden; }
 .app-updates { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
 .app-updates .chips { margin: 0; }
 
-.open-in-app { display: block; width: fit-content; margin: 12px auto; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: #0b0d10; font-weight: 800; text-decoration: none; }
-.open-in-app[hidden] { display: none; }
+.download-app { display: flex; align-items: center; gap: 9px; width: fit-content; margin: 12px auto; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: #0b0d10; font-weight: 800; text-decoration: none; }
+.download-app[hidden] { display: none; }
+
+.download-app svg { width: 24px; height: 24px; fill: currentColor; }
+.library-art-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; }
+.library-art-field { min-width: 0; display: grid; align-content: start; gap: 10px; }
+.library-art-preview { width: 100%; max-height: 240px; object-fit: contain; background: #171a20; border-radius: 8px; }
+.library-art-preview.poster { aspect-ratio: 2/3; }
+.library-art-preview.backdrop { aspect-ratio: 16/9; }
+.library-art-preview[hidden] { display: none; }
+
+.library-art-field label { display: grid; gap: 7px; }
+.library-art-field input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #38404b; border-radius: 8px; background: #0f1217; color: inherit; box-sizing: border-box; }
+.library-art-field small { color: var(--muted); }

@@ -1,4 +1,4 @@
-import { updateOpenApp } from './app-links.js';
+import { updateAppDownload } from './app-links.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
@@ -1384,7 +1384,7 @@ onProfilesChanged(() => {
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
 async function route() {
-  updateOpenApp();
+  updateAppDownload();
   const version = ++routeVersion;
   stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));

@@ -40,5 +40,24 @@ public class AppLinksTest {
       });
     }
   }
+  @Test public void sharedFilmWaitsForLibraryAndOpensItsTitlePage() throws Exception {
+    Intent initial = new Intent(ApplicationProvider.getApplicationContext(), CatalogFixtureActivity.class);
+    try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(initial)) {
+      InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+      scenario.onActivity(activity -> {
+        try {
+          activity.library = new Library.Data(new JSONObject("{\"sections\":{\"movies\":[{\"id\":\"m42\",\"kind\":\"movie\",\"title\":\"Portada compartida\",\"url\":\"https://example.com/video.mp4\"}]}}"));
+          activity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://djyuanyo.github.io/Calamar-TV/peliculas/m42/")));
+          activity.openPendingAppLink();
+          assertNull(activity.pendingAppLink);
+        } catch (JSONException e) { throw new AssertionError(e); }
+        finally { activity.setIntent(initial); }
+      });
+      androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Portada compartida"))
+          .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
+      androidx.test.espresso.Espresso.pressBack();
+    }
+  }
+
 }
 

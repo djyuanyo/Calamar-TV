@@ -23,7 +23,7 @@ final class AppLink {
       if (route.isEmpty()) return new AppLink("inicio", "");
       String[] parts = route.split("/", -1);
       String page = parts[0];
-      if (Arrays.asList("liga", "evento", "canal").contains(page) && parts.length == 2) {
+      if (Arrays.asList("liga", "evento", "canal", "peliculas", "series", "documentales").contains(page) && parts.length == 2) {
         String slug = URLDecoder.decode(parts[1].replace("+", "%2B"), "UTF-8");
         if (slug.isEmpty() || slug.length() > 200 || !slug.matches("[\\p{L}\\p{N}_+ .-]+") || slug.equals(".") || slug.equals("..")) return null;
         return new AppLink(page, slug);

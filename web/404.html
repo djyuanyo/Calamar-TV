@@ -16,7 +16,7 @@
     if (tv) { location.replace(tv[1] + '#/tv/' + tv[2].toUpperCase() + (code ? '/' + code.toUpperCase() : '')); return; }
     var live = path.match(/^(.*\/)directo\/?$/);
     if (live) { location.replace(live[1] + '#/directo'); return; }
-    var found = path.match(/^(.*\/)(evento|canal|liga)\/([^/]+)/);
+    var found = path.match(/^(.*\/)(evento|canal|liga|peliculas|series|documentales)\/([^/]+)/);
     var base = found ? found[1] : '/' + (path.split('/')[1] || '') + '/';
     location.replace(base + (found ? '#/' + found[2] + '/' + found[3] : ''));
   })();

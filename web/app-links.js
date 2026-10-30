@@ -1,19 +1,14 @@
-/** Android's verified links open directly. This button also works in browsers which keep links inside a tab. */
-export function appIntent(address) {
-  const url = new URL(address);
-  if (url.username || url.password || url.port || url.protocol !== 'https:' || url.hostname !== 'djyuanyo.github.io' || !url.pathname.startsWith('/Calamar-TV/')) return null;
-  const route = url.hash.replace(/^#\/?/, '') || url.pathname.slice('/Calamar-TV/'.length).replace(/\/$/, '');
-  if (!/^(?:(?:liga|evento|canal)\/[\p{L}\p{N}_%+ .-]+|directo|canales|peliculas|series|documentales)?$/u.test(route)) return null;
-  return `intent://open/${route}#Intent;scheme=calamartv;package=es.yuanyo.calamartv;S.browser_fallback_url=${encodeURIComponent(url.href)};end`;
-}
-
-export function updateOpenApp() {
-  let button = document.getElementById('open-in-app');
+/** Stable signed release asset: GitHub resolves "latest" each time it is downloaded. */
+export const APK_DOWNLOAD = 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk';
+export function updateAppDownload() {
+  let button = document.getElementById('download-app');
   if (!button) {
-    button = document.createElement('a'); button.id = 'open-in-app'; button.className = 'open-in-app';
-    button.textContent = 'Abrir en la app'; document.querySelector('main').before(button);
+    button = document.createElement('a'); button.id = 'download-app'; button.className = 'download-app';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'm17.6 9.48 1.84-3.18a.63.63 0 0 0-1.09-.63l-1.88 3.25a11.5 11.5 0 0 0-8.94 0L5.65 5.67a.63.63 0 0 0-1.09.63L6.4 9.48A10.7 10.7 0 0 0 1 18h22a10.7 10.7 0 0 0-5.4-8.52ZM7.5 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm9 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z');
+    svg.append(path); button.append(svg, document.createTextNode('Descargar aplicación'));
+    button.href = APK_DOWNLOAD; document.querySelector('main').before(button);
   }
-  const address = /Android/i.test(navigator.userAgent) ? appIntent(location.href) : null;
-  button.hidden = !address;
-  if (address) button.href = address;
 }

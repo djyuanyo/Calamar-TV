@@ -514,8 +514,30 @@ try {
   // Editing later shows the saved links.
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
+  await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
   assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  // Artwork is edited without asking TMDB; both uploaded images and HTTPS URLs persist.
+  assert.equal(await page.getByRole('link', { name: 'Descargar aplicación' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
+  assert.equal(await page.locator('#download-app svg').count(), 1);
+  assert.equal(await page.locator('#open-in-app').count(), 0);
+  for (const name of ['Avatar: El sentido del agua', 'Los hombres de Paco']) {
+    await page.locator('.library-item', { hasText: name }).getByRole('button', { name: 'Editar', exact: true }).click();
+    await page.getByLabel('Enlace de carátula', { exact: true }).fill('https://img.example/poster.jpg');
+    await page.getByLabel('Subir imagen de portada', { exact: true }).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') });
+    await page.getByText('Imagen preparada. Pulsa Guardar cambios para publicarla.').waitFor();
+    await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+    await page.getByText('Carátula y portada guardadas y publicadas.').waitFor();
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await page.locator('.library-item', { hasText: name }).getByRole('button', { name: 'Editar', exact: true }).click();
+    assert.equal(await page.getByLabel('Enlace de carátula', { exact: true }).inputValue(), 'https://img.example/poster.jpg');
+    assert.equal(await page.getByLabel('Enlace de imagen de portada', { exact: true }).inputValue(), '');
+    assert.match(await page.getByRole('img', { name: 'Vista previa de imagen de portada', exact: true }).getAttribute('src'), /^data:image\/(png|jpeg|webp);base64,/);
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  }
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['movies-0'].items.find(m => m.id === 'm76600').url, 'https://luluvido.com/abc123def456');
+  assert.equal(parts.parts['series-0'].items.find(m => m.id === 's4500').episodes.length, 2);
   // Or the LuluStream folders are read: Peliculas/ and Series/<Nombre>/Temporada N/, matched in TMDB.
   const luluFolders = { 0: { folders: [{ fld_id: 10, name: 'Películas' }, { fld_id: 20, name: 'Series' }] },
     10: { folders: [], files: [{ file_code: 'avatarlulu12', title: 'Avatar.El.sentido.del.agua.2022.1080p.mkv' }, { file_code: 'nadanada1234', title: 'Zzzz desconocida.mp4' }] },
@@ -968,5 +990,12 @@ try {
   assert.equal(await livePage.locator('.league-grid img.crest').count(), 2);
   await livePage.close();
   assert.deepEqual(errors, []);
+  // All types offer deletion, including unmatched titles, without loading TMDB.
+  await page.goto(base + '/#/admin/biblioteca');
+  await page.locator('.library-admin-list .library-item').first().waitFor();
+  const beforeDelete = await page.locator('.library-admin-list .library-item').count();
+  await page.locator('.library-admin-list .library-item').first().getByRole('button', { name: 'Editar', exact: true }).click();
+  await page.getByRole('button', { name: 'Eliminar del catálogo', exact: true }).click();
+  await page.waitForFunction(n => document.querySelectorAll('.library-admin-list .library-item').length === n - 1, beforeDelete);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

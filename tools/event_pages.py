@@ -13,6 +13,7 @@ Usage: event_pages.py SITE_DIR BASE_URL [CACHE_DIR]   e.g. event_pages.py _site 
 """
 import base64
 import datetime
+import concurrent.futures
 import html
 import json
 import math
@@ -206,6 +207,67 @@ def download_cover(url):
     return data, IMAGE_TYPES[kind]
 
 
+LIBRARY_URL = CATALOG_URL.rsplit('/', 2)[0] + '/calamarLibrary/'
+LIBRARY_PAGES = {'movies': 'peliculas', 'series': 'series', 'documentaries': 'documentales'}
+
+
+def read_library(fetch=None):
+    """Public library parts only; private administrator settings are never needed for previews."""
+    def get(name):
+        with urllib.request.urlopen(LIBRARY_URL + name, timeout=20) as answer:
+            return json.loads(json.load(answer)['fields']['json']['stringValue'])
+    fetch = fetch or get
+    index = fetch('index')
+    names = [(section, f'{section}-{n}') for section, count in index.get('sections', {}).items()
+             if section in LIBRARY_PAGES for n in range(min(int(count), 200))]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+        parts = list(pool.map(lambda entry: fetch(entry[1]), names))
+    sections = {section: [] for section in LIBRARY_PAGES}
+    for (section, _), part in zip(names, parts):
+        sections[section].extend(part.get('items', []))
+    return {'sections': sections}
+
+
+def publish_library(site, base, library, images=None, download=download_cover):
+    """Real film/series/documentary URLs let social crawlers read each title's cover without JS."""
+    site, base = pathlib.Path(site), base.rstrip('/') + '/'
+    if images:
+        images.prefetch([(item.get('artwork') or item.get('tmdb') or {}).get('backdrop') or (item.get('artwork') or item.get('tmdb') or {}).get('poster')
+                         for items in library.get('sections', {}).values() for item in items])
+    for section, route in LIBRARY_PAGES.items():
+        for item in library.get('sections', {}).get(section, []):
+            item_id = str(item.get('id') or '')
+            if not re.fullmatch(r'[\w+ .-]{1,200}', item_id) or item_id in ('.', '..'):
+                continue
+            slug = urllib.parse.quote(item_id, safe='')
+            folder = site / route / item_id
+            folder.mkdir(parents=True, exist_ok=True)
+            info = {**(item.get('tmdb') or {}), **(item.get('artwork') or {})}
+            cover = str(info.get('backdrop') or info.get('poster') or '')
+            image = ''
+            if images and cover:
+                import share_images
+                art = images.image(cover)
+                if art is not None:
+                    (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.cover_crop(art)))
+                    image = f'{base}{route}/{slug}/vista.jpg'
+            if not image:
+                match = COVER.fullmatch(cover)
+                copy = download(cover) if cover.startswith('https://') and not cover.startswith(OWN_IMAGES) else None
+                if match:
+                    kind, data = match.groups()
+                    copy = (base64.b64decode(data), 'jpg' if kind == 'jpeg' else kind)
+                if copy:
+                    data, extension = copy
+                    (folder / f'portada.{extension}').write_bytes(data)
+                    image = f'{base}{route}/{slug}/portada.{extension}'
+                elif cover.startswith('https://'):
+                    image = cover
+            title = info.get('title') or item.get('title') or 'Calamar TV'
+            text = info.get('overview') or f'{title} en Calamar TV'
+            (folder / 'index.html').write_text(page({'name': title}, {}, slug, base, image, kind=route, text=text), encoding='utf-8')
+
+
 def event_preview(event, catalog, images):
     """The card of an event as a JPEG: its cover, or the league's background with both crests."""
     import share_images
@@ -354,3 +416,9 @@ if __name__ == '__main__':
     tdt = json.loads(tdt_file.read_text(encoding='utf-8')) if tdt_file.exists() else {'channels': []}
     found = publish(site, base, read_catalog(), images=images, tdt=tdt)
     print(f'Páginas de vista previa de eventos: {len(found)}')
+    try:
+        library = read_library()
+    except Exception as error:
+        print(f'::error::No se pudo leer la biblioteca para las portadas compartidas: {error}')
+        raise
+    publish_library(site, base, library, images=images)

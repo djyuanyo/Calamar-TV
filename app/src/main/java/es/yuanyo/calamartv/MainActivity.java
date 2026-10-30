@@ -125,7 +125,14 @@ public class MainActivity extends Activity {
     AppLink link = pendingAppLink;
     String destination = null;
     Catalog.Channel selected = null;
-    if ("liga".equals(link.page)) {
+    Library.Item title = null;
+    String titleSection = null;
+    if (!link.slug.isEmpty() && ("peliculas".equals(link.page) || "series".equals(link.page) || "documentales".equals(link.page))) {
+      titleSection = "peliculas".equals(link.page) ? "movies" : "series".equals(link.page) ? "series" : "documentaries";
+      if (library == null) { loadLibrary(); return; }
+      title = library.find(titleSection, link.slug);
+      if (title == null) return;
+    } else if ("liga".equals(link.page)) {
       for (java.util.Map.Entry<String, String> entry : SportsCatalog.leagueSlugs(custom).entrySet())
         if (link.slug.equals(entry.getValue()) || link.slug.equals(entry.getKey())) { destination = LEAGUE + entry.getKey(); break; }
     } else if ("evento".equals(link.page)) {
@@ -149,10 +156,11 @@ public class MainActivity extends Activity {
         default: return;
       }
     }
-    if (destination == null && selected == null) return;
+    if (destination == null && selected == null && title == null) return;
     pendingAppLink = null;
     query = "";
-    if (destination != null) { mode = destination; home(); }
+    if (title != null) { libraryDetail(titleSection, title); }
+    else if (destination != null) { mode = destination; home(); }
     else if (selected.event && MatchScores.expired(selected.matchId, System.currentTimeMillis())) {
       startActivity(new Intent(this, MatchActivity.class).putExtra("title", selected.name)
           .putExtra("match_id", selected.matchId).putExtra("event_info", eventInfo(selected).toString()));
@@ -1788,7 +1796,7 @@ public class MainActivity extends Activity {
       final String failure = error;
       runOnUiThread(() -> {
         libraryBusy = false;
-        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); prefetchPosters(result); }
+        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); prefetchPosters(result); handler.post(this::openPendingAppLink); }
         libraryError = failure;
         // The home page also draws again the first time, for the titles «En portada» and the top.
         if (!isFinishing() && (Library.section(mode) != null || (result != null && "Inicio".equals(mode) && (first || !query.trim().isEmpty())))) render();
@@ -2129,7 +2137,7 @@ public class MainActivity extends Activity {
     Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
     share.setOnClickListener(v -> {
       Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
-          .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/#/" + Library.page(section) + "/" + Uri.encode(item.id));
+          .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/" + Library.page(section) + "/" + Uri.encode(item.id) + "/");
       try { startActivity(Intent.createChooser(send, "Compartir")); }
       catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });

@@ -5,7 +5,7 @@ import org.junit.Test;
 public class AppLinkTest {
   @Test public void parsesSharedPagesHashPagesAndTheAppScheme() {
     String base = "https://djyuanyo.github.io/Calamar-TV/";
-    for (String route : new String[]{"liga/laliga", "evento/local-vs-visitante", "canal/la-1", "directo", "canales", "peliculas"}) {
+    for (String route : new String[]{"liga/laliga", "evento/local-vs-visitante", "canal/la-1", "directo", "canales", "peliculas", "peliculas/m12", "series/s34", "documentales/m56"}) {
       for (String url : new String[]{base + route + "/", base + "#/" + route, "calamartv://open/" + route}) {
         AppLink parsed = AppLink.parse(url); assertNotNull(url, parsed);
         assertEquals(route.split("/")[0], parsed.page);

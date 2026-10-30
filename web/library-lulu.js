@@ -1,3 +1,4 @@
+import { keepArtwork } from './library-art.js';
 // Reads the administrator's LuluStream folders with its API and matches each video with TMDB:
 //   Peliculas/<one video per film>          Documentales/<one video per documentary>
 //   Series/<Name>/Temporada N/<episodes>     Documentales/<Name>/Temporada N/<episodes>
@@ -274,6 +275,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       ? { ...item, episodes: item.episodes.map(e => managedByScan(e, section, scan) ? { ...e, fromFolder: true } : e) }
       : managedByScan(item, section, scan) ? { ...item, fromFolder: true } : item;
     const previous = Object.values(sections).flat().find((x) => x.id === item.id);
+    item = keepArtwork(previous, item);
     if (previous && Object.hasOwn(previous, "trailerUrl")) item = { ...item, trailerUrl: previous.trailerUrl };
     for (const k of Object.keys(sections)) sections[k] = sections[k].filter((x) => x.id !== item.id);
     (sections[section] ||= []).push(item);
