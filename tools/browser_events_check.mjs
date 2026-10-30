@@ -827,27 +827,34 @@ try {
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
   // Failed lookup stays in our player and retries; it must never switch to an iframe.
-  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: '<p>Sin fuentes ahora</p>' }));
+  let hostedReady = false, tokenVersion = 0;
+  await page.route('https://calamarmenciano.com/calamar-player.php?*', route => {
+    const request = new URL(route.request().url()), page = request.searchParams.get('page');
+    const channel = page ? new URL(page).pathname.split('/').pop() : '';
+    if (!hostedReady && channel === '1') return route.fulfill({status:502,json:{error:'Ninguna fuente responde'}});
+    const signature = channel === '1' ? `fresh${++tokenVersion}` : `event-${channel}`;
+    return route.fulfill({json:{url:`calamar-player.php?seg=manifest&sig=${signature}&l=1`}});
+  });
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
   await page.goto(base + '/?zico=1#/canal/canal-zico');
-  await page.getByText(/No hay un M3U8 vigente/).waitFor();
+  await page.getByText(/No se pudo conectar con la señal/).waitFor();
   await page.clock.runFor(90000);
   assert.equal(await page.locator('#player-frame').count(), 0);
   assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), false);
   assert.equal(await page.locator('#player-close').isVisible(), true);
   assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
-  // Exposed sources use our HLS player without sending the page through the hosting.
-  let tokenVersion = 0;
-  await page.route('https://zicotv.cc/api/player/1', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' },
-    body: 'var ZT_SOURCES = ' + JSON.stringify([{ url: `https://cdn.example/renew.m3u8?token=fresh${++tokenVersion}` }]) + ';' }));
+  // Resolution and every HLS URL stay on the hosting; no provider page is loaded by the viewer.
+  hostedReady = true;
+
   await page.goto(base + '/?zico=2#/canal/canal-zico');
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
   assert.equal(await page.locator('#player-frame').count(), 0);
+  assert.ok((await page.evaluate(() => window.__hlsSources)).every(url => new URL(url).hostname === 'calamarmenciano.com'));
   await page.locator('#player-close').click();
   // Event page URLs expand into named public players, never an iframe of /events/.
   let eventReady = true;

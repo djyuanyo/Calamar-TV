@@ -269,6 +269,9 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  if (pages && u.origin === new URL(PLAYER_ENDPOINT).origin && u.pathname === new URL(PLAYER_ENDPOINT).pathname
+      && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
+    return { ok: true, kind: 'hls', page: true, renewable: true };
   const anon = anonmp4Embed(url);
   if (anon) return { ok: true, kind: 'frame', address: anon };
   const embed = lulustreamEmbed(url);

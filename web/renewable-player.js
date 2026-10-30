@@ -1,4 +1,5 @@
-import { streamExpiry } from './catalog.js';
+import { streamExpiry, renewablePage, PLAYER_ENDPOINT } from './catalog.js';
+import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.js';
 import { autoplay } from './autoplay.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
@@ -37,101 +38,102 @@ export function renewalDelay(url, now = Date.now()) {
   return expiry ? Math.max(15000, expiry - now - 30000) : 300000;
 }
 
-/** Per-viewer resolution and renewal; no tokens are persisted in the catalog or sent to our hosting. */
-export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {},
+/** A fixed player page or an explicit signal selected from our hosting menu. */
+export function hostedPage(address) {
+  if (renewablePage(address)) return address;
+  try {
+    const u = new URL(address), endpoint = new URL(PLAYER_ENDPOINT), page = u.searchParams.get('page');
+    if (u.origin === endpoint.origin && u.pathname === endpoint.pathname && !u.username && !u.password && renewablePage(page)) return page;
+  } catch { /* Not a hosting choice. */ }
+  return null;
+}
+
+/** Resolve through the hosting; its first usable HLS wins without waiting for the other signals. */
+export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null,
   fetcher = globalThis.fetch, timers = globalThis, now = Date.now }) {
-  let stopped = false, request = null, refreshTimer = null, watchdog = null, engine = null;
-  let address = '', failures = 0, loaded = false, recovering = false;
+  const original = hostedPage(page);
+  let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, watchdog = null, engine = null;
+  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false;
+  const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
+  selected.searchParams.set('cast', '1');
+  const automatic = !selected.searchParams.has('src') && !selected.searchParams.has('source_id');
   const clearRefresh = () => { timers.clearTimeout(refreshTimer); refreshTimer = null; };
-  const schedule = (delay) => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
+  const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
-  const fallback = () => {
-    if (stopped) return;
-    cleanup();
-    onFallback();
-  };
   const retry = () => {
     if (stopped || request || recovering) return;
-    failures++;
-    recovering = true;
-    onStatus('La emisión se ha cortado. Renovando enlace y reconectando…');
-    schedule(Math.min(30000, 1000 * 2 ** Math.min(failures, 5)));
+    failures++; recovering = true;
+    onStatus('Probando otra señal disponible…');
+    // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
+    schedule(failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4)));
   };
-  const install = (url) => {
+  const install = url => {
     const shouldPlay = !loaded || !video.paused;
-    loaded = true;
-    destroyEngine();
-    address = url;
+    loaded = true; destroyEngine(); address = url;
     if (Hls?.isSupported()) {
-      const instance = engine = new Hls({ lowLatencyMode: false });
+      const instance = engine = new Hls({ lowLatencyMode: false, maxBufferLength: 30 });
       instance.on(Hls.Events.ERROR, (_event, data) => {
-        if (stopped || engine !== instance) return;
-        if (data.fatal || [401, 403].includes(data.response?.code)) retry();
+        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry();
       });
-      instance.loadSource(url);
-      instance.attachMedia(video);
-      onAttach(instance);
+      instance.loadSource(url); instance.attachMedia(video); onAttach(instance);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = url;
-    else { fallback(); return; }
+    else { cleanup(); onFallback(); return; }
     if (shouldPlay) autoplay(video).catch(() => { if (!stopped) onStatus('Pulsa ▶ para empezar.'); });
   };
   async function refresh() {
     if (stopped || request) return;
     clearRefresh();
     const controller = request = new AbortController();
-    const timeout = timers.setTimeout(() => controller.abort(), 15000);
+    const timeout = timers.setTimeout(() => controller.abort(), 35000);
     try {
-      const response = await fetcher(page, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const html = await response.text();
+      if (!original) throw Error('Enlace de canal no válido.');
+      const target = new URL(selected);
+      if (automatic && failures) target.searchParams.set('intento', String(Math.min(9, failures)));
+      const response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || `Hosting HTTP ${response.status}`);
       if (stopped || controller.signal.aborted) return;
-      const sources = pageSources(html, response.url || page).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
-      if (!sources.length) throw new Error('No hay un M3U8 vigente en la respuesta del proveedor.');
-      // Preserve the chosen CDN on renewal; after an error try the next CDN from the fresh page.
-      let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);
-      if (recovering && index >= 0) index = (index + 1) % sources.length;
-      const url = sources[Math.max(0, index)];
+      const url = hostedUrl(data.url);
       if (url !== address || recovering) install(url);
       if (stopped) return;
       recovering = false;
-      schedule(renewalDelay(url, now()));
+      // The hosting provides fresh signed media; refresh periodically and immediately on errors.
+      let upstream = '';
+      try { const code = new URL(url).searchParams.get('seg').replaceAll('-', '+').replaceAll('_', '/'); upstream = atob(code.padEnd(Math.ceil(code.length / 4) * 4, '=')); } catch { /* Unknown token: periodic renewal. */ }
+      schedule(renewalDelay(upstream, now()));
     } catch (error) {
       if (stopped) return;
       failures++;
-      // A transient outage must not replace the Calamar player. Keep the current buffer and
-      // request fresh public sources with bounded backoff until the viewer closes the channel.
-      const delay = Math.min(30000, 1000 * 2 ** Math.min(failures, 5));
-      const detail = /^HTTP \d{3}$/.test(error?.message || '') ? `El proveedor responde ${error.message}. `
-        : error?.message === 'No hay un M3U8 vigente en la respuesta del proveedor.' ? error.message + ' '
-        : 'No se pudo consultar el enlace del proveedor. ';
-      onStatus(`${detail}Reintentando en ${delay / 1000} s…`);
+      const delay = failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4));
+      onStatus(`No se pudo conectar con la señal. Reintentando…`);
       schedule(delay);
     } finally {
       timers.clearTimeout(timeout);
       if (request === controller) request = null;
     }
   }
-  const playing = () => { if (!stopped) { failures = 0; onStatus(''); } };
+  const playing = () => {
+    if (stopped) return;
+    failures = 0; onStatus('');
+    // Populate the optional selector after playback, so metadata never delays the first picture.
+    if (!onSources || menuStarted) return;
+    menuStarted = true; menu = new AbortController();
+    const mine = menu; menuTimer = timers.setTimeout(() => mine.abort(), 15000);
+    void expandHostedSources([original], { fetcher, signal: mine.signal }).then(options => {
+      if (!stopped && !mine.signal.aborted && !options.some(option => option.error)) onSources(options);
+    }).finally(() => { timers.clearTimeout(menuTimer); });
+  };
   const failed = () => { if (!stopped) retry(); };
   const stalled = () => {
     timers.clearTimeout(watchdog);
-    watchdog = timers.setTimeout(() => { if (!stopped && !video.paused) failed(); }, 20000);
+    watchdog = timers.setTimeout(() => { if (!stopped && !video.paused) failed(); }, 8000);
   };
   const progressing = () => { timers.clearTimeout(watchdog); watchdog = null; };
-  video.addEventListener('playing', playing);
-  video.addEventListener('timeupdate', progressing);
-  video.addEventListener('error', failed);
-  video.addEventListener('waiting', stalled);
-  video.addEventListener('stalled', stalled);
+  video.addEventListener('playing', playing); video.addEventListener('timeupdate', progressing);
+  video.addEventListener('error', failed); video.addEventListener('waiting', stalled); video.addEventListener('stalled', stalled);
   function cleanup() {
-    stopped = true;
-    request?.abort();
-    clearRefresh();
-    timers.clearTimeout(watchdog);
-    destroyEngine();
+    stopped = true; request?.abort(); menu?.abort(); clearRefresh(); timers.clearTimeout(menuTimer); timers.clearTimeout(watchdog); destroyEngine();
     for (const [name, listener] of [['playing', playing], ['timeupdate', progressing], ['error', failed], ['waiting', stalled], ['stalled', stalled]]) video.removeEventListener(name, listener);
   }
-  onStatus('Buscando una fuente de vídeo vigente…');
-  void refresh();
-  return cleanup;
+  onStatus('Conectando con la primera señal disponible…'); void refresh(); return cleanup;
 }
