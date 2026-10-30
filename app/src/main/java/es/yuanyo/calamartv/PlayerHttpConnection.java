@@ -31,12 +31,16 @@ public final class PlayerHttpConnection extends HttpURLConnection {
     Request.Builder request = new Request.Builder().url(url).method(getRequestMethod(), null);
     for (Map.Entry<String, List<String>> entry : getRequestProperties().entrySet())
       for (String value : entry.getValue()) request.addHeader(entry.getKey(), value);
+    // Respect the explicit longer read budget of signed hosting resolution. Other page readers
+    // retain their existing bound; a host request still has a finite total connection + read budget.
+    long callMs = HostingPlayback.isRelay(url.toString())
+        ? Math.max(35000L, (long) getConnectTimeout() + getReadTimeout()) : 35000L;
     OkHttpClient configured =
         client
             .newBuilder()
             .connectTimeout(getConnectTimeout(), TimeUnit.MILLISECONDS)
             .readTimeout(getReadTimeout(), TimeUnit.MILLISECONDS)
-            .callTimeout(35, TimeUnit.SECONDS)
+            .callTimeout(callMs, TimeUnit.MILLISECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
             .build();
