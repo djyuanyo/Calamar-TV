@@ -1,6 +1,7 @@
 // Films, series and documentaries added by hand in the admin page: the title is chosen in TMDB (synopsis,
 // cast, rating, images, seasons and episodes) and the administrator pastes the video link of each film or
 // episode (LuluStream or any direct video). The library is published to Firestore (calamarLibrary).
+import { videoKey } from './library-sync.js';
 export const TMDB_API = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE = 'https://image.tmdb.org/t/p/';
 export const ATTRIBUTION = 'Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.';
@@ -192,8 +193,11 @@ export const movieItem = (info, url) => ({ id: `m${info.id}`, kind: 'movie', tit
  */
 export function seriesWithSeason(existing, info, season, episodes, links) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
-  const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => ({
-    id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: '', url: String(links[e.episode]).trim() }));
+  const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => {
+    const url = String(links[e.episode]).trim();
+    const old = existing?.episodes?.find(saved => saved.season === season && saved.episode === e.episode && videoKey(saved.url) === videoKey(url));
+    return { ...old, id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
+  });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
   return { ...(existing || {}), id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };

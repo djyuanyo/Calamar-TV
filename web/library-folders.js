@@ -33,6 +33,10 @@ export async function driveFolder(folder, key, fetcher = globalThis.fetch) {
     }), credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(45000) });
     const data = await response.json();
     if (!response.ok) throw Error(data.error || 'No se pudo leer la carpeta de Google Drive.');
+    if (!data || typeof data !== 'object' || data.incompleteSearch || data.error
+        || (!Array.isArray(data.files) && !Array.isArray(data.folders))
+        || (data.files != null && !Array.isArray(data.files)) || (data.folders != null && !Array.isArray(data.folders)))
+      throw Error('Drive devolvió una lista incompleta o no válida. No se ha actualizado el catálogo.');
     name = data.name || name;
     files.push(...(data.files || [])); folders.push(...(data.folders || []));
     pageToken = data.nextPageToken || '';
@@ -49,7 +53,7 @@ const mostlyEpisodes = (files, strict = false) => {
 
 /** One combined scan; publication happens only after every configured folder has been read. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
-  const films = [], series = [], unknown = [], cache = new Map(), providers = new Set();
+  const films = [], series = [], unknown = [], cache = new Map(), providers = new Set(), inventory = [];
   let count = 0;
   const read = async (folder) => {
     const key = `${folder.provider}:${folder.id}`;
@@ -100,11 +104,13 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     providers.add(ref.provider);
     if (ref.provider === 'lulu') ref = await luluId(ref);
     const data = await read(ref);
-    if (source.section === 'movies') { for (const f of await videos(ref)) film(f, source.section); continue; }
+    const all = await videos(ref);
+    inventory.push({ id: `${ref.provider}:${ref.id}`, provider: ref.provider, section: source.section, links: all.map(f => f.link) });
+    if (source.section === 'movies') { for (const f of all) film(f, source.section); continue; }
     // A documentaries folder is one series only when most of its videos name an episode (1x01, S01E01, «Capítulo 3»…)
     // or it has season folders: a film whose name starts with a number («11M (2022)») does not make it a series.
     const isShow = (source.section === 'documentaries' ? mostlyEpisodes(data.files, true) : data.files.some(f => episodeOf(f.title))) || data.folders.some(f => /^(?:temporada|season|T\s*\d)/i.test(f.name));
-    if (isShow) { show(data.name, await videos(ref), source.section); continue; }
+    if (isShow) { show(data.name, all, source.section); continue; }
     if (source.section === 'documentaries') for (const f of data.files) film(f, source.section);
     else if (data.files.length) unknown.push(`${data.name}: coloca cada serie en su propia carpeta.`);
     for (const child of data.folders) {
@@ -114,5 +120,5 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     }
   }
   // Which sites were read: a copy missing from a site read in full was deleted there.
-  return { films, series, unknown, providers: [...providers] };
+  return { films, series, unknown, providers: [...providers], inventory, complete: true };
 }

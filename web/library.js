@@ -7,6 +7,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { scanFolders, folderReference } from './library-folders.js';
+import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
 
@@ -954,6 +955,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     if (before && Object.hasOwn(before, 'trailerUrl') && !Object.hasOwn(item, 'trailerUrl')) item = { ...item, trailerUrl: before.trailerUrl };
     if (before?.featured && item.featured === undefined) item = { ...item, featured: before.featured };
     if (before?.trend && item.trend === undefined) item = { ...item, trend: before.trend };
+    if (before?.url && videoKey(before.url) === videoKey(item.url)) {
+      for (const name of ['fromFolder', 'folderSources', 'mirrors', 'files', 'addedAt'])
+        if (Object.hasOwn(before, name) && !Object.hasOwn(item, name)) item = { ...item, [name]: before[name] };
+    }
     const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
     sections[section] = [...sections[section], item].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
     await store(sections);
@@ -1143,8 +1148,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const scan = await scanFolders(sources, settings, {onFolder:name=>{folderNote.textContent=`Leyendo «${name}»…`;}});
       const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
         onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
-      if (result.added.films || result.added.shows || result.added.pending) await store(result.sections);
-      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.`;
+      if (result.changed) await store(result.sections);
+      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.`;
       scanReport.replaceChildren(...result.unknown.map(line=>el('p',{class:'note'},line)));
     } catch(error) { folderNote.textContent=error.message; }
     finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
@@ -1154,22 +1159,21 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const scanNote = el('p', { class: 'note', role: 'status' });
   const scanReport = el('div', { class: 'library-scan-report' });
   const scanButton = el('button', { class: 'btn', type: 'button', onclick: async () => {
-    scanButton.disabled = true; scanReport.replaceChildren();
+    if (mixedScan.disabled) return;
+    scanButton.disabled = true; mixedScan.disabled = true; saveFolders.disabled = true; scanReport.replaceChildren();
     try {
       if (!settings.lulu) throw new Error('Primero añade la clave de la API de LuluStream en «Configuración».');
       const key = tmdbKey();
       scanNote.textContent = 'Leyendo las carpetas de LuluStream…';
       const scan = await scanLulu(settings.lulu, { onFolder: (name) => { scanNote.textContent = `Leyendo «${name}» en LuluStream…`; } });
-      const found = scan.films.length + scan.series.length;
-      if (!found) throw new Error('No hay vídeos en las carpetas Peliculas, Series o Documentales.');
       const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
       scanNote.textContent = 'Publicando…';
-      await store(result.sections);
+      if (result.changed) await store(result.sections);
       const { films, shows, episodes, pending } = result.added;
-      scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados${pending ? `, y ${pending} sin ficha de TMDB` : ''}. Revisa la lista de abajo; puedes editar o quitar cualquiera.`;
+      scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados${pending ? `, y ${pending} sin ficha de TMDB` : ''}. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos.`;
       if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Para revisar (${result.unknown.length}). Los que están «sin ficha de TMDB» ya se ven con su nombre de archivo: en la lista de abajo pulsa «Buscar en TMDB» y elige su ficha.`),
         el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
-    } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; }
+    } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; mixedScan.disabled = false; saveFolders.disabled = false; }
   } }, 'Leer carpetas de LuluStream');
   // LuluStream moved to luluvido.com: the links saved before (lulustream.com, luluvdo.com…) move there in one go.
   const moveButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
@@ -1381,7 +1385,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       el('p', {class:'note'}, 'Para Drive, añade una clave de Google Cloud con Google Drive API habilitada. Se guarda solo para el administrador y viaja cifrada en los enlaces de vídeo.'),
       field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive)),
     el('h3',{},'Carpetas de Google Drive y LuluStream'),
-    el('p',{class:'note'},'Puedes mezclar los dos sitios. Se conserva el vídeo de los títulos y capítulos que ya existen; solo se añaden los nuevos. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace. Los vídeos se abren en el reproductor de Calamar TV.'),
+    el('p',{class:'note'},'Puedes mezclar los dos sitios. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si queda otra copia del mismo título o capítulo, se conserva; una serie sin capítulos desaparece. Si falla la lectura, no se publica ningún cambio. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
+    el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
     el('div',{class:'actions'},saveFolders,mixedScan),folderNote,
     el('h3', {}, 'Leer las carpetas de LuluStream'),

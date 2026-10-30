@@ -3,8 +3,9 @@
 //   Series/<Name>/Temporada N/<episodes>     Documentales/<Name>/Temporada N/<episodes>
 // The key lives only in the admin-only settings; when the browser cannot call the API directly
 // (CORS), the request goes through the hosting (calamar-lulu.php), which only relays the JSON.
-import { LULU_ENDPOINT, lulustreamEmbed } from './catalog.js';
+import { LULU_ENDPOINT } from './catalog.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason } from './library-tmdb.js';
+import { videoKey as codeOf, managedByScan, reconcileScan } from './library-sync.js';
 
 // LuluStream moved to luluvido.com (lulustream.com stopped answering): the same API, tried there first.
 export const LULU_APIS = ['https://luluvido.com/api/', 'https://api.lulustream.com/api/'];
@@ -81,6 +82,13 @@ export const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value || '')) 
 /** A folder's subfolders and videos: { folders: [{ id, name }], files: [{ code, title, uploaded }] }. */
 export async function luluFolder(id, key, fetcher) {
   const result = await luluApi('folder/list', { fld_id: String(id), files: '1' }, key, fetcher);
+  if ((!Array.isArray(result.folders) && !Array.isArray(result.files))
+      || (result.folders != null && !Array.isArray(result.folders)) || (result.files != null && !Array.isArray(result.files))
+      || result.has_more || result.next_page || result.nextPageToken)
+    throw Error('LuluStream devolvió una lista incompleta o no válida. No se ha actualizado el catálogo.');
+  if ((result.folders || []).some(f => !f || !textOf(f.fld_id, f.id))
+      || (result.files || []).some(f => !f || !/^[A-Za-z0-9]{8,20}$/.test(textOf(f.file_code, f.filecode, f.code))))
+    throw Error('LuluStream devolvió archivos o carpetas no válidos. No se ha actualizado el catálogo.');
   return {
     folders: (result.folders || []).map((f) => ({ id: textOf(f.fld_id, f.id), name: textOf(f.name, f.title), ...(f.code ? { code: String(f.code) } : {}) })).filter((f) => f.id),
     files: (result.files || []).map((f) => ({ code: textOf(f.file_code, f.filecode, f.code), title: textOf(f.title, f.name, f.file_title),
@@ -122,31 +130,38 @@ const link = (code) => `https://luluvido.com/${code}`;
  */
 export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
   resetLuluRoute(); // Each reading tries the direct route again first.
-  const films = [], series = [], unknown = [];
+  const films = [], series = [], unknown = [], inventory = [];
+  let folderCount = 0;
   const root = await luluFolder(0, key, fetcher);
   const sections = root.folders.map((f) => ({ ...f, section: SECTION_FOLDERS[plain(f.name).replace(/[^a-z]/g, '')] })).filter((f) => f.section);
-  if (!sections.length) throw new Error(`No hay carpetas «Peliculas», «Series» o «Documentales» en LuluStream (encontradas: ${root.folders.map((f) => f.name).join(', ') || 'ninguna'}).`);
-  const videos = async (folder, depth = 0) => {
+  // Include empty/missing sections too: deleting the last video or the whole series must sync.
+  for (const section of ['movies', 'series', 'documentaries']) inventory.push({ id: `lulu:library:${section}`, provider: 'lulu', section, links: [] });
+  const videos = async (folder, bucket, depth = 0, ancestry = new Set()) => {
+    if (depth > 8 || ++folderCount > 1000 || ancestry.has(folder.id)) throw Error('No se pudieron leer todas las carpetas de LuluStream. No se ha actualizado el catálogo.');
     onFolder(folder.name);
     const content = await luluFolder(folder.id, key, fetcher);
+    bucket.links.push(...content.files.map(f => link(f.code)));
     // One folder at a time: dozens of requests at once filled the hosting and LuluStream stopped answering.
     const nested = [];
-    if (depth < 2) for (const f of content.folders) nested.push(await videos(f, depth + 1));
+    const next = new Set(ancestry).add(folder.id);
+    for (const f of content.folders) nested.push(await videos(f, bucket, depth + 1, next));
     return [...content.files.map((f) => ({ ...f, folder: folder.name })), ...nested.flat()];
   };
   for (const section of sections) {
     onFolder(section.name);
     const content = await luluFolder(section.id, key, fetcher);
+    const bucket = inventory.find(source => source.section === section.section);
+    bucket.links.push(...content.files.map(f => link(f.code)));
     if (section.section === 'movies') {
       const inside = [];
-      for (const sub of content.folders) inside.push(...await videos(sub));
+      for (const sub of content.folders) inside.push(...await videos(sub, bucket));
       for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
       continue;
     }
     if (section.section === 'documentaries') for (const f of content.files) films.push({ section: 'documentaries', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
     for (const show of content.folders) {
       const episodes = [];
-      for (const f of await videos(show)) {
+      for (const f of await videos(show, bucket)) {
         const at = episodeOf(f.title, f.folder === show.name ? '' : f.folder);
         if (at) episodes.push({ season: at[0], episode: at[1], file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
         else unknown.push(`${show.name} / ${f.title}: no se sabe qué capítulo es (usa 1x01 o S01E01 en el nombre)`);
@@ -154,7 +169,7 @@ export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
       if (episodes.length) series.push({ section: section.section, ...cleanTitle(show.name), folder: show.name, episodes });
     }
   }
-  return { films, series, unknown };
+  return { films, series, unknown, providers: ['lulu'], inventory, complete: true };
 }
 
 /** A search result is taken automatically only when its title is close to the file or folder name. */
@@ -176,17 +191,6 @@ async function bestMatch(title, year, kind, key, fetcher) {
   return sameYear.find((r) => confident(title, r.title)) || (found[0] && confident(title, found[0].title) ? found[0] : null);
 }
 
-const codeOf = (url) => {
-  const lulu = lulustreamEmbed(String(url || ''))?.split('/').pop();
-  if (lulu) return lulu;
-  try {
-    const u = new URL(url);
-    const drive = u.hostname === 'www.googleapis.com' ? u.pathname.match(/^\/drive\/v3\/files\/([A-Za-z0-9_-]+)$/)?.[1]
-      : u.hostname === 'calamarmenciano.com' && u.pathname === '/calamar-drive.php' ? u.searchParams.get('id') : null;
-    if (drive) return `drive_${drive}`;
-    return u.href;
-  } catch { return ''; }
-};
 const titleKey = value => plain(decodeHtml(value || '')).replace(/[^a-z0-9]+/g, '');
 const namedItem = (sections, wanted, kind) => {
   const candidates = Object.entries(sections).flatMap(([section, items]) => items
@@ -246,10 +250,11 @@ export async function seriesWithLinks(item, info, links, key, fetcher) {
 export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    return { ...movieItem(info, item.url), ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}) };
+    return { ...item, ...movieItem(info, item.url) };
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
-  const series = await seriesWithLinks(existing, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
+  const base = { ...item, ...existing, episodes: [...(existing?.episodes || []).filter(e => !item.episodes.some(old => old.season === e.season && old.episode === e.episode)), ...item.episodes] };
+  const series = await seriesWithLinks(base, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
   return { ...series, ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}), folder: item.folder || existing?.folder || info.title };
 }
 
@@ -260,7 +265,14 @@ export async function matchUnmatched(item, tmdbId, existing, key, fetcher = glob
 export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {}, skipDuplicates = false } = {}) {
   const skipped = { films: 0, episodes: 0 };
   const sections = Object.fromEntries(Object.entries(current).map(([k, items]) => [k, [...items]]));
+  // Adopt pre-provenance imports before collecting their spare copies.
+  if (skipDuplicates) for (const [section, items] of Object.entries(sections)) sections[section] = items.map(item => item.kind === 'tv'
+    ? { ...item, episodes: (item.episodes || []).map(e => managedByScan(e, section, scan) ? { ...e, fromFolder: true } : e) }
+    : managedByScan(item, section, scan) ? { ...item, fromFolder: true } : item);
   const put = (section, item) => {
+    if (skipDuplicates) item = item.kind === 'tv'
+      ? { ...item, episodes: item.episodes.map(e => managedByScan(e, section, scan) ? { ...e, fromFolder: true } : e) }
+      : managedByScan(item, section, scan) ? { ...item, fromFolder: true } : item;
     const previous = Object.values(sections).flat().find((x) => x.id === item.id);
     if (previous && Object.hasOwn(previous, "trailerUrl")) item = { ...item, trailerUrl: previous.trailerUrl };
     for (const k of Object.keys(sections)) sections[k] = sections[k].filter((x) => x.id !== item.id);
@@ -327,8 +339,8 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     put(f.section, arrived(movieItem(info, f.link)));
     films++;
   }
-  // A copy deleted from Drive or LuluStream: the title goes on with the copy that is still there.
-  if (skipDuplicates) {
+  // Older callers without complete folder inventories retain the historical mirror handling.
+  if (skipDuplicates && !scan.complete) {
     const seen = new Set([...scan.films.map((f) => codeOf(f.link)), ...scan.series.flatMap((x) => x.episodes.map((e) => codeOf(e.link)))]);
     const provider = (code) => code.startsWith('drive_') ? 'drive' : /^[A-Za-z0-9]{8,20}$/.test(code) ? 'lulu' : '';
     const scanned = new Set(scan.providers || [...seen].map(provider).filter(Boolean));
@@ -343,7 +355,13 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
-    const known = (skipDuplicates ? namedItem(sections, s, 'tv') : null) || byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
+    let known = (skipDuplicates ? namedItem(sections, s, 'tv') : null) || byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
+    if (skipDuplicates && known) {
+      const latest = find(known.item.id) || known.item;
+      const item = { ...latest, episodes: latest.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
+        .reduce((old, f) => withCopy(old, f.file, f.link), e)) };
+      put(known.section, item); known = { ...known, item };
+    }
     let info = known?.item.tmdb;
     if (!info) {
       const match = await bestMatch(s.title, s.year, 'tv', key, fetcher);
@@ -366,7 +384,13 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
     }
     // Links pasted by hand stay; the folder adds or replaces its own episodes.
-    const before = find(`s${info.id}`) || (skipDuplicates ? known?.item : null);
+    let before = find(`s${info.id}`) || (skipDuplicates ? known?.item : null);
+    if (skipDuplicates && before) {
+      const section = Object.entries(sections).find(([, items]) => items.some(item => item.id === before.id))?.[0] || s.section;
+      before = { ...before, episodes: before.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
+        .reduce((old, f) => withCopy(old, f.file, f.link), e)) };
+      put(section, before);
+    }
     const incoming = skipDuplicates ? s.episodes.filter((e, i, list) => {
       const duplicate = before?.episodes?.some(old => old.season === e.season && old.episode === e.episode)
         || list.slice(0,i).some(old => old.season === e.season && old.episode === e.episode);
@@ -377,7 +401,12 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     const linked = await seriesWithLinks(before, info, incoming, key, fetcher);
     // Each episode arrived the day LuluStream received it (for «Nuevo episodio»).
     const uploads = new Map((skipDuplicates ? incoming : s.episodes).filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
-    const item = linked && { ...linked, episodes: (linked.episodes || []).map((e) => (uploads.get(codeOf(e.url)) ? { ...e, addedAt: uploads.get(codeOf(e.url)) } : e)) };
+    const item = linked && { ...linked, episodes: (linked.episodes || []).map(e => {
+      let next = uploads.get(codeOf(e.url)) ? { ...e, addedAt: uploads.get(codeOf(e.url)) } : e;
+      if (skipDuplicates && scan.complete) next = s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
+        .reduce((old, f) => withCopy(old, f.file, f.link), { ...next, fromFolder: true });
+      return next;
+    }) };
     // A series arrived with its first uploaded episode.
     const first = s.episodes.map((e) => e.uploaded).filter(Boolean).sort()[0];
     if (item?.episodes?.length) {
@@ -385,6 +414,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       put(known?.section || Object.entries(sections).find(([,items])=>items.some(x=>x.id===before?.id))?.[0] || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += incoming.length;
     }
   }
-  for (const k of Object.keys(sections)) sections[k].sort((a, b) => String(a.tmdb?.title || a.title).localeCompare(String(b.tmdb?.title || b.title), 'es', { sensitivity: 'base' }));
-  return { sections, added: { films, shows, episodes, pending }, unknown, ...(skipDuplicates ? { skipped } : {}) };
+  const reconciled = reconcileScan(sections, scan);
+  for (const items of Object.values(reconciled.sections)) items.sort((a, b) => String(a.tmdb?.title || a.title).localeCompare(String(b.tmdb?.title || b.title), 'es', { sensitivity: 'base' }));
+  return { ...reconciled, changed: JSON.stringify(reconciled.sections) !== JSON.stringify(current), added: { films, shows, episodes, pending }, unknown, ...(skipDuplicates ? { skipped } : {}) };
 }

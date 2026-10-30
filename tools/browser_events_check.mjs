@@ -35,7 +35,7 @@ export const recordVisit = async (day, key) => { window.__visits.push([day, key]
 export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
 export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
 export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
-export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; };
+export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; window.__libraryPublishCount = (window.__libraryPublishCount || 0) + 1; };
 export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
 export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
 export const readAccount = async () => window.__account || null;
@@ -874,6 +874,53 @@ try {
   await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
   await page.locator('#player-close').click();
+  // A sync that only deletes files must publish too. Exercise the actual admin handlers and readers.
+  const syncPage = await browser.newPage();
+  const driveLink = id => `https://calamarmenciano.com/calamar-drive.php?id=${id}&v=${'A'.repeat(80)}`;
+  const syncSeed = { index: { sections: { movies: 1, series: 1, documentaries: 1 } }, parts: {
+    'movies-0': { items: [{ id: 'm-sync-drive', kind: 'movie', title: 'Retirar Drive', url: driveLink('film'), fromFolder: true },
+      { id: 'm-sync-lulu', kind: 'movie', title: 'Retirar Lulu', url: 'https://luluvido.com/removed12345', fromFolder: true }] },
+    'series-0': { items: [{ id: 's-sync', kind: 'tv', title: 'Serie borrada', episodes: [
+      { id: 'e-sync', season: 1, episode: 1, url: driveLink('episode'), fromFolder: true }] }] },
+    'documentaries-0': { items: [] },
+  } };
+  await syncPage.addInitScript(seed => {
+    window.__libraryParts = seed;
+    window.__librarySettings = { tmdb: 'abcdef0123456789abcdef0123456789', lulu: 'clave123456', drive: 'AIza' + 'x'.repeat(35), sourceFolders: [
+      { section: 'movies', url: 'https://drive.google.com/drive/folders/movies' },
+      { section: 'series', url: 'https://drive.google.com/drive/folders/series' },
+    ] };
+  }, syncSeed);
+  await syncPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await syncPage.route('https://firestore.googleapis.com/**/calamarLibrary/*', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const data = await syncPage.evaluate(name => name === 'index' ? window.__libraryParts.index : window.__libraryParts.parts[name], name);
+    await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
+  });
+  let failSeries = true;
+  await syncPage.route('https://calamarmenciano.com/calamar-drive.php', route => {
+    const id = new URLSearchParams(route.request().postData()).get('id');
+    return route.fulfill({ status: failSeries && id === 'series' ? 502 : 200, json: failSeries && id === 'series'
+      ? { error: 'Falló la carpeta de series: catálogo conservado' } : { name: id, files: [], folders: [] } });
+  });
+  await syncPage.route('https://luluvido.com/api/folder/list*', route => route.fulfill({ json: { status: 200, result: { files: [], folders: [] } } }));
+  await syncPage.goto(base + '/#/admin/biblioteca');
+  await syncPage.getByText('Retirar Drive', { exact: false }).waitFor();
+  await syncPage.getByRole('button', { name: 'Buscar e importar de ambos sitios', exact: true }).click();
+  await syncPage.getByText('Falló la carpeta de series: catálogo conservado', { exact: true }).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount || 0), 0, 'a failure after an empty folder never publishes deletions');
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts), syncSeed);
+  failSeries = false;
+  await syncPage.getByRole('button', { name: 'Buscar e importar de ambos sitios', exact: true }).click();
+  await syncPage.getByText(/Retirados: 1 películas o documentales, 1 series y 1 capítulos/).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 1, 'zero additions still publishes the removals');
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.map(item => item.id)), ['m-sync-lulu']);
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['series-0'].items), []);
+  await syncPage.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
+  await syncPage.getByText(/Retirados: 1 películas o documentales, 0 series y 0 capítulos/).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 2);
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
+  await syncPage.close();
   assert.deepEqual(errors, []);
   console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
