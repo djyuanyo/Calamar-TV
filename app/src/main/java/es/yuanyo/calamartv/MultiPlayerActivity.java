@@ -46,6 +46,7 @@ public final class MultiPlayerActivity extends Activity {
   private LinearLayout bar;
   private boolean controls;
   private int sound;
+  private android.app.AlertDialog accessDialog;
 
   private final class Tile {
     final String title;
@@ -156,6 +157,7 @@ public final class MultiPlayerActivity extends Activity {
     }
   }
 
+  private AccountAccess.Playback accountPlayback;
   @Override
   protected void onCreate(Bundle state) {
     super.onCreate(state);
@@ -216,11 +218,25 @@ public final class MultiPlayerActivity extends Activity {
   @Override
   protected void onStart() {
     super.onStart();
-    for (Tile tile : tiles) { tile.next = 0; tile.start(); }
+    if(accountPlayback==null)accountPlayback=new AccountAccess.Playback(this,"Multipantalla",tiles.size(),()->{
+      if(accessDialog!=null){accessDialog.dismiss();accessDialog=null;}
+      for(Tile tile:tiles){tile.next=0;tile.start();}
+    },reason->{
+      for(Tile tile:tiles)tile.release();
+      for(Tile tile:tiles)tile.status.setText(reason);
+      if(reason.contains("Comprobando"))return;
+      if(accessDialog!=null){accessDialog.dismiss();accessDialog=null;}
+      if(!isFinishing())accessDialog=new android.app.AlertDialog.Builder(this).setTitle("Acceso a Calamar TV").setMessage(reason)
+          .setPositiveButton("Mi cuenta",(d,w)->{startActivity(new android.content.Intent(this,AccountActivity.class));finish();})
+          .setNegativeButton("Volver",(d,w)->finish()).show();
+    });
+    accountPlayback.start();
   }
 
   @Override
   protected void onStop() {
+    if(accountPlayback!=null)accountPlayback.close();
+    if(accessDialog!=null){accessDialog.dismiss();accessDialog=null;}
     for (Tile tile : tiles) tile.release();
     super.onStop();
   }
@@ -266,6 +282,7 @@ public final class MultiPlayerActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    if(accountPlayback!=null)accountPlayback.close();
     handler.removeCallbacks(hide);
     super.onDestroy();
   }

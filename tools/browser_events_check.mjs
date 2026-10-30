@@ -18,7 +18,21 @@ export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@ex
 export const administrator = (user) => user === undefined || user?.email === 'admin@example.com';
 export const imageService = async () => ({configured: true});
 export const connectImageService = async () => ({configured: true});
-export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };
+// Viewing needs an account: the page opens signed in as an ordinary viewer, with its profile already chosen.
+sessionStorage.setItem('calamar-profile-picked:viewer', '1');
+const viewer = { uid: 'viewer', email: 'viewer@example.com', displayName: 'Viewer' };
+// The administration pages keep the administrator of auth.currentUser above, as before: no sign-in answer there.
+// Leaving them for the public pages, the viewer signs in.
+let answered = false;
+const answer = () => { if (answered || location.hash.startsWith('#/admin')) return; answered = true; setTimeout(() => (window.__authWatchers || []).forEach((w) => w(window.__signedOut ? null : viewer)), 0); };
+addEventListener('hashchange', answer);
+export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); if (answered) setTimeout(() => changed(window.__signedOut ? null : viewer), 0); else answer(); return () => {}; };
+export const registerMember = async () => {}, readAccess = async () => ({ expires: null, screens: null });
+export const claimSessions = async () => ({slots:[0]}), beatSession = async () => {}, endSession = async () => {};
+export const watchAccessSettings = next => { next({requireRegistration: window.__requireRegistration !== false}); return () => {}; };
+export const watchAccess = (uid, next) => { next({expires:null,screens:1}); return () => {}; };
+export const saveAccessSettings = async value => { window.__requireRegistration = value; };
+export const usersOverview = async () => window.__users || [], saveAccess = async (uid, value) => { (window.__savedAccess ||= {})[uid] = value; };
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
 export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
@@ -78,6 +92,18 @@ try {
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await page.waitForFunction(() => window.__published?.leagues.length === 1);
   const leagueId = await page.evaluate(() => window.__published.leagues[0].id);
+  // Administración → Usuarios: each account's expiry and screens; an empty date is «no end».
+  await page.evaluate(() => { window.__users = [{ uid: 'u1', email: 'ana@example.com', name: 'Ana', seenAt: Date.now(), expires: null, screens: null, live: [{ title: 'La 1' }] }]; });
+  await page.locator('.admin-stats a').filter({ hasText: 'Usuarios' }).click();
+  await page.getByText('Viendo ahora en 1 pantalla: La 1', { exact: false }).waitFor();
+  await page.getByLabel('Caduca (ana@example.com)').fill('2026-12-24');
+  await page.getByLabel('Pantallas a la vez (ana@example.com)').fill('2');
+  await page.locator('.user-row').getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.waitForFunction(() => window.__savedAccess?.u1?.screens === 2);
+  const savedAccess = await page.evaluate(() => window.__savedAccess.u1);
+  assert.equal(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid'}).format(new Date(savedAccess.expires)), '2026-12-24');
+  assert.equal(new Date(savedAccess.expires).toISOString(), '2026-12-23T23:00:00.000Z');
+  await page.locator('.admin-stats a').filter({ hasText: 'Ligas' }).click();
   await page.locator('.admin-stats a').filter({ hasText: 'Equipos' }).click();
   await page.getByLabel('Nombre de equipo', { exact: true }).fill('Local');
   await page.getByLabel('Liga principal', { exact: false }).selectOption(leagueId);
@@ -696,7 +722,8 @@ try {
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // «Continuar viendo» heads the home page (after «Eventos En Directo», the first row of all when there are
   // events today) and opens the film where it was left.
-  await page.evaluate(() => localStorage.setItem('calamar-progress-v1', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',
+  // The viewer's own row (each account keeps its own «Continuar viendo» in the browser).
+  await page.evaluate(() => localStorage.setItem('calamar-progress-v1:viewer', JSON.stringify({ mavatar: { key: 'mavatar', page: 'peliculas', item: 'mavatar', episode: '',
     name: 'Avatar', sub: '2009', image: '', position: 1800, duration: 9720, at: Date.now() } })));
   await page.goto(base + '/#/inicio');
   await page.getByRole('heading', { name: 'Continuar viendo', exact: true }).waitFor();

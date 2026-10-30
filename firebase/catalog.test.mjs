@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp, increment, query, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, collectionGroup, setDoc, deleteDoc, serverTimestamp, increment, query, where, runTransaction, Timestamp } from 'firebase/firestore';
 let env;
 const path = 'calamarCatalog/custom';
 const data = { json: '{"channels":[],"featured":[],"hidden":[]}', revision: 1 };
@@ -155,4 +155,76 @@ test('each account reads and writes only its own profiles, their data and their 
   await assertFails(getDocs(collection(mine, 'calamarUsers')));
   await assertFails(getDocs(collection(mine, 'calamarUsers/user-a/profiles')));
   await assertSucceeds(deleteDoc(doc(mine, 'calamarUsers/user-a/profiles/p2')));
+});
+test('accounts register themselves; only the administrator sets their expiry and screens and sees everyone', async () => {
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const member = (overrides = {}) => ({ email: 'a@example.com', name: 'Ana', seenAt: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(mine, 'calamarMembers/user-a'), member()));
+  await assertFails(setDoc(doc(mine, 'calamarMembers/user-a'), member({ screens: 9 })));
+  await assertFails(setDoc(doc(other, 'calamarMembers/user-a'), member()));
+  await assertFails(getDocs(collection(mine, 'calamarMembers')));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarMembers')));
+  const access = (overrides = {}) => ({ expires: null, screens: 2, updatedAt: serverTimestamp(), ...overrides });
+  await assertFails(setDoc(doc(mine, 'calamarAccess/user-a'), access({ screens: 10 })));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarAccess/user-a'), access()));
+  await assertFails(setDoc(doc(admin(), 'calamarAccess/user-a'), access({ screens: 11 })));
+  await assertSucceeds(getDoc(doc(mine, 'calamarAccess/user-a')));
+  await assertFails(getDoc(doc(other, 'calamarAccess/user-a')));
+});
+test('each account opens its own screens while it has not expired; the administrator sees them all', async () => {
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
+  const screen = (overrides = {}) => ({ holder: 'A'.repeat(32), profile: 'main', title: 'La 1', device: 'web', at: serverTimestamp(), ...overrides });
+  await assertSucceeds(setDoc(doc(mine, 'calamarStreams/user-a/sessions/0'), screen()));
+  await assertSucceeds(getDocs(collection(mine, 'calamarStreams/user-a/sessions')));
+  await assertFails(getDocs(collection(other, 'calamarStreams/user-a/sessions')));
+  await assertFails(setDoc(doc(other, 'calamarStreams/user-a/sessions/0'), screen()));
+  await assertFails(setDoc(doc(mine, 'calamarStreams/user-a/sessions/1'), screen({ device: 'pc' })));
+  await assertSucceeds(getDocs(collectionGroup(admin(), 'sessions')));
+  await assertFails(getDocs(collectionGroup(mine, 'sessions')));
+  // Expired yesterday: no screen opens.
+  await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'calamarAccess/user-a'), { expires: new Date(Date.now() - 86400000), screens: 1, updatedAt: new Date() }));
+  await assertFails(setDoc(doc(mine, 'calamarStreams/user-a/sessions/1'), screen()));
+  await assertSucceeds(deleteDoc(doc(mine, 'calamarStreams/user-a/sessions/0')));
+});
+
+test('only the administrator changes mandatory registration; anyone can read the switch', async () => {
+  const ref = db => doc(db, 'calamarSettings/access');
+  const value = { requireRegistration: false, updatedAt: serverTimestamp() };
+  await assertSucceeds(getDoc(ref(env.unauthenticatedContext().firestore())));
+  await assertFails(setDoc(ref(env.unauthenticatedContext().firestore()), value));
+  await assertFails(setDoc(ref(env.authenticatedContext('viewer').firestore()), value));
+  await assertSucceeds(setDoc(ref(admin()), value));
+  await assertFails(setDoc(ref(admin()), {...value,requireRegistration:'yes'}));
+});
+test('slots enforce the screen limit and cannot replace another live playback', async () => {
+  const db = env.authenticatedContext('viewer').firestore();
+  const slot = n => doc(db, 'calamarStreams/viewer/sessions/' + n);
+  const value = holder => ({holder,profile:'main',title:'Canal',device:'web',at:serverTimestamp()});
+  await assertSucceeds(setDoc(slot(0), value('A'.repeat(32))));
+  await assertFails(setDoc(slot(1), value('B'.repeat(32))));
+  await assertFails(setDoc(slot(0), value('B'.repeat(32))));
+  await assertSucceeds(setDoc(slot(0), value('A'.repeat(32))));
+  await assertFails(setDoc(slot('arbitraryId'), value('B'.repeat(32))));
+  await env.withSecurityRulesDisabled(async c => setDoc(doc(c.firestore(), 'calamarStreams/viewer/sessions/0'), {...value('A'.repeat(32)),at:new Date(Date.now()-100000)}));
+  await assertSucceeds(setDoc(slot(0), value('B'.repeat(32))));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarAccess/viewer'), {expires:null,screens:2,updatedAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(slot(1), value('C'.repeat(32))));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarAccess/viewer'), {expires:null,screens:1,updatedAt:serverTimestamp()}));
+  await assertFails(setDoc(slot(1), value('C'.repeat(32))));
+});
+test('two simultaneous devices cannot both claim the last screen', async () => {
+  const { claimPlan } = await import('../web/access-lease.js');
+  const db = env.authenticatedContext('viewer').firestore();
+  const claim = holder => runTransaction(db, async tx => {
+    const ref = doc(db, 'calamarStreams/viewer/sessions/0');
+    const snapshot = await tx.get(ref);
+    const slots = [snapshot.exists() ? {...snapshot.data(),at:snapshot.data().at.toMillis()} : null];
+    claimPlan(slots,holder,1,1);
+    tx.set(ref,{holder,profile:holder,title:'Canal',device:'web',at:serverTimestamp()});
+  });
+  const results = await Promise.allSettled([claim('A'.repeat(32)),claim('B'.repeat(32))]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(results.filter(x=>x.status==='rejected').length,1);
 });

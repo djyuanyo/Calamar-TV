@@ -91,6 +91,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean diagnosing;
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
+  private AccountAccess.Playback accountPlayback;
+  private Button accountAccessButton;
   private boolean hostingPlayback;
   private String hostingTriedPage;
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
@@ -268,7 +270,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
-        () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
+        () -> accountPlayback==null || !accountPlayback.allowed() ? null
+            : pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
             : !currentUrl.isEmpty() ? currentUrl
             : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
         title, () -> {
@@ -311,6 +314,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
       @Override public void afterTextChanged(android.text.Editable s) { status.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); }
     });    panel.addView(status);
+    accountAccessButton=new Button(this);accountAccessButton.setText("Entrar / Mi cuenta");
+    accountAccessButton.setVisibility(View.GONE);
+    accountAccessButton.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+    panel.addView(accountAccessButton);
     root.addView(panel);
 
     stage = new FrameLayout(this);
@@ -542,6 +549,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   protected void onStart() {
     super.onStart();
     active = true;
+    if(accountPlayback==null)accountPlayback=new AccountAccess.Playback(this,title,1,this::resumeAuthorizedPlayback,reason -> {
+      ++generation;resolving=false;
+      handler.removeCallbacks(renewal);handler.removeCallbacks(renewalRequest);
+      releasePlayer();clearWeb();
+      if(castControls!=null)castControls.stopForAccess();castPlayback=false;
+      if(accountAccessButton!=null)accountAccessButton.setVisibility(View.VISIBLE);
+      problem(reason);
+    });
+    if(accountPlayback.allowed())resumeAuthorizedPlayback();else accountPlayback.start();
+  }
+  private void resumeAuthorizedPlayback() {
+    if(!active)return;
+    if(accountAccessButton!=null)accountAccessButton.setVisibility(View.GONE);
     if (castPlayback && castControls != null && castControls.connected()) {
       status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
       return;
@@ -554,6 +574,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void playDirect() {
+    if(accountPlayback!=null&&!accountPlayback.allowed())return;
     if (!active) return;
     webMode = false;
     clearWeb();
@@ -574,6 +595,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void resolveFresh() {
+    if(accountPlayback!=null&&!accountPlayback.allowed()){accountPlayback.retry();return;}
+    if(DailymotionPlayer.embed(pageUrl)!=null){openWeb();return;}
     if (!active || resolving) return;
     keepControlsVisible(true);
     if (directUrl != null) {
@@ -757,7 +780,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** A player page of a catalog channel, which the hosting reads (not LuluStream, it has its own file). */
   private boolean channelPage() {
-    return pageUrl != null && channelPages.contains(pageUrl) && Library.Media.hosting(pageUrl) == null;
+    return pageUrl != null && DailymotionPlayer.embed(pageUrl) == null && channelPages.contains(pageUrl) && Library.Media.hosting(pageUrl) == null;
   }
 
   /** Metadata must not delay or reject the automatic hosting route that was used in 2.20.55. */
@@ -786,6 +809,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
   private void playSource(VideoResolver.Source source) {
+    if(accountPlayback!=null&&!accountPlayback.allowed())return;
     if (!active) return;
     castPlayback = false;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
@@ -1368,7 +1392,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void openWeb() {
-    if (!active) return;
+    if (!active || (accountPlayback!=null&&!accountPlayback.allowed())) return;
+    final boolean officialDailymotion=DailymotionPlayer.embed(pageUrl)!=null;
     setFullscreen(false); // The web page has no controller, so the panel must be there.
     ++generation;
     resolving = false;
@@ -1399,7 +1424,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             String url = request.getUrl().toString();
             if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
                 new java.io.ByteArrayInputStream(new byte[0]));
-            if (!zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
+            if (!officialDailymotion && !zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
                     if (generation == browserGeneration) detected(url);
@@ -1412,6 +1437,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           public void onPageFinished(WebView view, String url) {
             if (!active || !webMode || generation != browserGeneration || browser != view) return;
             documentUrl = url;
+            if(officialDailymotion){status.setText("Dailymotion · reproductor integrado");return;}
             view.evaluateJavascript(
                 "(function(){var v=document.querySelector('video');return"
                     + " v?(v.currentSrc||v.src||''):'';})()",
@@ -1425,13 +1451,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           }
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
-    status.setText("Modo web · Pulsa ▶ para detectar el vídeo.");
+    status.setText(officialDailymotion?"Dailymotion · Pulsa ▶ para reproducir.":"Modo web · Pulsa ▶ para detectar el vídeo.");
+    if(officialDailymotion){browser.getSettings().setMediaPlaybackRequiresUserGesture(false);browser.setWebChromeClient(new android.webkit.WebChromeClient());}
     browser.loadUrl(pageUrl);
     browser.requestFocus();
   }
 
   /** Keep HLS inside Chromium. Do not detect it and send it back to the failed native engine. */
   private void openDirectWeb() {
+    if(accountPlayback!=null&&!accountPlayback.allowed())return;
     if (!active || directUrls.isEmpty()) return;
     String address = directUrls.get(selection);
     if (!BrowserPlayback.supports(address)) {
@@ -1556,6 +1584,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onStop() {
+    if(accountPlayback!=null && !(castPlayback&&castControls!=null&&castControls.connected()))accountPlayback.close();
     active = false;
     if (sourceDialog != null) { sourceDialog.dismiss(); sourceDialog = null; }
     generation++;
@@ -1569,6 +1598,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onDestroy() {
+    if(accountPlayback!=null)accountPlayback.close();
+    if(castPlayback&&castControls!=null)castControls.stopForAccess();
     handler.removeCallbacks(skipTick);
     handler.removeCallbacks(remainingTick);
     if (castControls != null) castControls.destroy();

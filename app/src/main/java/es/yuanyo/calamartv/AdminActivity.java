@@ -97,6 +97,7 @@ public class AdminActivity extends Activity {
             16));
     addButton("Cerrar sesión de Google", () -> SharedCatalog.auth(this).signOut());
     addButton("Recargar catálogo", this::load);
+    addButton("Usuarios y acceso", () -> startActivity(new android.content.Intent(this, AccountUsersActivity.class)));
     if (loading) {
       status.setText("Cargando catálogo…");
       return;

@@ -19,7 +19,7 @@ jobs:
         run: |
           php -l hosting/calamar-drive.php
           python -m unittest discover -s tools -p 'test_drive_relay.py' -v
-          node --test tools/library_folders.test.mjs tools/library_lulu.test.mjs
+          node --test tools/library_folders.test.mjs tools/library_lulu.test.mjs tools/access.test.mjs tools/dailymotion.test.mjs
       - run: npm install --prefix /tmp/calamar-ui --no-audit --no-fund playwright@1.58.2
       - name: Probar eventos con catálogo aislado
         env:

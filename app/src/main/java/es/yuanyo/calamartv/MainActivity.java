@@ -74,6 +74,8 @@ public class MainActivity extends Activity {
         }
       };
 
+  private AccountAccess.State accountAccessState;
+  private Runnable stopAccessObserver;
   public void onCreate(Bundle b) {
     super.onCreate(b);
     television = getPackageManager().hasSystemFeature("android.software.leanback")
@@ -91,6 +93,12 @@ public class MainActivity extends Activity {
     // Accounts and profiles: «Elige tu perfil» each time the app opens, and each profile's own rows.
     Profiles.start(this);
     Profiles.listen(profilesChanged);
+    stopAccessObserver=AccountAccess.get(this).watch(state -> {
+      accountAccessState=state;
+      if(state.problem()!=null && gate!=null && gate.isShowing())gate.dismiss();
+      if(list!=null)render();
+      if(state.problem()==null && Profiles.needsPick())profileGate();
+    });
     home();
     // A signed-in account: «Elige tu perfil» at once, with the profiles kept on this device.
     if (Profiles.needsPick()) profileGate();
@@ -117,6 +125,7 @@ public class MainActivity extends Activity {
    * the account, «Añadir» and «Modificar». Once each time the app opens.
    */
   void profileGate() {
+    if(accountAccessState==null || accountAccessState.problem()!=null)return;
     if (gate != null && gate.isShowing()) return;
     FrameLayout root = new FrameLayout(this);
     root.setBackgroundColor(Ui.BG);
@@ -586,6 +595,12 @@ public class MainActivity extends Activity {
     lazySections.clear();
     list.removeAllViews();
     message.setText(status());
+    if(accountAccessState==null || accountAccessState.problem()!=null){
+      TextView reason=new TextView(this);reason.setText(accountAccessState==null?"Comprobando tu cuenta…":accountAccessState.problem());
+      reason.setTextColor(Ui.FG);reason.setTextSize(20);reason.setPadding(Ui.dp(this,20),Ui.dp(this,24),Ui.dp(this,20),Ui.dp(this,16));list.addView(reason);
+      Button enter=new Button(this);enter.setText("Entrar / Mi cuenta");enter.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));list.addView(enter);
+      return;
+    }
     if (Library.section(mode) != null) {
       libraryPage(Library.section(mode));
       return;
@@ -1434,6 +1449,7 @@ public class MainActivity extends Activity {
   }
 
   protected void onDestroy() {
+    if(stopAccessObserver!=null)stopAccessObserver.run();
     Profiles.forget(profilesChanged);
     if (gate != null && gate.isShowing()) gate.dismiss();
     if (updater != null) updater.close();

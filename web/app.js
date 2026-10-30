@@ -14,8 +14,9 @@ import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
-import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
+import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate } from './account.js';
+import { startAccess, onAccessChanged, accessKnown, registrationRequired, expiredSince, startWatching, stopWatching, onPlaybackAccessLost, playbackAllowed } from './access.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -588,14 +589,25 @@ function multiPage() {
     el('p', { class: 'note multi-note' }, 'Elige varios canales o eventos para verlos a la vez. Con 2 se reparten arriba y abajo; con más, en cuadrícula en horizontal.'),
     el('div', { class: 'multi-actions' }, el('label', { class: 'search multi-search' }, query), watch, clear), grid];
 }
+let multiWatching = false;
+let multiRequest = 0;
+function endMulti() { ++multiRequest; closeMulti(); if (multiWatching) stopWatching(); multiWatching = false; }
 function showMulti(arg) {
   const items = multiItems(arg.split('+').map(decodeURIComponent));
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
-  openMulti(items, {
-    onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
+  const requestedRoute = location.hash, request = ++multiRequest;
+  startWatching('Multipantalla', activeProfile()?.name || '', items.length).then(check => {
+    if (request !== multiRequest || location.hash !== requestedRoute) { if (check.ok && request === multiRequest) stopWatching(); return; }
+    if (!check.ok) {
+      closeMulti(); view.replaceChildren(el('p', { class: 'error', role: 'alert' }, check.reason), ...multiPage()); return;
+    }
+    multiWatching = true;
+    openMulti(items, {
+    onClose: () => { endMulti(); if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
     onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
       .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
+    });
   });
   return true;
 }
@@ -632,11 +644,11 @@ let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
-initCast({
+const casting = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  getSource: () => playbackAllowed() && current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
   onSent: stop,
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
@@ -677,6 +689,7 @@ const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 
 
 async function playSource(c, index) {
   stop();
+  if (!c.pending && !playbackAllowed()) { playerStatus.textContent = 'Comprueba tu cuenta y vuelve a abrir el contenido.'; return; }
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
     renderSourcePicker(playerSources, [], 0, () => {});
@@ -785,7 +798,7 @@ async function playSource(c, index) {
   const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
-      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture; web-share', allowfullscreen: '' });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
     controls.attach(null);
@@ -978,7 +991,7 @@ function open(c, fromRoute = false) {
   if (!c.pending) startAudience(c);
   // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
-  playSource(c, 0);
+  beginWatching(c);
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
   if (resume > 0) video.addEventListener('loadedmetadata', () => {
@@ -1193,7 +1206,26 @@ function showMatchCenter(c) {
   return true;
 }
 
+/** Plays once the account may: not expired, and a screen free within its limit (access.js). */
+async function beginWatching(c) {
+  if(c.pending){stopWatching();playSource(c,0);return;}
+  player.classList.remove('blocked');
+  playerStatus.textContent = 'Comprobando tu cuenta…';
+  const check = await startWatching(c.name, activeProfile()?.name || '');
+  // A catalog refresh meanwhile rebuilds the channel object: compare ids, and play the newest one.
+  if (!current || current.id !== c.id || player.hidden) { if (check.ok && player.hidden) stopWatching(); return; }
+  if (!check.ok) {
+    player.classList.add('blocked');
+    playerStatus.textContent = check.reason;
+    return;
+  }
+  playerStatus.textContent = '';
+  playSource(current, 0);
+}
+
 function hidePlayer() {
+  casting.stop();
+  stopWatching();
   showMatchCenter(null);
   rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
@@ -1321,6 +1353,24 @@ let accountEditing = null;
 // show the profile's rows drawn again when the profile or its data change.
 const accountLink = document.getElementById('account-link');
 startProfiles(shared);
+startAccess(shared);
+// The page is drawn again only when what it may show changes: signed in or not, expired or not.
+onPlaybackAccessLost(reason => {
+  casting.stop();
+  endMulti();
+  if (!player.hidden) {
+    stop();
+    player.classList.add('blocked'); playerStatus.textContent = reason;
+  }
+});
+let accessShown = '';
+onAccessChanged(() => {
+  const now = `${accessKnown()}|${registrationRequired()}|${!!signedUser()}|${expiredSince() || ''}`;
+  if (now === accessShown) return;
+  accessShown = now;
+  const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  if (!['admin', 'tv'].includes(page)) route();
+});
 let profileRedraw = 0;
 let gate = null;
 function closeGate() { gate?.remove(); gate = null; document.body.classList.remove('gate-open'); }
@@ -1407,6 +1457,27 @@ async function route() {
     }
     return;
   }
+  // Every viewer has an account: without one, «Entra»; an account past its date, the notice to renew it.
+  if (!accessKnown() || (registrationRequired() && !signedUser())) {
+    if (!player.hidden) hidePlayer();
+    endMulti();
+    if (!accessKnown()) { view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando tu cuenta…')); return; }
+    const f = await shared().catch(() => null);
+    if (version !== routeVersion) return;
+    view.replaceChildren(el('p', { class: 'auth-required' }, 'Para ver Calamar TV, entra con tu cuenta o créala gratis.'),
+      ...(f ? accountPage(el, f, { rerender: route, chosen: () => { location.hash = '#/'; } }) : [el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Recarga la página.')]));
+    return;
+  }
+  const expired = expiredSince();
+  if (expired) {
+    if (!player.hidden) hidePlayer();
+    endMulti();
+    view.replaceChildren(el('section', { class: 'auth-card expired' },
+      el('h1', {}, 'Tu acceso ha caducado'),
+      el('p', { class: 'auth-lead' }, `Tu cuenta pudo ver Calamar TV hasta el ${new Date(expired).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}. Habla con el administrador para renovarla.`),
+      el('button', { class: 'auth-submit', type: 'button', onclick: async () => { const f = await shared(); await f.logout(); route(); } }, 'Cerrar sesión')));
+    return;
+  }
   if (!state.tdt) {
     view.replaceChildren(el('div', { class: 'skeleton-hero', 'aria-hidden': 'true' }), el('p', { class: 'status', role: 'status' }, 'Cargando canales…'));
     try {
@@ -1422,7 +1493,7 @@ async function route() {
   syncLibraryNav();
   const watching = sectionByPage(page) && hash.split('/')[2] === 'ver';
   if (!['canal', 'evento'].includes(page) && !watching && !player.hidden) hidePlayer();
-  if (page !== 'multipantalla' || !arg) closeMulti();
+  if (page !== 'multipantalla' || !arg) endMulti();
   if (page === 'multipantalla') {
     if (arg && showMulti(arg)) { view.replaceChildren(...multiPage()); return; }
     view.replaceChildren(...multiPage());

@@ -129,6 +129,64 @@ service cloud.firestore {
         allow list: if false;
       }
     }
+    // Access: each account registers itself (email, name, last seen); the administrator sets its expiry and
+    // screens (only he writes them); each open screen says it is watching every 30 s. An expired account
+    // cannot open a screen.
+    match /calamarMembers/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list, delete: if administrator();
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt'])
+        && request.resource.data.email is string && request.resource.data.email == request.auth.token.email && request.resource.data.email.size() <= 320
+        && request.resource.data.name is string && request.resource.data.name.size() <= 100
+        && request.resource.data.seenAt == request.time;
+    }
+    match /calamarAccess/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list, delete: if administrator();
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasOnly(['expires', 'screens', 'updatedAt'])
+        && (request.resource.data.expires == null || request.resource.data.expires is timestamp)
+        && request.resource.data.screens is int && request.resource.data.screens >= 1 && request.resource.data.screens <= 10
+        && request.resource.data.updatedAt == request.time;
+    }
+    function notExpired(uid) {
+      let access = /databases/$(database)/documents/calamarAccess/$(uid);
+      return !exists(access) || get(access).data.expires == null || get(access).data.expires > request.time;
+    }
+    match /calamarSettings/access {
+      allow get: if true;
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasOnly(['requireRegistration', 'updatedAt'])
+        && request.resource.data.requireRegistration is bool && request.resource.data.updatedAt == request.time;
+      allow delete, list: if false;
+    }
+    function screens(uid) {
+      let access = /databases/$(database)/documents/calamarAccess/$(uid);
+      return exists(access) ? get(access).data.screens : 1;
+    }
+    function validPlayback(uid, session) {
+      let p = request.resource.data;
+      return owner(uid) && session.matches('^[0-9]$') && int(session) < screens(uid) && notExpired(uid)
+        && p.keys().hasAll(['holder', 'profile', 'title', 'device', 'at'])
+        && p.keys().hasOnly(['holder', 'profile', 'title', 'device', 'at'])
+        && p.holder is string && p.holder.matches('^[A-Za-z0-9]{20,40}$')
+        && p.profile is string && p.profile.size() <= 40
+        && p.title is string && p.title.size() <= 120
+        && p.device in ['web', 'android', 'tv'] && p.at == request.time;
+    }
+    match /calamarStreams/{uid}/sessions/{session} {
+      allow read: if owner(uid) || administrator();
+      allow delete: if owner(uid) || administrator();
+      allow create: if validPlayback(uid, session);
+      // A live slot belongs to its first viewer. Concurrent claims conflict and retry transactionally.
+      allow update: if validPlayback(uid, session)
+        && (resource.data.holder == request.resource.data.holder || resource.data.at <= request.time - duration.value(90, 's'));
+    }
+    // Administración → Usuarios: the screens watching now of every account.
+    match /{path=**}/sessions/{session} {
+      allow read: if administrator();
+    }
     match /{document=**} {
       allow read, write: if false;
     }
