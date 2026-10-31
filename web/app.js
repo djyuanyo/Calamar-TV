@@ -24,6 +24,7 @@ import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, 
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
+let stopMusic = null;
 let sharedStarted = false;
 // Firebase loads on demand so the bundled catalog works even when it cannot be reached.
 let firebase = null;
@@ -1390,10 +1391,19 @@ async function route() {
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
   // Films, series and documentaries have their own search box: the channels and events one hides there.
-  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE;
+  if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
+  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE || page === 'musica';
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
+  if (page === 'musica') {
+    if (!player.hidden) hidePlayer();
+    const music = await import('./music.js');
+    if (version !== routeVersion) return;
+    view.replaceChildren();
+    stopMusic = music.renderMusic(view, signedUser());
+    return;
+  }
   if (page === 'tv') {
     // An app signing in from this phone: its QR / short link (…/tv/K7Q2) opens here.
     const login = await import('./tv-login.js');
