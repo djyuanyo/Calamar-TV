@@ -31,6 +31,53 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
+  @Test public void unreachableHostingAndUnavailableNativeRouteOpensCalamarWebPlayer() throws Exception {
+    HeldCertificate cert = new HeldCertificate.Builder().commonName("bp.zicotv.cc").addSubjectAlternativeName("bp.zicotv.cc").build();
+    HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
+    HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
+    try (MockWebServer server = new MockWebServer()) {
+      server.useHttps(serverTls.sslSocketFactory(), false);
+      server.setDispatcher(new Dispatcher() {
+        @Override public MockResponse dispatch(RecordedRequest request) { return new MockResponse().setResponseCode(503); }
+      });
+      server.start();
+      NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
+      Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);
+      OkHttpClient oldSystem = (OkHttpClient) field.get(system), oldSecure = (OkHttpClient) field.get(secure);
+      DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
+      field.set(system, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("Hosting no disponible"); }).build());
+      field.set(secure, new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
+          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
+          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder().url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build());
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
+      String source = "https://bp.zicotv.cc/api/player/4";
+      try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
+          .putExtra("page_url", source).putExtra("title", "Prueba alternativa web"))) {
+        AtomicBoolean opened = new AtomicBoolean();
+        long deadline = SystemClock.elapsedRealtime() + 20000;
+        while (!opened.get() && SystemClock.elapsedRealtime() < deadline) {
+          scenario.onActivity(activity -> {
+            try {
+              Field browser = NativePlayerActivity.class.getDeclaredField("browser"); browser.setAccessible(true);
+              android.webkit.WebView view = (android.webkit.WebView) browser.get(activity);
+              if (view == null || view.getOriginalUrl() == null) return;
+              assertEquals(BrowserPlayback.channelPage(source), view.getOriginalUrl());
+              assertEquals(android.view.View.VISIBLE, view.getVisibility());
+              assertFalse(view.getSettings().getAllowFileAccess());
+              assertFalse(view.getSettings().getAllowContentAccess());
+              assertTrue(view.getSettings().getUserAgentString().contains("Android"));
+              view.getSettings().setBlockNetworkLoads(true); view.stopLoading();
+              opened.set(true);
+            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+          });
+          SystemClock.sleep(100);
+        }
+        assertTrue("Unavailable native and hosting routes must open the integrated web player", opened.get());
+        assertTrue("The native provider route should be attempted before the web alternative", server.getRequestCount() > 0);
+      } finally { field.set(system, oldSystem); field.set(secure, oldSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
+    }
+  }
+
   @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false, true); }
   @Test public void televisionRemoteSelectsAndRenewsHostedSignal() throws Exception {
     org.junit.Assume.assumeTrue((ApplicationProvider.getApplicationContext().getResources().getConfiguration().uiMode

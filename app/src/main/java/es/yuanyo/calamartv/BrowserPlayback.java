@@ -29,4 +29,16 @@ public final class BrowserPlayback {
       throw new AssertionError(impossible);
     }
   }
+
+  /** Stable public player/event address, resolved and renewed by the same JavaScript as the web. */
+  public static String channelPage(String address) {
+    if (!VideoResolver.renewablePage(address) && VideoResolver.eventApi(address) == null)
+      throw new IllegalArgumentException("Página de canal no compatible");
+    try {
+      return "https://djyuanyo.github.io/Calamar-TV/direct-player.html#"
+          + URLEncoder.encode(address, "UTF-8").replace("+", "%20");
+    } catch (java.io.UnsupportedEncodingException impossible) {
+      throw new AssertionError(impossible);
+    }
+  }
 }

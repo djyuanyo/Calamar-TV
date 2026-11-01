@@ -549,7 +549,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     castPlayback = false;
     if (progressEntry != null) { handler.removeCallbacks(progressTick); handler.postDelayed(progressTick, 10000); }
-    if (directUrl != null && webMode) openDirectWeb();
+    if (zicoPage() && webMode) openChannelWeb();
+    else if (directUrl != null && webMode) openDirectWeb();
     else if (directUrl != null) playDirect();
     else if (pageUrl != null) resolveFresh();
   }
@@ -729,7 +730,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (tryHosting() || (zicoPage() && switchChannelSource())) {
+                  } else if (tryChannelWeb() || tryHosting() || (zicoPage() && switchChannelSource())) {
                     return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
@@ -994,7 +995,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private boolean tryNextZicoSource() {
-    return zicoPage() && (tryHosting() || switchChannelSource());
+    return zicoPage() && (tryChannelWeb() || tryHosting() || switchChannelSource());
+  }
+
+  private boolean tryChannelWeb() {
+    if (!zicoPage() || !hostingUnavailable || webMode
+        || (!hostingSourceId.isEmpty() && !HostingPlayback.AUTOMATIC.equals(hostingSourceId))) return false;
+    openChannelWeb();
+    return true;
   }
 
   /** One hosting attempt per page; renewals continue through the selected route. */
@@ -1298,6 +1306,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       actions.add(() -> selectChannelAddress(address, true));
     }
     if (zicoPage()) {
+      if (webMode) checked = names.size();
+      names.add("Reproductor web de Calamar");
+      actions.add(this::openChannelWeb);
+      names.add("Reproductor nativo");
+      actions.add(() -> {
+        hostingUnavailable = false; hostingSourceId = ""; automaticAttempts = 0;
+        generation++; resolving = false; webMode = false; clearWeb(); resolveFresh();
+      });
       for (HostingPlayback.Option option : hostingOptions) {
         if (hostingPlayback && option.id.equals(hostingSourceId)) checked = names.size();
         names.add(option.name);
@@ -1452,6 +1468,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           "El modo web admite enlaces HLS (.m3u8) por HTTPS. Usa Modo nativo para esta fuente.");
       return;
     }
+    openBrowserPlayer(BrowserPlayback.page(address));
+  }
+
+  private void openChannelWeb() {
+    if (!active || !zicoPage()) return;
+    hostingPlayback = false;
+    openBrowserPlayer(BrowserPlayback.channelPage(pageUrl));
+  }
+
+  /** Ordinary WebView: no user-agent spoofing, certificate overrides or native media interception. */
+  private void openBrowserPlayer(String playerPage) {
+    setFullscreen(false); // Keep Fuentes accessible above the WebView, including with the TV remote.
     generation++;
     resolving = false;
     diagnosing = false;
@@ -1461,7 +1489,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     clearWeb();
     webMode = true;
     playerView.setVisibility(View.GONE);
-    browser = new WebView(this);
+    try { browser = new WebView(this); }
+    catch (RuntimeException unavailable) {
+      webMode = false;
+      problem("No se pudo iniciar el reproductor web. Actualiza Android System WebView o elige Reproductor nativo en Fuentes.");
+      return;
+    }
     browser.getSettings().setJavaScriptEnabled(true);
     browser.getSettings().setDomStorageEnabled(true);
     browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
@@ -1480,8 +1513,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           public void onPageFinished(WebView view, String url) {
             if (active && webMode && generation == request && browser == view)
               status.setText(
-                  "Reproductor web · Si no empieza, pulsa Reproducir. Atrás sale de pantalla"
-                      + " completa.");
+                  "Reproductor web de Calamar · Si no empieza, pulsa Reproducir.");
           }
 
           @Override
@@ -1496,7 +1528,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText("Abriendo el reproductor web integrado…");
-    browser.loadUrl(BrowserPlayback.page(address));
+    browser.loadUrl(playerPage);
     browser.requestFocus();
   }
 

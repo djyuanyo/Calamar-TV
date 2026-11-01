@@ -10,6 +10,13 @@ test('preserves signed URL including percent escapes, plus and ampersand', () =>
   assert.equal(readSource('#%ZZ'), null);
 });
 
+test('integrated player accepts stable public channel/event pages, rejects unrelated pages', () => {
+  for (const url of ['https://bp.zicotv.cc/api/player/4','https://bp.zicotv.cc/events/98019'])
+    assert.equal(readSource('#' + encodeURIComponent(url)), url);
+  for (const url of ['https://zicotv.cc.evil.test/api/player/4','https://bp.zicotv.cc/admin','https://u:p@bp.zicotv.cc/api/player/4'])
+    assert.equal(readSource('#' + encodeURIComponent(url)), null);
+});
+
 function fixture(url) {
   const instances = [];
   class Hls {

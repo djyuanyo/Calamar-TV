@@ -1,24 +1,31 @@
 import { streamExpiry, explainStreamError } from './catalog.js';
+import { renewablePage } from './catalog.js';
+import { mountRenewable } from './renewable-player.js';
+import { zicoEventApi, expandEventSources } from './event-sources.js';
 
 /** The signed URL stays byte-for-byte intact and is never sent to the hosting server. */
 export function readSource(fragment) {
   try {
     const address = decodeURIComponent(fragment.replace(/^#/, ''));
     const url = new URL(address);
-    return url.protocol === 'https:' && !url.username && !url.password && /\.m3u8$/i.test(url.pathname)
+    return url.protocol === 'https:' && !url.username && !url.password
+      && (/\.m3u8$/i.test(url.pathname) || renewablePage(address) || zicoEventApi(address))
       ? address : null;
   } catch {
     return null;
   }
 }
 
-export function mount({ video, status, play, retry, fragment, Hls }) {
+export function mount({ video, status, play, retry, fragment, Hls, fetcher = globalThis.fetch }) {
   const address = readSource(fragment);
   let hls = null;
   let generation = 0;
   let failed = false;
+  let renewable = null, lookup = null;
   const stop = () => {
     generation++;
+    lookup?.abort(); lookup = null;
+    renewable?.(); renewable = null;
     video.onerror = null;
     video.onplaying = null;
     if (hls) hls.destroy();
@@ -40,6 +47,30 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
       return;
     }
     const request = generation;
+    if (renewablePage(address) || zicoEventApi(address)) {
+      status.textContent = 'Conectando con la emisión…';
+      const attach = page => {
+        if (request !== generation) return;
+        renewable = mountRenewable({ page, video, Hls, fetcher,
+          onStatus: message => { if (request === generation) status.textContent = message || 'En directo'; },
+          onFallback: () => { if (request === generation) status.textContent = 'Este dispositivo no admite vídeo HLS. Actualiza Android System WebView.'; },
+        });
+      };
+      if (renewablePage(address)) attach(address);
+      else {
+        const controller = lookup = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        void expandEventSources([address], { fetcher, signal: controller.signal }).then(rows => {
+          if (request !== generation) return;
+          const source = rows.find(row => !row.error && renewablePage(row.url));
+          if (source) attach(source.url);
+          else { failed = true; status.textContent = rows[0]?.error || 'El evento no publica una señal compatible. Pulsa Reintentar.'; }
+        }).catch(() => {
+          if (request === generation) { failed = true; status.textContent = 'No se pudo consultar el evento. Pulsa Reintentar.'; }
+        }).finally(() => { clearTimeout(timeout); if (lookup === controller) lookup = null; });
+      }
+      return;
+    }
     const fail = (data) => {
       if (request !== generation || failed) return;
       failed = true;
