@@ -127,7 +127,8 @@ public class HostingPlaybackTest {
       NetworkTransport secureNetwork = NetworkTransport.get(DnsProvider.GOOGLE);
       OkHttpClient originalSecure = (OkHttpClient) f.get(secureNetwork);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
-      OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
+      OkHttpClient local = new OkHttpClient.Builder().readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+          .sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
           .dns(host -> { if (rootUnavailable && "calamarmenciano.com".equals(host)) throw new java.net.UnknownHostException("Root unavailable"); return Collections.singletonList(InetAddress.getByName("127.0.0.1")); })
           .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
               .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
