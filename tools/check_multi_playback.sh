@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -eu
+# AOSP first-use fullscreen teaching overlay owns focus until acknowledged.
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb shell settings put system screen_off_timeout 2147483647
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
