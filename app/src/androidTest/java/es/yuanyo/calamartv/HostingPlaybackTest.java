@@ -60,13 +60,24 @@ public class HostingPlaybackTest {
             Field status = NativePlayerActivity.class.getDeclaredField("status"); status.setAccessible(true);
             lastStatus.set(((android.widget.TextView) status.get(activity)).getText().toString());
             assertEquals("No retry may contact the upstream provider", 0, direct.get());
-            finished.set(lastStatus.get().contains("No se pudo conectar con esta fuente"));
+            if (lastStatus.get().contains("No se pudo conectar con esta fuente")) {
+              // Menu lookups run independently and may finish after a previous activity closes.
+              // Check this player's retry state instead of counting unrelated HTTP requests.
+              Field attempts = NativePlayerActivity.class.getDeclaredField("automaticAttempts"); attempts.setAccessible(true);
+              assertEquals("Exactly three automatic retries must precede the terminal error", 3, attempts.getInt(activity));
+              if (android.os.Build.VERSION.SDK_INT >= 29) {
+                Field handler = NativePlayerActivity.class.getDeclaredField("handler"); handler.setAccessible(true);
+                Field retry = NativePlayerActivity.class.getDeclaredField("renewalRequest"); retry.setAccessible(true);
+                assertFalse("No automatic retry may remain after the terminal error",
+                    ((android.os.Handler) handler.get(activity)).hasCallbacks((Runnable) retry.get(activity)));
+              }
+              finished.set(true);
+            }
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
         SystemClock.sleep(100);
       }
       assertTrue("Hosting retries must finish with a visible connection error; status=" + lastStatus.get() + ", hosted=" + hosted.get(), finished.get());
-      assertTrue("Hosting retries must stay bounded", hosted.get() <= 20);
       assertTrue("The configured hosting was never requested", hosted.get() >= 3);
       assertEquals("The device must never contact the upstream provider", 0, direct.get());
     } finally {
