@@ -108,15 +108,7 @@ public class MultiPlayerActivity extends Activity {
       stopPlayer(); resolved = result;
       boolean hosted = result.hosted();
       NetworkTransport network = hosted ? NetworkTransport.get(DnsProvider.SYSTEM) : NetworkTransport.get(MultiPlayerActivity.this);
-      DefaultRenderersFactory renderers = new DefaultRenderersFactory(MultiPlayerActivity.this).setEnableDecoderFallback(true);
-      if (tiles.indexOf(this) >= 2) renderers.setMediaCodecSelector((mime, secure, tunneling) -> {
-        List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> codecs = new ArrayList<>(androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling));
-        // Some TVs provide only two concurrent hardware video decoders. Keep those players running
-        // and prefer software for additional windows, retaining every compatible fallback.
-        if (mime.startsWith("video/")) codecs.sort(java.util.Comparator.comparing(codec -> !codec.softwareOnly));
-        return codecs;
-      });
-      player = new ExoPlayer.Builder(MultiPlayerActivity.this).setRenderersFactory(renderers)
+      player = new ExoPlayer.Builder(MultiPlayerActivity.this).setRenderersFactory(new DefaultRenderersFactory(MultiPlayerActivity.this).setEnableDecoderFallback(true))
           .setLoadControl(new DefaultLoadControl.Builder().setBufferDurationsMs(3000, 15000, 750, 1500).build())
           .setMediaSourceFactory(new DefaultMediaSourceFactory(MultiPlayerActivity.this).setDataSourceFactory(
               network.mediaFactory(result.referer, hosted, result.url, !hosted && result.page != null && !result.url.startsWith(Library.LULU_ENDPOINT))))
@@ -139,7 +131,6 @@ public class MultiPlayerActivity extends Activity {
       if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
       if ("ts".equals(UserChannels.kind(result.url)) || CastSource.needsBridge(result.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
       instance.setMediaItem(item.build()); instance.setVolume(audible == this ? 1f : 0f);
-      instance.setTrackSelectionParameters(instance.getTrackSelectionParameters().buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, audible != this).build());
       if (initialPosition > 0 || position > 0) { instance.seekTo(initialPosition > 0 ? initialPosition : position); initialPosition = 0; }
       instance.prepare(); instance.play();
     }
@@ -224,7 +215,8 @@ public class MultiPlayerActivity extends Activity {
       }
       rows.addView(row, new LinearLayout.LayoutParams(-1, 0, 1));
     }
-    if (MultiScreen.landscape(tiles.size()) && getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    if ((getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK) != android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        && MultiScreen.landscape(tiles.size()) && getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     addButton.setEnabled(tiles.size() < MultiScreen.MAX); addButton.setText("Añadir evento (" + tiles.size() + "/" + MultiScreen.MAX + ")");
     listen(audible); showControls(controls);
   }
@@ -232,10 +224,7 @@ public class MultiPlayerActivity extends Activity {
     audible = chosen;
     for (Tile tile : tiles) {
       boolean selected = tile == chosen;
-      if (tile.player != null) {
-        tile.player.setVolume(selected ? 1f : 0f);
-        tile.player.setTrackSelectionParameters(tile.player.getTrackSelectionParameters().buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !selected).build());
-      }
+      if (tile.player != null) tile.player.setVolume(selected ? 1f : 0f);
       tile.name.setText((selected ? "🔊 " : "") + tile.title); tile.sound.setText(selected ? "🔊" : "🔇");
       tile.sound.setBackground(Ui.shape(this, selected ? Ui.ACC : 0xa6000000, 26, 2, selected ? Ui.ACC : 0xb3ffffff));
     }
