@@ -1,288 +1,250 @@
 package es.yuanyo.calamartv;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.view.Window;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
-import android.view.WindowManager;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
-import androidx.media3.exoplayer.ExoPlayer;
+import android.view.*;
+import android.widget.*;
+import androidx.media3.common.*;
+import androidx.media3.exoplayer.*;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import androidx.media3.ui.AspectRatioFrameLayout;
+import java.util.*;
+import java.util.concurrent.*;
 
-/**
- * Multi-screen: several channels or events at once, as on the web. Two share the screen top and
- * bottom; three or more make a grid on a horizontal screen. Only the tile with sound plays audio. A tap
- * shows the buttons (exit, and a sound button per tile) for a few seconds; only a sound button moves
- * the sound, or on TV the remote's focus. Each tile tries its links in order.
- */
-// Same Media3 player settings (resize mode, buffering indicator) as NativePlayerActivity.
+/** Four independent native players. Adding a tile never restarts the other tiles. */
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
-public final class MultiPlayerActivity extends Activity {
-  /** Names of the videos, and for each one its links joined by line breaks. */
+public class MultiPlayerActivity extends Activity {
   static final String TITLES = "titles", STREAMS = "streams";
-
   private final List<Tile> tiles = new ArrayList<>();
   private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-  private final Runnable hide = () -> showControls(false);
-  private LinearLayout bar;
-  private boolean controls;
-  private int sound;
+  private final ExecutorService worker = Executors.newFixedThreadPool(MultiScreen.MAX);
+  private final Runnable hide = this::hideIfIdle;
+  private LinearLayout rows, bar;
+  private Button addButton;
+  private Tile audible;
+  private boolean controls, active;
+  private Dialog picker;
 
   private final class Tile {
-    final String title;
+    final String title, target, channel;
     final List<String> urls;
     final FrameLayout frame;
     final PlayerView view;
-    final TextView name, status, soundButton, viewersBadge;
+    final TextView name, status, viewersBadge;
+    final Button sound, remove;
     ExoPlayer player;
     AudienceSession audience;
-    long viewers=-1;
-    int next;
+    MultiSource.Result resolved;
+    String endpoint = Library.PLAYER_ENDPOINT, signal = "";
+    int sourceIndex, attempt, generation;
+    boolean loading;
+    long initialPosition;
+    final Runnable refresh = () -> resolve(true);
+    final Runnable stalled = () -> fail(new java.net.SocketTimeoutException("La ventana no ha recibido vídeo"));
 
-    Tile(String title, List<String> urls) {
-      this.title = title;
-      this.urls = urls;
-      frame = new FrameLayout(MultiPlayerActivity.this);
-      frame.setBackgroundColor(Color.BLACK);
-      frame.setFocusable(true);
-      frame.setClickable(true);
-      frame.setContentDescription(title + ". Pulsa para oír este vídeo");
-      frame.setForeground(Ui.focusOutline(MultiPlayerActivity.this, 0));
-      view = new PlayerView(MultiPlayerActivity.this);
-      view.setUseController(false);
-      view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-      view.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
-      view.setFocusable(false);
-      view.setClickable(false);
-      frame.addView(view, new FrameLayout.LayoutParams(-1, -1));
-      name = new TextView(MultiPlayerActivity.this);
-      name.setTextColor(Color.WHITE);
-      name.setTextSize(12);
-      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-      name.setSingleLine(true);
-      name.setPadding(Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 3), Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 3));
-      name.setBackground(Ui.shape(MultiPlayerActivity.this, 0x99000000, 6, 0, 0));
-      FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
-      np.setMargins(Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 8), Ui.dp(MultiPlayerActivity.this, 8), 0);
-      frame.addView(name, np);
-      viewersBadge=Ui.audienceBadge(MultiPlayerActivity.this,11);viewersBadge.setVisibility(View.GONE);
-      FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);vp.setMargins(0,Ui.dp(MultiPlayerActivity.this,8),Ui.dp(MultiPlayerActivity.this,8),0);frame.addView(viewersBadge,vp);
-      status = new TextView(MultiPlayerActivity.this);
-      status.setTextColor(Color.WHITE);
-      status.setTextSize(13);
-      status.setGravity(Gravity.CENTER);
-      frame.addView(status, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-      soundButton = new TextView(MultiPlayerActivity.this);
-      soundButton.setGravity(Gravity.CENTER);
-      soundButton.setTextSize(22);
-      soundButton.setFocusable(true);
-      soundButton.setClickable(true);
-      soundButton.setVisibility(View.GONE);
-      int size = Ui.dp(MultiPlayerActivity.this, 52);
-      FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(size, size, Gravity.BOTTOM | Gravity.END);
-      sp.setMargins(0, 0, Ui.dp(MultiPlayerActivity.this, 10), Ui.dp(MultiPlayerActivity.this, 10));
-      frame.addView(soundButton, sp);
-      final int index = tiles.size();
-      soundButton.setContentDescription("Oír " + title);
-      soundButton.setOnClickListener(v -> { listen(index); showControls(true); });
-      // A tap shows or hides the buttons; it never moves the sound (the sound button does).
+    Tile(String title, List<String> urls, String target, String channel) {
+      this.title = title; this.urls = urls; this.target = target; this.channel = channel;
+      frame = new FrameLayout(MultiPlayerActivity.this); frame.setBackgroundColor(Color.BLACK); frame.setFocusable(true); frame.setClickable(true);
+      frame.setContentDescription(title); frame.setForeground(Ui.focusOutline(MultiPlayerActivity.this, 0));
+      view = new PlayerView(MultiPlayerActivity.this); view.setUseController(false); view.setFocusable(false); view.setClickable(false);
+      view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT); view.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING); frame.addView(view, new FrameLayout.LayoutParams(-1, -1));
+      name = new TextView(MultiPlayerActivity.this); name.setTextSize(12); name.setTextColor(Color.WHITE); name.setSingleLine(true);
+      name.setPadding(dp(8), dp(3), dp(8), dp(3)); name.setText(title); name.setBackground(Ui.shape(MultiPlayerActivity.this, 0x99000000, 6, 0, 0));
+      FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START); np.setMargins(dp(8), dp(8), dp(48), 0); frame.addView(name, np);
+      viewersBadge = Ui.audienceBadge(MultiPlayerActivity.this, 11); viewersBadge.setVisibility(View.GONE);
+      FrameLayout.LayoutParams vp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END); vp.setMargins(0, dp(8), dp(54), 0); frame.addView(viewersBadge, vp);
+      status = new TextView(MultiPlayerActivity.this); status.setTextColor(Color.WHITE); status.setGravity(Gravity.CENTER); status.setTextSize(13); frame.addView(status, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+      sound = Ui.pill(MultiPlayerActivity.this, "🔇", Ui.Kind.SURFACE, true); sound.setContentDescription("Oír " + title);
+      sound.setOnClickListener(v -> { listen(this); showControls(true); });
+      FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(52), dp(52), Gravity.BOTTOM | Gravity.END); sp.setMargins(0, 0, dp(10), dp(10)); frame.addView(sound, sp);
+      remove = Ui.pill(MultiPlayerActivity.this, "✕", Ui.Kind.SURFACE, true); remove.setContentDescription("Quitar " + title);
+      remove.setOnClickListener(v -> removeTile(this));
+      FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP | Gravity.END); rp.setMargins(0, dp(8), dp(8), 0); frame.addView(remove, rp);
       frame.setOnClickListener(v -> showControls(!controls));
-      // On TV there is no touch: moving to a tile with the remote gives it the sound.
-      frame.setOnFocusChangeListener((v, focused) -> { if (focused && !v.isInTouchMode()) listen(index); });
+      frame.setOnFocusChangeListener((v, focused) -> { if (focused && !v.isInTouchMode()) { listen(this); showControls(true); } });
+      if (AudienceModel.validTarget(target)) audience = createAudience(target, channel, count -> {
+        viewersBadge.setVisibility(View.VISIBLE); viewersBadge.setText(count < 0 ? "—" : String.valueOf(count));
+        viewersBadge.setContentDescription(count < 0 ? "Espectadores no disponibles" : count + " personas viendo");
+      });
     }
 
-    void start() {
-      release();
-      if (next >= urls.size()) {
-        status.setText("No disponible");
-        return;
-      }
-      String url = urls.get(next++);
-      status.setText("Conectando…");
-      player = new ExoPlayer.Builder(MultiPlayerActivity.this)
-          .setMediaSourceFactory(new DefaultMediaSourceFactory(MultiPlayerActivity.this)
-              .setDataSourceFactory(NetworkTransport.get(MultiPlayerActivity.this).mediaFactory(null, false, url)))
-          .build();
-      view.setPlayer(player);
-      final ExoPlayer instance = player;
-      if(audience!=null)audience.open();
-      player.addListener(new Player.Listener() {
-        @Override public void onIsPlayingChanged(boolean playing){if(instance==player&&audience!=null)audience.watching(playing);}
-        @Override public void onPlaybackStateChanged(int state) {
-          if (instance == player && state == Player.STATE_READY) status.setText("");
-        }
-
-        @Override public void onPlayerError(PlaybackException error) {
-          if (instance == player) start(); // Next link of this channel, if any.
+    void start() { if (resolved != null && player == null) play(resolved); else resolve(false); }
+    void resolve(boolean renewal) {
+      if (!active || loading) return;
+      if (sourceIndex >= urls.size()) { status.setText("No disponible. Quita esta pantalla o elige otro evento."); return; }
+      loading = true; final int request = ++generation;
+      final String page = renewal && resolved != null && resolved.page != null ? resolved.page : urls.get(sourceIndex);
+      final String base = endpoint, selected = signal; final int round = attempt;
+      if (player == null || !player.isPlaying()) status.setText("Conectando…");
+      worker.execute(() -> {
+        try {
+          MultiSource.Result result = MultiSource.resolve(page, base, selected, round,
+              NetworkTransport.get(DnsProvider.SYSTEM), NetworkTransport.get(MultiPlayerActivity.this));
+          handler.post(() -> {
+            if (!active || generation != request || !tiles.contains(this)) return;
+            loading = false;
+            if (result.hosted()) try { endpoint = HostingPlayback.endpoint(result.url); } catch (java.io.IOException invalid) { fail(invalid); return; }
+            if (player != null && player.isPlaying() && resolved != null && resolved.url.equals(result.url)) scheduleRenewal(result);
+            else play(result);
+          });
+        } catch (Exception error) {
+          handler.post(() -> {
+            if (!active || generation != request || !tiles.contains(this)) return;
+            loading = false;
+            if (player != null && player.isPlaying()) { handler.postDelayed(refresh, 15000); return; }
+            fail(error);
+          });
         }
       });
-      MediaItem.Builder item = new MediaItem.Builder().setUri(url);
-      String path = Uri.parse(url).getPath();
-      if (path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-      if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-      if ("ts".equals(UserChannels.kind(url)) || CastSource.needsBridge(url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
-      player.setMediaItem(item.build());
-      player.setVolume(tiles.indexOf(this) == sound ? 1f : 0f);
-      player.prepare();
-      player.play();
     }
-
-    void release() {
-      if(audience!=null)audience.close();
-      if (player != null) {
-        view.setPlayer(null);
-        player.release();
-        player = null;
-      }
+    void play(MultiSource.Result result) {
+      long position = player != null && !player.isCurrentMediaItemLive() ? player.getCurrentPosition() : 0;
+      stopPlayer(); resolved = result;
+      boolean hosted = result.hosted();
+      NetworkTransport network = hosted ? NetworkTransport.get(DnsProvider.SYSTEM) : NetworkTransport.get(MultiPlayerActivity.this);
+      player = new ExoPlayer.Builder(MultiPlayerActivity.this).setRenderersFactory(new DefaultRenderersFactory(MultiPlayerActivity.this).setEnableDecoderFallback(true))
+          .setLoadControl(new DefaultLoadControl.Builder().setBufferDurationsMs(3000, 15000, 750, 1500).build())
+          .setMediaSourceFactory(new DefaultMediaSourceFactory(MultiPlayerActivity.this).setDataSourceFactory(
+              network.mediaFactory(result.referer, hosted, result.url, !hosted && result.page != null && !result.url.startsWith(Library.LULU_ENDPOINT))))
+          .build();
+      final ExoPlayer instance = player; view.setPlayer(instance);
+      if (audience != null) audience.open();
+      instance.addListener(new Player.Listener() {
+        @Override public void onIsPlayingChanged(boolean playing) { if (instance == player && audience != null) audience.watching(playing); }
+        @Override public void onPlaybackStateChanged(int state) {
+          if (instance != player) return;
+          handler.removeCallbacks(stalled);
+          if (state == Player.STATE_READY) { status.setText(""); attempt = 0; scheduleRenewal(result); }
+          else if (state == Player.STATE_BUFFERING) handler.postDelayed(stalled, hosted ? 60000 : 30000);
+        }
+        @Override public void onPlayerError(PlaybackException error) { if (instance == player) fail(error); }
+      });
+      MediaItem.Builder item = new MediaItem.Builder().setUri(result.url);
+      String path = Uri.parse(result.url).getPath();
+      if (hosted || result.url.startsWith(Library.LULU_ENDPOINT) || path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+      if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+      if ("ts".equals(UserChannels.kind(result.url)) || CastSource.needsBridge(result.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
+      instance.setMediaItem(item.build()); instance.setVolume(audible == this ? 1f : 0f);
+      if (initialPosition > 0 || position > 0) { instance.seekTo(initialPosition > 0 ? initialPosition : position); initialPosition = 0; }
+      instance.prepare(); instance.play();
+    }
+    void scheduleRenewal(MultiSource.Result result) {
+      handler.removeCallbacks(refresh); long delay = result.renewalDelay(); if (delay >= 0) handler.postDelayed(refresh, delay);
+    }
+    void fail(Throwable error) {
+      if (!active || !tiles.contains(this)) return;
+      handler.removeCallbacks(stalled); handler.removeCallbacks(refresh);
+      boolean renewable = resolved != null && resolved.renewable() || sourceIndex < urls.size() && UserChannels.isPage(urls.get(sourceIndex));
+      if (resolved != null && resolved.hosted() && Library.PLAYER_ENDPOINT.equals(endpoint) && HostingPlayback.networkUnavailable(error)) endpoint = HostingPlayback.ALTERNATE_ENDPOINT;
+      if (player != null && !player.isCurrentMediaItemLive()) initialPosition = player.getCurrentPosition();
+      stopPlayer();
+      if (renewable && ++attempt <= 3) { status.setText("Reconectando…"); handler.postDelayed(refresh, 1000); }
+      else { sourceIndex++; attempt = 0; resolved = null; handler.postDelayed(refresh, 500); }
+    }
+    void stopPlayer() {
+      handler.removeCallbacks(stalled); handler.removeCallbacks(refresh);
+      if (player != null) { view.setPlayer(null); player.release(); player = null; }
+    }
+    void stop() {
+      generation++; loading = false; stopPlayer(); if (audience != null) audience.close();
     }
   }
 
-  @Override
-  protected void onCreate(Bundle state) {
+  AudienceSession createAudience(String target, String channel, AudienceSession.Count count) { return new AudienceSession(this, target, channel, count); }
+
+  @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
-    ArrayList<String> titles = getIntent().getStringArrayListExtra(TITLES);
-    ArrayList<String> streams = getIntent().getStringArrayListExtra(STREAMS);
-    if (titles == null || streams == null || titles.isEmpty() || titles.size() != streams.size()) {
-      finish();
-      return;
-    }
-    int count = Math.min(titles.size(), MultiScreen.MAX);
+    ArrayList<String> titles = getIntent().getStringArrayListExtra(TITLES), streams = getIntent().getStringArrayListExtra(STREAMS);
+    if (titles == null || streams == null || titles.isEmpty() || titles.size() != streams.size()) { finish(); return; }
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    if (MultiScreen.landscape(count)) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-    for (int i = 0; i < count; i++) tiles.add(new Tile(titles.get(i), AppSources.forAndroid(Arrays.asList(streams.get(i).split("\n")))));
-    ArrayList<String> targets=getIntent().getStringArrayListExtra("audience_targets"),channels=getIntent().getStringArrayListExtra("audience_channels");
-    for(int i=0;i<tiles.size();i++)if(targets!=null&&i<targets.size()&&AudienceModel.validTarget(targets.get(i))){
-      final Tile tile=tiles.get(i);String channel=channels!=null&&i<channels.size()?channels.get(i):null;
-      tile.audience=new AudienceSession(this,targets.get(i),channel,viewers -> {tile.viewers=viewers;tile.viewersBadge.setVisibility(View.VISIBLE);tile.viewersBadge.setText(viewers<0?"—":String.valueOf(viewers));tile.viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers+" personas viendo");});
+    FrameLayout screen = new FrameLayout(this); rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL); rows.setBackgroundColor(Color.BLACK); screen.addView(rows, new FrameLayout.LayoutParams(-1, -1));
+    bar = new LinearLayout(this); bar.setGravity(Gravity.CENTER_VERTICAL); bar.setPadding(dp(8), dp(8), dp(8), dp(14));
+    bar.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xd9000000, 0x00000000}));
+    Button exit = Ui.pill(this, "✕ Salir", Ui.Kind.SURFACE, true); exit.setOnClickListener(v -> finish()); bar.addView(exit);
+    addButton = Ui.pill(this, "Añadir evento", Ui.Kind.SURFACE, true); addButton.setContentDescription("Añadir evento a multipantalla"); addButton.setOnClickListener(v -> chooseEvent()); bar.addView(addButton);
+    screen.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP)); setContentView(screen);
+    ArrayList<String> targets = getIntent().getStringArrayListExtra("audience_targets"), channels = getIntent().getStringArrayListExtra("audience_channels");
+    for (int i = 0; i < Math.min(titles.size(), MultiScreen.MAX); i++) append(titles.get(i), Arrays.asList(streams.get(i).split("\n")), targets != null && i < targets.size() ? targets.get(i) : "", channels != null && i < channels.size() ? channels.get(i) : "");
+    Tile first = tiles.get(0); first.initialPosition = getIntent().getLongExtra("initial_position", 0);
+    String initialPage = getIntent().getStringExtra("initial_page");
+    if (initialPage != null && first.urls.remove(initialPage)) first.urls.add(0, initialPage);
+    first.endpoint = getIntent().getStringExtra("initial_endpoint"); if (first.endpoint == null || !HostingPlayback.isRelay(first.endpoint)) first.endpoint = Library.PLAYER_ENDPOINT;
+    first.signal = getIntent().getStringExtra("initial_signal"); if (first.signal == null) first.signal = "";
+    String initial = getIntent().getStringExtra("initial_media");
+    if (initial != null && !initial.isEmpty() && !first.urls.isEmpty() && (VideoResolver.isMedia(initial) || HostingPlayback.isRelay(initial) || initial.startsWith(Library.LULU_ENDPOINT))) {
+      long expiry = VideoResolver.expiryMillis(initial);
+      if (expiry < 0 || expiry > System.currentTimeMillis()) first.resolved = new MultiSource.Result(initial, UserChannels.isPage(first.urls.get(0)) ? first.urls.get(0) : null, getIntent().getStringExtra("initial_referer"));
     }
-    int[] grid = MultiScreen.grid(count);
-    LinearLayout rows = new LinearLayout(this);
-    rows.setOrientation(LinearLayout.VERTICAL);
-    rows.setBackgroundColor(Color.BLACK);
-    int gap = Ui.dp(this, 1);
-    for (int r = 0; r < grid[0]; r++) {
+    layoutTiles(); immersive(); showControls(true);
+  }
+  private void append(String title, List<String> streams, String target, String channel) {
+    if (tiles.size() >= MultiScreen.MAX) return;
+    if (target != null && !target.isEmpty()) for (Tile tile : tiles) if (target.equals(tile.target)) return;
+    Tile tile = new Tile(title, AppSources.forAndroid(streams), target, channel); tiles.add(tile); if (audible == null) audible = tile;
+  }
+  private void chooseEvent() {
+    if (tiles.size() >= MultiScreen.MAX) return;
+    List<String> selected = new ArrayList<>(); for (Tile tile : tiles) if (tile.target != null) selected.add(tile.target);
+    picker = MultiEventPicker.show(this, selected, event -> {
+      int before = tiles.size(); append(event.name, event.streams, AudienceModel.target(true, event.id), event.channelId);
+      if (tiles.size() > before) { layoutTiles(); tiles.get(tiles.size() - 1).start(); }
+      showControls(true);
+    });
+    picker.setOnDismissListener(d -> showControls(true));
+  }
+  private void removeTile(Tile tile) {
+    if (tiles.size() < 2) return;
+    tile.stop(); tiles.remove(tile); if (audible == tile) audible = tiles.get(0); layoutTiles(); listen(audible); showControls(true);
+  }
+  private void layoutTiles() {
+    // Detach all frames before moving them to new rows; their players keep playing.
+    for (Tile tile : tiles) if (tile.frame.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) tile.frame.getParent()).removeView(tile.frame);
+    rows.removeAllViews(); int[] shape = MultiScreen.grid(tiles.size());
+    for (int r = 0; r < shape[0]; r++) {
       LinearLayout row = new LinearLayout(this);
-      for (int c = 0; c < grid[1]; c++) {
-        int index = r * grid[1] + c;
-        View cell = index < count ? tiles.get(index).frame : new View(this);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1);
-        lp.setMargins(gap, gap, gap, gap);
-        row.addView(cell, lp);
+      for (int c = 0; c < shape[1]; c++) {
+        int i = r * shape[1] + c; View cell = i < tiles.size() ? tiles.get(i).frame : new View(this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1); lp.setMargins(dp(1), dp(1), dp(1), dp(1)); row.addView(cell, lp);
       }
       rows.addView(row, new LinearLayout.LayoutParams(-1, 0, 1));
     }
-    FrameLayout screen = new FrameLayout(this);
-    screen.addView(rows, new FrameLayout.LayoutParams(-1, -1));
-    bar = new LinearLayout(this);
-    bar.setGravity(Gravity.CENTER_VERTICAL);
-    bar.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 18));
-    bar.setBackground(new android.graphics.drawable.GradientDrawable(
-        android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xd9000000, 0x00000000}));
-    android.widget.Button exit = Ui.pill(this, "✕ Salir", Ui.Kind.SURFACE, true);
-    exit.setOnClickListener(v -> finish());
-    bar.addView(exit, new LinearLayout.LayoutParams(-2, Ui.dp(this, 40)));
-    TextView hint = new TextView(this);
-    hint.setText("Pulsa 🔊 en un vídeo para oírlo");
-    hint.setTextColor(Ui.MUTED);
-    hint.setTextSize(13);
-    hint.setGravity(Gravity.CENTER);
-    bar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
-    bar.setVisibility(View.GONE);
-    screen.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
-    setContentView(screen);
-    immersive();
-    showSound();
+    if (MultiScreen.landscape(tiles.size())) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    addButton.setEnabled(tiles.size() < MultiScreen.MAX); addButton.setText("Añadir evento (" + tiles.size() + "/" + MultiScreen.MAX + ")");
+    listen(audible); showControls(controls);
   }
-
-  @Override
-  protected void onStart() {
-    super.onStart();
-    for (Tile tile : tiles) { tile.next = 0; tile.start(); }
-  }
-
-  @Override
-  protected void onStop() {
-    for (Tile tile : tiles) tile.release();
-    super.onStop();
-  }
-
-  @Override
-  public void onWindowFocusChanged(boolean hasFocus) {
-    super.onWindowFocusChanged(hasFocus);
-    if (hasFocus) immersive();
-  }
-
-  private void listen(int index) {
-    if (index == sound) return;
-    sound = index;
-    showSound();
-  }
-
-  private void showSound() {
-    for (int i = 0; i < tiles.size(); i++) {
-      Tile tile = tiles.get(i);
-      if (tile.player != null) tile.player.setVolume(i == sound ? 1f : 0f);
-      tile.name.setText((i == sound ? "🔊 " : "") + tile.title);
-      tile.name.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0x99000000, 6, 0, 0));
-      tile.name.setTextColor(i == sound ? Ui.BG : Color.WHITE);
-      tile.soundButton.setText(i == sound ? "🔊" : "🔇");
-      tile.soundButton.setBackground(Ui.shape(this, i == sound ? Ui.ACC : 0xa6000000, 26, 2, i == sound ? Ui.ACC : 0xb3ffffff));
+  private void listen(Tile chosen) {
+    audible = chosen;
+    for (Tile tile : tiles) {
+      boolean selected = tile == chosen;
+      if (tile.player != null) tile.player.setVolume(selected ? 1f : 0f);
+      tile.name.setText((selected ? "🔊 " : "") + tile.title); tile.sound.setText(selected ? "🔊" : "🔇");
+      tile.sound.setBackground(Ui.shape(this, selected ? Ui.ACC : 0xa6000000, 26, 2, selected ? Ui.ACC : 0xb3ffffff));
     }
   }
-
-  /** The exit bar and the sound buttons, for 4 seconds after a tap. */
-  private void showControls(boolean on) {
-    controls = on;
-    handler.removeCallbacks(hide);
-    bar.setVisibility(on ? View.VISIBLE : View.GONE);
+  private void hideIfIdle() {
+    boolean focused = bar.hasFocus(); for (Tile tile : tiles) focused |= tile.sound.hasFocus() || tile.remove.hasFocus();
+    if (!bar.isInTouchMode() && focused) handler.postDelayed(hide, 4000); else showControls(false);
+  }
+  private void showControls(boolean shown) {
+    controls = shown; handler.removeCallbacks(hide); bar.setVisibility(shown ? View.VISIBLE : View.GONE);
     int columns = MultiScreen.grid(tiles.size())[1];
-    for (int i = 0; i < tiles.size(); i++) {
-      Tile tile = tiles.get(i);
-      tile.soundButton.setVisibility(on ? View.VISIBLE : View.GONE);
-      // Names of the top row move below the bar while it is shown.
-      tile.name.setTranslationY(on && i < columns ? Ui.dp(this, 54) : 0);
-    }
-    if (on) handler.postDelayed(hide, 4000);
+    for (int i = 0; i < tiles.size(); i++) { Tile tile = tiles.get(i); tile.sound.setVisibility(shown ? View.VISIBLE : View.GONE); tile.remove.setVisibility(shown && tiles.size() > 1 ? View.VISIBLE : View.GONE); tile.name.setTranslationY(shown && i < columns ? dp(58) : 0); tile.remove.setTranslationY(shown && i < columns ? dp(58) : 0); tile.viewersBadge.setTranslationY(shown && i < columns ? dp(58) : 0); }
+    if (shown) handler.postDelayed(hide, 4000);
   }
-
-  @Override
-  protected void onDestroy() {
-    handler.removeCallbacks(hide);
-    super.onDestroy();
-  }
-
-  @SuppressWarnings("deprecation") // setSystemUiVisibility is the way before Android 11.
-  private void immersive() {
+  @Override protected void onStart() { super.onStart(); active = true; for (Tile tile : tiles) tile.start(); }
+  @Override protected void onStop() { active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
+  @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); worker.shutdownNow(); super.onDestroy(); }
+  @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused) immersive(); }
+  private int dp(float value) { return Ui.dp(this, value); }
+  @SuppressWarnings("deprecation") private void immersive() {
     Window window = getWindow();
-    if (Build.VERSION.SDK_INT >= 30) {
-      WindowInsetsController controller = window.getInsetsController();
-      if (controller == null) return;
-      controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-      controller.hide(WindowInsets.Type.systemBars());
-    } else {
-      window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-          | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN
-          | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-          | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
-    }
+    if (Build.VERSION.SDK_INT >= 30) { WindowInsetsController controller = window.getInsetsController(); if (controller != null) { controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE); controller.hide(WindowInsets.Type.systemBars()); } }
+    else window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
   }
 }

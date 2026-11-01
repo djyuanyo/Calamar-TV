@@ -1388,3 +1388,23 @@ body.gate-open { overflow: hidden; }
 .library-art-field small { color: var(--muted); }
 
 .channel-logo-preview { width: 128px; height: 128px; object-fit: contain; padding: 12px; border: 1px solid #ffffff26; border-radius: 12px; background: #ffffff0a; }
+
+/* Player event picker: the video continues while the list is open. */
+.multi-event-picker { width: min(560px, calc(100vw - 24px)); max-height: min(700px, calc(100dvh - 28px)); box-sizing: border-box; padding: 20px; border: 1px solid #ffffff26; border-radius: 18px; background: var(--bg, #101216); color: var(--fg, #fff); box-shadow: 0 20px 90px #000b; }
+.multi-event-picker::backdrop { background: #000a; }
+.multi-event-picker h2 { margin: 0 0 8px; }
+.multi-event-picker input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #ffffff40; border-radius: 10px; background: #ffffff0d; color: inherit; font-size: 16px; }
+.multi-event-list { max-height: 52dvh; overflow: auto; display: grid; gap: 8px; margin: 14px 0; }
+.multi-event-choice { display: grid; gap: 5px; width: 100%; padding: 14px; text-align: left; border: 1px solid #ffffff26; border-radius: 10px; background: #ffffff09; color: inherit; cursor: pointer; font: inherit; }
+.multi-event-choice small { color: var(--muted); }
+.multi-event-choice:disabled { opacity: .45; cursor: default; }
+.multi-event-choice:focus-visible { outline: 2px solid var(--accent); }
+.multi-remove { position: absolute; right: 8px; top: 8px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #ffffff70; background: #000a; color: #fff; cursor: pointer; z-index: 2; }
+.multi.idle .multi-remove { opacity: 0; pointer-events: none; }
+.multi:not(.idle) .top-row .multi-remove { top: 62px; }
+.multi:not(.idle) .multi-name { max-width: calc(100% - 60px); }
+@media (max-width: 600px) { .multi-bar { flex-wrap: wrap; gap: 6px; } .multi-hint { display: none; } .multi-bar .pill-btn { padding: 8px; font-size: 12px; } }
+@media (max-width: 600px) {
+  .multi-bar > button:last-child { font-size: 0; min-width: 40px; }
+  .multi-bar > button:last-child::before { content: '⛶'; font-size: 22px; }
+}

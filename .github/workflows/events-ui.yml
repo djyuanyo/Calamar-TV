@@ -1,9 +1,9 @@
 name: Calamar TV · Eventos en navegador
 on:
   push:
-    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_hosting_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_hosting_check.mjs', 'tools/browser_multi_check.mjs', '.github/workflows/events-ui.yml']
   pull_request:
-    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_hosting_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_hosting_check.mjs', 'tools/browser_multi_check.mjs', '.github/workflows/events-ui.yml']
 permissions:
   contents: read
 jobs:
@@ -33,3 +33,10 @@ jobs:
           CALAMAR_HLS: /tmp/calamar-ui/node_modules/hls.js/dist/hls.min.js
           CALAMAR_CHROME_CHANNEL: chrome
         run: node tools/browser_hosting_check.mjs
+
+      - name: Reproducir cuatro ventanas simultáneas con vídeo real
+        env:
+          CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
+          CALAMAR_HLS: /tmp/calamar-ui/node_modules/hls.js/dist/hls.min.js
+          CALAMAR_CHROME_CHANNEL: chrome
+        run: node tools/browser_multi_check.mjs

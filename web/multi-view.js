@@ -4,11 +4,14 @@
 import { sourceOptions } from './player-sources.js';
 import { mountTs } from './ts-player.js';
 import { mountRenewable } from './renewable-player.js';
+import { expandEventSources, zicoEventApi } from './event-sources.js';
 
-export const MULTI_MAX = 6;
+export const MULTI_MAX = 4;
+export const multiKey = c => `${c.event ? 'e' : 'c'}:${c.eventId || c.id || c.slug}`;
 
-/** Rows and columns for n videos: 2 -> 2x1 (top and bottom), 3-4 -> 2x2, 5-6 -> 2x3. */
+/** Rows and columns for n videos: 2 -> 2x1 (top and bottom), 3-4 -> 2x2; a larger request is clamped to four. */
 export function multiGrid(n) {
+  n = Math.min(MULTI_MAX, n);
   if (n <= 1) return { rows: 1, cols: 1 };
   if (n === 2) return { rows: 2, cols: 1 };
   const cols = Math.ceil(Math.sqrt(n));
@@ -16,11 +19,13 @@ export function multiGrid(n) {
 }
 
 /** True when the browser can play at least one source of the channel or event. */
-export const multiPlayable = (c) => c.playable && sourceOptions(c.streams).some((s) => s.how.ok);
+export const multiPlayable = c => c.playable && (c.streams.some(zicoEventApi) || sourceOptions(c.streams).some(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind)));
 
 /** Plays a channel in one tile, trying its sources in order; returns a function that stops it. */
 export function playTile(video, channel, onStatus) {
-  const sources = sourceOptions(channel.streams).filter((s) => s.how.ok && (!s.expiry || s.expiry > Date.now()));
+  let sources = [];
+  const lookup = new AbortController();
+  let lookupTimer = null;
   let next = 0, hls = null, stopTs = null, stopRenewable = null, stopped = false, attempt = 0;
   const clear = () => {
     attempt++;
@@ -57,7 +62,7 @@ export function playTile(video, channel, onStatus) {
         onFailure: () => { if (current()) tryNext(); }, onRecovering: () => {}, onPlaying: () => { if (current()) onStatus(''); } });
       return;
     }
-    const url = source.url;
+    const url = source.how.address || source.url;
     if (source.how.kind === 'hls' && window.Hls?.isSupported()) {
       hls = new window.Hls({ lowLatencyMode: false });
       hls.on(window.Hls.Events.ERROR, (_event, data) => { if (data.fatal && current()) tryNext(); });
@@ -66,109 +71,108 @@ export function playTile(video, channel, onStatus) {
     } else video.src = url;
     video.play().catch(() => {});
   };
-  tryNext();
-  return () => { stopped = true; clear(); };
+  const prepare = async () => {
+    let streams = channel.streams;
+    if (streams.some(zicoEventApi)) {
+      onStatus('Consultando fuentes del evento…'); lookupTimer = setTimeout(() => lookup.abort(), 15000);
+      const resolved = await expandEventSources(streams, { signal: lookup.signal });
+      clearTimeout(lookupTimer); if (stopped) return;
+      streams = resolved.filter(s => !s.error).map(s => s.url);
+    }
+    sources = sourceOptions(streams).filter(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind));
+    if (channel.vod && channel.position > 0) video.addEventListener('loadedmetadata', () => {
+      if (!stopped) video.currentTime = channel.position;
+    }, { once: true });
+    tryNext();
+  };
+  void prepare();
+  return () => { stopped = true; clearTimeout(lookupTimer); lookup.abort(); clear(); };
 }
 
 let view = null;
 
-/** Shows the channels full screen in a grid; `onClose` runs when the viewer leaves it. */
-export function openMulti(items, { onClose, onWatch = () => {} } = {}) {
+/** Full screen grid. Adding or removing a tile leaves the other players running. */
+export function openMulti(items, { onClose, onWatch = () => {}, onAdd, onChange = () => {} } = {}) {
   closeMulti();
-  const list = items.slice(0, MULTI_MAX);
-  const { rows, cols } = multiGrid(list.length);
   const root = document.createElement('div');
-  root.className = 'multi';
-  root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-modal', 'true');
-  root.setAttribute('aria-label', 'Multipantalla');
-  // The buttons stay hidden over the videos; a tap shows them for a few seconds (another tap hides
-  // them). Sound only changes with each video's own sound button, so a tap never moves the audio.
-  root.classList.add('idle');
-  const bar = document.createElement('div');
-  bar.className = 'multi-bar';
-  const close = Object.assign(document.createElement('button'), { type: 'button', className: 'pill-btn', textContent: '✕ Salir' });
-  const full = Object.assign(document.createElement('button'), { type: 'button', className: 'pill-btn', textContent: 'Pantalla completa' });
+  root.className = 'multi idle'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Multipantalla');
+  const bar = document.createElement('div'); bar.className = 'multi-bar';
+  const button = text => Object.assign(document.createElement('button'), { type: 'button', className: 'pill-btn', textContent: text });
+  const close = button('✕ Salir'), full = button('Pantalla completa'), add = button('＋ Añadir evento');
+  add.setAttribute('aria-label', 'Añadir evento a multipantalla'); add.hidden = !onAdd;
   const hint = Object.assign(document.createElement('span'), { className: 'multi-hint', textContent: 'Pulsa 🔊 en un vídeo para oírlo' });
-  bar.append(close, hint, full);
-  const grid = document.createElement('div');
-  grid.className = 'multi-grid';
-  grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-  grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-  let hideTimer = null, pointer = '';
-  root.addEventListener('pointerdown', (event) => { pointer = event.pointerType; });
+  bar.append(close, add, hint, full);
+  const grid = document.createElement('div'); grid.className = 'multi-grid'; root.append(grid, bar);
+  let hideTimer = null, pointer = '', audible = null;
+  const tiles = [];
   const showControls = () => {
-    root.classList.remove('idle');
-    clearTimeout(hideTimer);
-    // They stay while a keyboard user is on one of them; taps and clicks let them hide.
+    root.classList.remove('idle'); clearTimeout(hideTimer);
     hideTimer = setTimeout(() => { if (!root.querySelector('button:focus-visible')) root.classList.add('idle'); }, 4000);
   };
-  const hideControls = () => { clearTimeout(hideTimer); root.classList.add('idle'); };
-  const stops = [], tiles = [];
-  const listen = (index) => tiles.forEach((tile, i) => {
-    tile.video.muted = i !== index;
-    tile.node.classList.toggle('active', i === index);
-    tile.sound.textContent = i === index ? '🔊' : '🔇';
-    tile.sound.setAttribute('aria-pressed', String(i === index));
-  });
-  list.forEach((channel, index) => {
-    const node = document.createElement('div');
-    node.className = index < cols ? 'multi-tile top-row' : 'multi-tile';
-    node.setAttribute('role', 'group');
-    node.setAttribute('aria-label', channel.name);
-    const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, autoplay: true });
-    video.setAttribute('playsinline', '');
+  const listen = chosen => {
+    audible = chosen;
+    for (const tile of tiles) {
+      const active = tile === chosen; tile.video.muted = !active; tile.node.classList.toggle('active', active);
+      tile.sound.textContent = active ? '🔊' : '🔇'; tile.sound.setAttribute('aria-pressed', String(active));
+    }
+  };
+  const snapshot = () => tiles.map(t => ({ ...t.channel, position: t.video.currentTime || 0 }));
+  const layout = () => {
+    const { rows, cols } = multiGrid(tiles.length);
+    grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`; grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+    tiles.forEach((t, i) => { t.node.classList.toggle('top-row', i < cols); t.remove.hidden = tiles.length < 2; });
+    add.textContent = `＋ Añadir evento (${tiles.length}/${MULTI_MAX})`; add.disabled = tiles.length >= MULTI_MAX;
+  };
+  const remove = tile => {
+    if (tiles.length < 2) return;
+    tile.stop(); tile.node.remove(); tiles.splice(tiles.indexOf(tile), 1);
+    if (audible === tile) listen(tiles[0]); layout(); onChange(snapshot()); showControls();
+  };
+  const append = (channel, changed = true) => {
+    if (tiles.length >= MULTI_MAX || tiles.some(t => multiKey(t.channel) === multiKey(channel))) return false;
+    const node = document.createElement('div'); node.className = 'multi-tile'; node.setAttribute('role', 'group'); node.setAttribute('aria-label', channel.name);
+    const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, autoplay: true }); video.setAttribute('playsinline', '');
     const name = Object.assign(document.createElement('span'), { className: 'multi-name', textContent: channel.name });
     const status = Object.assign(document.createElement('span'), { className: 'multi-status' });
-    const sound = Object.assign(document.createElement('button'), { type: 'button', className: 'multi-sound' });
-    sound.setAttribute('aria-label', `Oír ${channel.name}`);
-    sound.addEventListener('click', (event) => { event.stopPropagation(); listen(index); video.play().catch(() => {}); showControls(); });
-    node.append(video, name, status, sound);
-    // A tap toggles the buttons; with a mouse (which already shows them by moving) a click only shows them.
-    node.addEventListener('click', () => (root.classList.contains('idle') || pointer === 'mouse' ? showControls() : hideControls()));
-    grid.append(node);
-    tiles.push({ node, video, sound });
-    stops.push(playTile(video, channel, (text) => { status.textContent = text; status.hidden = !text; }));
-    onWatch(channel);
-  });
-  root.append(grid, bar);
-  document.body.append(root);
-  document.body.style.overflow = 'hidden';
-  listen(0);
+    const sound = button('🔇'); sound.className = 'multi-sound'; sound.setAttribute('aria-label', `Oír ${channel.name}`);
+    const discard = button('✕'); discard.className = 'multi-remove'; discard.setAttribute('aria-label', `Quitar ${channel.name}`);
+    const tile = { channel, node, video, sound, remove: discard, stop: () => {} };
+    sound.addEventListener('click', e => { e.stopPropagation(); listen(tile); video.play().catch(() => {}); showControls(); });
+    discard.addEventListener('click', e => { e.stopPropagation(); remove(tile); });
+    node.addEventListener('click', () => {
+      if (root.classList.contains('idle') || pointer === 'mouse') showControls(); else { clearTimeout(hideTimer); root.classList.add('idle'); }
+    });
+    node.append(video, name, status, sound, discard); grid.append(node); tiles.push(tile);
+    tile.stop = playTile(video, channel, text => { status.textContent = text; status.hidden = !text; });
+    if (!audible) listen(tile); else listen(audible);
+    layout(); onWatch(channel); if (changed) { onChange(snapshot()); showControls(); } return true;
+  };
+  for (const item of items) append(item, false);
+  root.addEventListener('pointerdown', e => { pointer = e.pointerType; });
+  root.addEventListener('mousemove', e => { if (e.movementX || e.movementY) showControls(); });
+  root.addEventListener('focusin', e => { if (e.target !== root) showControls(); });
   const toggleFull = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else {
-        await root.requestFullscreen();
-        // Three or more videos read best on a horizontal screen (phones allow the lock in full screen).
-        if (list.length > 2) await screen.orientation?.lock?.('landscape').catch(() => {});
-      }
-    } catch { /* Full screen is optional: the grid already fills the window. */ }
+      else { await root.requestFullscreen(); if (tiles.length > 2) await screen.orientation?.lock?.('landscape').catch(() => {}); }
+    } catch { /* Optional: the grid already fills the viewport. */ }
     showControls();
   };
   full.addEventListener('click', toggleFull);
-  close.addEventListener('click', () => onClose ? onClose() : closeMulti());
-  // Keyboard and mouse users get the controls too: moving the pointer or the focus shows them.
-  root.addEventListener('mousemove', (event) => { if (event.movementX || event.movementY) showControls(); });
-  root.addEventListener('focusin', (event) => { if (event.target !== root) showControls(); });
-  const keys = (event) => { if (event.key === 'Escape' && !document.fullscreenElement) close.click(); };
+  add.addEventListener('click', () => { if (tiles.length < MULTI_MAX) onAdd?.(snapshot(), append, root); });
+  close.addEventListener('click', () => onClose ? onClose(snapshot()) : closeMulti());
+  const keys = e => { if (e.key === 'Escape' && !document.fullscreenElement && !document.querySelector('.multi-event-picker[open]')) close.click(); };
   document.addEventListener('keydown', keys);
-  root.tabIndex = -1;
-  view = { root, stops, keys, hideTimer: () => clearTimeout(hideTimer) };
+  document.body.append(root); document.body.style.overflow = 'hidden'; root.tabIndex = -1;
+  view = { root, stops: () => tiles.forEach(t => t.stop()), keys, hideTimer: () => clearTimeout(hideTimer) };
   root.focus({ preventScroll: true });
-  return { toggleFull };
+  return { toggleFull, add: append, items: snapshot };
 }
 
 export function closeMulti() {
   if (!view) return;
-  view.stops.forEach((stop) => stop());
-  view.hideTimer();
-  document.removeEventListener('keydown', view.keys);
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  screen.orientation?.unlock?.();
-  view.root.remove();
-  document.body.style.overflow = '';
-  view = null;
+  view.stops(); view.hideTimer(); document.removeEventListener('keydown', view.keys);
+  if (document.fullscreenElement === view.root || document.fullscreenElement === document.documentElement) document.exitFullscreen().catch(() => {});
+  screen.orientation?.unlock?.(); view.root.remove(); document.body.style.overflow = ''; view = null;
 }
-
 export const multiOpen = () => !!view;

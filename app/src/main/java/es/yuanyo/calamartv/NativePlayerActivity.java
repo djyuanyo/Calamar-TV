@@ -92,6 +92,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
   private boolean hostingPlayback;
+  private android.app.Dialog multiPicker;
   private String hostingEndpoint = Library.PLAYER_ENDPOINT;
   private String hostingTriedPage;
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
@@ -266,6 +267,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       shareButton.setOnClickListener(v -> share());
       controls.addView(shareButton, new LinearLayout.LayoutParams(buttonSize));
     }
+    ImageButton multiButton = new ImageButton(this);
+    multiButton.setImageDrawable(Ui.icon(Ui.Icon.MULTI, Ui.FG, Ui.dp(this, 24)));
+    multiButton.setContentDescription("Multipantalla"); multiButton.setFocusable(true);
+    multiButton.setPadding(Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9));
+    multiButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
+    multiButton.setOnClickListener(v -> chooseMultiEvent()); controls.addView(multiButton, new LinearLayout.LayoutParams(buttonSize));
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
@@ -441,6 +448,27 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       root.addView(panel, 0);
       panel.setVisibility(View.VISIBLE);
     }
+  }
+
+  private void chooseMultiEvent() {
+    String target = getIntent().getStringExtra("audience_target");
+    java.util.List<String> selected = java.util.Collections.singletonList(target == null ? "current" : target);
+    multiPicker = MultiEventPicker.show(this, selected, event -> {
+      java.util.ArrayList<String> first = new java.util.ArrayList<>();
+      if (pageUrl != null) first.add(pageUrl); else if (directUrl != null) first.add(directUrl);
+      for (String url : channelPages) if (!first.contains(url)) first.add(url);
+      for (String url : directUrls) if (!first.contains(url)) first.add(url);
+      if (first.isEmpty()) return;
+      java.util.ArrayList<String> titles = new java.util.ArrayList<>(java.util.Arrays.asList(title == null ? "Canal" : title, event.name));
+      java.util.ArrayList<String> streams = new java.util.ArrayList<>(java.util.Arrays.asList(android.text.TextUtils.join("\n", first), android.text.TextUtils.join("\n", AppSources.forAndroid(event.streams))));
+      java.util.ArrayList<String> targets = new java.util.ArrayList<>(java.util.Arrays.asList(target == null ? "" : target, AudienceModel.target(true, event.id)));
+      java.util.ArrayList<String> channels = new java.util.ArrayList<>(java.util.Arrays.asList(getIntent().getStringExtra("audience_channel"), event.channelId));
+      Intent intent = new Intent(this, MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES, titles)
+          .putStringArrayListExtra(MultiPlayerActivity.STREAMS, streams).putStringArrayListExtra("audience_targets", targets).putStringArrayListExtra("audience_channels", channels)
+          .putExtra("initial_media", currentUrl).putExtra("initial_page", pageUrl).putExtra("initial_referer", mediaReferer()).putExtra("initial_endpoint", hostingEndpoint).putExtra("initial_signal", hostingSourceId)
+          .putExtra("initial_position", progressEntry == null || player == null ? 0 : player.getCurrentPosition());
+      startActivity(intent);
+    });
   }
 
   private void share() {
@@ -1573,6 +1601,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onStop() {
+    if (multiPicker != null) { multiPicker.dismiss(); multiPicker = null; }
     active = false;
     if (sourceDialog != null) { sourceDialog.dismiss(); sourceDialog = null; }
     generation++;

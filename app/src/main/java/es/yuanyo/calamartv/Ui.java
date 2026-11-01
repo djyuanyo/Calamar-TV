@@ -218,7 +218,8 @@ final class Ui {
     EYE,
     BACK,
     ADMIN,
-    SHARE
+    SHARE,
+    MULTI
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -245,6 +246,9 @@ final class Ui {
       } else if (icon == Icon.EYE) {
         path.moveTo(2f,12f);path.cubicTo(6f,3f,18f,3f,22f,12f);path.cubicTo(18f,21f,6f,21f,2f,12f);path.close();
         path.addCircle(12f,12f,3f,Path.Direction.CW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);
+      } else if (icon == Icon.MULTI) {
+        for (int y : new int[] {3, 14}) for (int x : new int[] {3, 14}) path.addRoundRect(x, y, x + 7, y + 7, 1.2f, 1.2f, Path.Direction.CW);
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f);
       } else if (icon == Icon.SHARE) {
         // Three dots joined by two lines, as the web's share button.
         path.addCircle(18f, 5f, 3f, Path.Direction.CW);

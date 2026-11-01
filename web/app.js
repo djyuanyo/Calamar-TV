@@ -12,6 +12,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
+import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
@@ -553,7 +554,7 @@ let multiPicks = [];
 const multiKey = (c) => (c.event ? `e:${c.slug}` : `c:${c.slug}`);
 function multiItems(keys) {
   const list = events(state.channels, state.custom);
-  return keys.map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
+  return keys.slice(0, MULTI_MAX).map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
 }
 function multiPage() {
   const query = el('input', { type: 'search', placeholder: 'Buscar canales y eventos', 'aria-label': 'Buscar para la multipantalla' });
@@ -600,6 +601,8 @@ function showMulti(arg) {
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
   openMulti(items, {
+    onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
+    onChange: selected => { multiPicks = selected.map(multiKey); history.replaceState(null, '', `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`); },
     onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
     onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
       .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
@@ -639,6 +642,30 @@ let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
+let inlineMulti = null;
+function chooseMultiEvent(selected, onChoose, parent) {
+  return pickMultiEvent({ events: events(state.channels, state.custom, Date.now(), { allWeeks: true }), selected, onChoose, ...(parent ? { parent } : {}) });
+}
+document.getElementById('ctl-multi').addEventListener('click', () => {
+  if (!current || !multiPlayable(current)) return;
+  const initial = current;
+  chooseMultiEvent([initial], event => {
+    if (current !== initial) return;
+    const first = { ...initial, position: initial.vod ? video.currentTime : 0,
+      streams: [...new Set([currentSourceUrl, ...initial.streams].filter(Boolean))] };
+    const origin = location.hash;
+    hidePlayer(); inlineMulti = { hash: origin };
+    openMulti([first, event], {
+      onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
+      onClose: selected => {
+        const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
+        closeMultiPicker(); closeMulti(); inlineMulti = null;
+        open(initial, true);
+        if (initial.vod && resume > 0) video.addEventListener('loadedmetadata', () => { if (current === initial) video.currentTime = resume; }, { once: true });
+      },
+    });
+  });
+});
 initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
@@ -970,6 +997,7 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
+  document.getElementById('ctl-multi').disabled = !multiPlayable(c);
   // Channels and events are shared through their preview page; films and episodes are not.
   shareButton.hidden = !!c.vod;
   paintFavorite();
@@ -1212,6 +1240,7 @@ function showMatchCenter(c) {
 }
 
 function hidePlayer() {
+  closeMultiPicker();
   showMatchCenter(null);
   rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
@@ -1385,6 +1414,10 @@ onProfilesChanged(() => {
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
 async function route() {
+  if (inlineMulti) {
+    if (location.hash === inlineMulti.hash) return;
+    closeMultiPicker(); closeMulti(); inlineMulti = null;
+  } else closeMultiPicker();
   updateAppDownload();
   const version = ++routeVersion;
   stopHighlight();

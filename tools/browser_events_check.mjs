@@ -1009,6 +1009,53 @@ try {
   await page.locator('.library-admin-list .library-item').first().getByRole('button', { name: 'Editar', exact: true }).click();
   await page.getByRole('button', { name: 'Eliminar del catálogo', exact: true }).click();
   await page.waitForFunction(n => document.querySelectorAll('.library-admin-list .library-item').length === n - 1, beforeDelete);
+  // Add events from the player, retaining the initial channel and the live tile elements.
+  const multiPage = await browser.newPage({viewport:{width:390,height:844}});
+  const multiFixture={...fixture,events:[
+    {id:'mp1',name:'Águilas vs Betis',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp2',name:'Evento Beta',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp3',name:'Evento Gamma',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp4',name:'Evento Delta',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp5',name:'Evento Quinto',channelId:'sport-two',cover:'https://example.com/cover.png'}]};
+  await multiPage.addInitScript(seed=>sessionStorage.setItem('catalog',JSON.stringify(seed)),multiFixture);
+  await multiPage.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
+  multiPage.on('pageerror',e=>errors.push(e.message));
+  await multiPage.goto(base+'/#/canal/sports-one');
+  await multiPage.locator('#ctl-multi').click();
+  const pick = multiPage.getByRole('dialog',{name:'Añadir evento',exact:true});
+  assert.equal(await pick.locator('.multi-event-choice').count(),5);
+  await pick.getByRole('button',{name:'Cancelar',exact:true}).click();
+  assert.equal(await multiPage.locator('#player').isVisible(),true);
+  assert.equal(await multiPage.locator('#player-title').textContent(),'Sports One');
+  await multiPage.locator('#ctl-multi').click();
+  await pick.getByRole('searchbox').fill('aguilas');
+  assert.equal(await pick.locator('.multi-event-choice').count(),1);
+  await pick.getByRole('button',{name:'Águilas vs Betis',exact:true}).click();
+  await multiPage.locator('.multi-tile').nth(1).waitFor();
+  assert.equal(await multiPage.locator('.multi-name').first().textContent(),'Sports One');
+  await multiPage.locator('.multi-tile video').first().evaluate(v=>v.dataset.retained='yes');
+  const addEvent=async name=>{
+    await multiPage.locator('.multi-tile').first().click();
+    await multiPage.getByRole('button',{name:'Añadir evento a multipantalla',exact:true}).click();
+    await pick.getByRole('searchbox').fill(name);
+    await pick.getByRole('button',{name,exact:true}).click();
+  };
+  await addEvent('Evento Beta');await addEvent('Evento Gamma');
+  assert.equal(await multiPage.locator('.multi-tile').count(),4);
+  assert.equal(await multiPage.locator('.multi-tile video').first().getAttribute('data-retained'),'yes');
+  assert.equal(await multiPage.getByRole('button',{name:'Añadir evento a multipantalla',exact:true}).isEnabled(),false);
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[false,true,true,true]);
+  await multiPage.getByRole('button',{name:'Oír Evento Gamma',exact:true}).click();
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[true,true,true,false]);
+  await multiPage.getByRole('button',{name:'Quitar Evento Gamma',exact:true}).click();
+  assert.equal(await multiPage.locator('.multi-tile').count(),3);
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[false,true,true]);
+  assert.equal(await multiPage.locator('.multi-tile video').first().getAttribute('data-retained'),'yes');
+  await multiPage.getByRole('button',{name:'✕ Salir',exact:true}).click();
+  await multiPage.locator('#player').waitFor({state:'visible'});
+  assert.equal(await multiPage.locator('#player-title').textContent(),'Sports One');
+  assert.equal(await multiPage.locator('.multi').count(),0);
+  await multiPage.close();
   // Channel images can be chosen from a device when creating or editing; untouched images persist.
   const channelPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   channelPage.on('pageerror', error => errors.push(error.message));

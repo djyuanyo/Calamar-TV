@@ -1306,7 +1306,7 @@ public class MainActivity extends Activity {
     return out;
   }
 
-  /** Multi-screen: pick 2 to 6 channels or events (events first) and watch them together. */
+  /** Multi-screen: pick 2 to 4 channels or events (events first) and watch them together. */
   void pickMulti() {
     final List<Catalog.Channel> options = new ArrayList<>();
     for (Catalog.Channel c : Catalog.events(channels, custom)) if (directMedia(c)) options.add(c);
@@ -1356,10 +1356,10 @@ public class MainActivity extends Activity {
     dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
 
-  /** Channels whose links are videos the player opens directly (not pages resolved in the full player). */
+  /** Channel and player-page sources that the independent native tiles can resolve. */
   boolean directMedia(Catalog.Channel c) {
     List<String> sources = AppSources.forAndroid(c.streams);
-    return !sources.isEmpty() && !UserChannels.isPage(sources.get(0));
+    return !sources.isEmpty();
   }
 
   void open(Catalog.Channel c) {
