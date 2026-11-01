@@ -2,9 +2,9 @@ name: Calamar TV · APK Android y TV
 on:
   workflow_dispatch:
   push:
-    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'tools/check_multi_playback.sh', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
   pull_request:
-    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'tools/check_multi_playback.sh', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
 permissions:
   contents: write
 jobs:
@@ -64,16 +64,7 @@ jobs:
           disk-size: 2048M
           emulator-boot-timeout: 300
           disable-animations: true
-          script: |
-            adb shell settings put system screen_off_timeout 2147483647
-            adb shell input keyevent KEYCODE_WAKEUP
-            adb shell wm dismiss-keyguard
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.MultiPlaybackTest || {
-              mkdir -p app/build/reports/androidTests/connected
-              adb exec-out run-as es.yuanyo.calamartv cat files/multi-focus.png > app/build/reports/androidTests/connected/multi-focus.png || true
-              exit 1
-            }
-            gradle --no-daemon :app:connectedDebugAndroidTest
+          script: bash tools/check_multi_playback.sh
       - name: Liberar el emulador móvil antes de probar Android TV
         run: |
           rm -rf "$HOME/.android/avd/test.avd" "$HOME/.android/avd/test.ini"
