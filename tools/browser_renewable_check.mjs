@@ -46,7 +46,8 @@ try {
   for (const source of ['https://bp.zicotv.cc/api/player/4','https://bp.zicotv.cc/events/98019']) {
     const before = pages, beforeSegments = segments;
     await page.goto(base + '/direct-player.html#' + encodeURIComponent(source));
-    await page.locator('#play').click();
+    // Autoplay may already be playing on this fast fixture. An unconditional toggle would pause it.
+    await page.locator('#video').evaluate(video => { video.muted = true; void video.play().catch(() => {}); });
     await page.waitForFunction(() => {
       const v = document.querySelector('video');
       return v.videoWidth > 0 && v.currentTime > 0.3 && !v.paused;
