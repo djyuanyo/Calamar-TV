@@ -976,7 +976,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (tryDeviceConnection(error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+      if (tryDeviceConnection(new java.net.SocketTimeoutException("Sin fragmentos de vídeo durante 25 segundos")) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");

@@ -51,7 +51,7 @@ final class HostingPlayback {
   static boolean networkUnavailable(Throwable error) {
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause instanceof javax.net.ssl.SSLException || cause instanceof PlayerDocument.HttpFailure) return false;
-      if (cause instanceof java.net.UnknownHostException || cause instanceof java.net.SocketTimeoutException
+      if (cause instanceof java.net.UnknownHostException || cause instanceof java.io.InterruptedIOException
           || cause instanceof java.net.SocketException || cause instanceof java.net.NoRouteToHostException) return true;
     }
     return false;

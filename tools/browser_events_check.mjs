@@ -188,7 +188,7 @@ try {
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   assert.equal(await page.locator('#player-viewers').isHidden(), true);
   // Multi-screen: two videos top and bottom, three in a 2x2 grid; tapping a tile gives it the sound.
-  await page.locator('.nav a').filter({ hasText: 'Multipantalla' }).click();
+  await page.goto(base + '/#/multipantalla');
   await page.getByRole('button', { name: 'Sports One', exact: true }).click();
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Ver 2 a la vez', exact: true }).click();
