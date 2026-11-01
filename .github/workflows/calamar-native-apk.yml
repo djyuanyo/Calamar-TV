@@ -55,20 +55,6 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Reproducir TS por HTTP y recuperar conexión atascada en Android
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          target: google_apis
-          disk-size: 2048M
-          emulator-boot-timeout: 300
-          disable-animations: true
-          script: bash tools/check_multi_playback.sh
-      - name: Liberar el emulador móvil antes de probar Android TV
-        run: |
-          rm -rf "$HOME/.android/avd/test.avd" "$HOME/.android/avd/test.ini"
-          df -h /
       - name: Reproducir y cambiar señales con mando en Android TV API 31
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -81,11 +67,21 @@ jobs:
           disable-animations: true
           script: |
             adb shell pm list features | grep -q android.software.leanback
-            adb shell settings put secure immersive_mode_confirmations confirmed
-            adb shell settings put system screen_off_timeout 2147483647
-            adb shell input keyevent KEYCODE_WAKEUP
-            adb shell wm dismiss-keyguard
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.MultiPlaybackTest,es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest,es.yuanyo.calamartv.AppLinksTest,es.yuanyo.calamartv.IptvHostedPlaybackTest,es.yuanyo.calamartv.HttpIptvDataSourceTest
+            bash tools/check_multi_playback.sh tv
+      - name: Liberar el emulador TV antes de probar Android móvil
+        run: |
+          rm -rf "$HOME/.android/avd/calamar-tv-api31.avd" "$HOME/.android/avd/calamar-tv-api31.ini"
+          df -h /
+      - name: Reproducir TS por HTTP y recuperar conexión atascada en Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disk-size: 2048M
+          emulator-boot-timeout: 300
+          disable-animations: true
+          script: bash tools/check_multi_playback.sh
       - name: Mostrar errores del reproductor en el emulador
         if: failure()
         run: |

@@ -71,7 +71,7 @@ public class MultiPlaybackTest {
   static void renders(MultiPlayerActivity activity,int count)throws Exception{
     long deadline=SystemClock.elapsedRealtime()+35000;AtomicBoolean done=new AtomicBoolean();
     while(!done.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{List<ExoPlayer> ps=players(activity);done.set(ps.size()==count);for(ExoPlayer p:ps)done.set(done.get()&&p!=null&&p.isPlaying()&&p.getVideoSize().width>0&&p.getCurrentPosition()>300);});SystemClock.sleep(100);}
-    if(!done.get()){StringBuilder detail=new StringBuilder();main(()->{for(Object tile:tiles(activity))detail.append(((TextView)field(tile,"status")).getText()).append(';');});fail("Every native tile must decode H264/AAC: "+detail);}
+    if(!done.get()){StringBuilder detail=new StringBuilder();main(()->{for(Object tile:tiles(activity)){ExoPlayer p=(ExoPlayer)field(tile,"player");detail.append(((TextView)field(tile,"status")).getText()).append(" loading=").append(field(tile,"loading")).append(" resolved=").append(field(tile,"resolved")!=null);if(p!=null){detail.append(" state=").append(p.getPlaybackState()).append(" playing=").append(p.isPlaying()).append(" size=").append(p.getVideoSize().width).append(" position=").append(p.getCurrentPosition()).append(" videoQueued=").append(p.getVideoDecoderCounters()==null?-1:p.getVideoDecoderCounters().queuedInputBufferCount).append(" videoRendered=").append(p.getVideoDecoderCounters()==null?-1:p.getVideoDecoderCounters().renderedOutputBufferCount).append(" error=").append(p.getPlayerError()==null?"none":p.getPlayerError().getErrorCodeName());}detail.append(';');}});fail("Every native tile must decode H264/AAC: "+detail);}
   }
   @Test public void playerSearchAddsUpToFourNativeWindowsThroughHostingAndKeepsTheFirst()throws Exception{
     Context context=ApplicationProvider.getApplicationContext();Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
@@ -119,7 +119,7 @@ public class MultiPlaybackTest {
         }
         renders(activity.get(),4);main(()->{assertSame("Earlier tiles must keep their player",first.get(),players(activity.get()).get(0));show(activity.get());});
         main(()->{Button add=(Button)field(activity.get(),"addButton");assertFalse(add.isEnabled());add.performClick();assertEquals(4,tiles(activity.get()).size());assertFalse(((Dialog)field(activity.get(),"picker")).isShowing());});
-        main(()->{int audible=0;for(ExoPlayer p:players(activity.get()))if(p.getVolume()>0)audible++;assertEquals(1,audible);});
+        main(()->{((Button)field(tiles(activity.get()).get(1),"sound")).performClick();int audible=0,audioDecoders=0;for(ExoPlayer p:players(activity.get())){if(p.getVolume()>0)audible++;if(!p.getTrackSelectionParameters().disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO))audioDecoders++;}assertEquals(1,audible);assertEquals(1,audioDecoders);assertEquals(1f,players(activity.get()).get(1).getVolume(),0f);((Button)field(tiles(activity.get()).get(0),"sound")).performClick();});renders(activity.get(),4);
         main(()->{Object last=tiles(activity.get()).get(3);Button remove=(Button)field(last,"remove");assertTrue(remove.isShown());remove.performClick();});renders(activity.get(),3);
         main(()->{assertSame(first.get(),players(activity.get()).get(0));show(activity.get());});
         main(()->assertTrue(((Button)field(activity.get(),"addButton")).isEnabled()));
