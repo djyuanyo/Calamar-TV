@@ -1,9 +1,9 @@
 name: Calamar TV · Eventos en navegador
 on:
   push:
-    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_renewable_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
   pull_request:
-    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', 'tools/browser_renewable_check.mjs', '.github/workflows/events-ui.yml']
+    paths: ['web/**', 'hosting/calamar-drive.php', 'tools/test_drive_relay.py', 'tools/library_folders.test.mjs', 'tools/browser_events_check.mjs', '.github/workflows/events-ui.yml']
 permissions:
   contents: read
 jobs:
@@ -20,14 +20,9 @@ jobs:
           php -l hosting/calamar-drive.php
           python -m unittest discover -s tools -p 'test_drive_relay.py' -v
           node --test tools/library_folders.test.mjs tools/library_lulu.test.mjs
-      - run: npm install --prefix /tmp/calamar-ui --no-audit --no-fund playwright@1.58.2 hls.js@1.5.17
+      - run: npm install --prefix /tmp/calamar-ui --no-audit --no-fund playwright@1.58.2
       - name: Probar eventos con catálogo aislado
         env:
           CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
           CALAMAR_CHROME_CHANNEL: chrome
         run: node tools/browser_events_check.mjs
-      - name: Decodificar vídeo y renovar el reproductor web integrado sin hosting
-        env:
-          CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
-          CALAMAR_CHROME_CHANNEL: chrome
-        run: node tools/browser_renewable_check.mjs

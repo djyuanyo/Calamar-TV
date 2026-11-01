@@ -31,50 +31,41 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
-  @Test public void unreachableHostingAndUnavailableNativeRouteOpensCalamarWebPlayer() throws Exception {
-    HeldCertificate cert = new HeldCertificate.Builder().commonName("bp.zicotv.cc").addSubjectAlternativeName("bp.zicotv.cc").build();
-    HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
-    HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
-    try (MockWebServer server = new MockWebServer()) {
-      server.useHttps(serverTls.sslSocketFactory(), false);
-      server.setDispatcher(new Dispatcher() {
-        @Override public MockResponse dispatch(RecordedRequest request) { return new MockResponse().setResponseCode(503); }
-      });
-      server.start();
-      NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
-      Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);
-      OkHttpClient oldSystem = (OkHttpClient) field.get(system), oldSecure = (OkHttpClient) field.get(secure);
-      DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
-      field.set(system, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("Hosting no disponible"); }).build());
-      field.set(secure, new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
-          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
-          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder().url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build());
-      NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
-      String source = "https://bp.zicotv.cc/api/player/4";
-      try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", source).putExtra("title", "Prueba alternativa web"))) {
-        AtomicBoolean opened = new AtomicBoolean();
-        long deadline = SystemClock.elapsedRealtime() + 20000;
-        while (!opened.get() && SystemClock.elapsedRealtime() < deadline) {
-          scenario.onActivity(activity -> {
-            try {
-              Field browser = NativePlayerActivity.class.getDeclaredField("browser"); browser.setAccessible(true);
-              android.webkit.WebView view = (android.webkit.WebView) browser.get(activity);
-              if (view == null || view.getOriginalUrl() == null) return;
-              assertEquals(BrowserPlayback.channelPage(source), view.getOriginalUrl());
-              assertEquals(android.view.View.VISIBLE, view.getVisibility());
-              assertFalse(view.getSettings().getAllowFileAccess());
-              assertFalse(view.getSettings().getAllowContentAccess());
-              assertTrue(view.getSettings().getUserAgentString().contains("Android"));
-              view.getSettings().setBlockNetworkLoads(true); view.stopLoading();
-              opened.set(true);
-            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
-          });
-          SystemClock.sleep(100);
-        }
-        assertTrue("Unavailable native and hosting routes must open the integrated web player", opened.get());
-        assertTrue("The native provider route should be attempted before the web alternative", server.getRequestCount() > 0);
-      } finally { field.set(system, oldSystem); field.set(secure, oldSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
+  @Test public void hostingFailureNeverContactsProviderOrOpensWebPlayer() throws Exception {
+    NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
+    Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);
+    OkHttpClient previousSystem = (OkHttpClient) field.get(system), previousSecure = (OkHttpClient) field.get(secure);
+    DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
+    AtomicInteger hosted = new AtomicInteger(), direct = new AtomicInteger();
+    field.set(system, new OkHttpClient.Builder().addInterceptor(chain -> {
+      if ("calamarmenciano.com".equals(chain.request().url().host())) hosted.incrementAndGet();
+      else direct.incrementAndGet();
+      throw new java.net.UnknownHostException("Hosting temporalmente inaccesible");
+    }).build());
+    field.set(secure, new OkHttpClient.Builder().addInterceptor(chain -> {
+      direct.incrementAndGet(); throw new java.net.UnknownHostException("No se debe consultar el proveedor desde la app");
+    }).build());
+    NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
+    try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
+        .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba solo hosting"))) {
+      AtomicBoolean finished = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + 20000;
+      while (!finished.get() && SystemClock.elapsedRealtime() < deadline) {
+        scenario.onActivity(activity -> {
+          try {
+            Field browser = NativePlayerActivity.class.getDeclaredField("browser"); browser.setAccessible(true);
+            assertNull("A hosting outage must not open a browser player", browser.get(activity));
+            Field status = NativePlayerActivity.class.getDeclaredField("status"); status.setAccessible(true);
+            finished.set(((android.widget.TextView) status.get(activity)).getText().toString().contains("No se pudo conectar con esta fuente"));
+          } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        });
+        SystemClock.sleep(100);
+      }
+      assertTrue("Hosting retries must finish with a visible connection error", finished.get());
+      assertTrue("The configured hosting was never requested", hosted.get() >= 3);
+      assertEquals("The device must never contact the upstream provider", 0, direct.get());
+    } finally {
+      field.set(system, previousSystem); field.set(secure, previousSecure);
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous);
     }
   }
 
@@ -86,54 +77,6 @@ public class HostingPlaybackTest {
   }
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
-  @Test public void unreachableHostingUsesTheDeviceConnectionAndRenewsThere() throws Exception {
-    HeldCertificate cert = new HeldCertificate.Builder().commonName("bp.zicotv.cc")
-        .addSubjectAlternativeName("bp.zicotv.cc").addSubjectAlternativeName("cdn.example").build();
-    HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
-    HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
-    Buffer video = new Buffer();
-    try (InputStream in = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("live.ts")) {
-      byte[] bytes = new byte[8192]; for (int n; (n = in.read(bytes)) != -1;) video.write(bytes, 0, n);
-    }
-    AtomicInteger pages = new AtomicInteger(), segments = new AtomicInteger();
-    try (MockWebServer server = new MockWebServer()) {
-      server.useHttps(serverTls.sslSocketFactory(), false); server.start();
-      server.setDispatcher(new Dispatcher() {
-        @Override public MockResponse dispatch(RecordedRequest request) {
-          if (request.getPath().startsWith("/api/player/4")) {
-            int n = pages.incrementAndGet();
-            return new MockResponse().setBody("var ZT_SOURCES = [{\"url\":\"https://cdn.example/live.m3u8?t=" + n + "\"}];");
-          }
-          if (request.getPath().startsWith("/live.m3u8")) return new MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl")
-              .setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\nhttps://cdn.example/video.ts\n#EXT-X-ENDLIST\n");
-          if (request.getPath().startsWith("/video.ts")) {
-            segments.incrementAndGet(); return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
-          }
-          return new MockResponse().setResponseCode(404);
-        }
-      });
-      NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
-      Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);
-      OkHttpClient oldSystem = (OkHttpClient) field.get(system), oldSecure = (OkHttpClient) field.get(secure);
-      DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
-      OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
-          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
-          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder().url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
-      field.set(system, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("Hosting inaccesible desde el operador"); }).build());
-      field.set(secure, local); NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
-      try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Ruta directa"))) {
-        assertPlays(scenario); assertTrue(pages.get() > 0); assertTrue(segments.get() > 0);
-        int before = pages.get();
-        scenario.onActivity(activity -> { try { Field renewal = NativePlayerActivity.class.getDeclaredField("renewal"); renewal.setAccessible(true); ((Runnable) renewal.get(activity)).run(); }
-          catch (ReflectiveOperationException e) { throw new AssertionError(e); } });
-        long deadline = SystemClock.elapsedRealtime() + 15000;
-        while (pages.get() <= before && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(100);
-        assertTrue("Renewal must use the working device route", pages.get() > before); assertPlays(scenario);
-      } finally { field.set(system, oldSystem); field.set(secure, oldSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
-    }
-  }
-
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")

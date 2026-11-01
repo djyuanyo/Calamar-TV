@@ -92,7 +92,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
   private boolean hostingPlayback;
-  private boolean hostingUnavailable;
   private String hostingTriedPage;
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
   private String hostingSourceId = "";
@@ -549,8 +548,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     castPlayback = false;
     if (progressEntry != null) { handler.removeCallbacks(progressTick); handler.postDelayed(progressTick, 10000); }
-    if (zicoPage() && webMode) openChannelWeb();
-    else if (directUrl != null && webMode) openDirectWeb();
+    if (directUrl != null && webMode) openDirectWeb();
     else if (directUrl != null) playDirect();
     else if (pageUrl != null) resolveFresh();
   }
@@ -597,7 +595,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     final String requestedPage = pageUrl;
-    if (zicoPage()) hostingPlayback = !hostingUnavailable;
+    if (zicoPage()) hostingPlayback = true;
+    lastReport = reportHeader();
     final boolean throughHosting = hostingPlayback;
     final String requestedSignal = hostingSourceId.isEmpty() ? HostingPlayback.AUTOMATIC : hostingSourceId;
     final int requestedAttempt = automaticAttempts;
@@ -721,8 +720,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                         "No se pudo renovar. La emisión actual continúa; reintentando…");
                     handler.removeCallbacks(renewal);
                     handler.postDelayed(renewal, 15000L);
-                  } else if (throughHosting && tryDeviceConnection(failure)) {
-                    return;
                   } else if (throughHosting) {
                     if (HostingPlayback.AUTOMATIC.equals(requestedSignal))
                       refreshAutomatically("El servidor no ha encontrado vídeo todavía. Reintentando con otra señal…");
@@ -730,7 +727,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (Library.Media.hosting(pageUrl) != null) {
                     // LuluStream refused this device its page: the hosting reads it, as for the web.
                     playThroughHosting();
-                  } else if (tryChannelWeb() || tryHosting() || (zicoPage() && switchChannelSource())) {
+                  } else if (tryHosting() || (zicoPage() && switchChannelSource())) {
                     return;
                   } else if (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null) {
                     refreshAutomatically("No se pudo consultar la fuente (" + reason + "). Reintentando…");
@@ -931,7 +928,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (tryDeviceConnection(error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -977,7 +974,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (tryDeviceConnection(new java.net.SocketTimeoutException("Sin fragmentos de vídeo durante 25 segundos")) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -995,34 +992,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private boolean tryNextZicoSource() {
-    return zicoPage() && (tryChannelWeb() || tryHosting() || switchChannelSource());
-  }
-
-  private boolean tryChannelWeb() {
-    if (!zicoPage() || !hostingUnavailable || webMode
-        || (!hostingSourceId.isEmpty() && !HostingPlayback.AUTOMATIC.equals(hostingSourceId))) return false;
-    openChannelWeb();
-    return true;
+    return zicoPage() && (tryHosting() || switchChannelSource());
   }
 
   /** One hosting attempt per page; renewals continue through the selected route. */
   private boolean tryHosting() {
-    if (!zicoPage() || hostingPlayback || hostingUnavailable || pageUrl.equals(hostingTriedPage)) return false;
+    if (!zicoPage() || hostingPlayback || pageUrl.equals(hostingTriedPage)) return false;
     hostingPlayback = true; hostingTriedPage = pageUrl;
     releasePlayer();
     status.setText("Conectando con la señal del canal…");
     resolveFresh();
     return true;
-  }
-
-  /** A network cut to our hosting can affect metadata or a later video fragment. */
-  private boolean tryDeviceConnection(Throwable failure) {
-    if (!zicoPage() || !hostingPlayback || hostingUnavailable || !HostingPlayback.networkUnavailable(failure)
-        || (!hostingSourceId.isEmpty() && !HostingPlayback.AUTOMATIC.equals(hostingSourceId))) return false;
-    hostingUnavailable = true; hostingPlayback = false; chromiumNetwork = false; mediaSystemRetry = false;
-    lastReport += "\nHosting inaccesible: conexión directa con el DNS seleccionado";
-    releasePlayer(); status.setText("El hosting no responde. Probando otra conexión…");
-    resolveFresh(); return true;
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {
@@ -1253,16 +1233,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseDiagnostic() {
-    List<String> addresses = new ArrayList<>(channelPages);
-    if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
-    if (directUrl != null) addresses.add(directUrl);
+    List<String> addresses = new ArrayList<>();
     if (zicoPage()) addresses.add(VideoResolver.eventApi(pageUrl) != null
         ? Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(pageUrl) : HostingPlayback.request(pageUrl));
+    addresses.addAll(channelPages);
+    if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
+    if (directUrl != null) addresses.add(directUrl);
     if (addresses.isEmpty()) return;
     String[] labels = new String[addresses.size()];
     for (int i = 0; i < labels.length; i++) {
       Uri u = Uri.parse(addresses.get(i));
-      labels[i] = u.getHost() + (VideoResolver.renewablePage(addresses.get(i)) || VideoResolver.eventApi(addresses.get(i)) != null ? u.getPath() : " · enlace directo");
+      labels[i] = HostingPlayback.isRelay(addresses.get(i)) ? "Hosting de Calamar TV · comprobar conexión"
+          : u.getHost() + (VideoResolver.renewablePage(addresses.get(i)) || VideoResolver.eventApi(addresses.get(i)) != null ? u.getPath() : " · enlace directo");
     }
     new AlertDialog.Builder(this).setTitle("Comprobar conexión")
         .setItems(labels, (dialog, index) -> diagnoseAddress(addresses.get(index)))
@@ -1306,21 +1288,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       actions.add(() -> selectChannelAddress(address, true));
     }
     if (zicoPage()) {
-      if (webMode) checked = names.size();
-      names.add("Reproductor web de Calamar");
-      actions.add(this::openChannelWeb);
-      names.add("Reproductor nativo");
-      actions.add(() -> {
-        hostingUnavailable = false; hostingSourceId = ""; automaticAttempts = 0;
-        generation++; resolving = false; webMode = false; clearWeb(); resolveFresh();
-      });
       for (HostingPlayback.Option option : hostingOptions) {
         if (hostingPlayback && option.id.equals(hostingSourceId)) checked = names.size();
         names.add(option.name);
         actions.add(() -> {
           generation++; resolving = false;
           handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
-          hostingUnavailable = false; hostingPlayback = true; hostingTriedPage = pageUrl; hostingSourceId = option.id; automaticAttempts = 0;
+          hostingPlayback = true; hostingTriedPage = pageUrl; hostingSourceId = option.id; automaticAttempts = 0;
           releasePlayer(); clearWeb(); webMode = false; resolveFresh();
         });
       }
@@ -1468,18 +1442,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           "El modo web admite enlaces HLS (.m3u8) por HTTPS. Usa Modo nativo para esta fuente.");
       return;
     }
-    openBrowserPlayer(BrowserPlayback.page(address));
-  }
-
-  private void openChannelWeb() {
-    if (!active || !zicoPage()) return;
-    hostingPlayback = false;
-    openBrowserPlayer(BrowserPlayback.channelPage(pageUrl));
-  }
-
-  /** Ordinary WebView: no user-agent spoofing, certificate overrides or native media interception. */
-  private void openBrowserPlayer(String playerPage) {
-    setFullscreen(false); // Keep Fuentes accessible above the WebView, including with the TV remote.
     generation++;
     resolving = false;
     diagnosing = false;
@@ -1489,12 +1451,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     clearWeb();
     webMode = true;
     playerView.setVisibility(View.GONE);
-    try { browser = new WebView(this); }
-    catch (RuntimeException unavailable) {
-      webMode = false;
-      problem("No se pudo iniciar el reproductor web. Actualiza Android System WebView o elige Reproductor nativo en Fuentes.");
-      return;
-    }
+    browser = new WebView(this);
     browser.getSettings().setJavaScriptEnabled(true);
     browser.getSettings().setDomStorageEnabled(true);
     browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
@@ -1513,7 +1470,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           public void onPageFinished(WebView view, String url) {
             if (active && webMode && generation == request && browser == view)
               status.setText(
-                  "Reproductor web de Calamar · Si no empieza, pulsa Reproducir.");
+                  "Reproductor web · Si no empieza, pulsa Reproducir. Atrás sale de pantalla"
+                      + " completa.");
           }
 
           @Override
@@ -1528,7 +1486,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText("Abriendo el reproductor web integrado…");
-    browser.loadUrl(playerPage);
+    browser.loadUrl(BrowserPlayback.page(address));
     browser.requestFocus();
   }
 

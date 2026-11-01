@@ -7,19 +7,6 @@ import java.net.URLDecoder;
 import org.junit.Test;
 
 public class BrowserPlaybackTest {
-  @Test public void channelBrowserKeepsStablePagesOutOfRequestsAndRejectsOtherSites() throws Exception {
-    for (String source : new String[] {"https://bp.zicotv.cc/api/player/4", "https://bp.zicotv.cc/events/98019"}) {
-      URI page = URI.create(BrowserPlayback.channelPage(source));
-      assertEquals("djyuanyo.github.io", page.getHost());
-      assertNull(page.getRawQuery());
-      assertEquals(source, URLDecoder.decode(page.getRawFragment(), "UTF-8"));
-    }
-    for (String bad : new String[] {"http://bp.zicotv.cc/api/player/4", "https://zicotv.cc.evil.test/api/player/4", "https://user:secret@bp.zicotv.cc/api/player/4", "https://bp.zicotv.cc/admin"}) {
-      try { BrowserPlayback.channelPage(bad); fail("Accepted an unsupported player page"); }
-      catch (IllegalArgumentException expected) { }
-    }
-  }
-
   @Test
   public void signedSourceIsPreservedAndNeverInHostingQuery() throws Exception {
     String source = "https://cdn.example/live/INDEX.M3U8?token=a%2Bb%2Fc-1799999999-&x=1+2";
