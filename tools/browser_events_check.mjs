@@ -879,7 +879,7 @@ try {
   assert.equal(await page.locator('#player-close').isVisible(), true);
   assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
-  // Resolution and every HLS URL stay on the hosting; no provider page is loaded by the viewer.
+  // If the public provider cannot be reached, playback falls back to the signed hosting route.
   hostedReady = true;
 
   await page.goto(base + '/?zico=2#/canal/canal-zico');
@@ -914,6 +914,18 @@ try {
   eventReady = true;
   await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  await page.locator('#player-close').click();
+  // The 2.20.67 direct route keeps playing even when our hosting domain cannot be reached.
+  await page.route('https://calamarmenciano.com/calamar-player.php?*', route => route.abort());
+  await page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4'];
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  });
+  await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
+  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-4')));
+  assert.ok((await page.evaluate(() => window.__hlsSources)).some(url => new URL(url).hostname === 'cdn.example'));
+  assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
   // A sync that only deletes files must publish too. Exercise the actual admin handlers and readers.
   const syncPage = await browser.newPage();

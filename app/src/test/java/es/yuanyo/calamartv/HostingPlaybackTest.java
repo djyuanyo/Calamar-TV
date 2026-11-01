@@ -86,4 +86,13 @@ public class HostingPlaybackTest {
       }
     }
   }
+  @org.junit.Test public void onlyNetworkFailuresEnableTheDeviceRoute() {
+    org.junit.Assert.assertTrue(HostingPlayback.networkUnavailable(new java.net.UnknownHostException("hosting")));
+    org.junit.Assert.assertTrue(HostingPlayback.networkUnavailable(new java.net.SocketTimeoutException("hosting")));
+    org.junit.Assert.assertTrue(HostingPlayback.networkUnavailable(new java.net.SocketException("reset")));
+    org.junit.Assert.assertFalse(HostingPlayback.networkUnavailable(new PlayerDocument.HttpFailure(403)));
+    org.junit.Assert.assertFalse(HostingPlayback.networkUnavailable(new javax.net.ssl.SSLHandshakeException("certificate")));
+    org.junit.Assert.assertFalse(HostingPlayback.networkUnavailable(new java.io.IOException("invalid signed URL")));
+  }
+
 }

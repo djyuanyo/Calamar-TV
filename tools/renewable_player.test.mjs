@@ -24,7 +24,7 @@ function fixture(fetcher, NativeHls = true, options = {}) {
     emitError(code = 403) { this[Hls.Events.ERROR]('', { fatal: true, response: { code } }); }
   }
   const timers = { setTimeout(fn, delay) { jobs.set(++id, { fn, at: clock + delay }); return id; }, clearTimeout(key) { jobs.delete(key); } };
-  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher, timers, now: () => clock,
+  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher, timers, now: () => clock, preferDirect: false,
     onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true), ...options });
   return { stop, engines, video, listeners, statuses, fallbacks, jobs,
     async tick(ms) { clock += ms; for (const [key, job] of [...jobs]) if (job.at <= clock && jobs.has(key)) { jobs.delete(key); job.fn(); } await flush(); } };
@@ -137,4 +137,47 @@ test('an explicitly chosen hosted signal is preserved on renewal and error retry
   await flush(); f.engines[0].emitError(); await f.tick(250);
   assert.equal(calls.length, 2); assert.ok(calls.every(u => u.searchParams.get('src') === '1' && !u.searchParams.has('intento')));
   assert.equal(webPlayback(chosen, { pages: true }).renewable, true); f.stop();
+});
+
+
+test('2.20.67 direct lookup starts without contacting the hosting and renews its token', async () => {
+  const calls = [];
+  const f = fixture(async (url, options) => {
+    calls.push(url); assert.equal(url, page); assert.equal(options.credentials, 'omit');
+    return {ok:true, url:page, text:async()=>document(media(calls.length === 1 ? 1793040120 : 1793041320))};
+  }, true, {preferDirect:true});
+  await flush(); assert.equal(f.engines[0].url, media(1793040120));
+  await f.tick(90000); assert.equal(f.engines[1].url, media(1793041320));
+  assert.equal(calls.length, 2); f.stop();
+});
+
+test('a blocked provider falls back to signed hosting without replacing our player', async () => {
+  const calls = [];
+  const f = fixture(async url => {
+    calls.push(url);
+    if (url === page) throw new TypeError('Failed to fetch');
+    return response(media(1793041200));
+  }, true, {preferDirect:true});
+  await flush(); await f.tick(250);
+  assert.equal(calls[0], page); assert.equal(new URL(calls[1]).hostname, 'calamarmenciano.com');
+  assert.equal(f.engines[0].url, signed(media(1793041200))); assert.equal(f.fallbacks.length, 0); f.stop();
+});
+
+test('an unreachable hosting falls back to the public provider with fresh renewal', async () => {
+  let direct = 0;
+  const f = fixture(async url => {
+    if (url !== page) throw new TypeError('Failed to fetch');
+    direct++; return {ok:true,url:page,text:async()=>document(media(direct === 1 ? 1793040120 : 1793041320))};
+  });
+  await flush(); await f.tick(250); assert.equal(f.engines[0].url, media(1793040120));
+  await f.tick(90000); assert.equal(f.engines[1].url, media(1793041320)); f.stop();
+});
+
+test('direct lookup never plays locked sources or expired tokens', async () => {
+  const f = fixture(async url => {
+    if (url !== page) return response(media(1793041200));
+    return {ok:true,url:page,text:async()=>`var ZT_SOURCES = ${JSON.stringify([{url:media(1793041200),locked:true},{url:media(1793039999)}])};`};
+  }, true, {preferDirect:true});
+  await flush(); assert.equal(f.engines.length, 0); await f.tick(250);
+  assert.equal(f.engines[0].url, signed(media(1793041200))); f.stop();
 });

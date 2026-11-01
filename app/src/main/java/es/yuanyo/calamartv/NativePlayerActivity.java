@@ -92,6 +92,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
   private boolean hostingPlayback;
+  private boolean hostingUnavailable;
   private String hostingTriedPage;
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
   private String hostingSourceId = "";
@@ -595,7 +596,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     final String requestedPage = pageUrl;
-    if (zicoPage()) hostingPlayback = true;
+    if (zicoPage()) hostingPlayback = !hostingUnavailable;
     final boolean throughHosting = hostingPlayback;
     final String requestedSignal = hostingSourceId.isEmpty() ? HostingPlayback.AUTOMATIC : hostingSourceId;
     final int requestedAttempt = automaticAttempts;
@@ -719,6 +720,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                         "No se pudo renovar. La emisión actual continúa; reintentando…");
                     handler.removeCallbacks(renewal);
                     handler.postDelayed(renewal, 15000L);
+                  } else if (throughHosting && tryDeviceConnection(failure)) {
+                    return;
                   } else if (throughHosting) {
                     if (HostingPlayback.AUTOMATIC.equals(requestedSignal))
                       refreshAutomatically("El servidor no ha encontrado vídeo todavía. Reintentando con otra señal…");
@@ -927,7 +930,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+              if (tryDeviceConnection(error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -973,7 +976,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
-      if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+      if (tryDeviceConnection(error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -996,12 +999,22 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** One hosting attempt per page; renewals continue through the selected route. */
   private boolean tryHosting() {
-    if (!zicoPage() || hostingPlayback || pageUrl.equals(hostingTriedPage)) return false;
+    if (!zicoPage() || hostingPlayback || hostingUnavailable || pageUrl.equals(hostingTriedPage)) return false;
     hostingPlayback = true; hostingTriedPage = pageUrl;
     releasePlayer();
     status.setText("Conectando con la señal del canal…");
     resolveFresh();
     return true;
+  }
+
+  /** A network cut to our hosting can affect metadata or a later video fragment. */
+  private boolean tryDeviceConnection(Throwable failure) {
+    if (!zicoPage() || !hostingPlayback || hostingUnavailable || !HostingPlayback.networkUnavailable(failure)
+        || (!hostingSourceId.isEmpty() && !HostingPlayback.AUTOMATIC.equals(hostingSourceId))) return false;
+    hostingUnavailable = true; hostingPlayback = false; chromiumNetwork = false; mediaSystemRetry = false;
+    lastReport += "\nHosting inaccesible: conexión directa con el DNS seleccionado";
+    releasePlayer(); status.setText("El hosting no responde. Probando otra conexión…");
+    resolveFresh(); return true;
   }
 
   private boolean retryChromiumNetwork(VideoResolver.Source source) {
@@ -1291,7 +1304,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         actions.add(() -> {
           generation++; resolving = false;
           handler.removeCallbacks(renewal); handler.removeCallbacks(renewalRequest);
-          hostingPlayback = true; hostingTriedPage = pageUrl; hostingSourceId = option.id; automaticAttempts = 0;
+          hostingUnavailable = false; hostingPlayback = true; hostingTriedPage = pageUrl; hostingSourceId = option.id; automaticAttempts = 0;
           releasePlayer(); clearWeb(); webMode = false; resolveFresh();
         });
       }

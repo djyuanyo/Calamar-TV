@@ -48,20 +48,22 @@ export function hostedPage(address) {
   return null;
 }
 
-/** Resolve through the hosting; its first usable HLS wins without waiting for the other signals. */
+/** Use the 2.20.67 device route, with signed hosting as an independent fallback. */
 export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null,
-  fetcher = globalThis.fetch, timers = globalThis, now = Date.now }) {
+  fetcher = globalThis.fetch, timers = globalThis, now = Date.now, preferDirect = true }) {
   const original = hostedPage(page);
   let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, watchdog = null, engine = null;
-  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false;
+  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false;
   const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
   selected.searchParams.set('cast', '1');
   const automatic = !selected.searchParams.has('src') && !selected.searchParams.has('source_id');
+  deviceRoute = preferDirect && automatic;
   const clearRefresh = () => { timers.clearTimeout(refreshTimer); refreshTimer = null; };
   const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
-  const retry = () => {
+  const retry = (networkFailure = false) => {
     if (stopped || request || recovering) return;
+    if (automatic && networkFailure) deviceRoute = !deviceRoute;
     failures++; recovering = true;
     onStatus('Probando otra señal disponible…');
     // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
@@ -73,7 +75,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     if (Hls?.isSupported()) {
       const instance = engine = new Hls({ lowLatencyMode: false, maxBufferLength: 30 });
       instance.on(Hls.Events.ERROR, (_event, data) => {
-        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry();
+        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry(data.response?.code === 0);
       });
       instance.loadSource(url); instance.attachMedia(video); onAttach(instance);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = url;
@@ -83,29 +85,51 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   async function refresh() {
     if (stopped || request) return;
     clearRefresh();
+    const usingDevice = deviceRoute;
     const controller = request = new AbortController();
-    const timeout = timers.setTimeout(() => controller.abort(), 35000);
+    const timeout = timers.setTimeout(() => controller.abort(), deviceRoute ? 15000 : 35000);
     try {
       if (!original) throw Error('Enlace de canal no válido.');
       const target = new URL(selected);
       if (automatic && failures) target.searchParams.set('intento', String(Math.min(9, failures)));
-      const response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
-      const data = await response.json();
-      if (!response.ok) throw Error(data.error || `Hosting HTTP ${response.status}`);
+      let url;
+      if (deviceRoute && automatic) {
+        const response = await fetcher(original, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+        if (!response.ok) throw Error(`Proveedor HTTP ${response.status}`);
+        const sources = pageSources(await response.text(), response.url || original).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
+        if (!sources.length) throw Error('No hay señales públicas disponibles.');
+        let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);
+        if (recovering && index >= 0) index = (index + 1) % sources.length;
+        url = sources[Math.max(0, index)];
+      } else {
+        let response;
+        try { response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', signal: controller.signal }); }
+        catch (error) {
+          // A network failure is different from a rejected or invalid hosting response.
+          if (!stopped && automatic && (error instanceof TypeError || error.name === 'AbortError')) deviceRoute = true;
+          throw error;
+        }
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || `Hosting HTTP ${response.status}`);
+        url = hostedUrl(data.url);
+      }
       if (stopped || controller.signal.aborted) return;
-      const url = hostedUrl(data.url);
       if (url !== address || recovering) install(url);
       if (stopped) return;
       recovering = false;
-      // The hosting provides fresh signed media; refresh periodically and immediately on errors.
-      let upstream = '';
-      try { const code = new URL(url).searchParams.get('seg').replaceAll('-', '+').replaceAll('_', '/'); upstream = atob(code.padEnd(Math.ceil(code.length / 4) * 4, '=')); } catch { /* Unknown token: periodic renewal. */ }
+      // Both routes receive fresh provider tokens; renew on expiry and on playback errors.
+      let upstream = deviceRoute ? url : '';
+      if (!deviceRoute) try {
+        const code = new URL(url).searchParams.get('seg').replaceAll('-', '+').replaceAll('_', '/');
+        upstream = atob(code.padEnd(Math.ceil(code.length / 4) * 4, '='));
+      } catch { /* Unknown token: periodic renewal. */ }
       schedule(renewalDelay(upstream, now()));
     } catch (error) {
       if (stopped) return;
+      if (usingDevice) deviceRoute = false;
       failures++;
       const delay = failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4));
-      onStatus(`No se pudo conectar con la señal. Reintentando…`);
+      onStatus(deviceRoute ? 'El hosting no responde. Probando la conexión directa…' : 'No se pudo conectar con la señal. Reintentando…');
       schedule(delay);
     } finally {
       timers.clearTimeout(timeout);
@@ -116,7 +140,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     if (stopped) return;
     failures = 0; onStatus('');
     // Populate the optional selector after playback, so metadata never delays the first picture.
-    if (!onSources || menuStarted) return;
+    if (!onSources || menuStarted || deviceRoute) return;
     menuStarted = true; menu = new AbortController();
     const mine = menu; menuTimer = timers.setTimeout(() => mine.abort(), 15000);
     void expandHostedSources([original], { fetcher, signal: mine.signal }).then(options => {

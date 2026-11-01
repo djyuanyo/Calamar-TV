@@ -55,8 +55,10 @@ public class AppLinksTest {
         finally { activity.setIntent(initial); }
       });
       androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Portada compartida"))
+          .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
           .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
-      androidx.test.espresso.Espresso.pressBack();
+      androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withContentDescription("Volver"))
+          .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog()).perform(androidx.test.espresso.action.ViewActions.click());
     }
   }
 

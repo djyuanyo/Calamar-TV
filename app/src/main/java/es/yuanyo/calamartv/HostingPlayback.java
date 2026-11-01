@@ -47,6 +47,16 @@ final class HostingPlayback {
     catch (Exception error) { throw new IOException("No se pudieron leer las señales del canal", error); }
   }
 
+  /** A rejected HTTP response or certificate is never treated as an unavailable network route. */
+  static boolean networkUnavailable(Throwable error) {
+    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+      if (cause instanceof javax.net.ssl.SSLException || cause instanceof PlayerDocument.HttpFailure) return false;
+      if (cause instanceof java.net.UnknownHostException || cause instanceof java.net.SocketTimeoutException
+          || cause instanceof java.net.SocketException || cause instanceof java.net.NoRouteToHostException) return true;
+    }
+    return false;
+  }
+
   static String request(String page) {
     return Library.playerRelay(page) + "&cast=1";
   }
