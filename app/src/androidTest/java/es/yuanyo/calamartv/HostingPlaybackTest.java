@@ -48,19 +48,25 @@ public class HostingPlaybackTest {
     NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
     try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
         .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba solo hosting"))) {
-      AtomicBoolean finished = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + 20000;
+      AtomicBoolean finished = new AtomicBoolean();
+      java.util.concurrent.atomic.AtomicReference<String> lastStatus = new java.util.concurrent.atomic.AtomicReference<>("");
+      // Four bounded attempts now consult two owned hostnames. Allow emulator scheduling overhead.
+      long deadline = SystemClock.elapsedRealtime() + 35000;
       while (!finished.get() && SystemClock.elapsedRealtime() < deadline) {
         scenario.onActivity(activity -> {
           try {
             Field browser = NativePlayerActivity.class.getDeclaredField("browser"); browser.setAccessible(true);
             assertNull("A hosting outage must not open a browser player", browser.get(activity));
             Field status = NativePlayerActivity.class.getDeclaredField("status"); status.setAccessible(true);
-            finished.set(((android.widget.TextView) status.get(activity)).getText().toString().contains("No se pudo conectar con esta fuente"));
+            lastStatus.set(((android.widget.TextView) status.get(activity)).getText().toString());
+            assertEquals("No retry may contact the upstream provider", 0, direct.get());
+            finished.set(lastStatus.get().contains("No se pudo conectar con esta fuente"));
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
         SystemClock.sleep(100);
       }
-      assertTrue("Hosting retries must finish with a visible connection error", finished.get());
+      assertTrue("Hosting retries must finish with a visible connection error; status=" + lastStatus.get() + ", hosted=" + hosted.get(), finished.get());
+      assertTrue("Hosting retries must stay bounded", hosted.get() <= 20);
       assertTrue("The configured hosting was never requested", hosted.get() >= 3);
       assertEquals("The device must never contact the upstream provider", 0, direct.get());
     } finally {
