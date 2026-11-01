@@ -33,6 +33,7 @@ public class AdminActivity extends Activity {
   private long revision;
   private boolean loading, saving;
   private EditText pendingCover;
+  private Runnable pendingCoverReady;
   private String adminSection = "events";
   private FirebaseAuth.AuthStateListener authListener;
 
@@ -316,8 +317,20 @@ public class AdminActivity extends Activity {
     EditText name = input(form, "Nombre", existing == null ? "" : existing.optString("name"));
     EditText group =
         categoryInput(form, existing == null ? "Calamar TV" : existing.optString("group", "Calamar TV"));
-    EditText logo =
-        input(form, "Logo https (opcional)", existing == null ? "" : existing.optString("logo"));
+    String savedLogo = existing == null ? "" : existing.optString("logo");
+    EditText logo = input(form, "Logo HTTPS (opcional)", savedLogo.startsWith("https://") ? savedLogo : "");
+    logo.setTag(savedLogo.startsWith("data:image/") ? savedLogo : "");
+    ImageView preview = new ImageView(this);
+    preview.setContentDescription("Vista previa del logo del canal");
+    preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    form.addView(preview, new LinearLayout.LayoutParams(dp(128), dp(128)));
+    Runnable showLogo = () -> previewChannelLogo(preview, channelLogo(logo));
+    logo.addTextChangedListener(watcher(() -> { logo.setTag(""); if (logo.getText().length() == 0) showLogo.run(); }));
+    logo.setOnFocusChangeListener((v, focused) -> { if (!focused) showLogo.run(); });
+    showLogo.run();
+    Button upload = new Button(this); upload.setText("Subir imagen del canal"); upload.setAllCaps(false); form.addView(upload);
+    Button clearLogo = new Button(this); clearLogo.setText("Quitar imagen"); clearLogo.setAllCaps(false); form.addView(clearLogo);
+    clearLogo.setOnClickListener(v -> { logo.setTag(""); logo.setText(""); showLogo.run(); });
     EditText streams =
         input(
             form,
@@ -377,11 +390,11 @@ public class AdminActivity extends Activity {
                                     group.getText().toString().trim().isEmpty()
                                         ? "Calamar TV"
                                         : group.getText().toString().trim())
-                                .put("logo", logo.getText().toString().trim())
+                                .put("logo", channelLogo(logo))
                                 .put("streams", links);
                         if (!channel.getString("logo").isEmpty()
-                            && !channel.getString("logo").startsWith("https://"))
-                          throw new JSONException("El logo debe usar https");
+                            && !SharedCatalog.validCover(channel.getString("logo")))
+                          throw new JSONException("El logo debe ser una imagen o un enlace HTTPS válido");
                         JSONObject next = copy();
                         JSONArray list = next.getJSONArray("channels");
                         boolean replaced = false;
@@ -401,7 +414,47 @@ public class AdminActivity extends Activity {
                         error.setText(invalid.getMessage());
                       }
                     }));
+    upload.setOnClickListener(v -> {
+      pendingCover = logo;
+      pendingCoverReady = () -> { logo.setEnabled(true); upload.setEnabled(true); clearLogo.setEnabled(true); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); showLogo.run(); };
+      logo.setEnabled(false); upload.setEnabled(false); clearLogo.setEnabled(false); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+      try { startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 300); }
+      catch (android.content.ActivityNotFoundException missing) {
+        pendingCover = null; Runnable ready = pendingCoverReady; pendingCoverReady = null; ready.run(); logo.setError("Pega un enlace HTTPS a la imagen.");
+      }
+    });
     dialog.show();
+  }
+
+  private static String channelLogo(EditText logo) {
+    String value = logo.getText().toString().trim();
+    return value.isEmpty() && logo.getTag() instanceof String ? (String) logo.getTag() : value;
+  }
+
+  private void previewChannelLogo(ImageView preview, String image) {
+    preview.setTag(image); preview.setImageDrawable(null);
+    preview.setVisibility(SharedCatalog.validCover(image) ? android.view.View.VISIBLE : android.view.View.GONE);
+    if (!SharedCatalog.validCover(image)) return;
+    new android.os.AsyncTask<Void, Void, android.graphics.Bitmap>() {
+      protected android.graphics.Bitmap doInBackground(Void... unused) {
+        try {
+          byte[] bytes = image.startsWith("data:image/")
+              ? android.util.Base64.decode(image.substring(image.indexOf(',') + 1), android.util.Base64.DEFAULT)
+              : MainActivity.downloadImage(image);
+          if (bytes == null) return null;
+          android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+          options.inJustDecodeBounds = true; android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+          options.inSampleSize = 1;
+          while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 512) options.inSampleSize *= 2;
+          options.inJustDecodeBounds = false;
+          return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+        } catch (Exception invalid) { return null; }
+      }
+      protected void onPostExecute(android.graphics.Bitmap bitmap) {
+        if (!isFinishing() && image.equals(preview.getTag())) preview.setImageBitmap(bitmap);
+        else if (bitmap != null) bitmap.recycle();
+      }
+    }.execute();
   }
 
   private void editEvent(JSONObject existing) {
@@ -601,8 +654,10 @@ public class AdminActivity extends Activity {
   @Override
   protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
-    if (requestCode != 300 || resultCode != RESULT_OK || data == null || data.getData() == null || pendingCover == null) return;
+    if (requestCode != 300) return;
     final EditText target = pendingCover; pendingCover = null;
+    final Runnable ready = pendingCoverReady; pendingCoverReady = null;
+    if (resultCode != RESULT_OK || data == null || data.getData() == null || target == null) { if (ready != null) ready.run(); return; }
     final Uri uri = data.getData();
     new android.os.AsyncTask<Void, Void, String>() {
       protected String doInBackground(Void... unused) {
@@ -647,7 +702,8 @@ public class AdminActivity extends Activity {
       protected void onPostExecute(String cover) {
         if (isFinishing()) return;
         if (cover == null) target.setError("No se pudo preparar la foto. Prueba una imagen más pequeña.");
-        else { target.setText(""); target.setTag(cover); target.setHint("Foto seleccionada. Pega un enlace para cambiarla."); Toast.makeText(AdminActivity.this, "Portada preparada", Toast.LENGTH_SHORT).show(); }
+        else { target.setText(""); target.setTag(cover); target.setHint("Foto seleccionada. Pega un enlace para cambiarla."); Toast.makeText(AdminActivity.this, "Imagen preparada", Toast.LENGTH_SHORT).show(); }
+        if (ready != null) ready.run();
       }
     }.execute();
   }

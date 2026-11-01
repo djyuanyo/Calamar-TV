@@ -111,23 +111,50 @@ function channelForm(existing, rerender, state) {
   groupNewField.hidden = groupSelect.value !== NEW_GROUP;
   groupSelect.addEventListener('change', () => { groupNewField.hidden = groupSelect.value !== NEW_GROUP; if (!groupNewField.hidden) groupNew.focus(); });
   const group = { get value() { return groupSelect.value === NEW_GROUP ? groupNew.value : groupSelect.value; } };
-  const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: existing ? existing.logo || '' : '' });
+  let selectedLogo = existing?.logo || '', imageRevision = 0, preparingLogo = false;
+  const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: selectedLogo.startsWith('https://') ? selectedLogo : '' });
+  const preview = el('img', { class: 'channel-logo-preview', alt: 'Vista previa del logo del canal', hidden: true });
+  const updatePreview = () => { preview.hidden = !validCover(selectedLogo); if (!preview.hidden) preview.src = selectedLogo; else preview.removeAttribute('src'); };
+  const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
   const streams = el('textarea', { required: true, placeholder: 'https://servidor/canal/index.m3u8', spellcheck: 'false' }, existing ? (existing.streams || []).join('\n') : '');
   const star = el('input', { type: 'checkbox', checked: existing ? data.featured.includes(existing.id) : false });
   const status = el('p', { class: 'note', 'aria-live': 'polite' });
+  const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
+    const image = upload.files?.[0]; if (!image) return;
+    const request = ++imageRevision; preparingLogo = true; submit.disabled = true;
+    status.className = 'note'; status.textContent = 'Preparando imagen…';
+    try {
+      const prepared = await coverFromFile(image, [512, 384, 256, 192]);
+      if (request !== imageRevision) return;
+      selectedLogo = prepared; logo.value = ''; updatePreview(); status.textContent = 'Imagen preparada.';
+    } catch (error) {
+      if (request === imageRevision) { status.textContent = error.message; status.className = 'error'; }
+    } finally {
+      if (request === imageRevision) { preparingLogo = false; submit.disabled = false; }
+    }
+  } });
+  logo.addEventListener('input', () => {
+    imageRevision++; preparingLogo = false; submit.disabled = false; upload.value = '';
+    selectedLogo = logo.value.trim(); updatePreview(); status.textContent = ''; status.className = 'note';
+  });
+  const clearLogo = el('button', { class: 'ghost', type: 'button', onclick: () => {
+    logo.value = ''; logo.dispatchEvent(new Event('input'));
+  } }, 'Quitar imagen');
+  updatePreview();
   return el(
     'form',
     {
       class: 'form',
       onsubmit: async (e) => {
         e.preventDefault();
-        if (saving) return;
+        if (saving || preparingLogo) return;
         try {
+          if (selectedLogo && !validCover(selectedLogo)) throw new Error('El logo debe ser una imagen o un enlace HTTPS válido.');
           const channel = {
             id: existing ? existing.id : `mio-${slug(name.value)}-${Date.now().toString(36)}`,
             name: name.value.trim(),
             group: group.value.trim(),
-            logo: logo.value.trim().startsWith('https://') ? logo.value.trim() : '',
+            logo: selectedLogo,
             streams: validStreams(streams.value),
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
@@ -156,10 +183,12 @@ function channelForm(existing, rerender, state) {
     field('Nombre', name, 'Por ejemplo «Canal Menciana».'),
     field('Categoría', groupSelect, 'Elige una de la lista o «Nueva categoría» para escribirla.'),
     groupNewField,
-    field('Logo (opcional)', logo),
+    field('Logo (opcional)', logo, 'Pega un enlace HTTPS o sube una imagen desde tu dispositivo.'),
+    field('Subir imagen del canal', upload, 'La imagen se adapta automáticamente y conserva la transparencia.'),
+    preview, clearLogo,
     field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI solo se ven en la app. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
-    el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
+    el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
   );
 }

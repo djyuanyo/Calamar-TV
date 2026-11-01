@@ -1009,5 +1009,51 @@ try {
   await page.locator('.library-admin-list .library-item').first().getByRole('button', { name: 'Editar', exact: true }).click();
   await page.getByRole('button', { name: 'Eliminar del catálogo', exact: true }).click();
   await page.waitForFunction(n => document.querySelectorAll('.library-admin-list .library-item').length === n - 1, beforeDelete);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
+  // Channel images can be chosen from a device when creating or editing; untouched images persist.
+  const channelPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  channelPage.on('pageerror', error => errors.push(error.message));
+  await channelPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  const logoFile = { name: 'canal.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') };
+  await channelPage.goto(base + '/#/admin');
+  await channelPage.getByLabel('Nombre', { exact: true }).fill('Canal con imagen');
+  await channelPage.getByLabel('Enlaces', { exact: true }).fill('https://example.com/channel.m3u8');
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles(logoFile);
+  await channelPage.getByText('Imagen preparada.', { exact: true }).waitFor();
+  const uploadedLogo = await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src');
+  assert.match(uploadedLogo, /^data:image\/(png|webp);base64,/);
+  await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await channelPage.waitForFunction(() => window.__published?.channels.some(c => c.name === 'Canal con imagen'));
+  const imageChannelId = await channelPage.evaluate(() => window.__published.channels.find(c => c.name === 'Canal con imagen').id);
+  const editChannel = async () => {
+    await channelPage.goto(base + '/#/admin/editar/' + imageChannelId);
+    await channelPage.getByRole('heading', { name: /Editar Canal con imagen/ }).waitFor();
+  };
+  const saveChannel = async expected => {
+    await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+    await channelPage.getByText('Guardado. Los cambios ya están publicados para la web y la app.', { exact: true }).waitFor();
+    await channelPage.waitForFunction(([id, expected]) => window.__published?.channels.find(c => c.id === id)?.logo === expected, [imageChannelId, expected]);
+  };
+  await editChannel();
+  assert.equal(await channelPage.getByLabel('Logo (opcional)', { exact: true }).inputValue(), '');
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Nombre', { exact: true }).fill('Canal con imagen editado');
+  await saveChannel(uploadedLogo);
+  await editChannel();
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles([]);
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles({ name: 'archivo.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+  await channelPage.getByText('Elige una imagen.', { exact: true }).waitFor();
+  assert.equal(await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).isEnabled(), true);
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Logo (opcional)', { exact: true }).fill('https://example.com/new-logo.png');
+  await saveChannel('https://example.com/new-logo.png');
+  await editChannel();
+  assert.equal(await channelPage.getByLabel('Logo (opcional)', { exact: true }).inputValue(), 'https://example.com/new-logo.png');
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles(logoFile);
+  await channelPage.getByText('Imagen preparada.', { exact: true }).waitFor();
+  await saveChannel(uploadedLogo);
+  await editChannel(); await channelPage.getByRole('button', { name: 'Quitar imagen', exact: true }).click(); await saveChannel('');
+  assert.equal(await channelPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await channelPage.close(); assert.deepEqual(errors, []);
+  console.log('UI verificada: crear y editar canales con subida de imagen, URL, transparencia y cancelación; crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

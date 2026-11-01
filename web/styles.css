@@ -1386,3 +1386,5 @@ body.gate-open { overflow: hidden; }
 .library-art-field label { display: grid; gap: 7px; }
 .library-art-field input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #38404b; border-radius: 8px; background: #0f1217; color: inherit; box-sizing: border-box; }
 .library-art-field small { color: var(--muted); }
+
+.channel-logo-preview { width: 128px; height: 128px; object-fit: contain; padding: 12px; border: 1px solid #ffffff26; border-radius: 12px; background: #ffffff0a; }
