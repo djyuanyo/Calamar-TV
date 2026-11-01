@@ -42,10 +42,15 @@ public class MultiPlaybackTest {
     if(root instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)root;for(int i=0;i<group.getChildCount();i++){T child=find(group.getChildAt(i),kind,description);if(child!=null)return child;}}
     return null;
   }
+  static String windowFocus(){
+    try(InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("dumpsys window windows"))){
+      StringBuilder focus=new StringBuilder();for(String line:Io.read(input).split("\n"))if(line.contains("mCurrentFocus=")||line.contains("mFocusedApp="))focus.append(line.trim()).append(';');return focus.toString();
+    }catch(Exception error){return error.getClass().getSimpleName();}
+  }
   static Dialog picker(Activity activity)throws Exception{
     AtomicReference<Dialog> value=new AtomicReference<>();AtomicReference<String> detail=new AtomicReference<>();AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
-    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{Dialog d=(Dialog)field(activity,activity instanceof MultiPlayerActivity?"picker":"multiPicker");value.set(d);focused.set(d!=null&&d.isShowing()&&d.getWindow().getDecorView().hasWindowFocus());detail.set("dialog="+(d==null?"null":("showing="+d.isShowing()+", flags="+d.getWindow().getAttributes().flags+", focus="+d.getCurrentFocus()))+", activityFocus="+activity.hasWindowFocus()+", active="+field(activity,"active"));});SystemClock.sleep(100);}
-    assertTrue("The event selector must receive real input focus: "+detail.get(),focused.get());return value.get();
+    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{Dialog d=(Dialog)field(activity,activity instanceof MultiPlayerActivity?"picker":"multiPicker");value.set(d);focused.set(d!=null&&d.isShowing()&&d.getWindow().getDecorView().hasWindowFocus());detail.set("dialog="+(d==null?"null":("showing="+d.isShowing()+", flags="+d.getWindow().getAttributes().flags+", focus="+d.getCurrentFocus()))+", activityFocus="+activity.hasWindowFocus()+", active="+field(activity,"active")+", tiles="+(activity instanceof MultiPlayerActivity?tiles((MultiPlayerActivity)activity).size():1));});SystemClock.sleep(100);}
+    assertTrue("The event selector must receive real input focus: "+detail.get()+(focused.get()?"":"; "+windowFocus()),focused.get());return value.get();
   }
   static void search(Dialog dialog,String query)throws Exception{main(()->{EditText input=find(dialog.getWindow().getDecorView(),EditText.class,"Buscar evento para multipantalla");assertNotNull(input);assertTrue(input.isShown());input.setText(query);});}
   static void choose(Dialog dialog,String name)throws Exception{
@@ -55,6 +60,11 @@ public class MultiPlaybackTest {
   static List<?> tiles(MultiPlayerActivity activity)throws Exception{Field f=MultiPlayerActivity.class.getDeclaredField("tiles");f.setAccessible(true);return (List<?>)f.get(activity);}
   static List<ExoPlayer> players(MultiPlayerActivity activity)throws Exception{List<ExoPlayer> out=new ArrayList<>();for(Object tile:tiles(activity))out.add((ExoPlayer)field(tile,"player"));return out;}
   static void show(MultiPlayerActivity activity)throws Exception{Method m=MultiPlayerActivity.class.getDeclaredMethod("showControls",boolean.class);m.setAccessible(true);m.invoke(activity,true);}
+  static void foreground(Activity activity)throws Exception{
+    AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
+    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->focused.set(activity.hasWindowFocus()));SystemClock.sleep(100);}
+    assertTrue("The player must regain window focus after layout/rotation before the next click: "+(focused.get()?"":windowFocus()),focused.get());
+  }
   static void renders(MultiPlayerActivity activity,int count)throws Exception{
     long deadline=SystemClock.elapsedRealtime()+35000;AtomicBoolean done=new AtomicBoolean();
     while(!done.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{List<ExoPlayer> ps=players(activity);done.set(ps.size()==count);for(ExoPlayer p:ps)done.set(done.get()&&p!=null&&p.isPlaying()&&p.getVideoSize().width>0&&p.getCurrentPosition()>300);});SystemClock.sleep(100);}
@@ -99,10 +109,10 @@ public class MultiPlaybackTest {
       }finally{instrumentation.removeMonitor(monitor);}
       assertNotNull(launch.get());Intent multiIntent=launch.get().setClass(context,MultiFixtureActivity.class);
       try(ActivityScenario<MultiFixtureActivity> multi=ActivityScenario.launch(multiIntent)){
-        AtomicReference<MultiFixtureActivity> activity=new AtomicReference<>();multi.onActivity(activity::set);renders(activity.get(),2);
+        AtomicReference<MultiFixtureActivity> activity=new AtomicReference<>();multi.onActivity(activity::set);renders(activity.get(),2);foreground(activity.get());
         AtomicReference<ExoPlayer> first=new AtomicReference<>();main(()->first.set(players(activity.get()).get(0)));
-        for(String name:new String[]{names[1],names[2]}){
-          main(()->{show(activity.get());((Button)field(activity.get(),"addButton")).performClick();});choose(picker(activity.get()),name);
+        int expected=3;for(String name:new String[]{names[1],names[2]}){
+          main(()->{show(activity.get());((Button)field(activity.get(),"addButton")).performClick();});choose(picker(activity.get()),name);renders(activity.get(),expected++);foreground(activity.get());
         }
         renders(activity.get(),4);main(()->{assertSame("Earlier tiles must keep their player",first.get(),players(activity.get()).get(0));show(activity.get());});
         main(()->{Button add=(Button)field(activity.get(),"addButton");assertFalse(add.isEnabled());add.performClick();assertEquals(4,tiles(activity.get()).size());assertFalse(((Dialog)field(activity.get(),"picker")).isShowing());});

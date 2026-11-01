@@ -189,14 +189,15 @@ public class MultiPlayerActivity extends Activity {
     Tile tile = new Tile(title, AppSources.forAndroid(streams), target, channel); tiles.add(tile); if (audible == null) audible = tile;
   }
   private void chooseEvent() {
-    if (tiles.size() >= MultiScreen.MAX) return;
+    if (tiles.size() >= MultiScreen.MAX || picker != null && picker.isShowing()) return;
+    systemBars(false);
     List<String> selected = new ArrayList<>(); for (Tile tile : tiles) if (tile.target != null) selected.add(tile.target);
     picker = MultiEventPicker.show(this, selected, event -> {
       int before = tiles.size(); append(event.name, event.streams, AudienceModel.target(true, event.id), event.channelId);
       if (tiles.size() > before) { layoutTiles(); tiles.get(tiles.size() - 1).start(); }
       showControls(true);
     });
-    picker.setOnDismissListener(d -> showControls(true));
+    picker.setOnDismissListener(d -> { if (active) { immersive(); showControls(true); } });
   }
   private void removeTile(Tile tile) {
     if (tiles.size() < 2) return;
@@ -214,7 +215,7 @@ public class MultiPlayerActivity extends Activity {
       }
       rows.addView(row, new LinearLayout.LayoutParams(-1, 0, 1));
     }
-    if (MultiScreen.landscape(tiles.size())) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    if (MultiScreen.landscape(tiles.size()) && getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     addButton.setEnabled(tiles.size() < MultiScreen.MAX); addButton.setText("Añadir evento (" + tiles.size() + "/" + MultiScreen.MAX + ")");
     listen(audible); showControls(controls);
   }
@@ -228,6 +229,7 @@ public class MultiPlayerActivity extends Activity {
     }
   }
   private void hideIfIdle() {
+    if (picker != null && picker.isShowing()) { handler.postDelayed(hide, 4000); return; }
     boolean focused = bar.hasFocus(); for (Tile tile : tiles) focused |= tile.sound.hasFocus() || tile.remove.hasFocus();
     if (!bar.isInTouchMode() && focused) handler.postDelayed(hide, 4000); else showControls(false);
   }
@@ -240,11 +242,12 @@ public class MultiPlayerActivity extends Activity {
   @Override protected void onStart() { super.onStart(); active = true; for (Tile tile : tiles) tile.start(); }
   @Override protected void onStop() { active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
   @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); worker.shutdownNow(); super.onDestroy(); }
-  @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused) immersive(); }
+  @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused && (picker == null || !picker.isShowing())) immersive(); }
   private int dp(float value) { return Ui.dp(this, value); }
-  @SuppressWarnings("deprecation") private void immersive() {
+  @SuppressWarnings("deprecation") private void immersive() { systemBars(true); }
+  @SuppressWarnings("deprecation") private void systemBars(boolean hidden) {
     Window window = getWindow();
-    if (Build.VERSION.SDK_INT >= 30) { WindowInsetsController controller = window.getInsetsController(); if (controller != null) { controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE); controller.hide(WindowInsets.Type.systemBars()); } }
-    else window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    if (Build.VERSION.SDK_INT >= 30) { WindowInsetsController controller = window.getInsetsController(); if (controller != null) { controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE); if (hidden) controller.hide(WindowInsets.Type.systemBars()); else controller.show(WindowInsets.Type.systemBars()); } }
+    else window.getDecorView().setSystemUiVisibility(hidden ? View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN : View.SYSTEM_UI_FLAG_VISIBLE);
   }
 }

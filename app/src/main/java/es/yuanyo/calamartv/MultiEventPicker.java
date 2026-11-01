@@ -44,7 +44,7 @@ final class MultiEventPicker {
     ListView list = new ListView(activity); list.setDividerHeight(Ui.dp(activity, 6)); panel.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView empty = new TextView(activity); empty.setTextColor(Ui.MUTED); panel.addView(empty); list.setEmptyView(empty);
     Button cancel = Ui.pill(activity, "Cancelar", Ui.Kind.SURFACE, true); panel.addView(cancel);
-    android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity).create();
+    android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert).create();
     dialog.setView(panel, 0, 0, 0, 0);
     List<Catalog.Channel> found = new ArrayList<>(events);
     BaseAdapter adapter = new BaseAdapter() {
@@ -75,6 +75,6 @@ final class MultiEventPicker {
     });
     cancel.setOnClickListener(v -> dialog.dismiss()); dialog.show();
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black); dialog.getWindow().setLayout(-1, -1); dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-    draw.run(); return dialog;
+    draw.run(); search.requestFocus(); return dialog;
   }
 }
