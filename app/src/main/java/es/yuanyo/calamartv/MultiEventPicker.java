@@ -44,7 +44,8 @@ final class MultiEventPicker {
     ListView list = new ListView(activity); list.setDividerHeight(Ui.dp(activity, 6)); panel.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView empty = new TextView(activity); empty.setTextColor(Ui.MUTED); panel.addView(empty); list.setEmptyView(empty);
     Button cancel = Ui.pill(activity, "Cancelar", Ui.Kind.SURFACE, true); panel.addView(cancel);
-    Dialog dialog = new Dialog(activity, android.R.style.Theme_Material_NoActionBar); dialog.setContentView(panel);
+    Dialog dialog = new Dialog(activity); dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+    dialog.setContentView(panel, new android.view.ViewGroup.LayoutParams(-1, -1));
     List<Catalog.Channel> found = new ArrayList<>(events);
     BaseAdapter adapter = new BaseAdapter() {
       public int getCount() { return found.size(); }
@@ -73,7 +74,7 @@ final class MultiEventPicker {
       public void afterTextChanged(android.text.Editable text) {}
     });
     cancel.setOnClickListener(v -> dialog.dismiss()); dialog.show();
-    dialog.getWindow().setLayout(-1, -1); dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black); dialog.getWindow().setLayout(-1, -1); dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     draw.run(); return dialog;
   }
 }

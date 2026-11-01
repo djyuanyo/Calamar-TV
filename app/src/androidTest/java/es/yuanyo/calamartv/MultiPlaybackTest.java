@@ -1,11 +1,6 @@
 package es.yuanyo.calamartv;
 
 import static org.junit.Assert.*;
-import static androidx.test.espresso.Espresso.onView;
-import static androidx.test.espresso.matcher.ViewMatchers.*;
-import static androidx.test.espresso.matcher.RootMatchers.isDialog;
-import static androidx.test.espresso.action.ViewActions.*;
-import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import android.app.*;
 import android.content.*;
 import android.os.SystemClock;
@@ -38,7 +33,25 @@ public class MultiPlaybackTest {
     InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{try{check.run();}catch(Throwable e){error.set(e);}});
     if(error.get()!=null)throw new AssertionError(error.get());
   }
-  static Object field(Object object,String name)throws Exception{Field f=object.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(object);}
+  static Object field(Object object,String name)throws Exception{
+    for(Class<?> type=object.getClass();type!=null;type=type.getSuperclass())try{Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(object);}catch(NoSuchFieldException next){}
+    throw new NoSuchFieldException(name);
+  }
+  static <T extends android.view.View> T find(android.view.View root,Class<T> kind,String description){
+    if(kind.isInstance(root)&&(description==null||description.contentEquals(root.getContentDescription()==null?"":root.getContentDescription())))return kind.cast(root);
+    if(root instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)root;for(int i=0;i<group.getChildCount();i++){T child=find(group.getChildAt(i),kind,description);if(child!=null)return child;}}
+    return null;
+  }
+  static Dialog picker(Activity activity)throws Exception{
+    AtomicReference<Dialog> value=new AtomicReference<>();AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
+    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{Dialog d=(Dialog)field(activity,activity instanceof MultiPlayerActivity?"picker":"multiPicker");value.set(d);focused.set(d!=null&&d.isShowing()&&d.getWindow().getDecorView().hasWindowFocus());});SystemClock.sleep(100);}
+    assertTrue("The event selector must receive real input focus",focused.get());return value.get();
+  }
+  static void search(Dialog dialog,String query)throws Exception{main(()->{EditText input=find(dialog.getWindow().getDecorView(),EditText.class,"Buscar evento para multipantalla");assertNotNull(input);assertTrue(input.isShown());input.setText(query);});}
+  static void choose(Dialog dialog,String name)throws Exception{
+    search(dialog,name);main(()->{ListView list=find(dialog.getWindow().getDecorView(),ListView.class,null);assertNotNull(list);assertEquals(1,list.getAdapter().getCount());assertTrue(list.getAdapter().isEnabled(0));
+      assertEquals(name,((Catalog.Channel)list.getAdapter().getItem(0)).name);android.view.View row=list.getAdapter().getView(0,null,list);list.performItemClick(row,0,list.getAdapter().getItemId(0));});
+  }
   static List<?> tiles(MultiPlayerActivity activity)throws Exception{Field f=MultiPlayerActivity.class.getDeclaredField("tiles");f.setAccessible(true);return (List<?>)f.get(activity);}
   static List<ExoPlayer> players(MultiPlayerActivity activity)throws Exception{List<ExoPlayer> out=new ArrayList<>();for(Object tile:tiles(activity))out.add((ExoPlayer)field(tile,"player"));return out;}
   static void show(MultiPlayerActivity activity)throws Exception{Method m=MultiPlayerActivity.class.getDeclaredMethod("showControls",boolean.class);m.setAccessible(true);m.invoke(activity,true);}
@@ -78,9 +91,10 @@ public class MultiPlaybackTest {
       try(ActivityScenario<NativePlayerActivity> single=ActivityScenario.launch(new Intent(context,NativePlayerActivity.class).putExtra("page_url","https://zicotv.cc/api/player/1").putExtra("title","Canal inicial"))){
         long deadline=SystemClock.elapsedRealtime()+30000;AtomicBoolean playing=new AtomicBoolean();
         while(!playing.get()&&SystemClock.elapsedRealtime()<deadline){single.onActivity(a->{try{ExoPlayer p=(ExoPlayer)field(a,"player");playing.set(p!=null&&p.isPlaying()&&p.getVideoSize().width>0);}catch(Exception e){throw new AssertionError(e);}});SystemClock.sleep(100);}assertTrue(playing.get());
-        onView(withContentDescription("Multipantalla")).perform(scrollTo(),click());
-        onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText("no existe"),closeSoftKeyboard());onView(withText("No hay eventos con ese nombre.")).inRoot(isDialog()).check(matches(isDisplayed()));
-        onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText("aguilas"),closeSoftKeyboard());onView(withContentDescription(names[0])).inRoot(isDialog()).perform(click());
+        AtomicReference<NativePlayerActivity> originalActivity=new AtomicReference<>();single.onActivity(originalActivity::set);
+        main(()->{((androidx.media3.ui.PlayerView)field(originalActivity.get(),"playerView")).showController();android.view.View button=find(originalActivity.get().getWindow().getDecorView(),android.view.View.class,"Multipantalla");assertNotNull(button);assertTrue(button.isShown());button.requestFocus();button.performClick();});
+        Dialog selector=picker(originalActivity.get());search(selector,"no existe");main(()->assertEquals(0,find(selector.getWindow().getDecorView(),ListView.class,null).getAdapter().getCount()));
+        search(selector,"aguilas");main(()->assertEquals(1,find(selector.getWindow().getDecorView(),ListView.class,null).getAdapter().getCount()));choose(selector,names[0]);
         assertNotNull(launch.get());assertEquals(Arrays.asList("Canal inicial",names[0]),launch.get().getStringArrayListExtra(MultiPlayerActivity.TITLES));
       }finally{instrumentation.removeMonitor(monitor);}
       assertNotNull(launch.get());Intent multiIntent=launch.get().setClass(context,MultiFixtureActivity.class);
@@ -88,15 +102,14 @@ public class MultiPlaybackTest {
         AtomicReference<MultiFixtureActivity> activity=new AtomicReference<>();multi.onActivity(activity::set);renders(activity.get(),2);
         AtomicReference<ExoPlayer> first=new AtomicReference<>();main(()->first.set(players(activity.get()).get(0)));
         for(String name:new String[]{names[1],names[2]}){
-          main(()->show(activity.get()));onView(withContentDescription("Añadir evento a multipantalla")).perform(click());
-          onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText(name),closeSoftKeyboard());onView(withContentDescription(name)).inRoot(isDialog()).perform(click());
+          main(()->{show(activity.get());((Button)field(activity.get(),"addButton")).performClick();});choose(picker(activity.get()),name);
         }
         renders(activity.get(),4);main(()->{assertSame("Earlier tiles must keep their player",first.get(),players(activity.get()).get(0));show(activity.get());});
-        onView(withContentDescription("Añadir evento a multipantalla")).check(matches(org.hamcrest.Matchers.not(isEnabled())));
+        main(()->{Button add=(Button)field(activity.get(),"addButton");assertFalse(add.isEnabled());add.performClick();assertEquals(4,tiles(activity.get()).size());assertFalse(((Dialog)field(activity.get(),"picker")).isShowing());});
         main(()->{int audible=0;for(ExoPlayer p:players(activity.get()))if(p.getVolume()>0)audible++;assertEquals(1,audible);});
-        onView(withContentDescription("Quitar "+names[2])).perform(click());renders(activity.get(),3);
+        main(()->{Object last=tiles(activity.get()).get(3);Button remove=(Button)field(last,"remove");assertTrue(remove.isShown());remove.performClick();});renders(activity.get(),3);
         main(()->{assertSame(first.get(),players(activity.get()).get(0));show(activity.get());});
-        onView(withContentDescription("Añadir evento a multipantalla")).check(matches(isEnabled()));
+        main(()->assertTrue(((Button)field(activity.get(),"addButton")).isEnabled()));
       }
       assertEquals("No device request may contact the provider",0,provider.get());assertTrue(lookups.get()>=4);
     }finally{clientField.set(network,original);NetworkTransport.select(context,previous);if(previousCache==null)cache.delete();else java.nio.file.Files.write(cache.toPath(),previousCache);}

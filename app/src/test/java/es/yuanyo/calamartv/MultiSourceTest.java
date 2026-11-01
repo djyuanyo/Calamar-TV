@@ -35,4 +35,9 @@ public class MultiSourceTest {
       assertEquals("https://zicotv.cc/api/player/2",server.takeRequest().getRequestUrl().queryParameter("page"));
     }
   }
+  @Test public void refererIncludesOnlyThePageOriginAndNeverMediaCredentials() {
+    assertNull(new MultiSource.Result("https://media.example/live.m3u8",null,"https://user:password@media.example/private?token=secret").referer);
+    assertEquals("https://page.example/",new MultiSource.Result("https://cdn.example/live.m3u8","https://page.example/watch","https://user:password@page.example/watch?token=secret").referer);
+  }
+
 }

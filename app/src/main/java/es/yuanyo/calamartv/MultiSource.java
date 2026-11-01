@@ -8,7 +8,16 @@ import java.util.List;
 final class MultiSource {
   static final class Result {
     final String url, page, referer;
-    Result(String url, String page, String referer) { this.url = url; this.page = page; this.referer = referer; }
+    Result(String url, String page, String referer) {
+      this.url = url; this.page = page;
+      String origin = null;
+      if (page != null && referer != null) try {
+        URI parsed = URI.create(referer);
+        if (parsed.getHost() != null && ("https".equals(parsed.getScheme()) || "http".equals(parsed.getScheme())))
+          origin = new URI(parsed.getScheme(), null, parsed.getHost(), parsed.getPort(), "/", null, null).toString();
+      } catch (Exception invalid) { /* A media request never needs page credentials or query parameters. */ }
+      this.referer = origin;
+    }
     boolean hosted() { return HostingPlayback.isRelay(url); }
     boolean renewable() { return page != null && UserChannels.isPage(page); }
     long renewalDelay() { return page == null ? -1 : VideoResolver.pageRenewalDelay(page, url, System.currentTimeMillis()); }
