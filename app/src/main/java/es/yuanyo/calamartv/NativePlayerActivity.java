@@ -454,6 +454,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (browser != null && player == null) { Toast.makeText(this, "Esta fuente no admite multipantalla en la app.", Toast.LENGTH_LONG).show(); return; }
     String target = getIntent().getStringExtra("audience_target");
     java.util.List<String> selected = java.util.Collections.singletonList(target == null ? "current" : target);
+    if (fullscreen) applySystemBars(false);
     multiPicker = MultiEventPicker.show(this, selected, event -> {
       java.util.ArrayList<String> first = new java.util.ArrayList<>();
       if (pageUrl != null) first.add(pageUrl); else if (directUrl != null) first.add(directUrl);
@@ -469,6 +470,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           .putExtra("initial_media", currentUrl).putExtra("initial_page", pageUrl).putExtra("initial_referer", mediaReferer()).putExtra("initial_endpoint", hostingEndpoint).putExtra("initial_signal", hostingSourceId)
           .putExtra("initial_position", progressEntry == null || player == null ? 0 : player.getCurrentPosition());
       startActivity(intent);
+    });
+    multiPicker.setOnDismissListener(dialog -> {
+      multiPicker = null;
+      if (active) { if (fullscreen) applySystemBars(true); playerView.showController(); }
     });
   }
 
@@ -530,7 +535,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   public void onWindowFocusChanged(boolean hasFocus) {
     super.onWindowFocusChanged(hasFocus);
     // The system shows its bars again when another app was in front; hide them once more.
-    if (hasFocus && fullscreen && (sourceDialog == null || !sourceDialog.isShowing())) applySystemBars(true);
+    if (hasFocus && fullscreen && (sourceDialog == null || !sourceDialog.isShowing()) && (multiPicker == null || !multiPicker.isShowing())) applySystemBars(true);
   }
 
   private void chooseDns() {

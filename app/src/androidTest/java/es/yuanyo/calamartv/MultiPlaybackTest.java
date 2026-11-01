@@ -43,9 +43,9 @@ public class MultiPlaybackTest {
     return null;
   }
   static Dialog picker(Activity activity)throws Exception{
-    AtomicReference<Dialog> value=new AtomicReference<>();AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
-    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{Dialog d=(Dialog)field(activity,activity instanceof MultiPlayerActivity?"picker":"multiPicker");value.set(d);focused.set(d!=null&&d.isShowing()&&d.getWindow().getDecorView().hasWindowFocus());});SystemClock.sleep(100);}
-    assertTrue("The event selector must receive real input focus",focused.get());return value.get();
+    AtomicReference<Dialog> value=new AtomicReference<>();AtomicReference<String> detail=new AtomicReference<>();AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
+    while(!focused.get()&&SystemClock.elapsedRealtime()<deadline){main(()->{Dialog d=(Dialog)field(activity,activity instanceof MultiPlayerActivity?"picker":"multiPicker");value.set(d);focused.set(d!=null&&d.isShowing()&&d.getWindow().getDecorView().hasWindowFocus());detail.set("dialog="+(d==null?"null":("showing="+d.isShowing()+", flags="+d.getWindow().getAttributes().flags+", focus="+d.getCurrentFocus()))+", activityFocus="+activity.hasWindowFocus()+", active="+field(activity,"active"));});SystemClock.sleep(100);}
+    assertTrue("The event selector must receive real input focus: "+detail.get(),focused.get());return value.get();
   }
   static void search(Dialog dialog,String query)throws Exception{main(()->{EditText input=find(dialog.getWindow().getDecorView(),EditText.class,"Buscar evento para multipantalla");assertNotNull(input);assertTrue(input.isShown());input.setText(query);});}
   static void choose(Dialog dialog,String name)throws Exception{

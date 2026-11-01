@@ -44,8 +44,8 @@ final class MultiEventPicker {
     ListView list = new ListView(activity); list.setDividerHeight(Ui.dp(activity, 6)); panel.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView empty = new TextView(activity); empty.setTextColor(Ui.MUTED); panel.addView(empty); list.setEmptyView(empty);
     Button cancel = Ui.pill(activity, "Cancelar", Ui.Kind.SURFACE, true); panel.addView(cancel);
-    Dialog dialog = new Dialog(activity); dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
-    dialog.setContentView(panel, new android.view.ViewGroup.LayoutParams(-1, -1));
+    android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity).create();
+    dialog.setView(panel, 0, 0, 0, 0);
     List<Catalog.Channel> found = new ArrayList<>(events);
     BaseAdapter adapter = new BaseAdapter() {
       public int getCount() { return found.size(); }

@@ -64,7 +64,9 @@ jobs:
           disk-size: 2048M
           emulator-boot-timeout: 300
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.MultiPlaybackTest
+            gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Liberar el emulador móvil antes de probar Android TV
         run: |
           rm -rf "$HOME/.android/avd/test.avd" "$HOME/.android/avd/test.ini"
