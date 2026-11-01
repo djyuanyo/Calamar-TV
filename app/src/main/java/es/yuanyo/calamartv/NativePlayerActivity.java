@@ -451,6 +451,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseMultiEvent() {
+    if (browser != null && player == null) { Toast.makeText(this, "Esta fuente no admite multipantalla en la app.", Toast.LENGTH_LONG).show(); return; }
     String target = getIntent().getStringExtra("audience_target");
     java.util.List<String> selected = java.util.Collections.singletonList(target == null ? "current" : target);
     multiPicker = MultiEventPicker.show(this, selected, event -> {

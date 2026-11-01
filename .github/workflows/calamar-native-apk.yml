@@ -88,7 +88,7 @@ jobs:
           python - <<'PYCODE'
           import pathlib, re, html
           root = pathlib.Path('app/build/reports/androidTests/connected')
-          for name in ('HostingPlaybackTest', 'ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
+          for name in ('MultiPlaybackTest', 'HostingPlaybackTest', 'ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
               for path in root.rglob('*' + name + '.html'):
                   print('Informe:', path)
                   print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])

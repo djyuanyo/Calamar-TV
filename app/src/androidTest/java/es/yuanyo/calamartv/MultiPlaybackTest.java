@@ -3,6 +3,7 @@ package es.yuanyo.calamartv;
 import static org.junit.Assert.*;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.matcher.ViewMatchers.*;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import static androidx.test.espresso.action.ViewActions.*;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import android.app.*;
@@ -78,8 +79,8 @@ public class MultiPlaybackTest {
         long deadline=SystemClock.elapsedRealtime()+30000;AtomicBoolean playing=new AtomicBoolean();
         while(!playing.get()&&SystemClock.elapsedRealtime()<deadline){single.onActivity(a->{try{ExoPlayer p=(ExoPlayer)field(a,"player");playing.set(p!=null&&p.isPlaying()&&p.getVideoSize().width>0);}catch(Exception e){throw new AssertionError(e);}});SystemClock.sleep(100);}assertTrue(playing.get());
         onView(withContentDescription("Multipantalla")).perform(scrollTo(),click());
-        onView(withContentDescription("Buscar evento para multipantalla")).perform(replaceText("no existe"),closeSoftKeyboard());onView(withText("No hay eventos con ese nombre.")).check(matches(isDisplayed()));
-        onView(withContentDescription("Buscar evento para multipantalla")).perform(replaceText("aguilas"),closeSoftKeyboard());onView(withContentDescription(names[0])).perform(click());
+        onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText("no existe"),closeSoftKeyboard());onView(withText("No hay eventos con ese nombre.")).inRoot(isDialog()).check(matches(isDisplayed()));
+        onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText("aguilas"),closeSoftKeyboard());onView(withContentDescription(names[0])).inRoot(isDialog()).perform(click());
         assertNotNull(launch.get());assertEquals(Arrays.asList("Canal inicial",names[0]),launch.get().getStringArrayListExtra(MultiPlayerActivity.TITLES));
       }finally{instrumentation.removeMonitor(monitor);}
       assertNotNull(launch.get());Intent multiIntent=launch.get().setClass(context,MultiFixtureActivity.class);
@@ -88,7 +89,7 @@ public class MultiPlaybackTest {
         AtomicReference<ExoPlayer> first=new AtomicReference<>();main(()->first.set(players(activity.get()).get(0)));
         for(String name:new String[]{names[1],names[2]}){
           main(()->show(activity.get()));onView(withContentDescription("Añadir evento a multipantalla")).perform(click());
-          onView(withContentDescription("Buscar evento para multipantalla")).perform(replaceText(name),closeSoftKeyboard());onView(withContentDescription(name)).perform(click());
+          onView(withContentDescription("Buscar evento para multipantalla")).inRoot(isDialog()).perform(replaceText(name),closeSoftKeyboard());onView(withContentDescription(name)).inRoot(isDialog()).perform(click());
         }
         renders(activity.get(),4);main(()->{assertSame("Earlier tiles must keep their player",first.get(),players(activity.get()).get(0));show(activity.get());});
         onView(withContentDescription("Añadir evento a multipantalla")).check(matches(org.hamcrest.Matchers.not(isEnabled())));
