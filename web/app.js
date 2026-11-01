@@ -553,7 +553,7 @@ function channelsPage(selected) {
 let multiPicks = [];
 const multiKey = (c) => (c.event ? `e:${c.slug}` : `c:${c.slug}`);
 function multiItems(keys) {
-  const list = events(state.channels, state.custom);
+  const list = events(state.channels, state.custom, Date.now(), { allWeeks: true });
   return keys.slice(0, MULTI_MAX).map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
 }
 function multiPage() {
@@ -561,7 +561,7 @@ function multiPage() {
   const watch = el('button', { class: 'btn', type: 'button' });
   const clear = el('button', { class: 'ghost', type: 'button' }, 'Quitar selección');
   const grid = el('div', { class: 'grid' });
-  const candidates = [...events(state.channels, state.custom), ...state.channels].filter(multiPlayable);
+  const candidates = [...events(state.channels, state.custom, Date.now(), { allWeeks: true }), ...state.channels].filter(multiPlayable);
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const draw = () => {
     multiPicks = multiPicks.filter((key) => candidates.some((c) => multiKey(c) === key));

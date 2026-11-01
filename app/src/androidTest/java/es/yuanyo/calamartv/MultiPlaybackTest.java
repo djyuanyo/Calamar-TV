@@ -43,9 +43,12 @@ public class MultiPlaybackTest {
     return null;
   }
   static String windowFocus(){
-    try(InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("dumpsys window windows"))){
-      StringBuilder focus=new StringBuilder();for(String line:Io.read(input).split("\n"))if(line.contains("mCurrentFocus=")||line.contains("mFocusedApp="))focus.append(line.trim()).append(';');return focus.toString();
-    }catch(Exception error){return error.getClass().getSimpleName();}
+    Context context=ApplicationProvider.getApplicationContext();StringBuilder focus=new StringBuilder();
+    focus.append("interactive=").append(((android.os.PowerManager)context.getSystemService(Context.POWER_SERVICE)).isInteractive()).append(", keyguard=").append(((android.app.KeyguardManager)context.getSystemService(Context.KEYGUARD_SERVICE)).isKeyguardLocked()).append(';');
+    try{android.graphics.Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();if(screenshot!=null)try(OutputStream out=context.openFileOutput("multi-focus.png",Context.MODE_PRIVATE)){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);screenshot.recycle();}}catch(Exception ignored){}
+    try(InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("dumpsys window"))){
+      for(String line:Io.read(input).split("\n"))if(line.contains("mCurrentFocus=")||line.contains("mFocusedApp=")||line.contains("mTopFocusedDisplayId="))focus.append(line.trim()).append(';');
+    }catch(Exception error){focus.append(error.getClass().getSimpleName());}return focus.toString();
   }
   static Dialog picker(Activity activity)throws Exception{
     AtomicReference<Dialog> value=new AtomicReference<>();AtomicReference<String> detail=new AtomicReference<>();AtomicBoolean focused=new AtomicBoolean();long deadline=SystemClock.elapsedRealtime()+10000;
