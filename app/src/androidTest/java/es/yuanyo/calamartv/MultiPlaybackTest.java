@@ -59,7 +59,7 @@ public class MultiPlaybackTest {
     Buffer video=new Buffer();try(InputStream in=instrumentation.getContext().getAssets().open("live.ts")){byte[] block=new byte[8192];for(int n;(n=in.read(block))!=-1;)video.write(block,0,n);}
     AtomicInteger provider=new AtomicInteger(),lookups=new AtomicInteger();
     try(MockWebServer server=new MockWebServer()){
-      server.useHttps(serverTls.sslSocketFactory(),false);server.start();server.setDispatcher(new Dispatcher(){@Override public MockResponse dispatch(RecordedRequest r){
+      server.useHttps(serverTls.sslSocketFactory(),false);server.start();server.setDispatcher(new okhttp3.mockwebserver.Dispatcher(){@Override public MockResponse dispatch(RecordedRequest r){
         String path=r.getPath();
         if(path.contains("&list=1"))return new MockResponse().setBody("{\"sources\":1}");
         if(path.startsWith("/calamar-player.php?page=")){lookups.incrementAndGet();return new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=playlist&sig=ok\"}");}
