@@ -39,7 +39,8 @@ try {
         {url:`https://cdn.example/live.m3u8?token=fixture-${Math.floor(Date.now()/1000)+45}-&version=${pages}`}
       ]) + ';'});
     }
-    if (u.pathname === '/live.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\nhttps://cdn.example/segment.ts\n#EXT-X-ENDLIST\n'});
+    if (u.pathname === '/live.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n'
+      + Array.from({length:4},(_,i)=>(i ? '#EXT-X-DISCONTINUITY\n':'') + `#EXTINF:8.023,\nhttps://cdn.example/segment.ts?n=${i}\n`).join('') + '#EXT-X-ENDLIST\n'});
     if (u.pathname === '/segment.ts') { segments++; return route.fulfill({headers,contentType:'video/mp2t',body:ts}); }
     throw Error('Unexpected external request: ' + u.origin + u.pathname);
   });
@@ -51,6 +52,11 @@ try {
     await page.waitForFunction(() => {
       const v = document.querySelector('video');
       return v.videoWidth > 0 && v.currentTime > 0.3 && !v.paused;
+    }).catch(async error => {
+      console.error({source,pages,segments,hostRequests,errors,state:await page.evaluate(() => {
+        const v=document.querySelector('video');
+        return {status:document.querySelector('#status').textContent,paused:v.paused,ready:v.readyState,width:v.videoWidth,time:v.currentTime,error:v.error?.message};
+      })}); throw error;
     });
     assert.ok(segments > beforeSegments, 'Video segments were not received');
     await page.waitForFunction(() => document.querySelector('#status').textContent === 'En directo');
