@@ -46,7 +46,9 @@ try {
   });
   for (const source of ['https://bp.zicotv.cc/api/player/4','https://bp.zicotv.cc/events/98019']) {
     const before = pages, beforeSegments = segments;
-    await page.goto(base + '/direct-player.html#' + encodeURIComponent(source));
+    // A different document per case, as opening a new WebView does in the app.
+    const fixtureCase = source.includes('/events/') ? 'event' : 'channel';
+    await page.goto(base + '/direct-player.html?case=' + fixtureCase + '#' + encodeURIComponent(source));
     // Autoplay may already be playing on this fast fixture. An unconditional toggle would pause it.
     await page.locator('#video').evaluate(video => { video.muted = true; void video.play().catch(() => {}); });
     await page.waitForFunction(() => {
@@ -63,9 +65,9 @@ try {
     // A fresh public page/token must be obtained automatically before the 45-second token expires.
     const until = Date.now() + 22000;
     while (pages <= before + 1 && Date.now() < until) await new Promise(done => setTimeout(done, 100));
-    assert.ok(pages > before + 1, 'Stable channel did not renew its token');
+    assert.ok(pages > before + 1, `Stable channel did not renew its token (${fixtureCase}, ${pages}/${before})`);
     await page.getByRole('button',{name:'Reintentar',exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('video').videoWidth > 0 && !document.querySelector('video').paused);
+    await page.waitForFunction(() => document.querySelector('video').videoWidth > 0 && document.querySelector('video').currentTime > 0.3 && !document.querySelector('video').paused);
     assert.equal(hostRequests,0,'Working web connection must not depend on the unreachable hosting');
   }
   assert.deepEqual(errors, []);
