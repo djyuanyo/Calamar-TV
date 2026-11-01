@@ -1,4 +1,4 @@
-import { PLAYER_ENDPOINT, renewablePage, playerPageRelay } from './catalog.js';
+import { PLAYER_ENDPOINT, playerEndpoint, renewablePage, playerPageRelay } from './catalog.js';
 
 export function signalName(value, fallback = 'Canal') {
   const clean = String(value || '').replace(/https?:\/\/\S+|(?:[a-z0-9-]+\.)+(?:com|cc|net|org)\b\S*/gi, '')
@@ -14,9 +14,10 @@ export function hostedRequest(page, id) {
   return request.href;
 }
 
-export function hostedUrl(value) {
-  const u = new URL(value, PLAYER_ENDPOINT), endpoint = new URL(PLAYER_ENDPOINT);
-  if (u.origin !== endpoint.origin || u.pathname !== endpoint.pathname || u.username || u.password
+export function hostedUrl(value, base = PLAYER_ENDPOINT) {
+  if (!playerEndpoint(base)) throw Error('Dirección del hosting no válida.');
+  const u = new URL(value, base);
+  if (!playerEndpoint(u.href)
       || !u.searchParams.has('seg') || !u.searchParams.has('sig')) throw Error('La señal no devolvió una lista válida.');
   return u.href;
 }

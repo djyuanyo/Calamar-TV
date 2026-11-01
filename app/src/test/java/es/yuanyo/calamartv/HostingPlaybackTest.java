@@ -86,4 +86,33 @@ public class HostingPlaybackTest {
       }
     }
   }
+  @Test public void networkResetUsesOwnAliasAndKeepsSelectedSignal() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=playlist&sig=ok\"}")); server.start();
+      OkHttpClient client = new OkHttpClient(); java.util.List<String> hosts = new java.util.ArrayList<>();
+      PlayerDocument.ConnectionFactory network = url -> {
+        hosts.add(url.getHost());
+        if ("calamarmenciano.com".equals(url.getHost())) throw new java.net.SocketException("Connection reset");
+        return new PlayerHttpConnection(server.url(url.getFile()).url(), client);
+      };
+      String result = HostingPlayback.resolve("https://zicotv.cc/api/player/6", "fedcba9876543210", 2, network);
+      assertEquals(java.util.Arrays.asList("calamarmenciano.com", "www.calamarmenciano.com"), hosts);
+      assertTrue(result.startsWith(HostingPlayback.ALTERNATE_ENDPOINT + "?seg="));
+      assertEquals("fedcba9876543210", server.takeRequest().getRequestUrl().queryParameter("source_id"));
+    }
+  }
+
+  @Test public void certificateAndHttpErrorsNeverSwitchAddresses() throws Exception {
+    java.net.SocketException wrapped = new java.net.SocketException("wrapper");
+    wrapped.initCause(new javax.net.ssl.SSLHandshakeException("bad certificate"));
+    assertFalse(HostingPlayback.networkUnavailable(wrapped));
+    for (int code : new int[]{403, 502}) try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse().setResponseCode(code)); server.start();
+      OkHttpClient client = new OkHttpClient(); java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+      PlayerDocument.ConnectionFactory network = url -> {calls.incrementAndGet(); return new PlayerHttpConnection(server.url(url.getFile()).url(), client);};
+      try {HostingPlayback.resolve("https://zicotv.cc/api/player/6", network); fail();} catch(IOException expected) {assertEquals(1,calls.get());}
+    }
+    assertEquals(HostingPlayback.ALTERNATE_ENDPOINT + "?seg=a&sig=b", HostingPlayback.signedUrl("{\"url\":\"calamar-player.php?seg=a&sig=b\"}",HostingPlayback.ALTERNATE_ENDPOINT));
+  }
+
 }

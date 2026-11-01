@@ -38,7 +38,7 @@ public class HostingPlaybackTest {
     DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
     AtomicInteger hosted = new AtomicInteger(), direct = new AtomicInteger();
     field.set(system, new OkHttpClient.Builder().addInterceptor(chain -> {
-      if ("calamarmenciano.com".equals(chain.request().url().host())) hosted.incrementAndGet();
+      if (HostingPlayback.isRelay(chain.request().url().toString())) hosted.incrementAndGet();
       else direct.incrementAndGet();
       throw new java.net.UnknownHostException("Hosting temporalmente inaccesible");
     }).build());
@@ -78,9 +78,12 @@ public class HostingPlaybackTest {
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
-  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception {
+  @Test public void rootConnectionFailureKeepsNativeVideoAndRenewalsOnWww() throws Exception { playback(false, true, false, true, false); }
+  @Test public void slowHostedListsAndFragmentsRenderBeforeTheHostedDeadline() throws Exception { playback(false, false, false, false, true); }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception { playback(remote, menuAvailable, legacyMenu, false, false); }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
-        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
+        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
     HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
     Buffer video = new Buffer();
@@ -109,11 +112,11 @@ public class HostingPlaybackTest {
           }
           if (path.startsWith("/calamar-player.php?seg=manifest")) {
             if (path.contains("sig=1&")) return new MockResponse().setResponseCode(403);
-            return new MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
+            return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
                 "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
           }
           if (path.startsWith("/calamar-player.php?seg=video")) {
-            segments.incrementAndGet(); return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
+            segments.incrementAndGet(); return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "video/mp2t").setBody(video.clone());
           }
           return new MockResponse().setResponseCode(404);
         }
@@ -125,7 +128,7 @@ public class HostingPlaybackTest {
       OkHttpClient originalSecure = (OkHttpClient) f.get(secureNetwork);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
       OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
-          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
+          .dns(host -> { if (rootUnavailable && "calamarmenciano.com".equals(host)) throw new java.net.UnknownHostException("Root unavailable"); return Collections.singletonList(InetAddress.getByName("127.0.0.1")); })
           .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
               .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
       f.set(network, local);
@@ -135,7 +138,12 @@ public class HostingPlaybackTest {
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
           .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
-        assertPlays(scenario);
+        assertPlays(scenario, slow ? 55000 : 30000);
+        if (slow) assertEquals("Slow valid media must not restart lookup", 2, renewals.get());
+        if (rootUnavailable) scenario.onActivity(activity -> {
+          try {Field endpoint=NativePlayerActivity.class.getDeclaredField("hostingEndpoint"); endpoint.setAccessible(true); assertEquals(HostingPlayback.ALTERNATE_ENDPOINT,endpoint.get(activity));}
+          catch(ReflectiveOperationException error) {throw new AssertionError(error);}
+        });
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
         assertEquals(0, pages.get());
@@ -188,8 +196,9 @@ public class HostingPlaybackTest {
     }
   }
 
-  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) {
-    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + 30000;
+  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) {assertPlays(scenario,30000);}
+  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario, long timeout) {
+    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + timeout;
     while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {
       scenario.onActivity(activity -> {
         try {

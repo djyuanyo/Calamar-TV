@@ -35,3 +35,13 @@ test('the installed count-only relay also exposes every selectable hosted signal
   assert.equal(new URL(rows[4].url).searchParams.get('src'),'4');
   assert.equal(new URL(rows[4].url).searchParams.get('cast'),'1');
 });
+
+
+test('relative signed lists resolve on the effective owned endpoint',()=>{
+  const base='https://www.calamarmenciano.com/calamar-player.php';
+  assert.equal(hostedUrl('calamar-player.php?seg=a&sig=b',base),base+'?seg=a&sig=b');
+  for(const url of ['http://www.calamarmenciano.com/calamar-player.php?seg=a&sig=b',
+    'https://www.calamarmenciano.com.evil.test/calamar-player.php?seg=a&sig=b',
+    'https://user@www.calamarmenciano.com/calamar-player.php?seg=a&sig=b',
+    'https://www.calamarmenciano.com:444/calamar-player.php?seg=a&sig=b']) assert.throws(()=>hostedUrl(url));
+});

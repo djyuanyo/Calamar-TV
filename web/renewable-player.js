@@ -1,4 +1,4 @@
-import { streamExpiry, renewablePage, PLAYER_ENDPOINT } from './catalog.js';
+import { streamExpiry, renewablePage, PLAYER_ENDPOINT, PLAYER_ALTERNATE_ENDPOINT, playerEndpoint } from './catalog.js';
 import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.js';
 import { autoplay } from './autoplay.js';
 
@@ -42,8 +42,8 @@ export function renewalDelay(url, now = Date.now()) {
 export function hostedPage(address) {
   if (renewablePage(address)) return address;
   try {
-    const u = new URL(address), endpoint = new URL(PLAYER_ENDPOINT), page = u.searchParams.get('page');
-    if (u.origin === endpoint.origin && u.pathname === endpoint.pathname && !u.username && !u.password && renewablePage(page)) return page;
+    const u = new URL(address), page = u.searchParams.get('page');
+    if (playerEndpoint(address) && renewablePage(page)) return page;
   } catch { /* Not a hosting choice. */ }
   return null;
 }
@@ -57,13 +57,15 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
   selected.searchParams.set('cast', '1');
   const automatic = !selected.searchParams.has('src') && !selected.searchParams.has('source_id');
+  let alternateHosting = selected.hostname === 'www.calamarmenciano.com';
   deviceRoute = preferDirect && automatic;
   const clearRefresh = () => { timers.clearTimeout(refreshTimer); refreshTimer = null; };
   const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
   const retry = (networkFailure = false) => {
     if (stopped || request || recovering) return;
-    if (automatic && networkFailure) deviceRoute = !deviceRoute;
+    if (networkFailure && !deviceRoute && !alternateHosting) alternateHosting = true;
+    else if (automatic && networkFailure) deviceRoute = !deviceRoute;
     failures++; recovering = true;
     onStatus('Probando otra señal disponible…');
     // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
@@ -73,10 +75,14 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     const shouldPlay = !loaded || !video.paused;
     loaded = true; destroyEngine(); address = url;
     if (Hls?.isSupported()) {
-      const instance = engine = new Hls({ lowLatencyMode: false, maxBufferLength: 30 });
+      const instance = engine = new Hls({ lowLatencyMode: false, maxBufferLength: 30,
+        manifestLoadingTimeOut: 30000, levelLoadingTimeOut: 30000, fragLoadingTimeOut: 45000 });
       instance.on(Hls.Events.ERROR, (_event, data) => {
-        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry(data.response?.code === 0);
+        const networkFailure = data.response?.code === 0 || (!data.response?.code && data.type === 'networkError');
+        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry(networkFailure);
       });
+      for (const name of ['MANIFEST_LOADED','LEVEL_LOADED','FRAG_LOADED']) if (Hls.Events[name])
+        instance.on(Hls.Events[name], () => { if (!stopped && engine === instance && watchdog) stalled(); });
       instance.loadSource(url); instance.attachMedia(video); onAttach(instance);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = url;
     else { cleanup(); onFallback(); return; }
@@ -91,6 +97,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     try {
       if (!original) throw Error('Enlace de canal no válido.');
       const target = new URL(selected);
+      if (alternateHosting) target.hostname = new URL(PLAYER_ALTERNATE_ENDPOINT).hostname;
       if (automatic && failures) target.searchParams.set('intento', String(Math.min(9, failures)));
       let url;
       if (deviceRoute && automatic) {
@@ -106,12 +113,15 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
         try { response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', signal: controller.signal }); }
         catch (error) {
           // A network failure is different from a rejected or invalid hosting response.
-          if (!stopped && automatic && (error instanceof TypeError || error.name === 'AbortError')) deviceRoute = true;
+          if (!stopped && (error instanceof TypeError || error.name === 'AbortError')) {
+            if (!alternateHosting) alternateHosting = true;
+            else if (automatic) deviceRoute = true;
+          }
           throw error;
         }
         const data = await response.json();
         if (!response.ok) throw Error(data.error || `Hosting HTTP ${response.status}`);
-        url = hostedUrl(data.url);
+        url = hostedUrl(data.url, target.href);
       }
       if (stopped || controller.signal.aborted) return;
       if (url !== address || recovering) install(url);
@@ -150,14 +160,18 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const failed = () => { if (!stopped) retry(); };
   const stalled = () => {
     timers.clearTimeout(watchdog);
-    watchdog = timers.setTimeout(() => { if (!stopped && !video.paused) failed(); }, 8000);
+    // A signed master, media list and first segment can take over 8 seconds on shared hosting.
+    // Give the network time to finish, and restart this deadline when real lists/fragments arrive.
+    watchdog = timers.setTimeout(() => { if (!stopped && !video.paused) failed(); }, 30000);
   };
   const progressing = () => { timers.clearTimeout(watchdog); watchdog = null; };
+  const downloaded = () => { if (watchdog) stalled(); };
   video.addEventListener('playing', playing); video.addEventListener('timeupdate', progressing);
+  video.addEventListener('progress', downloaded);
   video.addEventListener('error', failed); video.addEventListener('waiting', stalled); video.addEventListener('stalled', stalled);
   function cleanup() {
     stopped = true; request?.abort(); menu?.abort(); clearRefresh(); timers.clearTimeout(menuTimer); timers.clearTimeout(watchdog); destroyEngine();
-    for (const [name, listener] of [['playing', playing], ['timeupdate', progressing], ['error', failed], ['waiting', stalled], ['stalled', stalled]]) video.removeEventListener(name, listener);
+    for (const [name, listener] of [['playing', playing], ['timeupdate', progressing], ['progress', downloaded], ['error', failed], ['waiting', stalled], ['stalled', stalled]]) video.removeEventListener(name, listener);
   }
   onStatus('Conectando con la primera señal disponible…'); void refresh(); return cleanup;
 }

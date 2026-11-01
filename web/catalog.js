@@ -229,6 +229,15 @@ export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
  * video (CORS), so the hosting reads the page and relays its HLS list (calamar-player.php).
  */
 export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
+export const PLAYER_ALTERNATE_ENDPOINT = 'https://www.calamarmenciano.com/calamar-player.php';
+export function playerEndpoint(address) {
+  try {
+    const u = new URL(address);
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port
+      && ['calamarmenciano.com','www.calamarmenciano.com'].includes(u.hostname) && u.pathname === '/calamar-player.php'
+      ? u.origin + u.pathname : null;
+  } catch { return null; }
+}
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
 /** Only the public player endpoint. Other provider pages keep their own player. */
@@ -269,7 +278,7 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
-  if (pages && u.origin === new URL(PLAYER_ENDPOINT).origin && u.pathname === new URL(PLAYER_ENDPOINT).pathname
+  if (pages && playerEndpoint(url)
       && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
     return { ok: true, kind: 'hls', page: true, renewable: true };
   const anon = anonmp4Embed(url);

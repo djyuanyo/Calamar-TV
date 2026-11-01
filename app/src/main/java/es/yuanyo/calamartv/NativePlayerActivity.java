@@ -92,6 +92,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
   private boolean hostingPlayback;
+  private String hostingEndpoint = Library.PLAYER_ENDPOINT;
   private String hostingTriedPage;
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
   private String hostingSourceId = "";
@@ -598,6 +599,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (zicoPage()) hostingPlayback = true;
     lastReport = reportHeader();
     final boolean throughHosting = hostingPlayback;
+    final String requestedHosting = hostingEndpoint;
     final String requestedSignal = hostingSourceId.isEmpty() ? HostingPlayback.AUTOMATIC : hostingSourceId;
     final int requestedAttempt = automaticAttempts;
     final String channelName = HostingPlayback.label(eventSourceNames.get(requestedPage), HostingPlayback.label(title, "Canal"));
@@ -613,11 +615,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (throughHosting && eventApi == null) {
               // Start exactly as 2.20.55: one request lets the hosting try every available signal.
               // The optional menu runs independently; it cannot stop a working video from opening.
-              String address = HostingPlayback.resolve(requestedPage, requestedSignal, requestedAttempt, NetworkTransport.get(DnsProvider.SYSTEM));
+              String address = HostingPlayback.resolve(requestedPage, requestedSignal, requestedAttempt, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
               handler.post(() -> {
                 if (!active || request != generation) return;
                 resolving = false;
-                documentUrl = Library.PLAYER_ENDPOINT;
+                try { hostingEndpoint = HostingPlayback.endpoint(address); } catch (java.io.IOException invalid) { problem(invalid.getMessage()); return; }
+                documentUrl = hostingEndpoint;
                 chromiumNetwork = false;
                 lastReport = reportHeader() + "\nHosting: lista HLS firmada recibida";
                 sources.clear();
@@ -630,8 +633,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (eventApi != null) {
               PlayerDocument.Result event;
               if (throughHosting) {
-                String endpoint = Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(requestedPage);
-                event = PlayerDocument.fetch(endpoint, NetworkTransport.get(DnsProvider.SYSTEM));
+                event = HostingPlayback.event(requestedPage, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
               } else try {
                 event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
                     NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
@@ -640,10 +642,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
                 chromiumNetwork = true;
               }
+              final String eventHosting = throughHosting ? HostingPlayback.endpoint(event.url) : requestedHosting;
               List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
                 if (!active || request != generation) return;
+                if (throughHosting) hostingEndpoint = eventHosting;
                 resolving = false;
                 int at = Math.max(0, channelPages.indexOf(requestedPage));
                 channelPages.remove(requestedPage);
@@ -807,14 +811,14 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     final boolean hostedSource = hostingPlayback && HostingPlayback.isRelay(source.url);
     final boolean requestHttp1 = mediaHttp1 || hostedSource;
     try {
-      if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || source.url.startsWith(Library.PLAYER_ENDPOINT)
+      if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || HostingPlayback.isRelay(source.url)
           || source.url.startsWith(Library.LULU_ENDPOINT))) http = ChromiumNetwork.get(this).mediaFactory(directUrl != null ? null : mediaReferer());
       else {
         http =
             (mediaSystemRetry || hostedSource ? NetworkTransport.get(DnsProvider.SYSTEM) : transport)
             .mediaFactory(directUrl != null ? null : mediaReferer(), requestHttp1, source.url,
                 directUrl == null && pageUrl != null
-                    && !source.url.startsWith(Library.LULU_ENDPOINT) && !source.url.startsWith(Library.PLAYER_ENDPOINT));
+                    && !source.url.startsWith(Library.LULU_ENDPOINT) && !HostingPlayback.isRelay(source.url));
       }
     } catch (java.io.IOException failure) {
       problem("No se pudo iniciar la conexión Chromium. " + ConnectionReport.describe(failure));
@@ -928,7 +932,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             cancelBufferingTimeout();
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
-              if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+              if (retryHostingAddress(source, error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
@@ -951,7 +955,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     MediaItem.Builder item = new MediaItem.Builder().setUri(source.url);
     String path = Uri.parse(source.url).getPath();
-    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT) || source.url.startsWith(Library.PLAYER_ENDPOINT)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
@@ -970,10 +974,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void armBufferingTimeout(ExoPlayer instance, VideoResolver.Source source) {
     cancelBufferingTimeout();
+    final int timeout = HostingPlayback.isRelay(source.url) ? 60000 : 25000;
     bufferingTimeout = () -> {
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
-      lastReport += "\nVídeo: 25 segundos sin completar el búfer.\n" + mediaProgress;
+      lastReport += "\nVídeo: " + (timeout / 1000) + " segundos sin completar el búfer.\n" + mediaProgress;
+      if (retryHostingAddress(source, new java.net.SocketTimeoutException("Hosting sin vídeo"))) return;
       if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
@@ -984,7 +990,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         refreshAutomatically("Probando otra conexión…");
       }
     };
-    handler.postDelayed(bufferingTimeout, 25000);
+    handler.postDelayed(bufferingTimeout, timeout);
+  }
+
+  private boolean retryHostingAddress(VideoResolver.Source source, Throwable error) {
+    if (!hostingPlayback || !HostingPlayback.isRelay(source.url) || !HostingPlayback.networkUnavailable(error)
+        || !Library.PLAYER_ENDPOINT.equals(hostingEndpoint)) return false;
+    hostingEndpoint = HostingPlayback.ALTERNATE_ENDPOINT;
+    lastReport += "\nReintento: dirección www del mismo hosting";
+    releasePlayer(); status.setText("Reconectando con el hosting…"); resolveFresh(); return true;
   }
 
   private boolean zicoPage() {

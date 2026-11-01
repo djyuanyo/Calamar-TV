@@ -14,6 +14,17 @@ import java.util.List;
 final class HostingPlayback {
   private HostingPlayback() {}
   static final String AUTOMATIC = "0000000000000000";
+  static final String ALTERNATE_ENDPOINT = "https://www.calamarmenciano.com/calamar-player.php";
+
+  static boolean networkUnavailable(Throwable error) {
+    boolean network = false;
+    for (Throwable at = error; at != null; at = at.getCause()) {
+      if (at instanceof javax.net.ssl.SSLException || at instanceof PlayerDocument.HttpFailure) return false;
+      if (at instanceof java.net.UnknownHostException || at instanceof java.io.InterruptedIOException
+          || at instanceof java.net.SocketException || at instanceof java.net.NoRouteToHostException) network = true;
+    }
+    return network;
+  }
 
   static final class Option {
     final String id, name;
@@ -28,7 +39,7 @@ final class HostingPlayback {
 
   static List<Option> options(String page, String fallback, PlayerDocument.ConnectionFactory network) throws IOException {
     try {
-      JSONObject menu = new JSONObject(fetch(Library.playerRelay(page) + "&list=1", network));
+      JSONObject menu = new JSONObject(fetchHosted(Library.playerRelay(page) + "&list=1", network, 25000).html);
       String channel = label(menu.optString("name"), fallback);
       JSONArray items = menu.optJSONArray("items");
       List<Option> out = new ArrayList<>();
@@ -54,15 +65,24 @@ final class HostingPlayback {
   static boolean isRelay(String address) {
     try {
       URI uri = URI.create(address), endpoint = URI.create(Library.PLAYER_ENDPOINT);
-      return endpoint.getScheme().equals(uri.getScheme()) && endpoint.getHost().equals(uri.getHost())
+      return endpoint.getScheme().equals(uri.getScheme()) && (endpoint.getHost().equals(uri.getHost()) || "www.calamarmenciano.com".equals(uri.getHost()))
           && endpoint.getPort() == uri.getPort() && endpoint.getPath().equals(uri.getPath())
           && uri.getUserInfo() == null;
     } catch (Exception invalid) { return false; }
   }
 
   static String signedUrl(String json) throws IOException {
+    return signedUrl(json, Library.PLAYER_ENDPOINT);
+  }
+
+  static String endpoint(String address) throws IOException {
+    if (!isRelay(address)) throw new IOException("Dirección del hosting no válida");
+    return "www.calamarmenciano.com".equals(URI.create(address).getHost()) ? ALTERNATE_ENDPOINT : Library.PLAYER_ENDPOINT;
+  }
+
+  static String signedUrl(String json, String base) throws IOException {
     try {
-      String address = URI.create(Library.PLAYER_ENDPOINT).resolve(new JSONObject(json).getString("url")).toString();
+      String address = URI.create(endpoint(base)).resolve(new JSONObject(json).getString("url")).toString();
       URI uri = URI.create(address);
       if (!isRelay(address) || uri.getRawQuery() == null
           || !uri.getRawQuery().contains("seg=") || !uri.getRawQuery().contains("sig="))
@@ -81,11 +101,30 @@ final class HostingPlayback {
   }
 
   static String resolve(String page, String id, int attempt, PlayerDocument.ConnectionFactory connections) throws IOException {
+    return resolve(page, id, attempt, Library.PLAYER_ENDPOINT, connections);
+  }
+
+  static String resolve(String page, String id, int attempt, String base, PlayerDocument.ConnectionFactory connections) throws IOException {
     if (!id.isEmpty() && !id.matches("[a-f0-9]{16}|legacy-[0-9]{1,2}")) throw new IOException("Señal no válida");
     boolean automatic = id.isEmpty() || AUTOMATIC.equals(id);
     String selection = automatic ? (attempt > 0 ? "&intento=" + Math.min(9, attempt) : "")
         : id.startsWith("legacy-") ? "&src=" + id.substring(7) : "&source_id=" + id;
-    return signedUrl(fetch(request(page) + selection, connections, 60000));
+    String address = endpoint(base) + request(page).substring(Library.PLAYER_ENDPOINT.length()) + selection;
+    PlayerDocument.Result response = fetchHosted(address, connections, 60000);
+    return signedUrl(response.html, response.url);
+  }
+
+  static PlayerDocument.Result event(String page, String base, PlayerDocument.ConnectionFactory connections) throws IOException {
+    return fetchHosted(endpoint(base) + "?event=" + java.net.URLEncoder.encode(page, "UTF-8"), connections, 60000);
+  }
+
+  private static PlayerDocument.Result fetchHosted(String address, PlayerDocument.ConnectionFactory connections, int timeout) throws IOException {
+    try { return new PlayerDocument.Result(fetch(address, connections, timeout), address); }
+    catch (IOException failure) {
+      if (!networkUnavailable(failure) || !Library.PLAYER_ENDPOINT.equals(endpoint(address))) throw failure;
+      String alternate = ALTERNATE_ENDPOINT + address.substring(Library.PLAYER_ENDPOINT.length());
+      return new PlayerDocument.Result(fetch(alternate, connections, timeout), alternate);
+    }
   }
 
   private static String fetch(String address, PlayerDocument.ConnectionFactory connections) throws IOException {
