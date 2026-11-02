@@ -115,9 +115,10 @@ service cloud.firestore {
         && p.json is string && p.json.size() <= limit && p.updatedAt == request.time;
     }
     match /calamarUsers/{uid} {
-      allow get, delete: if owner(uid);
+      allow get: if owner(uid) || administrator();
+      allow delete: if owner(uid);
       allow create, update: if owner(uid) && jsonDoc(20000);
-      allow list: if false;
+      allow list: if administrator();
       match /profiles/{profile} {
         allow get, delete: if owner(uid);
         allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
@@ -128,6 +129,45 @@ service cloud.firestore {
         allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
         allow list: if false;
       }
+    }
+    // The web's optional sign-in wall. Android guest playback keeps its existing access.
+    match /calamarWeb/access {
+      allow get: if true;
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasAll(['requireLogin', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['requireLogin', 'updatedAt'])
+        && request.resource.data.requireLogin is bool && request.resource.data.updatedAt == request.time;
+      allow delete, list: if false;
+    }
+    // Only metadata needed by the users panel; each member may update their own identity.
+    function memberData() {
+      let p = request.resource.data;
+      return p.keys().hasAll(['name', 'email', 'photo', 'verified', 'provider', 'lastSeen', 'createdAt'])
+        && p.keys().hasOnly(['name', 'email', 'photo', 'verified', 'provider', 'lastSeen', 'createdAt', 'registeredAt'])
+        && p.name is string && p.name.size() <= 80
+        && p.email == request.auth.token.email
+        && p.photo is string && p.photo.size() <= 2048
+        && p.verified == request.auth.token.get('email_verified', false)
+        && p.provider == request.auth.token.firebase.sign_in_provider
+        && p.lastSeen == request.time
+        && (!('registeredAt' in p) || p.registeredAt is timestamp);
+    }
+    match /calamarMembers/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list: if administrator();
+      allow create: if owner(uid) && memberData() && request.resource.data.createdAt == request.time;
+      allow update: if owner(uid) && memberData() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+    // Kept separate from editable profiles: changing/deleting a profile cannot undo a block.
+    match /calamarUserAccess/{uid} {
+      allow get: if owner(uid) || administrator();
+      allow list: if administrator();
+      allow create, update: if administrator() && uid != request.auth.uid
+        && request.resource.data.keys().hasAll(['blocked', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['blocked', 'updatedAt'])
+        && request.resource.data.blocked is bool && request.resource.data.updatedAt == request.time;
+      allow delete: if administrator() && uid != request.auth.uid;
     }
     match /{document=**} {
       allow read, write: if false;

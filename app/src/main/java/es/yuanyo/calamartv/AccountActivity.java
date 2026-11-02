@@ -472,7 +472,9 @@ public class AccountActivity extends Activity {
     title.setPadding(0, dp(22), 0, dp(2));
     card.addView(title);
     card.addView(label(creating ? "Regístrate con:" : "Inicia sesión o regístrate con:", 15, 0xaaffffff));
-    Button google = Ui.pill(this, "G   Google", Ui.Kind.GHOST, false);
+    Button google = Ui.pill(this, "Continuar con Google", Ui.Kind.GHOST, false);
+    google.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_google, 0, 0, 0);
+    google.setCompoundDrawablePadding(dp(12));
     google.setOnClickListener(v -> google());
     card.addView(google, new LinearLayout.LayoutParams(-1, dp(52)));
     // «O continuar con».

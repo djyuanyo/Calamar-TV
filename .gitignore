@@ -13,3 +13,5 @@ node_modules/
 firebase/package-lock.json
 __pycache__/
 *.pyc
+
+tools/ui-artifacts/

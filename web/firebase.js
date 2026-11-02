@@ -46,6 +46,7 @@ export function loginGoogle() {
 export async function registerEmail(email, password, name) {
   const result = await createUserWithEmailAndPassword(auth, email, password);
   if (name) await updateProfile(result.user, { displayName: name });
+  await recordMember().catch(() => {});
   return result;
 }
 export const loginEmail = (email, password) => signInWithEmailAndPassword(auth, email, password);
@@ -209,4 +210,45 @@ export function explain(error) {
     'unavailable': 'No se pudo conectar con el catálogo. Comprueba la conexión y vuelve a intentarlo.',
   };
   return messages[error.code] || error.message || 'No se pudo completar la operación.';
+}
+
+// ---- Optional website sign-in and administrator's user directory -------------------------------
+const webAccessDoc = doc(db, 'calamarWeb', 'access');
+const policy = data => ({ requireLogin: data?.requireLogin !== false });
+export async function readWebAccess() {
+  const s = await getDocFromServer(webAccessDoc); return policy(s.exists() ? s.data() : null);
+}
+export const watchWebAccess = (next, failed) => onSnapshot(webAccessDoc, { includeMetadataChanges: true }, s => {
+  if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(policy(s.exists() ? s.data() : null));
+}, failed);
+export async function saveWebAccess(value) {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+  await setDoc(webAccessDoc, { requireLogin: value.requireLogin === true, updatedAt: serverTimestamp() });
+}
+export const watchUserAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarUserAccess', uid), { includeMetadataChanges: true }, s => {
+  if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(s.exists() && s.data().blocked === true);
+}, failed);
+export async function recordMember() {
+  const user = auth.currentUser; if (!user || user.isAnonymous) return;
+  const token = await user.getIdTokenResult();
+  if (auth.currentUser?.uid !== user.uid) return;
+  const claims = token.claims, ref = doc(db, 'calamarMembers', user.uid);
+  await runTransaction(db, async tx => {
+    const before = await tx.get(ref);
+    const data = { name: String(user.displayName || '').slice(0, 80), email: String(claims.email || ''), photo: String(user.photoURL || '').slice(0, 2048),
+      verified: claims.email_verified === true, provider: String(claims.firebase?.sign_in_provider || ''), lastSeen: serverTimestamp() };
+    const registered = Date.parse(user.metadata?.creationTime || '');
+    if (Number.isFinite(registered)) data.registeredAt = new Date(registered);
+    if (!before.exists()) data.createdAt = serverTimestamp();
+    tx.set(ref, data, { merge: true });
+  });
+}
+export async function readUserDirectory() {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+  const [members, profiles, access] = await Promise.all(['calamarMembers', USERS_PATH, 'calamarUserAccess'].map(path => getDocs(collection(db, path))));
+  return { members: members.docs.map(s => ({ ...s.data(), uid: s.id })), profiles: profiles.docs.map(s => ({ ...s.data(), uid: s.id })), access: access.docs.map(s => ({ ...s.data(), uid: s.id })) };
+}
+export async function setUserBlocked(uid, blocked) {
+  if (!administrator() || uid === auth.currentUser.uid) throw Error('No puedes bloquear tu propia cuenta de administración.');
+  await setDoc(doc(db, 'calamarUserAccess', uid), { blocked: blocked === true, updatedAt: serverTimestamp() });
 }

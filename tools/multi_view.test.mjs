@@ -20,3 +20,9 @@ test('available events include renewable Zico pages and event APIs and exclude p
   assert.equal(multiPlayable(rows[0]),true);
   assert.deepEqual(availableMultiEvents(rows).map(e=>e.id),['a','b']);
 });
+test('movies, episodes and documentaries cannot be multi-screen candidates even with valid HLS URLs',()=>{
+  for(const page of ['peliculas','series','documentales']){
+    const vod={...event(page,page),vod:true,path:`#/${page}/id/ver`,progress:{page}};
+    assert.equal(multiPlayable(vod),false);assert.deepEqual(availableMultiEvents([vod]),[]);
+  }
+});

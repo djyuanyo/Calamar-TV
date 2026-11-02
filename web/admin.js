@@ -1,3 +1,5 @@
+import { usersAdmin } from './users-admin.js';
+import * as userService from './firebase.js';
 import { coverFromFile } from './image-file.js';
 import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
@@ -424,7 +426,7 @@ export async function render(state) {
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const reviewRoute = decodeURIComponent(location.hash).match(/^#\/admin\/biblioteca\/no-identificadas(?:\/(peliculas|series|documentales))?\/?$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
-  const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const section = location.hash.startsWith('#/admin/usuarios') ? 'users' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -437,8 +439,8 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'library' ? libraryAdmin(el, {
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
+      ...(section === 'users' ? usersAdmin(el, userService) : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.

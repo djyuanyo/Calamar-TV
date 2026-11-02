@@ -156,3 +156,33 @@ test('each account reads and writes only its own profiles, their data and their 
   await assertFails(getDocs(collection(mine, 'calamarUsers/user-a/profiles')));
   await assertSucceeds(deleteDoc(doc(mine, 'calamarUsers/user-a/profiles/p2')));
 });
+
+test('web admission settings are public to read and only the verified Google administrator may change them',async()=>{
+  const guest=env.unauthenticatedContext().firestore(),other=env.authenticatedContext('u',claims({email:'u@example.com'})).firestore();
+  await assertSucceeds(getDoc(doc(guest,'calamarWeb/access')));
+  const value={requireLogin:true,updatedAt:serverTimestamp()};
+  await assertFails(setDoc(doc(guest,'calamarWeb/access'),value));await assertFails(setDoc(doc(other,'calamarWeb/access'),value));
+  await assertSucceeds(setDoc(doc(admin(),'calamarWeb/access'),value));
+  await assertFails(setDoc(doc(admin(),'calamarWeb/access'),{...value,requireLogin:'yes'}));
+});
+test('the users directory is private; owners can report identity but cannot forge another account or moderation',async()=>{
+  const mine=env.authenticatedContext('member',claims({email:'member@example.com'})).firestore(), other=env.authenticatedContext('other',claims({email:'other@example.com'})).firestore(),guest=env.unauthenticatedContext().firestore();
+  const member={name:'Member',email:'member@example.com',photo:'',verified:true,provider:'google.com',createdAt:serverTimestamp(),lastSeen:serverTimestamp()};
+  await assertSucceeds(setDoc(doc(mine,'calamarMembers/member'),member));await assertFails(getDoc(doc(guest,'calamarMembers/member')));await assertFails(getDoc(doc(other,'calamarMembers/member')));await assertFails(getDocs(collection(mine,'calamarMembers')));
+  await assertSucceeds(getDocs(collection(admin(),'calamarMembers')));await assertSucceeds(getDocs(collection(admin(),'calamarUsers')));
+  await assertFails(setDoc(doc(mine,'calamarMembers/other'),member));await assertFails(setDoc(doc(mine,'calamarMembers/member'),{...member,email:'juanjocarrillo7@gmail.com'}));
+  await assertFails(setDoc(doc(mine,'calamarMembers/member'),{blocked:false},{merge:true}));
+});
+test('only the administrator can suspend web access; owners cannot remove the block by editing profiles',async()=>{
+  const mine=env.authenticatedContext('member',claims({email:'member@example.com'})).firestore(),guest=env.unauthenticatedContext().firestore();
+  const status={blocked:true,updatedAt:serverTimestamp()};
+  await assertSucceeds(setDoc(doc(admin(),'calamarUserAccess/member'),status));await assertSucceeds(getDoc(doc(mine,'calamarUserAccess/member')));
+  await assertFails(getDoc(doc(guest,'calamarUserAccess/member')));await assertFails(setDoc(doc(mine,'calamarUserAccess/member'),{...status,blocked:false}));await assertFails(deleteDoc(doc(mine,'calamarUserAccess/member')));
+  await assertFails(setDoc(doc(admin(),'calamarUserAccess/admin'),status));
+  await assertSucceeds(setDoc(doc(admin(),'calamarUserAccess/member'),{...status,blocked:false}));
+});
+
+test('unverified email/password registrations can register their own directory identity',async()=>{
+  const email=env.authenticatedContext('email-member',claims({email:'email@example.com',email_verified:false,firebase:{sign_in_provider:'password'}})).firestore();
+  await assertSucceeds(setDoc(doc(email,'calamarMembers/email-member'),{name:'Email',email:'email@example.com',photo:'',verified:false,provider:'password',createdAt:serverTimestamp(),lastSeen:serverTimestamp()}));
+});

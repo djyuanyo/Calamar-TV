@@ -1,7 +1,9 @@
+import { eventCover } from './event-art.js';
 import { MULTI_MAX, multiKey, multiPlayable } from './multi-view.js';
 const norm = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es');
 export const availableMultiEvents = events => events.filter(e => e.event && multiPlayable(e));
 export const searchMultiEvents = (events, query) => events.filter(e => norm(e.name).includes(norm(query.trim())));
+const element = (tag, attrs, ...children) => { const node = document.createElement(tag); for (const [key, value] of Object.entries(attrs || {})) if (value != null) node.setAttribute(key, value); for (const child of children) if (child != null) node.append(child); return node; };
 let picker = null;
 export function closeMultiPicker() { picker?.close(); }
 
@@ -23,7 +25,9 @@ export function pickMultiEvent({ events, selected, onChoose, parent = document.f
       button.setAttribute('aria-label', event.name); button.disabled = keys.has(multiKey(event)) || selected.length >= MULTI_MAX;
       const name = Object.assign(document.createElement('b'), { textContent: event.name });
       const meta = Object.assign(document.createElement('small'), { textContent: keys.has(multiKey(event)) ? 'Ya está en multipantalla' : event.meta || event.group || 'Añadir a multipantalla' });
-      button.append(name, meta); button.addEventListener('click', () => { dialog.close(); onChoose(event); }); list.append(button);
+      const art = document.createElement('span'); art.className = 'multi-event-art'; art.append(eventCover(element, event, 'event-cover'));
+      const details = document.createElement('span'); details.className = 'multi-event-details'; details.append(name, meta);
+      button.append(art, details); button.addEventListener('click', () => { dialog.close(); onChoose(event); }); list.append(button);
     }
     if (!found.length) list.append(Object.assign(document.createElement('p'), { className: 'note', role: 'status', textContent: candidates.length ? 'No hay eventos con ese nombre.' : 'No hay eventos disponibles.' }));
   };

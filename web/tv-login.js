@@ -1,3 +1,4 @@
+import { GOOGLE_G } from './google-icon.js';
 // The page the app's QR or short link opens on a phone: confirm the code the app shows and sign in with Google.
 import { deviceKey } from './device-login.js';
 
@@ -10,6 +11,7 @@ export async function render(el, keyText, codeText) {
     class: 'device-code-input', 'aria-label': 'Código que muestra la app', placeholder: 'AB3D' });
   const note = el('p', { class: 'note', role: 'status' });
   const confirm = el('button', { class: 'btn', type: 'submit' }, 'Confirmar e iniciar sesión con Google');
+  const googleMark = el('span', { class: 'google-mark', 'aria-hidden': 'true' }); googleMark.innerHTML = GOOGLE_G; confirm.prepend(googleMark);
   const form = el('form', { class: 'device-login', onsubmit: async (event) => {
     event.preventDefault();
     const typed = deviceKey(code.value);

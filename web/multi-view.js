@@ -19,10 +19,11 @@ export function multiGrid(n) {
 }
 
 /** True when the browser can play at least one source of the channel or event. */
-export const multiPlayable = c => c.playable && (c.streams.some(zicoEventApi) || sourceOptions(c.streams).some(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind)));
+export const multiPlayable = c => !!c && !c.vod && c.playable && (c.streams.some(zicoEventApi) || sourceOptions(c.streams).some(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind)));
 
 /** Plays a channel in one tile, trying its sources in order; returns a function that stops it. */
 export function playTile(video, channel, onStatus) {
+  if (!multiPlayable(channel)) { onStatus('Este contenido no admite multipantalla'); return () => {}; }
   let sources = [];
   const lookup = new AbortController();
   let lookupTimer = null;
@@ -129,7 +130,7 @@ export function openMulti(items, { onClose, onWatch = () => {}, onAdd, onChange 
     if (audible === tile) listen(tiles[0]); layout(); onChange(snapshot()); showControls();
   };
   const append = (channel, changed = true) => {
-    if (tiles.length >= MULTI_MAX || tiles.some(t => multiKey(t.channel) === multiKey(channel))) return false;
+    if (!multiPlayable(channel) || tiles.length >= MULTI_MAX || tiles.some(t => multiKey(t.channel) === multiKey(channel))) return false;
     const node = document.createElement('div'); node.className = 'multi-tile'; node.setAttribute('role', 'group'); node.setAttribute('aria-label', channel.name);
     const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, autoplay: true }); video.setAttribute('playsinline', '');
     const name = Object.assign(document.createElement('span'), { className: 'multi-name', textContent: channel.name });

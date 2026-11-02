@@ -57,8 +57,8 @@ public class MultiPlaybackTest {
   }
   static void search(Dialog dialog,String query)throws Exception{main(()->{EditText input=find(dialog.getWindow().getDecorView(),EditText.class,"Buscar evento para multipantalla");assertNotNull(input);assertTrue(input.isShown());input.setText(query);});}
   static void choose(Dialog dialog,String name)throws Exception{
-    search(dialog,name);main(()->{ListView list=find(dialog.getWindow().getDecorView(),ListView.class,null);assertNotNull(list);assertEquals(1,list.getAdapter().getCount());assertTrue(list.getAdapter().isEnabled(0));
-      assertEquals(name,((Catalog.Channel)list.getAdapter().getItem(0)).name);android.view.View row=list.getAdapter().getView(0,null,list);list.performItemClick(row,0,list.getAdapter().getItemId(0));});
+    search(dialog,name);main(()->{GridView list=find(dialog.getWindow().getDecorView(),GridView.class,null);assertNotNull(list);assertEquals(1,list.getAdapter().getCount());assertTrue(list.getAdapter().isEnabled(0));
+      assertEquals(name,((Catalog.Channel)list.getAdapter().getItem(0)).name);android.view.View row=list.getAdapter().getView(0,null,list);assertTrue(row instanceof LinearLayout);assertNotNull(find(row,ImageView.class,null));assertNotNull(find(row,TextView.class,null));list.performItemClick(row,0,list.getAdapter().getItemId(0));});
   }
   static List<?> tiles(MultiPlayerActivity activity)throws Exception{Field f=MultiPlayerActivity.class.getDeclaredField("tiles");f.setAccessible(true);return (List<?>)f.get(activity);}
   static List<ExoPlayer> players(MultiPlayerActivity activity)throws Exception{List<ExoPlayer> out=new ArrayList<>();for(Object tile:tiles(activity))out.add((ExoPlayer)field(tile,"player"));return out;}
@@ -79,7 +79,10 @@ public class MultiPlaybackTest {
     DnsProvider previous=NetworkTransport.selected(context);File cache=new File(context.getFilesDir(),"shared-catalog.json");byte[] previousCache=cache.isFile()?java.nio.file.Files.readAllBytes(cache.toPath()):null;
     JSONObject catalog=new JSONObject().put("channels",new JSONArray()).put("featured",new JSONArray()).put("hidden",new JSONArray());JSONArray events=new JSONArray();
     String[] names={"Águilas vs Betis","Evento Beta","Evento Gamma","Evento Delta"};
-    for(int i=0;i<names.length;i++)events.put(new JSONObject().put("id","multi-fixture-"+i).put("name",names[i]).put("cover","https://example.invalid/cover.png").put("streams",new JSONArray().put("https://zicotv.cc/api/player/"+(i+2))));
+    String pixel="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aC1sAAAAASUVORK5CYII=";
+    catalog.put("leagues",new JSONArray().put(new JSONObject().put("id","league-fixture").put("name","Liga de prueba")));
+    catalog.put("teams",new JSONArray().put(new JSONObject().put("id","home-fixture").put("name","Águilas").put("logo",pixel)).put(new JSONObject().put("id","away-fixture").put("name","Betis").put("logo",pixel)));
+    for(int i=0;i<names.length;i++)events.put(new JSONObject().put("id","multi-fixture-"+i).put("name",names[i]).put("cover",pixel).put("leagueId","league-fixture").put("homeTeamId","home-fixture").put("awayTeamId","away-fixture").put("streams",new JSONArray().put("https://zicotv.cc/api/player/"+(i+2))));
     catalog.put("events",events);SharedCatalog.validate(catalog);SharedCatalog.cache(context,catalog);
     HeldCertificate cert=new HeldCertificate.Builder().commonName("calamarmenciano.com").addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").build();
     HandshakeCertificates serverTls=new HandshakeCertificates.Builder().heldCertificate(cert).build(),tls=new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
@@ -101,13 +104,16 @@ public class MultiPlaybackTest {
       AtomicReference<Intent> launch=new AtomicReference<>();
       Instrumentation.ActivityMonitor monitor=new Instrumentation.ActivityMonitor(){@Override public Instrumentation.ActivityResult onStartActivity(Intent intent){if(intent.getComponent()!=null&&intent.getComponent().getClassName().equals(MultiPlayerActivity.class.getName())){launch.set(new Intent(intent));return new Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};
       instrumentation.addMonitor(monitor);
+      try(ActivityScenario<NativePlayerActivity> movie=ActivityScenario.launch(new Intent(context,NativePlayerActivity.class).putExtra("page_url","https://zicotv.cc/api/player/1").putExtra("title","Película de prueba").putExtra("progress_entry","{\"key\":\"vod-fixture\",\"page\":\"peliculas\",\"item\":\"vod-fixture\"}"))){
+        movie.onActivity(a->{try{android.view.View button=find(a.getWindow().getDecorView(),android.view.View.class,"Multipantalla");assertNotNull(button);assertEquals(android.view.View.GONE,button.getVisibility());Method choose=NativePlayerActivity.class.getDeclaredMethod("chooseMultiEvent");choose.setAccessible(true);choose.invoke(a);assertNull(field(a,"multiPicker"));}catch(Exception e){throw new AssertionError(e);}});assertNull("A film must never launch multi-screen",launch.get());
+      }
       try(ActivityScenario<NativePlayerActivity> single=ActivityScenario.launch(new Intent(context,NativePlayerActivity.class).putExtra("page_url","https://zicotv.cc/api/player/1").putExtra("title","Canal inicial"))){
         long deadline=SystemClock.elapsedRealtime()+30000;AtomicBoolean playing=new AtomicBoolean();
         while(!playing.get()&&SystemClock.elapsedRealtime()<deadline){single.onActivity(a->{try{ExoPlayer p=(ExoPlayer)field(a,"player");playing.set(p!=null&&p.isPlaying()&&p.getVideoSize().width>0);}catch(Exception e){throw new AssertionError(e);}});SystemClock.sleep(100);}assertTrue(playing.get());
         AtomicReference<NativePlayerActivity> originalActivity=new AtomicReference<>();single.onActivity(originalActivity::set);
         main(()->{((androidx.media3.ui.PlayerView)field(originalActivity.get(),"playerView")).showController();android.view.View button=find(originalActivity.get().getWindow().getDecorView(),android.view.View.class,"Multipantalla");assertNotNull(button);assertTrue(button.isShown());button.requestFocus();button.performClick();});
-        Dialog selector=picker(originalActivity.get());search(selector,"no existe");main(()->assertEquals(0,find(selector.getWindow().getDecorView(),ListView.class,null).getAdapter().getCount()));
-        search(selector,"aguilas");main(()->assertEquals(1,find(selector.getWindow().getDecorView(),ListView.class,null).getAdapter().getCount()));choose(selector,names[0]);
+        Dialog selector=picker(originalActivity.get());main(()->{GridView grid=find(selector.getWindow().getDecorView(),GridView.class,null);assertNotNull(grid);if((context.getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_TYPE_MASK)==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION)assertTrue("TV selector must have multiple columns",grid.getNumColumns()>=2);});search(selector,"no existe");main(()->assertEquals(0,find(selector.getWindow().getDecorView(),GridView.class,null).getAdapter().getCount()));
+        search(selector,"aguilas");main(()->assertEquals(1,find(selector.getWindow().getDecorView(),GridView.class,null).getAdapter().getCount()));choose(selector,names[0]);
         assertNotNull(launch.get());assertEquals(Arrays.asList("Canal inicial",names[0]),launch.get().getStringArrayListExtra(MultiPlayerActivity.TITLES));
       }finally{instrumentation.removeMonitor(monitor);}
       assertNotNull(launch.get());Intent multiIntent=launch.get().setClass(context,MultiFixtureActivity.class);

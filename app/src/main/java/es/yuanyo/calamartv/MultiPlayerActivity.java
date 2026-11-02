@@ -160,6 +160,8 @@ public class MultiPlayerActivity extends Activity {
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
+    ArrayList<String> requestedTargets = getIntent().getStringArrayListExtra("audience_targets");
+    if (getIntent().hasExtra("progress_entry") || requestedTargets != null && requestedTargets.stream().anyMatch(t -> t != null && t.startsWith("l:"))) { finish(); return; }
     ArrayList<String> titles = getIntent().getStringArrayListExtra(TITLES), streams = getIntent().getStringArrayListExtra(STREAMS);
     if (titles == null || streams == null || titles.isEmpty() || titles.size() != streams.size()) { finish(); return; }
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

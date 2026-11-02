@@ -1,3 +1,4 @@
+import { fakeFirebase } from './browser_fixture.mjs';
 // Exercise the real UI against an isolated catalog; never signs in or writes to Firebase.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -11,42 +12,7 @@ const fixture = { channels: [
   { id: 'sport-one', name: 'Sports One', group: 'Deportes', streams: ['https://example.com/one.mp4'] },
   { id: 'sport-two', name: 'Sports Two', group: 'Deportes', streams: ['https://example.com/two.mp4'] },
 ], featured: ['sport-two'], hidden: [], events: [], leagues: [], teams: [] };
-const firebase = `
-import { validateCatalog } from './shared-catalog.js';
-let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
-export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com', getIdToken: async () => 'token' } };
-export const administrator = (user) => user === undefined || user?.email === 'admin@example.com';
-export const imageService = async () => ({configured: true});
-export const connectImageService = async () => ({configured: true});
-export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };
-export const login = async () => {}, logout = async () => {}, explain = e => e.message;
-export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
-export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
-export const watchCatalog = (fallback, next) => { const send = () => next({ data: structuredClone(catalog) }); if (sessionStorage.getItem('slowCatalog')) setTimeout(send, 1500); else send(); return () => {}; };
-const present = new Map();
-window.__visits = [];
-export const beat = async (session, target) => { present.set(session, target); };
-export const leave = async session => { present.delete(session); };
-export const viewers = async target => [...present.values()].filter(t => t === target).length + 2;
-export const audience = async () => [...present.values()].map(target => ({ target, minute: Math.floor(Date.now() / 60000) }));
-export const viewersOf = async targets => new Map(targets.map(target => [target, [...present.values()].filter(t => t === target).length]));
-export const purgeAudience = async () => {};
-export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
-export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
-export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
-export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
-export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; window.__libraryPublishCount = (window.__libraryPublishCount || 0) + 1; };
-export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
-export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
-export const readAccount = async () => window.__account || null;
-export const writeAccount = async (data) => { window.__account = data; };
-export const readProfileData = async (id) => (window.__profileData || {})[id] || null;
-export const writeProfileData = async (id, data) => { (window.__profileData ||= {})[id] = data; };
-export const deleteProfileData = async (id) => { delete (window.__profileData || {})[id]; };
-export const readCloudProgress = async () => ({ entries: {}, removed: {} });
-export const writeCloudProgress = async () => {};
-export const loginGoogle = async () => {}, registerEmail = async () => {}, loginEmail = async () => {}, resetPassword = async () => {};
-`;
+const firebase = fakeFirebase(fixture);
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
@@ -680,6 +646,7 @@ try {
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
+  assert.equal(await page.locator('#ctl-multi').isVisible(),false);
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
   // Films are not live: no «En directo» pill or live button, whatever the stream says.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));

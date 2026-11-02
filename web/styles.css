@@ -1408,3 +1408,30 @@ body.gate-open { overflow: hidden; }
   .multi-bar > button:last-child { font-size: 0; min-width: 40px; }
   .multi-bar > button:last-child::before { content: '⛶'; font-size: 22px; }
 }
+
+/* Event cards in the multi-screen picker, sharing registered team crests with the home page. */
+.multi-event-picker { width: min(1060px, calc(100vw - 32px)); }
+.multi-event-list { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); align-items: start; }
+.multi-event-choice { padding: 0; overflow: hidden; gap: 0; }
+.multi-event-art { display: block; aspect-ratio: 16/9; width: 100%; position: relative; overflow: hidden; }
+.multi-event-art > .event-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.multi-event-details { display: grid; gap: 6px; padding: 12px; }
+.multi-event-details b { min-height: 2.5em; }
+.multi-event-choice:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+.google-mark { display: inline-flex; vertical-align: middle; margin-right: 10px; flex: none; }
+.google-mark svg, .auth-provider svg { display: inline-block; width: 22px; height: 22px; flex: none; }
+
+/* Admission screens use the existing account form and keep account/administrator access reachable. */
+.access-locked .nav, .access-locked .top .search, .access-locked .hero, .access-locked .skip { display: none !important; }
+.access-switch { display: flex; gap: 12px; align-items: center; margin: 18px 0; }
+.access-switch input { width: 24px; height: 24px; accent-color: var(--accent); }
+.users-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; }
+.users-tools input { flex: 1; min-width: 220px; background: var(--surface); color: var(--fg); border: 1px solid #ffffff30; border-radius: 10px; padding: 12px; }
+.users-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+.user-card { padding: 18px; border: 1px solid #ffffff26; border-radius: 14px; background: #ffffff06; overflow-wrap: anywhere; }
+.user-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.user-status { font-size: 12px; border: 1px solid #ffffff35; border-radius: 20px; padding: 4px 9px; }
+.user-status.blocked { color: #ff9191; border-color: #ff616170; }
+.user-card dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 13px; }
+.user-card dt { color: var(--muted); } .user-card dd { margin: 0; }

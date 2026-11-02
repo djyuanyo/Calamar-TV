@@ -41,11 +41,21 @@ final class MultiEventPicker {
     TextView count = new TextView(activity); count.setText(selected.size() + " de " + MultiScreen.MAX + " pantallas"); count.setTextColor(Ui.MUTED); panel.addView(count);
     EditText search = new EditText(activity); search.setSingleLine(true); search.setTextColor(Ui.FG); search.setHintTextColor(Ui.MUTED);
     search.setHint("Buscar por nombre del evento"); search.setContentDescription("Buscar evento para multipantalla"); panel.addView(search, new LinearLayout.LayoutParams(-1, -2));
-    ListView list = new ListView(activity); list.setDividerHeight(Ui.dp(activity, 6)); panel.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+    GridView list = new GridView(activity);
+    boolean television = (activity.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
+    int width = activity.getResources().getConfiguration().screenWidthDp;
+    list.setNumColumns(television ? Math.max(2, Math.min(4, width / 240)) : Math.max(1, Math.min(3, width / 190)));
+    list.setHorizontalSpacing(Ui.dp(activity, 10)); list.setVerticalSpacing(Ui.dp(activity, 10)); list.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+    list.setSelector(Ui.shape(activity, 0x20d6ff00, 12, 3, Ui.ACC)); list.setDrawSelectorOnTop(true); list.setContentDescription("Eventos disponibles en multipantalla"); panel.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView empty = new TextView(activity); empty.setTextColor(Ui.MUTED); panel.addView(empty); list.setEmptyView(empty);
     Button cancel = Ui.pill(activity, "Cancelar", Ui.Kind.SURFACE, true); panel.addView(cancel);
     android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert).create();
     dialog.setView(panel, 0, 0, 0, 0);
+    EventCardImages images = new EventCardImages();
+    panel.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      public void onViewAttachedToWindow(View v) {}
+      public void onViewDetachedFromWindow(View v) { images.close(); }
+    });
     List<Catalog.Channel> found = new ArrayList<>(events);
     BaseAdapter adapter = new BaseAdapter() {
       public int getCount() { return found.size(); }
@@ -55,10 +65,25 @@ final class MultiEventPicker {
       public boolean isEnabled(int position) { return selected.size() < MultiScreen.MAX && !selected.contains(AudienceModel.target(true, found.get(position).id)); }
       public View getView(int position, View reusable, android.view.ViewGroup parent) {
         Catalog.Channel event = found.get(position); boolean enabled = isEnabled(position);
-        TextView row = reusable instanceof TextView ? (TextView) reusable : new TextView(activity);
-        row.setText(event.name + "\n" + (enabled ? event.meta : "Ya está en multipantalla")); row.setTextSize(16);
-        row.setTextColor(enabled ? Ui.FG : Ui.MUTED); row.setContentDescription(event.name); row.setPadding(Ui.dp(activity, 12), Ui.dp(activity, 14), Ui.dp(activity, 12), Ui.dp(activity, 14));
-        row.setBackground(Ui.shape(activity, Ui.SURFACE, 10, 0, 0)); row.setEnabled(enabled); return row;
+        LinearLayout row = reusable instanceof LinearLayout ? (LinearLayout) reusable : new LinearLayout(activity);
+        row.removeAllViews(); row.setOrientation(LinearLayout.VERTICAL); row.setPadding(Ui.dp(activity, 3), Ui.dp(activity, 3), Ui.dp(activity, 3), Ui.dp(activity, 3));
+        row.setContentDescription(event.name); row.setEnabled(enabled); row.setAlpha(enabled ? 1f : .45f); row.setBackground(Ui.shape(activity, Ui.SURFACE, 12, 1, 0x30ffffff));
+        FrameLayout art = new FrameLayout(activity) { @Override protected void onMeasure(int w, int h) { super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(Math.round(View.MeasureSpec.getSize(w) * 9f / 16f), View.MeasureSpec.EXACTLY)); } };
+        art.setBackground(Ui.shape(activity, 0xff10271e, 10, 0, 0)); art.setClipToOutline(true);
+        ImageView background = new ImageView(activity); background.setScaleType(ImageView.ScaleType.CENTER_CROP); art.addView(background, new FrameLayout.LayoutParams(-1, -1));
+        images.load(background, event.cover.isEmpty() ? event.background : event.cover, false);
+        if (!event.homeLogo.isEmpty() || !event.awayLogo.isEmpty()) {
+          LinearLayout crests = new LinearLayout(activity); crests.setGravity(android.view.Gravity.CENTER); crests.setPadding(Ui.dp(activity, 12), Ui.dp(activity, 12), Ui.dp(activity, 12), Ui.dp(activity, 12));
+          for (int i = 0; i < 3; i++) {
+            if (i == 1) { TextView vs = new TextView(activity); vs.setText("VS"); vs.setTextColor(Ui.FG); vs.setGravity(android.view.Gravity.CENTER); vs.setTextSize(12); crests.addView(vs, new LinearLayout.LayoutParams(0, -1, .7f)); }
+            else { ImageView crest = new ImageView(activity); crest.setScaleType(ImageView.ScaleType.FIT_CENTER); images.load(crest, i == 0 ? event.homeLogo : event.awayLogo, true); crests.addView(crest, new LinearLayout.LayoutParams(0, -1, 1)); }
+          }
+          art.addView(crests, new FrameLayout.LayoutParams(-1, -1));
+        }
+        row.addView(art, new LinearLayout.LayoutParams(-1, -2));
+        TextView name = new TextView(activity); name.setText(event.name); name.setTextColor(Ui.FG); name.setTextSize(15); name.setTypeface(null, android.graphics.Typeface.BOLD); name.setMaxLines(2); name.setMinLines(2); name.setEllipsize(android.text.TextUtils.TruncateAt.END); name.setPadding(Ui.dp(activity, 10), Ui.dp(activity, 10), Ui.dp(activity, 10), 0); row.addView(name);
+        TextView meta = new TextView(activity); meta.setText(enabled ? event.meta : "Ya está en multipantalla"); meta.setTextSize(12); meta.setTextColor(Ui.MUTED); meta.setMaxLines(2); meta.setEllipsize(android.text.TextUtils.TruncateAt.END); meta.setPadding(Ui.dp(activity, 10), Ui.dp(activity, 5), Ui.dp(activity, 10), Ui.dp(activity, 10)); row.addView(meta);
+        return row;
       }
     };
     list.setAdapter(adapter);

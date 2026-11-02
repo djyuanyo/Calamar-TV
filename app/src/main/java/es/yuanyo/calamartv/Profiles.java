@@ -113,6 +113,7 @@ final class Profiles {
       data = localData(app);
     }
     confirmed = true;
+    UserDirectory.touch(app, user);
     db(app).document("calamarUsers/" + uid).get(Source.SERVER).addOnCompleteListener(task -> {
       if (!now.equals(uid)) return;
       JSONObject found = null;

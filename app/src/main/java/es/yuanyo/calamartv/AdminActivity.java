@@ -98,6 +98,7 @@ public class AdminActivity extends Activity {
             16));
     addButton("Cerrar sesión de Google", () -> SharedCatalog.auth(this).signOut());
     addButton("Recargar catálogo", this::load);
+    addButton("Usuarios y acceso web", () -> startActivity(new android.content.Intent(this, UsersActivity.class)));
     if (loading) {
       status.setText("Cargando catálogo…");
       return;
@@ -866,6 +867,7 @@ public class AdminActivity extends Activity {
   private void addButton(String text, Runnable action) {
     Button button = new Button(this);
     button.setText(text);
+    if (text.equals("Continuar con Google")) { button.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_google, 0, 0, 0); button.setCompoundDrawablePadding(dp(12)); }
     button.setAllCaps(false);
     button.setTextColor(BG);
     button.setMinHeight(dp(48));

@@ -1,3 +1,5 @@
+import { createWebAccess } from './web-access.js';
+import { eventCover as drawEventCover } from './event-art.js';
 import { updateAppDownload } from './app-links.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
@@ -17,7 +19,7 @@ import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryP
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
   loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
 import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
-import { accountPage, paintAccountButton, profileGate } from './account.js';
+import { accountPage, paintAccountButton, profileGate, signIn } from './account.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -32,6 +34,8 @@ let firebase = null;
 // True while the administrator is signed in on this browser (see the library section below).
 let libraryAdmin = false;
 const shared = () => (firebase ||= import('./firebase.js'));
+let accessReturnHash = null;
+const webAccess = createWebAccess(shared, () => { if (typeof route === 'function') route(); });
 let sharedValue = null;
 // True once the live catalog arrived, failed or took too long: until then a link to an event or channel
 // missing from the bundled copy is still loading, not missing.
@@ -90,6 +94,7 @@ function hue(name) {
   return h;
 }
 
+const eventCover = (c, cls) => drawEventCover(el, c, cls);
 function logo(c, cls) {
   const fallback = () => el('span', { class: `initials ${cls || ''}`.trim() }, initials(c.name));
   if (!c.logo) return fallback();
@@ -122,15 +127,6 @@ function card(c, pick = null) {
  * Teams' crests stay on top of the event's cover (or the league's background), including manual
  * matches. Events without registered crests keep their full photo.
  */
-function eventCover(c, cls) {
-  if (c.cover && !c.homeLogo && !c.awayLogo) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
-  const crest = (src, side) => src ? el('img', { class: `crest ${side}`, src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: `crest ${side} crest-empty` });
-  const background = c.cover || c.background;
-  return el('span', { class: `${cls} event-generic`, style: background ? `background-image:url("${background.replace(/"/g, '%22')}")` : null, 'aria-hidden': 'true' },
-    crest(c.homeLogo, 'home'),
-    c.leagueLogo ? el('span', { class: 'crest-league' }, el('img', { src: c.leagueLogo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })) : el('span', { class: 'crest-vs' }, 'VS'),
-    crest(c.awayLogo, 'away'));
-}
 
 /** Until an event starts its badge shows the date and time; then «En directo». */
 const matchScores = new Map();
@@ -987,6 +983,7 @@ let pushed = false;
 const channelLink = (c) => `${location.origin}${location.pathname}${c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`}`;
 
 function open(c, fromRoute = false) {
+  if (webAccess.current().decision !== 'allowed') { route(); return; }
   if (!c.playable && !c.pending) {
     window.open(c.web, '_blank', 'noopener');
     return;
@@ -997,6 +994,7 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
+  document.getElementById('ctl-multi').hidden = !!c.vod;
   document.getElementById('ctl-multi').disabled = !multiPlayable(c);
   // Channels and events are shared through their preview page; films and episodes are not.
   shareButton.hidden = !!c.vod;
@@ -1386,7 +1384,7 @@ function slidesForGate() {
 }
 function showGate() {
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
-  if (!signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
+  if (webAccess.current().decision !== 'allowed' || !signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
   const fromLibrary = !!cachedLibrary();
   // Already open with the library's titles: only the profiles can have changed.
   if (gate && gate.dataset.fromLibrary && fromLibrary && gate.dataset.profiles === JSON.stringify(accountProfiles())) return;
@@ -1411,9 +1409,35 @@ onProfilesChanged(() => {
   if (needsProfile() && page !== 'cuenta' && page !== 'admin') { location.hash = '#/cuenta'; return; }
   if (page === 'cuenta' || (!page && !search.value.trim())) { clearTimeout(profileRedraw); profileRedraw = setTimeout(route, 50); }
 });
+webAccess.start();
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
 async function route() {
+  const admission = webAccess.current();
+  const accessPage = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  const locked = admission.decision !== 'allowed';
+  document.body.classList.toggle('access-locked', locked);
+  if (locked) {
+    closeGate();
+    if (!player.hidden) hidePlayer();
+    closeMultiPicker(); closeMulti(); inlineMulti = null;
+    stopHighlight();
+    if (stopMusic) { stopMusic(); stopMusic = null; }
+    if (!['admin', 'cuenta', 'tv'].includes(accessPage)) {
+      if (!accessReturnHash) accessReturnHash = location.hash || '#/';
+      for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+      const ticket = ++routeVersion;
+      if (admission.decision === 'login') {
+        try { const f = await shared(); if (ticket !== routeVersion) return; view.replaceChildren(...signIn(el, f, route)); }
+        catch { view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el inicio de sesión. Recarga para volver a intentarlo.')); }
+      } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso web bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
+      else if (admission.decision === 'error') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'No se pudo comprobar el acceso'), el('p', {}, 'Comprueba la conexión y vuelve a intentarlo.'), el('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, 'Reintentar'), el('a', { class: 'ghost', href: '#/cuenta' }, 'Iniciar sesión')));
+      else view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando acceso…'));
+      return;
+    }
+  }
+
+  if (!locked) { showGate(); if (accessPage !== 'cuenta') accessReturnHash = null; }
   if (inlineMulti) {
     if (location.hash === inlineMulti.hash) return;
     closeMultiPicker(); closeMulti(); inlineMulti = null;
@@ -1450,7 +1474,7 @@ async function route() {
       const f = await shared();
       if (version !== routeVersion) return;
       view.replaceChildren(...accountPage(el, f, { rerender: route, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
-        chosen: () => { accountEditing = null; location.hash = '#/'; } }));
+        chosen: () => { accountEditing = null; const destination = accessReturnHash || '#/'; accessReturnHash = null; location.hash = destination; } }));
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Comprueba la conexión y recarga.'));
     }

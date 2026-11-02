@@ -272,6 +272,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     multiButton.setContentDescription("Multipantalla"); multiButton.setFocusable(true);
     multiButton.setPadding(Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9));
     multiButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
+    multiButton.setVisibility(getIntent().hasExtra("progress_entry") ? View.GONE : View.VISIBLE);
     multiButton.setOnClickListener(v -> chooseMultiEvent()); controls.addView(multiButton, new LinearLayout.LayoutParams(buttonSize));
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
@@ -451,6 +452,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseMultiEvent() {
+    if (getIntent().hasExtra("progress_entry") || progressEntry != null) return;
     if (browser != null && player == null) { Toast.makeText(this, "Esta fuente no admite multipantalla en la app.", Toast.LENGTH_LONG).show(); return; }
     String target = getIntent().getStringExtra("audience_target");
     java.util.List<String> selected = java.util.Collections.singletonList(target == null ? "current" : target);
