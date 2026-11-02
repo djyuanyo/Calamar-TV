@@ -170,8 +170,8 @@ test('the users directory is private; owners can report identity but cannot forg
   const member={name:'Member',email:'member@example.com',photo:'',verified:true,provider:'google.com',createdAt:serverTimestamp(),lastSeen:serverTimestamp()};
   await assertSucceeds(setDoc(doc(mine,'calamarMembers/member'),member));await assertFails(getDoc(doc(guest,'calamarMembers/member')));await assertFails(getDoc(doc(other,'calamarMembers/member')));await assertFails(getDocs(collection(mine,'calamarMembers')));
   await assertSucceeds(getDocs(collection(admin(),'calamarMembers')));await assertSucceeds(getDocs(collection(admin(),'calamarUsers')));
-  await assertFails(setDoc(doc(mine,'calamarMembers/other'),member));await assertFails(setDoc(doc(mine,'calamarMembers/member'),{...member,email:'juanjocarrillo7@gmail.com'}));
-  await assertFails(setDoc(doc(mine,'calamarMembers/member'),{blocked:false},{merge:true}));
+  await assertFails(setDoc(doc(mine,'calamarMembers/other'),member));await assertFails(setDoc(doc(mine,'calamarMembers/member'),{email:'juanjocarrillo7@gmail.com',lastSeen:serverTimestamp()},{merge:true}));
+  await assertFails(setDoc(doc(mine,'calamarMembers/member'),{blocked:false,lastSeen:serverTimestamp()},{merge:true}));
 });
 test('only the administrator can suspend web access; owners cannot remove the block by editing profiles',async()=>{
   const mine=env.authenticatedContext('member',claims({email:'member@example.com'})).firestore(),guest=env.unauthenticatedContext().firestore();

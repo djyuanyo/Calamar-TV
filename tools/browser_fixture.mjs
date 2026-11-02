@@ -2,7 +2,7 @@ export const fakeFirebase = fixture => `
 import { validateCatalog } from './shared-catalog.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
 export const ready = Promise.resolve(), auth = { currentUser: Object.prototype.hasOwnProperty.call(window, '__initialAuth') ? window.__initialAuth : { uid: 'admin-fixture', email: 'admin@example.com', getIdToken: async () => 'token' } };
-export const administrator = (user) => user === undefined || user?.email === 'admin@example.com';
+export const administrator = (user = auth.currentUser) => !!user && user.email === 'admin@example.com';
 export const imageService = async () => ({configured: true});
 export const connectImageService = async () => ({configured: true});
 export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };

@@ -44,7 +44,7 @@ try{
   // The administrator is exempt from their own wall, can change the policy and cannot block themselves.
   await page.evaluate(()=>window.__setAuthFixture({uid:'admin-fixture',email:'admin@example.com',displayName:'Administrador'}));
   await page.evaluate(()=>{location.hash='#/admin/usuarios';});await page.getByRole('heading',{name:'Usuarios',exact:true}).waitFor();
-  await page.getByLabel('Buscar usuarios').fill('alvaro');assert.equal(await page.locator('.user-card').count(),1);
+  await page.getByLabel('Buscar usuarios').fill('alvaro');await page.waitForFunction(()=>document.querySelectorAll('.user-card').length===1);assert.equal(await page.getByLabel('Buscar usuarios').inputValue(),'alvaro');
   await page.getByRole('button',{name:'Bloquear en la web a Álvaro',exact:true}).click();await page.getByRole('button',{name:'Desbloquear a Álvaro',exact:true}).waitFor();
   assert.deepEqual(await page.evaluate(()=>window.__lastUserBlock),{uid:'member-fixture',blocked:true});
   await page.getByRole('button',{name:'Desbloquear a Álvaro',exact:true}).click();await page.getByRole('button',{name:'Bloquear en la web a Álvaro',exact:true}).waitFor();
@@ -52,4 +52,4 @@ try{
   await page.getByLabel('Buscar usuarios').fill('');assert.equal(await page.getByRole('button',{name:'Bloquear en la web a Administrador'}).isEnabled(),false);
   await page.screenshot({path:'tools/ui-artifacts/users-admin.png'});assert.deepEqual(errors,[]);
   console.log('PASS: confirmed sign-in before deep-link media, guest mode, logout/revocation, Google mark, crest cards and admin-only user/policy controls');
-}finally{await browser?.close();await new Promise(ok=>server.close(ok));}
+}catch(error){console.error(error);if(browser){for(const context of browser.contexts())for(const page of context.pages()){await page.screenshot({path:'tools/ui-artifacts/access-failure.png'}).catch(()=>{});console.error(await page.evaluate(()=>({url:location.href,filter:document.querySelector('[aria-label=\"Buscar usuarios\"]')?.value,cards:[...document.querySelectorAll('.user-card')].map(n=>n.textContent)})).catch(()=>({})));}}throw error;}finally{await browser?.close();await new Promise(ok=>server.close(ok));}

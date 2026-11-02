@@ -35,7 +35,13 @@ let firebase = null;
 let libraryAdmin = false;
 const shared = () => (firebase ||= import('./firebase.js'));
 let accessReturnHash = null;
-const webAccess = createWebAccess(shared, () => { if (typeof route === 'function') route(); });
+let admissionSignature = '';
+const webAccess = createWebAccess(shared, admission => {
+  const signature = JSON.stringify([admission.decision, admission.user?.uid || null, admission.administrator === true]);
+  if (signature === admissionSignature) return;
+  admissionSignature = signature;
+  if (typeof route === 'function') route();
+});
 let sharedValue = null;
 // True once the live catalog arrived, failed or took too long: until then a link to an event or channel
 // missing from the bundled copy is still loading, not missing.
