@@ -1453,6 +1453,8 @@ async function route() {
   stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
+  // Account and administration routes must release the player's overlay/inert lock too.
+  if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
   if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
   search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE || page === 'musica';

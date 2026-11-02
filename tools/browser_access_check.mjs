@@ -32,8 +32,12 @@ try{
   await page.waitForFunction(()=>window.__account?.profiles?.length>0);
   await page.locator('.profile-gate .gate-profile').first().click();
   await page.locator('#player:not([hidden])').waitFor();assert.ok(page.url().endsWith('#/canal/sports-one'),'Sign-in must retain the requested channel link');
+  await page.evaluate(()=>{location.hash='#/admin/usuarios';});
+  await page.getByText('Esta cuenta no es de administración.',{exact:false}).waitFor();
+  assert.equal(await page.locator('.users-panel').count(),0);assert.equal(await page.locator('#player').isVisible(),false);
+  await page.evaluate(()=>{location.hash='#/canal/sports-one';});await page.locator('#player:not([hidden])').waitFor();
   await page.locator('#ctl-multi').click();const picker=page.getByRole('dialog',{name:'Añadir evento',exact:true});await picker.waitFor();
-  assert.equal(await picker.locator('.multi-event-choice .multi-event-art .crest').count(),2);await page.screenshot({path:'tools/ui-artifacts/event-picker-cards.png'});
+  assert.equal(await picker.locator('.multi-event-choice .multi-event-art .crest').count(),2);assert.equal(await picker.locator('.multi-event-details b').evaluate(n=>n.getBoundingClientRect().bottom<=n.closest('.multi-event-list').getBoundingClientRect().bottom),true,'Card title must be visible below the crests without scrolling a giant image');await page.screenshot({path:'tools/ui-artifacts/event-picker-cards.png'});
   await picker.getByRole('button',{name:'Cancelar',exact:true}).click();
   await page.evaluate(()=>window.__setAuthFixture(null));await page.getByRole('heading',{name:'Entra',exact:true}).waitFor();assert.equal(await page.locator('#player').isVisible(),false);
   await page.evaluate(()=>window.__setWebAccess({requireLogin:false}));await page.locator('#player:not([hidden])').waitFor();
@@ -43,7 +47,7 @@ try{
   await page.evaluate(()=>window.__setUserBlocked('member-fixture',false));await page.locator('#player:not([hidden])').waitFor();
   // The administrator is exempt from their own wall, can change the policy and cannot block themselves.
   await page.evaluate(()=>window.__setAuthFixture({uid:'admin-fixture',email:'admin@example.com',displayName:'Administrador'}));
-  await page.evaluate(()=>{location.hash='#/admin/usuarios';});await page.getByRole('heading',{name:'Usuarios',exact:true}).waitFor();
+  await page.evaluate(()=>{location.hash='#/admin/usuarios';});await page.getByRole('heading',{name:'Usuarios',exact:true}).waitFor();assert.equal(await page.locator('#player').isVisible(),false);assert.equal(await page.locator('#view').evaluate(n=>n.inert),false);
   await page.getByLabel('Buscar usuarios').fill('alvaro');await page.waitForFunction(()=>document.querySelectorAll('.user-card').length===1);assert.equal(await page.getByLabel('Buscar usuarios').inputValue(),'alvaro');
   await page.getByRole('button',{name:'Bloquear en la web a Álvaro',exact:true}).click();await page.getByRole('button',{name:'Desbloquear a Álvaro',exact:true}).waitFor();
   assert.deepEqual(await page.evaluate(()=>window.__lastUserBlock),{uid:'member-fixture',blocked:true});
