@@ -776,7 +776,8 @@ async function playSource(c, index, resumeAt = 0) {
       // Back to the first source: a server that failed a moment ago often answers again.
       if (hls) hls.stopLoad();
       if (stopTs) { stopTs(); stopTs = null; }
-      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : 'El vídeo se ha cortado. Reconectando…';
+      const reconnecting = c.vod ? 'El vídeo se ha cortado. Reconectando…' : 'La emisión se ha cortado. Reconectando…';
+      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : reconnecting;
       setTimeout(() => {
         if (generation !== playbackGeneration) return;
         const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
