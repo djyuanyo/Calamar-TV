@@ -604,7 +604,7 @@ function showMulti(arg) {
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
   openMulti(items, {
-    track: item => viewingSession(shared, item),
+    track: item => viewingSession(shared, item, undefined, true),
     onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
     onChange: selected => { multiPicks = selected.map(multiKey); history.replaceState(null, '', `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`); },
     onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
@@ -660,7 +660,7 @@ document.getElementById('ctl-multi').addEventListener('click', () => {
     const origin = location.hash;
     hidePlayer(); inlineMulti = { hash: origin };
     openMulti([first, event], {
-      track: item => viewingSession(shared, item),
+      track: item => viewingSession(shared, item, undefined, true),
       onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
       onClose: selected => {
         const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
@@ -963,10 +963,11 @@ function showViewers(count) {
 }
 function startAudience(c, visit = true) {
   const target = audienceTarget(c);
-  if (watching?.target === target) return;
+  const playbackKey = c.progress?.key || target;
+  if (watching?.key === playbackKey) return;
   stopAudience();
   const id = sessionId();
-  const session = { target, id, timers: [], privateViewing: viewingSession(shared, c, id) };
+  const session = { target, key: playbackKey, id, timers: [], privateViewing: viewingSession(shared, c, id) };
   watching = session;
   if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;

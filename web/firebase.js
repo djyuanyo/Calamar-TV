@@ -184,6 +184,11 @@ export async function audience() {
 export async function purgeAudience() {
   const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '<', minuteOf() - 10)));
   await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+  if (administrator()) {
+    const expired = await getDocs(query(collection(db, 'calamarLiveViewers'),
+      where('updatedAt', '<', new Date(Date.now() - 15 * 60000)), limit(100)));
+    await Promise.all(expired.docs.map(d => deleteDoc(d.ref)));
+  }
 }
 export const recordVisit = (day, key) => setDoc(doc(db, VISITS_PATH, day), { last: key, [key]: increment(1) }, { merge: true });
 /** Daily visit documents between two YYYY-MM-DD days, both included. */
