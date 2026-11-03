@@ -93,7 +93,7 @@ export function playTile(video, channel, onStatus) {
 let view = null;
 
 /** Full screen grid. Adding or removing a tile leaves the other players running. */
-export function openMulti(items, { onClose, onWatch = () => {}, onAdd, onChange = () => {} } = {}) {
+export function openMulti(items, { onClose, onWatch = () => {}, track = () => null, onAdd, onChange = () => {} } = {}) {
   closeMulti();
   const root = document.createElement('div');
   root.className = 'multi idle'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Multipantalla');
@@ -144,7 +144,11 @@ export function openMulti(items, { onClose, onWatch = () => {}, onAdd, onChange 
       if (root.classList.contains('idle') || pointer === 'mouse') showControls(); else { clearTimeout(hideTimer); root.classList.add('idle'); }
     });
     node.append(video, name, status, sound, discard); grid.append(node); tiles.push(tile);
-    tile.stop = playTile(video, channel, text => { status.textContent = text; status.hidden = !text; });
+    const viewing = track(channel);
+    video.addEventListener('playing', () => viewing?.watching(true));
+    for (const event of ['pause', 'ended', 'waiting', 'error']) video.addEventListener(event, () => viewing?.watching(false));
+    const stopPlayback = playTile(video, channel, text => { status.textContent = text; status.hidden = !text; });
+    tile.stop = () => { viewing?.close(); stopPlayback(); };
     if (!audible) listen(tile); else listen(audible);
     layout(); onWatch(channel); if (changed) { onChange(snapshot()); showControls(); } return true;
   };
@@ -177,3 +181,4 @@ export function closeMulti() {
   screen.orientation?.unlock?.(); view.root.remove(); document.body.style.overflow = ''; view = null;
 }
 export const multiOpen = () => !!view;
+if (typeof window !== 'undefined') window.addEventListener('pagehide', closeMulti);

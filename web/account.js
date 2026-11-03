@@ -63,6 +63,7 @@ export function signIn(el, f, done) {
       el('h1', {}, creating ? 'Crea tu cuenta' : 'Entra'),
       el('p', { class: 'auth-lead' }, creating ? 'Regístrate con:' : 'Inicia sesión o regístrate con:'),
       google,
+      el('p', { class: 'note' }, 'Con tu cuenta, el historial de reproducción y la actividad en directo se muestran en administración.'),
       el('div', { class: 'auth-divider' }, el('span', {}, 'O continuar con')),
       el('p', { class: 'auth-method' }, 'Email y contraseña'),
       el('form', { class: 'auth-form', onsubmit: (event) => {

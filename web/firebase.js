@@ -5,7 +5,7 @@ import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } f
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -251,4 +251,72 @@ export async function readUserDirectory() {
 export async function setUserBlocked(uid, blocked) {
   if (!administrator() || uid === auth.currentUser.uid) throw Error('No puedes bloquear tu propia cuenta de administración.');
   await setDoc(doc(db, 'calamarUserAccess', uid), { blocked: blocked === true, updatedAt: serverTimestamp() });
+}
+
+
+// ---- Private viewing history and administrator live viewers -----------------------------------
+const viewingDoc = (uid, id) => doc(db, 'calamarViewing', uid, 'sessions', id);
+const liveViewerDoc = id => doc(db, 'calamarLiveViewers', id);
+const ownsViewing = uid => auth.currentUser?.uid === uid && !auth.currentUser.isAnonymous;
+
+export async function showViewing({ uid, id, ...details }, first) {
+  if (!ownsViewing(uid)) return false;
+  const live = { ...details, uid, updatedAt: serverTimestamp() };
+  if (first) {
+    const batch = writeBatch(db);
+    batch.set(viewingDoc(uid, id), { ...details, startedAt: serverTimestamp() });
+    batch.set(liveViewerDoc(id), live);
+    await batch.commit();
+  } else await setDoc(liveViewerDoc(id), live);
+  return true;
+}
+
+export async function hideViewing({ uid, id }, finished) {
+  if (!ownsViewing(uid)) return;
+  await Promise.all([deleteDoc(liveViewerDoc(id)), ...(finished ? [
+    setDoc(viewingDoc(uid, id), { endedAt: serverTimestamp() }, { merge: true }),
+  ] : [])]);
+}
+
+function requireAdministrator() {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+}
+
+export async function readUserDetails(uid) {
+  requireAdministrator();
+  const [member, account, access] = await Promise.all([
+    getDocFromServer(doc(db, 'calamarMembers', uid)),
+    readJson(doc(db, USERS_PATH, uid), null),
+    getDocFromServer(doc(db, 'calamarUserAccess', uid)),
+  ]);
+  const profiles = (Array.isArray(account?.profiles) ? account.profiles : [])
+    .filter(p => /^[a-z0-9]{1,20}$/.test(p?.id)).slice(0, 5);
+  if (!member.exists() && !account && !access.exists()) return null;
+  const favorites = await Promise.all(profiles.map(async profile => ({
+    ...profile,
+    data: await readJson(doc(db, USERS_PATH, uid, 'profiles', profile.id), null),
+  })));
+  return { ...member.data(), uid, blocked: access.data()?.blocked === true, profiles: favorites };
+}
+
+export async function readViewingHistory(uid, cursor) {
+  requireAdministrator();
+  const items = collection(db, 'calamarViewing', uid, 'sessions');
+  const snapshot = await getDocs(query(items, orderBy('startedAt', 'desc'), ...(cursor ? [startAfter(cursor)] : []), limit(31)));
+  const page = snapshot.docs.slice(0, 30);
+  return { entries: page.map(d => d.data()), cursor: snapshot.size > 30 ? page.at(-1) : null };
+}
+
+export async function readLiveViewers() {
+  requireAdministrator();
+  const live = await getDocs(query(collection(db, 'calamarLiveViewers'), where('updatedAt', '>=', new Date(Date.now() - 5 * 60000))));
+  const entries = live.docs.map(d => d.data());
+  const uids = [...new Set(entries.map(entry => entry.uid))];
+  const names = new Map(await Promise.all(uids.map(async uid => {
+    const member = await getDocFromServer(doc(db, 'calamarMembers', uid));
+    if (member.data()?.name) return [uid, member.data().name];
+    const account = await readJson(doc(db, USERS_PATH, uid), null);
+    return [uid, account?.profiles?.[0]?.name || ''];
+  })));
+  return entries.map(entry => ({ ...entry, name: names.get(entry.uid) || entry.profile || 'Usuario registrado' }));
 }

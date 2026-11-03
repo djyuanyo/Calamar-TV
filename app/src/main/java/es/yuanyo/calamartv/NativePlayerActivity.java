@@ -64,6 +64,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private MatchCenter.Model eventModel;
   private TextView status, viewersBadge;
   private AudienceSession audience;
+  private Runnable stopAccess;
   private final Runnable audiencePlayback=new Runnable(){public void run(){
     if(!matchActive||audience==null)return;
     if(webMode&&browser!=null){final WebView current=browser;current.evaluateJavascript("(function(){var v=document.querySelector('video');return !!v&&!v.paused&&!v.ended&&v.readyState>=3;})()", value -> {if(matchActive&&browser==current&&webMode)audience.watching("true".equals(value));});}
@@ -244,11 +245,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     String audienceTarget=getIntent().getStringExtra("audience_target");
     // Films and series count in the statistics, but their player shows no «people watching».
     if(AudienceModel.validTarget(audienceTarget)&&audienceTarget.startsWith("l:")){
-      audience=new AudienceSession(this,audienceTarget,null,null);
+      audience=new AudienceSession(this,audienceTarget,null,title,null);
     } else if(AudienceModel.validTarget(audienceTarget)){
       viewersBadge=Ui.audienceBadge(this,12);viewersBadge.setContentDescription("Consultando espectadores");
       controls.addView(viewersBadge,new LinearLayout.LayoutParams(-2,-2));
-      audience=new AudienceSession(this,audienceTarget,getIntent().getStringExtra("audience_channel"), viewers -> {
+      audience=new AudienceSession(this,audienceTarget,getIntent().getStringExtra("audience_channel"), title, viewers -> {
         viewersBadge.setText(viewers<0?"—":String.valueOf(viewers));
         viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers==1?"1 persona viendo":viewers+" personas viendo");
       });
@@ -578,6 +579,22 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override
   protected void onStart() {
     super.onStart();
+    if (root == null || isFinishing()) return;
+    root.setVisibility(View.INVISIBLE);
+    stopAccess = AppAccess.observe(this, state -> {
+      if (state == AppAccess.State.ALLOWED) {
+        root.setVisibility(View.VISIBLE);
+        if (!active) startPlayback();
+      } else if (state != AppAccess.State.LOADING || active) {
+        active = false;
+        root.setVisibility(View.INVISIBLE);
+        if (castPlayback && castControls != null) castControls.stopRemote();
+        finish();
+      }
+    });
+  }
+
+  private void startPlayback() {
     active = true;
     if (castPlayback && castControls != null && castControls.connected()) {
       status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
@@ -1609,6 +1626,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onStop() {
+    if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     if (multiPicker != null) { multiPicker.dismiss(); multiPicker = null; }
     active = false;
     if (sourceDialog != null) { sourceDialog.dismiss(); sourceDialog = null; }

@@ -86,6 +86,10 @@ public final class CastControls {
     if (control != null) control.setActivated(connected());
   }
 
+  void stopRemote() {
+    if (connected()) sessions.endCurrentSession(true);
+  }
+
   public boolean connected() {
     CastSession session = sessions == null ? null : sessions.getCurrentCastSession();
     return session != null && session.isConnected();

@@ -120,7 +120,8 @@ service cloud.firestore {
       allow create, update: if owner(uid) && jsonDoc(20000);
       allow list: if administrator();
       match /profiles/{profile} {
-        allow get, delete: if owner(uid);
+        allow get: if owner(uid) || administrator();
+        allow delete: if owner(uid);
         allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
         allow list: if false;
       }
@@ -130,7 +131,7 @@ service cloud.firestore {
         allow list: if false;
       }
     }
-    // The web's optional sign-in wall. Android guest playback keeps its existing access.
+    // One sign-in policy for the website, Android and Android TV.
     match /calamarWeb/access {
       allow get: if true;
       allow create, update: if administrator()
@@ -168,6 +169,38 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['blocked', 'updatedAt'])
         && request.resource.data.blocked is bool && request.resource.data.updatedAt == request.time;
       allow delete: if administrator() && uid != request.auth.uid;
+    }
+    // Authenticated viewing never puts account identifiers in public audience counters.
+    function viewer(uid) {
+      return owner(uid) && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function viewingFields(p) {
+      return p.target is string && p.target.matches('^[cel]:[^|/]{1,200}$')
+        && p.title is string && p.title.size() <= 250
+        && p.profile is string && p.profile.size() <= 24
+        && p.device in ['web', 'android', 'tv'];
+    }
+    function validLiveViewer(id) {
+      let p = request.resource.data;
+      return id.matches('^[A-Za-z0-9]{20,40}$')
+        && p.keys().hasOnly(['uid', 'target', 'title', 'profile', 'device', 'updatedAt'])
+        && viewer(p.uid) && viewingFields(p) && p.updatedAt == request.time;
+    }
+    match /calamarLiveViewers/{id} {
+      allow read: if administrator();
+      allow create: if validLiveViewer(id);
+      allow update: if validLiveViewer(id) && request.resource.data.uid == resource.data.uid;
+      allow delete: if viewer(resource.data.uid) || administrator();
+    }
+    match /calamarViewing/{uid}/sessions/{id} {
+      allow read: if owner(uid) || administrator();
+      allow create: if viewer(uid) && id.matches('^[A-Za-z0-9]{20,40}$')
+        && request.resource.data.keys().hasOnly(['target', 'title', 'profile', 'device', 'startedAt'])
+        && viewingFields(request.resource.data) && request.resource.data.startedAt == request.time;
+      allow update: if viewer(uid) && !('endedAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endedAt'])
+        && request.resource.data.endedAt == request.time;
+      allow delete: if false;
     }
     match /{document=**} {
       allow read, write: if false;

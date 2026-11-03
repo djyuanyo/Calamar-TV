@@ -68,7 +68,7 @@ public class MultiPlayerActivity extends Activity {
       FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP | Gravity.END); rp.setMargins(0, dp(8), dp(8), 0); frame.addView(remove, rp);
       frame.setOnClickListener(v -> showControls(!controls));
       frame.setOnFocusChangeListener((v, focused) -> { if (focused && !v.isInTouchMode()) { listen(this); showControls(true); } });
-      if (AudienceModel.validTarget(target)) audience = createAudience(target, channel, count -> {
+      if (AudienceModel.validTarget(target)) audience = createAudience(target, channel, title, count -> {
         viewersBadge.setVisibility(View.VISIBLE); viewersBadge.setText(count < 0 ? "—" : String.valueOf(count));
         viewersBadge.setContentDescription(count < 0 ? "Espectadores no disponibles" : count + " personas viendo");
       });
@@ -156,7 +156,7 @@ public class MultiPlayerActivity extends Activity {
     }
   }
 
-  AudienceSession createAudience(String target, String channel, AudienceSession.Count count) { return new AudienceSession(this, target, channel, count); }
+  AudienceSession createAudience(String target, String channel, String title, AudienceSession.Count count) { return new AudienceSession(this, target, channel, title, count); }
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
@@ -242,8 +242,25 @@ public class MultiPlayerActivity extends Activity {
     for (int i = 0; i < tiles.size(); i++) { Tile tile = tiles.get(i); tile.sound.setVisibility(shown ? View.VISIBLE : View.GONE); tile.remove.setVisibility(shown && tiles.size() > 1 ? View.VISIBLE : View.GONE); tile.name.setTranslationY(shown && i < columns ? dp(58) : 0); tile.remove.setTranslationY(shown && i < columns ? dp(58) : 0); tile.viewersBadge.setTranslationY(shown && i < columns ? dp(58) : 0); }
     if (shown) handler.postDelayed(hide, 4000);
   }
-  @Override protected void onStart() { super.onStart(); active = true; for (Tile tile : tiles) tile.start(); }
-  @Override protected void onStop() { active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
+  private Runnable stopAccess;
+  @Override protected void onStart() {
+    super.onStart();
+    if (isFinishing()) return;
+    View content = findViewById(android.R.id.content);
+    content.setVisibility(View.INVISIBLE);
+    stopAccess = AppAccess.observe(this, state -> {
+      if (state == AppAccess.State.ALLOWED && !active) {
+        content.setVisibility(View.VISIBLE);
+        active = true;
+        for (Tile tile : tiles) tile.start();
+      } else if (state != AppAccess.State.ALLOWED && (active || state != AppAccess.State.LOADING)) {
+        active = false;
+        content.setVisibility(View.INVISIBLE);
+        finish();
+      }
+    });
+  }
+  @Override protected void onStop() { if (stopAccess != null) { stopAccess.run(); stopAccess = null; } active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
   @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); worker.shutdownNow(); super.onDestroy(); }
   @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused && (picker == null || !picker.isShowing())) immersive(); }
   private int dp(float value) { return Ui.dp(this, value); }

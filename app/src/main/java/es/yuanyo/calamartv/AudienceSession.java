@@ -14,24 +14,28 @@ final class AudienceSession {
   private final Handler handler=new Handler(Looper.getMainLooper());
   private final FirebaseFirestore db;
   private final DocumentReference presence;
-  private final String target, channelId;
+  private final String target, channelId, title;
+  private final Context context;
+  private UserViewing viewing;
   private final Count count;
   private Task<Void> writes=Tasks.forResult(null);
   private boolean opened,playing,visited,counting;
   private int generation;
-  private final Runnable heartbeat=new Runnable(){public void run(){if(!opened)return;if(playing)writePresence();handler.postDelayed(this,AudienceModel.HEARTBEAT_MS);}};
+  private final Runnable heartbeat=new Runnable(){public void run(){if(!opened)return;if(playing){writePresence();if(viewing!=null)viewing.beat();}handler.postDelayed(this,AudienceModel.HEARTBEAT_MS);}};
   private final Runnable refresh=new Runnable(){public void run(){if(!opened)return;readCount();handler.postDelayed(this,AudienceModel.COUNT_MS);}};
 
-  AudienceSession(Context context,String target,String channelId,Count count){
+  AudienceSession(Context context,String target,String channelId,String title,Count count){
+    this.context=context;this.title=title;
     this.target=AudienceModel.validTarget(target)?target:null;this.channelId=channelId;this.count=count;
     db=FirebaseFirestore.getInstance(SharedCatalog.app(context));
     String session=UUID.randomUUID().toString().replace("-","");
     presence=db.collection("calamarAudience").document(session);
   }
-  void open(){if(opened||target==null)return;opened=true;generation++;if(count!=null)handler.post(refresh);handler.post(heartbeat);}
+  void open(){if(opened||target==null)return;opened=true;viewing=new UserViewing(context,db,target,title);generation++;if(count!=null)handler.post(refresh);handler.post(heartbeat);}
   void watching(boolean value){
     if(!opened||target==null||playing==value)return;
     playing=value;
+    if(viewing!=null)viewing.watching(value);
     if(value){writePresence();if(!visited){visited=true;recordVisits();}}
     else removePresence();
   }
@@ -57,5 +61,5 @@ final class AudienceSession {
       Map<String,Object> data=new HashMap<>();data.put("last",key);data.put(key,FieldValue.increment(1));return db.collection("calamarVisits").document(day).set(data,SetOptions.merge());
     });
   }
-  void close(){opened=false;playing=false;generation++;handler.removeCallbacksAndMessages(null);if(target!=null)removePresence();}
+  void close(){if(viewing!=null){viewing.close();viewing=null;}opened=false;playing=false;generation++;handler.removeCallbacksAndMessages(null);if(target!=null)removePresence();}
 }

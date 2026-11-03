@@ -1,3 +1,4 @@
+import { viewingSession } from './user-playback.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
 import { updateAppDownload } from './app-links.js';
@@ -603,6 +604,7 @@ function showMulti(arg) {
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
   openMulti(items, {
+    track: item => viewingSession(shared, item),
     onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
     onChange: selected => { multiPicks = selected.map(multiKey); history.replaceState(null, '', `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`); },
     onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
@@ -658,6 +660,7 @@ document.getElementById('ctl-multi').addEventListener('click', () => {
     const origin = location.hash;
     hidePlayer(); inlineMulti = { hash: origin };
     openMulti([first, event], {
+      track: item => viewingSession(shared, item),
       onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
       onClose: selected => {
         const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
@@ -668,20 +671,22 @@ document.getElementById('ctl-multi').addEventListener('click', () => {
     });
   });
 });
-initCast({
+let casting = false;
+const cast = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
   getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
-  onSent: stop,
+  onSent: () => { casting = true; stop(); watching?.privateViewing.watching(true); },
   onStatus: (message) => { playerStatus.textContent = message; },
-  onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
+  onDisconnect: () => { casting = false; if (current && webAccess.current().decision === 'allowed') playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
 });
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 let stopRenewable = null, sourceLookup = null;
 function stop() {
+  if (!casting) watching?.privateViewing.watching(false);
   playbackGeneration++;
   if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
@@ -822,6 +827,9 @@ async function playSource(c, index) {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+    frame.addEventListener('load', () => {
+      if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
+    }, { once: true });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
     controls.attach(null);
@@ -939,9 +947,13 @@ function pagePlaybackError(code) {
 
 // ---- Audience -------------------------------------------------------------------------------
 // While the player is open this tab reports what it watches once a minute and shows how many
-// people are watching the same channel or event. Nothing about the viewer is stored.
+// people are watching the same channel or event. Account history is kept separately.
 const viewersBadge = document.getElementById('player-viewers');
 let watching = null;
+video.addEventListener('playing', () => watching?.privateViewing.watching(true));
+for (const event of ['pause', 'ended', 'waiting', 'error']) {
+  video.addEventListener(event, () => { if (!casting) watching?.privateViewing.watching(false); });
+}
 function showViewers(count) {
   viewersBadge.hidden = !Number.isInteger(count) || count < 0;
   viewersBadge.querySelector('b').textContent = count > 999 ? `${(count / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mil` : String(count);
@@ -953,7 +965,8 @@ function startAudience(c, visit = true) {
   const target = audienceTarget(c);
   if (watching?.target === target) return;
   stopAudience();
-  const session = { target, id: sessionId(), timers: [] };
+  const id = sessionId();
+  const session = { target, id, timers: [], privateViewing: viewingSession(shared, c, id) };
   watching = session;
   if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
@@ -976,6 +989,7 @@ function stopAudience() {
   if (!watching) return;
   const session = watching;
   watching = null;
+  session.privateViewing.close();
   for (const timer of session.timers) clearInterval(timer);
   showViewers(0);
   shared().then((f) => f.leave(session.id)).catch(() => {});
@@ -1424,6 +1438,7 @@ async function route() {
   const locked = admission.decision !== 'allowed';
   document.body.classList.toggle('access-locked', locked);
   if (locked) {
+    if (casting) { casting = false; cast.stop(); }
     closeGate();
     if (!player.hidden) hidePlayer();
     closeMultiPicker(); closeMulti(); inlineMulti = null;
@@ -1436,7 +1451,7 @@ async function route() {
       if (admission.decision === 'login') {
         try { const f = await shared(); if (ticket !== routeVersion) return; view.replaceChildren(...signIn(el, f, route)); }
         catch { view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el inicio de sesión. Recarga para volver a intentarlo.')); }
-      } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso web bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
+      } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
       else if (admission.decision === 'error') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'No se pudo comprobar el acceso'), el('p', {}, 'Comprueba la conexión y vuelve a intentarlo.'), el('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, 'Reintentar'), el('a', { class: 'ghost', href: '#/cuenta' }, 'Iniciar sesión')));
       else view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando acceso…'));
       return;

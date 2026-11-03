@@ -1,4 +1,5 @@
 import { usersAdmin } from './users-admin.js';
+import { viewerDevice } from './user-playback.js';
 import * as userService from './firebase.js';
 import { coverFromFile } from './image-file.js';
 import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
@@ -426,7 +427,9 @@ export async function render(state) {
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const reviewRoute = decodeURIComponent(location.hash).match(/^#\/admin\/biblioteca\/no-identificadas(?:\/(peliculas|series|documentales))?\/?$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
-  const section = location.hash.startsWith('#/admin/usuarios') ? 'users' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const userRoute = location.hash.match(/^#\/admin\/usuarios(?:\/([a-zA-Z0-9_-]{1,128}))?\/?$/);
+  if (userRoute) return usersAdmin(el, userService, state, userRoute[1]);
+  const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -440,7 +443,7 @@ export async function render(state) {
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
       el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'users' ? usersAdmin(el, userService) : section === 'library' ? libraryAdmin(el, {
+      ...(section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
@@ -991,16 +994,41 @@ function statsPanel(state) {
   const updated = el('span', { class: 'note' });
   const drawLive = async () => {
     try {
-      const counts = liveCounts(await audience());
+      const [docs, viewersResult] = await Promise.all([
+        audience(), userService.readLiveViewers().then(rows => ({ rows })).catch(() => ({ rows: [], unavailable: true })),
+      ]);
+      const counts = liveCounts(docs);
+      const named = new Map();
+      for (const row of viewersResult.rows) {
+        if (!named.has(row.target)) named.set(row.target, []);
+        named.get(row.target).push(row);
+      }
+      for (const [target, rows] of named) counts.set(target, Math.max(counts.get(target) || 0, rows.length));
       const lists = { c: [], e: [], l: [] };
-      for (const [target, viewers] of counts) lists[target[0]]?.push({ name: names.get(target) || target.slice(2), viewers });
+      for (const [target, viewers] of counts) {
+        const people = named.get(target) || [];
+        lists[target[0]]?.push({ name: names.get(target) || people[0]?.title || target.slice(2), viewers, people });
+      }
       liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
       updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+      const viewer = (person, title) => {
+        const subtitle = [
+          person.profile !== person.name ? person.profile : '',
+          viewerDevice(person.device), person.title !== title ? person.title : '',
+        ].filter(Boolean).join(' · ');
+        return el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
+          el('small', {}, subtitle));
+      };
+      const rank = item => el('li', { class: 'stats-watching' },
+        el('div', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))),
+        item.people.length ? el('ul', { class: 'stats-viewer-names' }, item.people.map(person => viewer(person, item.name))) : null);
       const column = (title, list, empty) => el('div', { class: 'stats-card' }, el('h3', {}, title),
-        list.length ? el('ol', { class: 'stats-rank' }, list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es'))
-          .map((item) => el('li', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))))) : el('p', { class: 'note' }, empty));
+        list.length ? el('ol', { class: 'stats-rank' },
+          list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es')).map(rank))
+          : el('p', { class: 'note' }, empty));
       liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'),
-        column('Pelis y series', lists.l, 'Nadie está viendo pelis ni series ahora.'));
+        column('Películas, series y documentales', lists.l, 'Nadie está viendo títulos ahora.'),
+        viewersResult.unavailable ? el('p', { class: 'note' }, 'Los nombres de los espectadores no están disponibles en este momento.') : null);
     } catch (error) { liveBody.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer los espectadores: ${explain(error)}`)); }
   };
   // Stops by itself once the panel leaves the page; a redrawn panel starts its own timer.

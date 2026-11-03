@@ -186,3 +186,55 @@ test('unverified email/password registrations can register their own directory i
   const email=env.authenticatedContext('email-member',claims({email:'email@example.com',email_verified:false,firebase:{sign_in_provider:'password'}})).firestore();
   await assertSucceeds(setDoc(doc(email,'calamarMembers/email-member'),{name:'Email',email:'email@example.com',photo:'',verified:false,provider:'password',createdAt:serverTimestamp(),lastSeen:serverTimestamp()}));
 });
+
+test('only the owner and administrator can read the private history; only the owner can record it', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  const anonymous = env.authenticatedContext('viewer', claims({ firebase: { sign_in_provider: 'anonymous' } })).firestore();
+  const id = 'ABCDEF0123456789ABCDEF0123';
+  const path = `calamarViewing/viewer/sessions/${id}`;
+  const details = { target: 'l:film', title: 'Película de prueba', profile: 'Principal', device: 'tv' };
+  const entry = { ...details, startedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, path), entry));
+  await assertFails(setDoc(doc(anonymous, path), entry));
+  await assertFails(setDoc(doc(owner, path), { ...entry, startedAt: new Date(0) }));
+  await assertSucceeds(setDoc(doc(owner, path), entry));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarViewing/viewer/sessions')));
+  await assertSucceeds(getDoc(doc(owner, path)));
+  await assertFails(getDocs(collection(guest, 'calamarViewing/viewer/sessions')));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(admin(), path), { endedAt: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(owner, path), { title: 'Otro título', endedAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(owner, path), { endedAt: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(owner, path), { endedAt: serverTimestamp() }, { merge: true }));
+});
+
+test('live viewer identity is admin-only and cannot be claimed by a different account', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  const path = 'calamarLiveViewers/ABCDEF0123456789ABCDEF0123';
+  const data = { uid: 'viewer', target: 'e:game', title: 'Partido', profile: 'Principal', device: 'android', updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, path), data));
+  await assertFails(setDoc(doc(guest, path), data));
+  await assertSucceeds(setDoc(doc(owner, path), data));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarLiveViewers')));
+  await assertFails(getDocs(collection(guest, 'calamarLiveViewers')));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(other, path), { ...data, uid: 'other' }));
+  await assertFails(deleteDoc(doc(other, path)));
+  await assertSucceeds(deleteDoc(doc(owner, path)));
+});
+
+test('the administrator can read profile favourites without editing them or reading progress', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const path = 'calamarUsers/viewer/profiles/main';
+  const data = { json: '{"favorites":{"la-1":{"at":123}}}', updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(owner, path), data));
+  await assertSucceeds(getDoc(doc(admin(), path)));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(admin(), path), data));
+  await assertFails(getDoc(doc(admin(), 'calamarUsers/viewer/progress/main')));
+});
