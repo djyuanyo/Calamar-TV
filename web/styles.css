@@ -1426,6 +1426,7 @@ body.gate-open { overflow: hidden; }
 .access-locked .nav, .access-locked .top .search, .access-locked .hero, .access-locked .skip { display: none !important; }
 /* Users are scanned as compact cards; account data lives in its own view. */
 .users-page { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+.users-page [hidden] { display: none !important; }
 .users-page h1, .users-page h2, .users-page h3, .users-page p { margin-block: 0; }
 .user-back { justify-self: start; text-decoration: none; }
 .user-surface, .user-card { padding: 18px; border: 1px solid #ffffff26; border-radius: 14px; background: #ffffff07; overflow-wrap: anywhere; }
@@ -1454,7 +1455,7 @@ body.gate-open { overflow: hidden; }
 .user-entries li:last-child { border-bottom: 0; }
 .user-favorites summary { font-weight: 700; cursor: pointer; }
 .user-day + .user-day { margin-top: 12px; }
-.user-day h3 { color: var(--muted); font-size: 14px; text-transform: capitalize; }
+.user-day h3 { color: var(--muted); font-size: 14px; }
 .stats-rank li.stats-watching { display: grid; gap: 5px; }
 .stats-watching > div, .stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
 .stats-viewer-names { list-style: none; margin: 0 0 6px; padding: 6px 10px; border-left: 2px solid #ffffff2a; }

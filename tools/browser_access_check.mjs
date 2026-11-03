@@ -59,6 +59,7 @@ try{
   await page.getByRole('heading',{name:'Historial de reproducción',exact:true}).waitFor();
   await page.locator('.user-history').getByText('Sports One',{exact:true}).waitFor();
   await page.locator('.user-favorites').getByText('Sports One',{exact:true}).waitFor();
+  assert.equal(await page.locator('.user-detail').getByText('Cargar más',{exact:true}).isVisible(),false);
   await page.getByRole('button',{name:'Bloquear acceso',exact:true}).click();
   await page.getByRole('button',{name:'Desbloquear acceso',exact:true}).waitFor();
   assert.deepEqual(await page.evaluate(()=>window.__lastUserBlock),{uid:'member-fixture',blocked:true});
