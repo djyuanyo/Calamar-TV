@@ -677,7 +677,7 @@ const cast = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
+  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo, vod: current.vod, position: video.currentTime } : null,
   onSent: () => { casting = true; stop(); watching?.privateViewing.watching(true); },
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { casting = false; if (current && webAccess.current().decision === 'allowed') playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
@@ -719,7 +719,7 @@ function recoveryRound(c, now = Date.now()) {
 }
 const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
 
-async function playSource(c, index, resumeAt = 0) {
+async function playSource(c, index, resumeAt = 0, compatible = false) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
@@ -749,9 +749,14 @@ async function playSource(c, index, resumeAt = 0) {
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
-  const source = selectedSource(allSources, index);
+  const original = selectedSource(allSources, index);
+  const compatibility = c.vod && original?.how.compatibility;
+  const source = compatible && compatibility ? { ...original, how: webPlayback(compatibility) } : original;
   currentSourceUrl = source?.url || '';
-  renderSourcePicker(playerSources, allSources, source?.index ?? index, (chosen) => playSource(c, chosen));
+  const compatibleIndex = c.streams.length;
+  const options = compatibility ? [...allSources, { ...original, label: 'Modo compatible', index: compatibleIndex }] : allSources;
+  renderSourcePicker(playerSources, options, compatible && compatibility ? compatibleIndex : source?.index ?? index, (chosen) =>
+    playSource(c, chosen === compatibleIndex ? source.index : chosen, c.vod ? video.currentTime || resumeAt : 0, chosen === compatibleIndex));
   if (candidates.length && !playable.length) {
     const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
@@ -769,7 +774,9 @@ async function playSource(c, index, resumeAt = 0) {
     failureHandled = true;
     if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
     const positionToKeep = c.vod ? resumeAt || video.currentTime : 0;
-    if (position + 1 < playable.length) {
+    if (compatibility && !compatible) {
+      playSource(c, source.index, positionToKeep, true);
+    } else if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, playable[position + 1].index, positionToKeep);
     } else if (recoveryRound(c)) {
@@ -781,7 +788,7 @@ async function playSource(c, index, resumeAt = 0) {
       setTimeout(() => {
         if (generation !== playbackGeneration) return;
         const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
-        playSource(latest, playable[0].index, positionToKeep);
+        playSource(latest, playable[0].index, positionToKeep, compatible && source.index === playable[0].index);
       }, 2000);
     } else {
       // A fatal network error is no longer a buffering state. Keep the failure
@@ -828,7 +835,7 @@ async function playSource(c, index, resumeAt = 0) {
       );
     }
   };
-  playerStatus.textContent = 'Conectando…';
+  playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
   const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
@@ -937,9 +944,10 @@ async function playSource(c, index, resumeAt = 0) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
       // The hosting answers 409 while LuluStream is still converting a video just uploaded.
-      if (data.fatal && source.how.address && !source.how.page && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
+      if (data.fatal && source.how.address && !source.how.page && !compatible && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
       // Player pages read by the hosting (calamar-player.php): what failed, in plain words.
       if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
+      if (data.fatal && compatible && data.response?.code === 503) data.userMessage = 'El hosting está adaptando otros vídeos. Pulsa Reintentar en un momento.';
       if (data.fatal) next(data);
     });
     hls.loadSource(address);

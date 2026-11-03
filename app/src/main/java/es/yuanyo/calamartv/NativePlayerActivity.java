@@ -92,6 +92,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean diagnosing;
   private boolean mediaHttp1;
   private boolean chromiumNetwork;
+  private String compatibleDriveOriginal;
   private boolean hostingPlayback;
   private android.app.Dialog multiPicker;
   private String hostingEndpoint = Library.PLAYER_ENDPOINT;
@@ -255,8 +256,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       });
     }
     sourceButton = button(controls, "Fuentes", this::chooseSource);
-    // Films, series and documentaries have no «Fuentes» button: they play their own video.
-    sourceButton.setVisibility(progressEntry != null ? View.GONE : View.VISIBLE);
+    updateSourceButton();
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
     if (shareUrl != null) {
       ImageButton shareButton = new ImageButton(this);
@@ -279,8 +279,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
         () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
-            : !currentUrl.isEmpty() ? currentUrl
-            : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1)),
+            : castAddress(!currentUrl.isEmpty() ? currentUrl
+                : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1))),
         title, () -> {
           castPlayback = true;
           if(audience!=null)audience.watching(true);
@@ -384,7 +384,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void updateSourceButton() {
-    if (sourceButton != null) sourceButton.setVisibility(progressEntry != null ? View.GONE : View.VISIBLE);
+    if (sourceButton == null) return;
+    boolean compatibleDrive = directUrls.stream().anyMatch(url -> CastSource.driveCompatibility(url) != null);
+    sourceButton.setVisibility(progressEntry == null || compatibleDrive ? View.VISIBLE : View.GONE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -622,6 +624,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     updateSourceButton();
     selection = Math.min(selection, sources.size() - 1);
     VideoResolver.Source source = sources.get(selection);
+    if (source.url.equals(compatibleDriveOriginal)) {
+      source = new VideoResolver.Source(source.label, CastSource.driveCompatibility(source.url));
+    }
     status.setText("Conectando con " + HostingPlayback.label(title, "el canal") + "…");
     releasePlayer();
     playSource(source);
@@ -855,6 +860,21 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playSource(sources.get(0));
   }
 
+  private static String castAddress(String original) {
+    String compatible = CastSource.driveCompatibility(original);
+    return compatible == null ? original : compatible;
+  }
+
+  private boolean tryCompatibleDrive(VideoResolver.Source source) {
+    if (progressEntry == null || directUrl == null || source.url.equals(compatibleDriveOriginal)) return false;
+    String address = CastSource.driveCompatibility(source.url);
+    if (address == null || address.equals(source.url)) return false;
+    compatibleDriveOriginal = source.url;
+    status.setText("Preparando vídeo compatible…");
+    playSource(new VideoResolver.Source(source.label, address));
+    return true;
+  }
+
   private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
   private void playSource(VideoResolver.Source source) {
@@ -997,6 +1017,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
             lastReport += "\n" + mediaProgress;
             cancelBufferingTimeout();
+            if (tryCompatibleDrive(source)) return;
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
               if (retryHostingAddress(source, error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
@@ -1023,7 +1044,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     MediaItem.Builder item = new MediaItem.Builder().setUri(source.url);
     String path = Uri.parse(source.url).getPath();
     if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT)
-        || ProviderPlayers.isVidaraStream(source.url) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+        || CastSource.onDemand(source.url) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
@@ -1042,11 +1063,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void armBufferingTimeout(ExoPlayer instance, VideoResolver.Source source) {
     cancelBufferingTimeout();
-    final int timeout = HostingPlayback.isRelay(source.url) ? 60000 : 25000;
+    final int timeout = HostingPlayback.isRelay(source.url) || CastSource.isDriveCompatibility(source.url) ? 60000 : 25000;
     bufferingTimeout = () -> {
       if (!active || player != instance || !instance.getPlayWhenReady()
           || instance.getPlaybackState() != Player.STATE_BUFFERING) return;
       lastReport += "\nVídeo: " + (timeout / 1000) + " segundos sin completar el búfer.\n" + mediaProgress;
+      if (tryCompatibleDrive(source)) return;
       if (retryHostingAddress(source, new java.net.SocketTimeoutException("Hosting sin vídeo"))) return;
       if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
@@ -1361,7 +1383,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
       names.add(HostingPlayback.label(title, "Canal") + (directUrls.size() + pages.size() > 1 ? " · Señal " + (++number) : ""));
-      actions.add(() -> selectChannelAddress(address, false));
+      actions.add(() -> { compatibleDriveOriginal = null; selectChannelAddress(address, false); });
+      String compatible = progressEntry == null ? null : CastSource.driveCompatibility(address);
+      if (compatible != null && !compatible.equals(address)) {
+        if (compatible.equals(currentUrl)) checked = names.size();
+        names.add("Modo compatible");
+        actions.add(() -> { compatibleDriveOriginal = address; selectChannelAddress(address, false); });
+      }
     }
     for (String address : pages) {
       if (AppSources.zico(address) && address.equals(pageUrl)) continue;

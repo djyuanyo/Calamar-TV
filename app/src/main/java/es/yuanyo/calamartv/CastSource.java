@@ -24,9 +24,29 @@ public final class CastSource {
     return null;
   }
 
+  /** Convert only the signed links issued by the Calamar Drive bridge. */
+  public static String driveCompatibility(String address) {
+    try {
+      URI u = URI.create(address);
+      if (!"https".equalsIgnoreCase(u.getScheme()) || !"calamarmenciano.com".equalsIgnoreCase(u.getHost())
+          || u.getUserInfo() != null || u.getPort() != -1 || !"/calamar-drive.php".equals(u.getPath())
+          || u.getRawQuery() == null) return null;
+      String id = null, token = null;
+      for (String parameter : u.getRawQuery().split("&")) {
+        if (parameter.matches("id=[A-Za-z0-9_-]{1,200}")) id = parameter;
+        if (parameter.matches("v=[A-Za-z0-9_-]{40,2048}")) token = parameter;
+      }
+      return id == null || token == null ? null : "https://calamarmenciano.com/calamar-drive.php?" + id + "&" + token + "&hls=1";
+    } catch (IllegalArgumentException | NullPointerException invalid) { return null; }
+  }
+
+  static boolean isDriveCompatibility(String address) {
+    return address != null && address.equals(driveCompatibility(address));
+  }
+
   /** A provider film through the hosting: an HLS list the TV can read, not live. */
   public static boolean onDemand(String address) {
-    return ProviderPlayers.isVidaraStream(address)
+    return isDriveCompatibility(address) || ProviderPlayers.isVidaraStream(address)
         || (address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1"));
   }
 

@@ -10,9 +10,10 @@ export function castSource(address) {
       : path.endsWith('.mpd') ? 'application/dash+xml'
       : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.webm') ? 'video/webm' : null;
     if (type) return { url: address, type, live: /\.(m3u8|mpd)$/.test(path) };
-    // A LuluStream film goes as the hosting's copy (calamar-lulu.php), a Drive film straight from Drive.
+    // A signed Drive film uses compatible HLS on Chromecast, which may not decode the original file.
     const how = webPlayback(address);
     if (how.kind === 'hls' && how.address) return { url: how.address, type: 'application/x-mpegURL', live: false };
+    if (how.compatibility) return { url: how.compatibility, type: 'application/x-mpegURL', live: false };
     if (how.kind === 'video') return { url: address, type: 'video/mp4', live: false };
     return null;
   } catch { return null; }

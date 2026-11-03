@@ -144,6 +144,154 @@ function driveStream($file, $head = false) {
     driveAnswer(array('error' => 'Google Drive no ha entregado el vídeo. Comprueba que siga compartido y tenga cuota disponible.',
         'upstream_http' => $status), $status === 416 ? 416 : 502);
 }
+const DRIVE_SEGMENT_SECONDS = 8;
+const DRIVE_COMPAT_ORIGIN = 'https://calamarmenciano.com/calamar-drive.php';
+
+function driveCompatBinary() {
+    $bundled = __DIR__ . '/calamar-cast-bin/ffmpeg';
+    return is_executable($bundled) ? $bundled : (is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : '');
+}
+
+function driveCompatReady() {
+    return function_exists('exec') && is_executable('/usr/bin/timeout') && driveCompatBinary() !== '';
+}
+
+function driveCompatBusy() {
+    header('Retry-After: 2');
+    driveAnswer(array('error' => 'El hosting está adaptando otros vídeos. Vuelve a intentarlo en un momento.'), 503);
+}
+
+function driveCompatCache() {
+    $dir = dirname(__DIR__) . '/calamar-drive-hls';
+    if (!is_dir($dir)) @mkdir($dir, 0700);
+    if (!is_dir($dir) || !is_writable($dir)) throw new RuntimeException('El hosting no puede guardar los segmentos de vídeo.');
+    return $dir;
+}
+
+function driveCompatWorker($dir) {
+    for ($i = 0; $i < 2; $i++) {
+        $lock = @fopen($dir . '/worker-' . $i, 'c');
+        if (!$lock) continue;
+        if (flock($lock, LOCK_EX | LOCK_NB)) return $lock;
+        fclose($lock);
+    }
+    driveCompatBusy();
+}
+
+function driveCompatInput($url) {
+    $args = array('-protocol_whitelist', 'https,tls,tcp', '-format_whitelist',
+        'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpegts,mpeg,flv,ogg,asf,rm,wtv,mxf,dv,nut,ivf,yuv4mpegpipe',
+        '-tls_verify', '1', '-verifyhost', 'calamarmenciano.com', '-rw_timeout', '8000000',
+        '-seekable', '1', '-threads', '2');
+    foreach (array('/etc/pki/tls/certs/ca-bundle.crt', '/etc/ssl/certs/ca-certificates.crt') as $ca) {
+        if (is_readable($ca)) { array_push($args, '-ca_file', $ca); break; }
+    }
+    return array_merge($args, array('-i', $url));
+}
+
+function driveCompatExec($args, &$output) {
+    $command = array_merge(array('/usr/bin/timeout', '-k', '2s', '22s', driveCompatBinary(),
+        '-nostdin', '-hide_banner', '-max_alloc', '134217728', '-filter_threads', '1'), $args);
+    exec(implode(' ', array_map('escapeshellarg', $command)) . ' 2>&1', $output, $code);
+    return $code === 0;
+}
+
+function driveCompatInspect($url) {
+    $output = array();
+    // Listing streams alone avoids decoding or downloading the whole file.
+    driveCompatExec(driveCompatInput($url), $output);
+    return driveCompatMetadata(implode("\n", $output));
+}
+
+function driveCompatMetadata($description) {
+    if (!preg_match('/^\s+Duration: (\d+):(\d{2}):(\d{2}\.\d+)/m', $description, $time)
+        || !preg_match('/Stream #0:\d+.*: Video: (?!.*\(attached pic\))/i', $description))
+        throw new RuntimeException('El hosting no ha podido leer un vídeo con duración válida en este archivo de Drive.');
+    $duration = (int)$time[1] * 3600 + (int)$time[2] * 60 + (float)$time[3];
+    if ($duration <= 0 || $duration > 43200) throw new RuntimeException('La duración del vídeo no es válida para el modo compatible.');
+    $audio = preg_match('/Stream #0:(\d+)(?:\[[^\]]+\])?\((?:spa|es|esp)\): Audio:/i', $description, $track) ? '0:' . $track[1] : '0:a:0?';
+    return array('duration' => $duration, 'audio' => $audio);
+}
+
+// At most one file per bucket. A reader opens the file while holding the same lock as writers.
+function driveCompatCacheFile($dir, $key, $suffix, $generate) {
+    $bucket = $dir . '/' . $suffix . '-' . (hexdec(substr($key, 0, 4)) % 64);
+    $lock = @fopen($bucket . '.lock', 'c');
+    if (!$lock) throw new RuntimeException('No se pudo abrir la caché de vídeo.');
+    try {
+        if (!flock($lock, LOCK_EX | LOCK_NB)) driveCompatBusy();
+        $path = $bucket . '-' . $key;
+        if (is_file($path) && time() - filemtime($path) < 900 && ($stream = fopen($path, 'rb'))) return $stream;
+        $worker = driveCompatWorker($dir);
+        $tmp = $bucket . '.tmp';
+        try {
+            $generate($tmp);
+            if (!rename($tmp, $path)) throw new RuntimeException('No se pudo guardar el vídeo adaptado.');
+            foreach (glob($bucket . '-*') ?: array() as $old) if ($old !== $path) @unlink($old);
+            $stream = fopen($path, 'rb');
+            if (!$stream) throw new RuntimeException('No se pudo leer el vídeo adaptado.');
+            return $stream;
+        } finally {
+            if (is_file($tmp)) @unlink($tmp);
+            fclose($worker);
+        }
+    } finally { fclose($lock); }
+}
+
+function driveCompatSegmentArguments($input, $start, $length, $audio, $tmp) {
+    return array_merge(array('-loglevel', 'error', '-y', '-ss', (string)$start), $input, array(
+        '-t', sprintf('%.3F', $length), '-map', '0:V:0', '-map', $audio,
+        '-vf', "yadif=deint=interlaced,scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-r', '30', '-g', '60',
+        '-crf', '23', '-maxrate', '2500k', '-bufsize', '2500k', '-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '128k',
+        '-f', 'mpegts', $tmp));
+}
+
+function driveCompat($file, $token, $head) {
+    if (!driveCompatReady()) driveAnswer(array('error' => 'El hosting no tiene disponible el conversor de vídeo.'), 503);
+    $dir = driveCompatCache();
+    $url = DRIVE_COMPAT_ORIGIN . '?' . http_build_query(array('id' => $file['id'], 'v' => $token));
+    $key = hash('sha256', 'drive-hls-v1:' . $token);
+    $meta = driveCompatCacheFile($dir, $key, 'info', function($tmp) use ($url) {
+        if (file_put_contents($tmp, json_encode(driveCompatInspect($url))) === false)
+            throw new RuntimeException('No se pudo guardar la información del vídeo.');
+    });
+    $info = json_decode(stream_get_contents($meta), true);
+    fclose($meta);
+    $count = (int)ceil($info['duration'] / DRIVE_SEGMENT_SECONDS);
+    $part = $_GET['seg'] ?? null;
+    if ($part === null) {
+        $lines = array('#EXTM3U', '#EXT-X-VERSION:3', '#EXT-X-PLAYLIST-TYPE:VOD',
+            '#EXT-X-TARGETDURATION:' . DRIVE_SEGMENT_SECONDS, '#EXT-X-MEDIA-SEQUENCE:0',
+            '#EXT-X-INDEPENDENT-SEGMENTS');
+        for ($i = 0; $i < $count; $i++) {
+            $length = min(DRIVE_SEGMENT_SECONDS, $info['duration'] - $i * DRIVE_SEGMENT_SECONDS);
+            if ($i > 0) $lines[] = '#EXT-X-DISCONTINUITY';
+            $lines[] = sprintf('#EXTINF:%.3F,', $length);
+            $lines[] = $url . '&hls=1&seg=' . $i;
+        }
+        $lines[] = '#EXT-X-ENDLIST';
+        header('Content-Type: application/vnd.apple.mpegurl');
+        if (!$head) echo implode("\n", $lines) . "\n";
+        exit;
+    }
+    if (!is_string($part) || !preg_match('/^(?:0|[1-9]\d{0,4})$/D', $part) || (int)$part >= $count)
+        driveAnswer(array('error' => 'Segmento fuera de rango.'), 404);
+    $start = (int)$part * DRIVE_SEGMENT_SECONDS;
+    $length = min(DRIVE_SEGMENT_SECONDS, $info['duration'] - $start);
+    $segment = driveCompatCacheFile($dir, hash('sha256', $key . ':' . $part), 'segment', function($tmp) use ($url, $start, $length, $info) {
+        $args = driveCompatSegmentArguments(driveCompatInput($url), $start, $length, $info['audio'], $tmp);
+        $output = array();
+        if (!driveCompatExec($args, $output) || !is_file($tmp) || filesize($tmp) < 188)
+            throw new RuntimeException('El hosting no ha podido convertir este tramo del vídeo.');
+    });
+    header('Content-Type: video/mp2t');
+    header('Content-Length: ' . fstat($segment)['size']);
+    if (!$head) fpassthru($segment);
+    fclose($segment);
+    exit;
+}
+
 function driveMain() {
     ini_set('display_errors', '0'); header('Cache-Control: no-store'); header('X-Robots-Tag: noindex, nofollow'); header('Referrer-Policy: no-referrer');
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
@@ -154,12 +302,15 @@ function driveMain() {
     header('Vary: Origin'); header('Access-Control-Allow-Methods: GET, HEAD, POST, OPTIONS'); header('Access-Control-Allow-Headers: Range, Content-Type');
     header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
     if ($method === 'OPTIONS') { http_response_code(204); exit; }
+    if ($method === 'GET' && ($_GET['status'] ?? '') === '1')
+        driveAnswer(array('bridge' => 'drive-hls-v1', 'ready' => driveCompatReady()));
     if (!function_exists('curl_init') || !function_exists('openssl_encrypt')) driveAnswer(array('error' => 'Falta cURL u OpenSSL en el hosting.'), 503);
     try {
         $secret = driveSecret();
         if ($video) {
             $file = driveOpen($_GET['v'] ?? '', $secret);
             if (!$file || $file['id'] !== ($_GET['id'] ?? '')) driveAnswer(array('error' => 'Enlace de vídeo no válido.'), 403);
+            if (($_GET['hls'] ?? '') === '1') driveCompat($file, $_GET['v'], $method === 'HEAD');
             driveStream($file, $method === 'HEAD');
         }
         if ($method !== 'POST') driveAnswer(array('error' => 'Método no permitido.'), 405);

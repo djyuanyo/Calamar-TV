@@ -820,7 +820,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       brand ? el('p', { class: 'title-brand' }, info.logos?.[brand] ? el('img', { class: 'title-platform-logo', src: info.logos[brand], alt: brand, referrerpolicy: 'no-referrer', onerror: (event) => { event.target.replaceWith(brand); } }) : brand) : null,
       el('h1', {}, itemTitle(item)),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
-      action, !series ? soundNote(el, item.file) : null,
+      action, !series ? soundNote(el, item.file, item.url) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
       starring,
       creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
@@ -877,8 +877,10 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
 }
 
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
-const soundNote = (el, file) => /\.(mkv|avi|mov|wmv|flv|mpg|mpeg|m2ts|vob)$/i.test(file || '')
-  ? el('p', { class: 'note library-sound' }, 'Este vídeo es MKV: si en el navegador no se oye, ábrelo en la app Calamar TV, donde se oye bien.') : null;
+const soundNote = (el, file, url) => webPlayback(url).compatibility
+  ? el('p', { class: 'note library-sound' }, 'Si el vídeo no se oye bien, elige Modo compatible en Fuentes.')
+  : /\.(mkv|avi|mov|wmv|flv|mpg|mpeg|m2ts|vob)$/i.test(file || '')
+  ? el('p', { class: 'note library-sound' }, 'Si el navegador no reproduce el vídeo o su audio, prueba a abrirlo en la app Calamar TV.') : null;
 
 /** «▶ Ver», or «▶ Continuar · 12:34» and «Desde el principio» when it was left half watched. */
 function playButtons(el, saved, play) {
@@ -899,7 +901,7 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), soundNote(el, episode.file),
+      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), soundNote(el, episode.file, episode.url),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
     attribution(el, library)];
 }

@@ -2,8 +2,10 @@
 import json
 import os
 import pathlib
+import shutil
 import socket
 import subprocess
+import tempfile
 import time
 import unittest
 import urllib.error
@@ -60,6 +62,28 @@ class DriveRelayTest(unittest.TestCase):
         self.assertEqual(result[0], [True, True, True, False, False, False, False, False])
         self.assertEqual(result[1], [True, True, True, True, False, False, False])
 
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'requires FFmpeg')
+    def test_converts_a_seeked_mkv_segment_to_h264_aac_with_spanish_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = str(pathlib.Path(directory) / 'original.mkv')
+            target = str(pathlib.Path(directory) / 'part.ts')
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24',
+                            '-f', 'lavfi', '-i', 'sine=frequency=450', '-f', 'lavfi', '-i', 'sine=frequency=1000',
+                            '-map', '0:v', '-map', '1:a', '-map', '2:a', '-metadata:s:a:1', 'language=spa',
+                            '-t', '11', '-c:v', 'mpeg4', '-c:a', 'ac3', original], check=True)
+            result = json.loads(php(
+                f'$input=["-i",{json.dumps(original)}]; $output=[]; driveCompatExec($input,$output);'
+                '$info=driveCompatMetadata(implode("\\n",$output)); $logs=[];'
+                f'$args=driveCompatSegmentArguments($input,8,2,$info["audio"],{json.dumps(target)});'
+                '$ok=driveCompatExec($args,$logs); echo json_encode([$info,$ok,$logs]);'))
+            self.assertEqual(result[0]['audio'], '0:2')
+            self.assertGreater(result[0]['duration'], 10)
+            self.assertTrue(result[1], result[2])
+            video = json.loads(subprocess.check_output(
+                ['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', target], text=True))
+            self.assertEqual([s['codec_name'] for s in video['streams']], ['h264', 'aac'])
+            self.assertAlmostEqual(float(video['format']['duration']), 2, delta=.15)
+
     def test_http_rejects_unsigned_video_and_allows_cast_preflight(self):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
@@ -71,9 +95,10 @@ class DriveRelayTest(unittest.TestCase):
                     with socket.create_connection(('127.0.0.1', port), timeout=.1): break
                 except OSError: time.sleep(.05)
             url = f'http://127.0.0.1:{port}/calamar-drive.php?id=video&v=invalid'
-            with self.assertRaises(urllib.error.HTTPError) as raised:
-                urllib.request.urlopen(url)
-            self.assertEqual(raised.exception.code, 403)
+            for source in (url, url + '&hls=1', url + '&hls=1&seg=0'):
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    urllib.request.urlopen(source)
+                self.assertEqual(raised.exception.code, 403)
             req = urllib.request.Request(url, method='OPTIONS', headers={'Origin': 'https://receiver.example', 'Access-Control-Request-Headers': 'range'})
             with urllib.request.urlopen(req) as response:
                 self.assertEqual(response.status, 204)

@@ -47,7 +47,9 @@ test('one scan combines Drive films, season folders and documentaries with a Lul
     {section:'movies',url:'https://luluvido.com/fld/sharecode'}],{drive:key,lulu:'clave123456'}, {fetcher});
   assert.deepEqual(scan.films.map(f=>[f.section,f.title,f.link]),[['movies','Avatar',video('avatar')],['documentaries','Planeta',video('planeta')],['movies','Otra','https://luluvido.com/lulufilm1234']]);
   assert.deepEqual(scan.series[0].episodes.map(e=>[e.season,e.episode,e.link]),[[2,3,video('paco203')]]);
-  assert.deepEqual(webPlayback(video('avatar')),{ok:true,kind:'video'});
+  const compatible = `${video('avatar')}&hls=1`;
+  assert.deepEqual(webPlayback(video('avatar')),{ok:true,kind:'video',compatibility:compatible});
+  assert.deepEqual(webPlayback(compatible),{ok:true,kind:'hls',address:compatible});
   assert.equal(webPlayback(video('avatar').replace('calamarmenciano.com','evil.com')).ok,false);
 });
 
