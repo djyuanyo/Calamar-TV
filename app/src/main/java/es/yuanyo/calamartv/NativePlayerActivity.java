@@ -255,8 +255,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         viewersBadge.setContentDescription(viewers<0?"Espectadores no disponibles":viewers==1?"1 persona viendo":viewers+" personas viendo");
       });
     }
-    sourceButton = button(controls, "Fuentes", this::chooseSource);
-    updateSourceButton();
+    if (progressEntry == null) sourceButton = button(controls, "Fuentes", this::chooseSource);
     // Channels and events, as on the web: their preview link (their card in WhatsApp) through the share sheet.
     if (shareUrl != null) {
       ImageButton shareButton = new ImageButton(this);
@@ -381,12 +380,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playerView.showController();
       if (fullscreen && panel != null) panel.setVisibility(View.VISIBLE);
     }
-  }
-
-  private void updateSourceButton() {
-    if (sourceButton == null) return;
-    boolean compatibleDrive = directUrls.stream().anyMatch(url -> CastSource.driveCompatibility(url) != null);
-    sourceButton.setVisibility(progressEntry == null || compatibleDrive ? View.VISIBLE : View.GONE);
   }
 
   // ---- Full screen ----------------------------------------------------------------------------
@@ -621,7 +614,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       sources.add(
           new VideoResolver.Source(
               directUrls.size() > 1 ? name + " · fuente " + (i + 1) : name, directUrls.get(i)));
-    updateSourceButton();
     selection = Math.min(selection, sources.size() - 1);
     VideoResolver.Source source = sources.get(selection);
     if (source.url.equals(compatibleDriveOriginal)) {
@@ -655,7 +647,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       sources.clear();
       sources.add(new VideoResolver.Source("Vídeo", vidaraStream));
       selection = 0;
-      updateSourceButton();
       playSource(sources.get(0));
       return;
     }
@@ -663,7 +654,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       resolving = false;
       sources.clear();
       sources.add(new VideoResolver.Source("Vídeo directo", pageUrl));
-      updateSourceButton();
       playSource(sources.get(0));
       return;
     }
@@ -698,7 +688,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 sources.clear();
                 hostingSourceId = requestedSignal;
                 sources.add(new VideoResolver.Source(requestedName, address));
-                selection = 0; updateSourceButton(); playSource(sources.get(0));
+                selection = 0; playSource(sources.get(0));
               });
               return;
             }
@@ -728,7 +718,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   eventSourceNames.put(source.url, source.label);
                 }
                 pageUrl = players.get(0).url; pageIndex = channelPages.indexOf(pageUrl); selection = 0; hostingOptions.clear(); hostingSourceId = "";
-                documentUrl = pageUrl; updateSourceButton(); resolveFresh();
+                documentUrl = pageUrl; resolveFresh();
               });
               return;
             }
@@ -767,7 +757,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   // Zico has an explicit hosting route in the picker and after device failures.
                   if (channelPage() && !VideoResolver.renewablePage(pageUrl) && !sources.isEmpty())
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
-                  updateSourceButton();
                   if (sources.isEmpty() && VideoResolver.processing(document.html)) {
                     // A video just uploaded to LuluStream plays once LuluStream has converted it.
                     problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
@@ -812,7 +801,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     sources.clear();
                     sources.add(new VideoResolver.Source("Por el hosting", Library.playerRelay(pageUrl)));
                     selection = 0;
-                    updateSourceButton();
                     playSource(sources.get(0));
                   } else if (footballFallback) {
                     openWeb();
@@ -845,7 +833,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         handler.post(() -> {
           if (!active || generation != request || !page.equals(pageUrl)) return;
           hostingOptions.clear(); hostingOptions.addAll(menu);
-          updateSourceButton();
         });
       } catch (java.io.IOException unavailable) { /* Playback continues through the automatic route. */ }
     });
@@ -856,7 +843,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     sources.clear();
     sources.add(new VideoResolver.Source("LuluStream por el hosting", Library.Media.hosting(pageUrl)));
     selection = 0;
-    updateSourceButton();
     playSource(sources.get(0));
   }
 
@@ -1383,13 +1369,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
       names.add(HostingPlayback.label(title, "Canal") + (directUrls.size() + pages.size() > 1 ? " · Señal " + (++number) : ""));
-      actions.add(() -> { compatibleDriveOriginal = null; selectChannelAddress(address, false); });
-      String compatible = progressEntry == null ? null : CastSource.driveCompatibility(address);
-      if (compatible != null && !compatible.equals(address)) {
-        if (compatible.equals(currentUrl)) checked = names.size();
-        names.add("Modo compatible");
-        actions.add(() -> { compatibleDriveOriginal = address; selectChannelAddress(address, false); });
-      }
+      actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
       if (AppSources.zico(address) && address.equals(pageUrl)) continue;
@@ -1614,7 +1594,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);
-    updateSourceButton();
     selection = 0;
     playSource(source);
   }
@@ -1661,8 +1640,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   public boolean dispatchKeyEvent(KeyEvent event) {
     if (isTelevision() && active
         && playerView != null && (sourceDialog == null || !sourceDialog.isShowing())) {
-      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) { chooseSource(); return true; }
-      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
+      if (sourceButton != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) { chooseSource(); return true; }
+      if (sourceButton != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
         playerView.showController(); panel.setVisibility(View.VISIBLE);
         sourceButton.requestFocus(); panel.post(() -> { if (active && panel.getVisibility() == View.VISIBLE) sourceButton.requestFocus(); });
         return true;

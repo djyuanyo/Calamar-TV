@@ -729,13 +729,14 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     return;
   }
   const generation = playbackGeneration;
-  if (c.streams.some(zicoEventApi) && !c.eventSourcesExpanded) {
+  const requestedStreams = c.vod ? c.streams.slice(0, 1) : c.streams;
+  if (requestedStreams.some(zicoEventApi) && !c.eventSourcesExpanded) {
     playerStatus.textContent = 'Consultando fuentes del evento…';
     renderSourcePicker(playerSources, [], 0, () => {});
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
-    const resolved = await expandEventSources(c.streams, { signal: lookup.signal });
+    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal });
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
@@ -745,7 +746,8 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       originalStreams: c.streams };
     index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
   }
-  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
+  const streams = c.vod ? c.streams.slice(0, 1) : c.streams;
+  const allSources = sourceOptions(streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
@@ -753,10 +755,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   const compatibility = c.vod && original?.how.compatibility;
   const source = compatible && compatibility ? { ...original, how: webPlayback(compatibility) } : original;
   currentSourceUrl = source?.url || '';
-  const compatibleIndex = c.streams.length;
-  const options = compatibility ? [...allSources, { ...original, label: 'Modo compatible', index: compatibleIndex }] : allSources;
-  renderSourcePicker(playerSources, options, compatible && compatibility ? compatibleIndex : source?.index ?? index, (chosen) =>
-    playSource(c, chosen === compatibleIndex ? source.index : chosen, c.vod ? video.currentTime || resumeAt : 0, chosen === compatibleIndex));
+  renderSourcePicker(playerSources, c.vod ? [] : allSources, source?.index ?? index, (chosen) => playSource(c, chosen));
   if (candidates.length && !playable.length) {
     const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
@@ -858,7 +857,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   if (source.how.renewable) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
       onSources: options => {
-        if (generation !== playbackGeneration) return;
+        if (generation !== playbackGeneration || c.vod) return;
         const page = hostedPage(source.url), first = c.streams.findIndex(url => hostedPage(url) === page);
         const other = c.streams.filter(url => hostedPage(url) !== page);
         const name = c.sourceNames?.[page] || c.name;
