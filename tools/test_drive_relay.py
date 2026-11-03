@@ -62,6 +62,35 @@ class DriveRelayTest(unittest.TestCase):
         self.assertEqual(result[0], [True, True, True, False, False, False, False, False])
         self.assertEqual(result[1], [True, True, True, True, False, False, False])
 
+    def test_service_account_assertion_is_signed_and_read_only(self):
+        result = json.loads(php(
+            '$key=openssl_pkey_new(["private_key_bits"=>2048]); openssl_pkey_export($key,$pem);'
+            '$account=["client_email"=>"calamar@example.iam.gserviceaccount.com","private_key"=>$pem];'
+            '$parts=explode(".",driveServiceJwt($account,2000));'
+            '$decode=fn($value)=>base64_decode(strtr($value,"-_","+/"));'
+            '$valid=openssl_verify($parts[0].".".$parts[1],$decode($parts[2]),'
+            'openssl_pkey_get_details($key)["key"],OPENSSL_ALGO_SHA256);'
+            'echo json_encode([$valid,json_decode($decode($parts[1]),true)]);'))
+        valid, claims = result
+        self.assertEqual(valid, 1)
+        self.assertEqual(claims, {
+            'iss': 'calamar@example.iam.gserviceaccount.com',
+            'scope': 'https://www.googleapis.com/auth/drive.readonly',
+            'aud': 'https://oauth2.googleapis.com/token',
+            'iat': 1970, 'exp': 5300,
+        })
+
+    def test_service_account_limits_access_to_selected_files_and_folder_descendants(self):
+        result = json.loads(php(
+            '$config=["calamar_files"=>["one"],"calamar_folders"=>["series"]];'
+            '$entries=["episode"=>["parents"=>["season"]],"season"=>["parents"=>["series"]],'
+            '"other"=>["parents"=>["home"]],"deleted"=>["parents"=>["series"],"trashed"=>true],'
+            '"loop"=>["parents"=>["loop"]]];'
+            '$lookup=fn($id)=>$entries[$id]??null;'
+            'echo json_encode(array_map(fn($id)=>driveServiceAllows($id,$config,$lookup),'
+            '["one","episode","other","deleted","loop","unknown","series"]));'))
+        self.assertEqual(result, [True, True, False, False, False, False, False])
+
     @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'requires FFmpeg')
     def test_converts_a_seeked_mkv_segment_to_h264_aac_with_spanish_audio(self):
         with tempfile.TemporaryDirectory() as directory:

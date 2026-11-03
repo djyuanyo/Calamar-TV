@@ -1,5 +1,5 @@
 <?php
-// Public Drive folders and videos in Calamar's own player. Google keys stay encrypted in video links.
+// Drive folders and videos in Calamar's own player. Google keys stay encrypted in video links.
 require_once __DIR__ . '/calamar-http-source.php';
 
 function driveAnswer($data, $status = 200) {
@@ -48,11 +48,12 @@ function driveAllowedUrl($url) {
         && ($host === 'www.googleapis.com' || $host === 'content.googleapis.com' || $host === 'drive.usercontent.google.com'
             || substr($host, -strlen('.googleusercontent.com')) === '.googleusercontent.com');
 }
-function driveCurl($url, $key, $id, $resourceKey, $range = '') {
+function driveCurl($url, $key, $id, $resourceKey, $range = '', $bearer = '') {
     if (!driveAllowedUrl($url) || !($target = publicTarget($url))) return null;
     $headers = array('Accept: */*');
     if (parse_url($url, PHP_URL_HOST) === 'www.googleapis.com') {
-        $headers[] = 'X-Goog-Api-Key: ' . $key;
+        if ($bearer !== '') $headers[] = 'Authorization: Bearer ' . $bearer;
+        elseif ($key !== '') $headers[] = 'X-Goog-Api-Key: ' . $key;
         if ($resourceKey !== '') $headers[] = 'X-Goog-Drive-Resource-Keys: ' . $id . '/' . $resourceKey;
     }
     if ($range !== '') $headers[] = 'Range: ' . $range;
@@ -62,8 +63,8 @@ function driveCurl($url, $key, $id, $resourceKey, $range = '') {
         CURLOPT_RESOLVE => array($target['host'] . ':' . $target['port'] . ':' . $target['ip'])));
     return $ch;
 }
-function driveJson($path, $params, $key, $id, $resourceKey) {
-    $ch = driveCurl('https://www.googleapis.com/drive/v3/' . $path . '?' . http_build_query($params), $key, $id, $resourceKey);
+function driveJson($path, $params, $key, $id, $resourceKey, $bearer = '') {
+    $ch = driveCurl('https://www.googleapis.com/drive/v3/' . $path . '?' . http_build_query($params), $key, $id, $resourceKey, '', $bearer);
     if (!$ch) throw new RuntimeException('No se pudo conectar con Google Drive.');
     $body = ''; curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $data) use (&$body) {
         if (strlen($body) + strlen($data) > 4194304) return 0;
@@ -97,9 +98,9 @@ function drivePublicDownload($file) {
 }
 
 /** Sends the media and exits, or returns the last HTTP status before any bytes were sent. */
-function driveTransfer($file, $url, $head, $range) {
+function driveTransfer($file, $url, $head, $range, $bearer = '') {
     for ($redirect = 0; $redirect < 5; $redirect++) {
-        $ch = driveCurl($url, $file['key'], $file['id'], $file['resourceKey'], $range);
+        $ch = driveCurl($url, $file['key'], $file['id'], $file['resourceKey'], $range, $bearer);
         if (!$ch) break;
         $status = 0; $headers = array(); $sent = false; $failure = '';
         curl_setopt_array($ch, array(CURLOPT_TIMEOUT => 0, CURLOPT_LOW_SPEED_LIMIT => 1, CURLOPT_LOW_SPEED_TIME => 45, CURLOPT_NOBODY => $head));
@@ -136,19 +137,129 @@ function driveTransfer($file, $url, $head, $range) {
     return 0;
 }
 
+const DRIVE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const DRIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+
+function driveServiceConfig() {
+    $path = dirname(__DIR__) . '/calamar-drive-service.json';
+    if (!is_file($path) || (fileperms($path) & 0077) !== 0) return null;
+    $config = json_decode((string)@file_get_contents($path, false, null, 0, 16384), true);
+    if (!is_array($config) || ($config['type'] ?? '') !== 'service_account'
+        || !is_string($config['client_email'] ?? null)
+        || !preg_match('/^[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+\.gserviceaccount\.com$/D', $config['client_email'])
+        || !is_string($config['private_key'] ?? null)) return null;
+    $files = $config['calamar_files'] ?? array();
+    $folders = $config['calamar_folders'] ?? array();
+    if (!is_array($files) || !is_array($folders) || (!$files && !$folders)
+        || array_filter($files, 'driveId') !== $files || array_filter($folders, 'driveId') !== $folders) return null;
+    return $config;
+}
+
+function driveServiceJwt($config, $now) {
+    $encode = static function($value) { return rtrim(strtr(base64_encode($value), '+/', '-_'), '='); };
+    $message = $encode('{"alg":"RS256","typ":"JWT"}') . '.' . $encode(json_encode(array(
+        'iss' => $config['client_email'], 'scope' => DRIVE_OAUTH_SCOPE, 'aud' => DRIVE_OAUTH_TOKEN_URL,
+        'iat' => $now - 30, 'exp' => $now + 3300), JSON_UNESCAPED_SLASHES));
+    if (!@openssl_sign($message, $signature, $config['private_key'], OPENSSL_ALGO_SHA256))
+        throw new RuntimeException('La clave de la cuenta de servicio de Drive no es válida.');
+    return $message . '.' . $encode($signature);
+}
+
+function driveServiceAccessToken($config) {
+    $dir = dirname(__DIR__) . '/calamar-drive-auth-cache';
+    if (!is_dir($dir)) @mkdir($dir, 0700);
+    if (!is_dir($dir) || (fileperms($dir) & 0077) !== 0) return '';
+    $cache = @fopen($dir . '/token.json', 'c+');
+    if (!$cache) return '';
+    try {
+        if (!flock($cache, LOCK_EX)) return '';
+        $now = time();
+        $identity = hash('sha256', $config['client_email'] . "\n" . $config['private_key']);
+        $stored = json_decode(stream_get_contents($cache, 16384), true);
+        if (($stored['identity'] ?? '') === $identity && ($stored['expires'] ?? 0) > $now + 60
+            && driveServiceTokenValid($stored['token'] ?? null)) return $stored['token'];
+
+        $ch = curl_init(DRIVE_OAUTH_TOKEN_URL);
+        $response = '';
+        curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_POSTFIELDS => http_build_query(array(
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => driveServiceJwt($config, $now))),
+            CURLOPT_WRITEFUNCTION => static function($ch, $bytes) use (&$response) {
+                if (strlen($response) + strlen($bytes) > 16384) return 0;
+                $response .= $bytes;
+                return strlen($bytes);
+            }));
+        $received = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        $data = json_decode($response, true);
+        $token = $data['access_token'] ?? null;
+        $lifetime = (int)($data['expires_in'] ?? 0);
+        if (!$received || $status !== 200 || !driveServiceTokenValid($token) || $lifetime < 60) return '';
+        rewind($cache);
+        if (ftruncate($cache, 0)) fwrite($cache, json_encode(array(
+            'identity' => $identity, 'token' => $token, 'expires' => $now + min($lifetime, 3600))));
+        return $token;
+    } finally { fclose($cache); }
+}
+
+function driveServiceTokenValid($value) {
+    return is_string($value) && preg_match('#^[A-Za-z0-9._~+/-]{1,4096}={0,2}$#D', $value);
+}
+
+/** Drive files have at most one parent. Follow it only up to the administrator's permitted roots. */
+function driveServiceAllows($id, $config, $metadata) {
+    if (in_array($id, $config['calamar_files'] ?? array(), true)) return true;
+    $roots = $config['calamar_folders'] ?? array();
+    if (!$roots) return false;
+    $seen = array($id => true);
+    for ($depth = 0; $depth < 10; $depth++) {
+        $entry = $metadata($id);
+        if (!is_array($entry) || !empty($entry['trashed'])) return false;
+        $parent = $entry['parents'][0] ?? null;
+        if (!driveId($parent) || isset($seen[$parent])) return false;
+        if (in_array($parent, $roots, true)) return true;
+        $seen[$parent] = true;
+        $id = $parent;
+    }
+    return false;
+}
+
+function driveServiceMedia($file, $url, $head, $range) {
+    $config = driveServiceConfig();
+    if (!$config) return null;
+    if (empty($config['calamar_folders']) && !in_array($file['id'], $config['calamar_files'] ?? array(), true)) return null;
+    try {
+        $token = driveServiceAccessToken($config);
+        if ($token === '') return null;
+        $allowed = driveServiceAllows($file['id'], $config, static function($id) use ($file, $token) {
+            $key = $id === $file['id'] ? $file['resourceKey'] : '';
+            return driveJson('files/' . $id, array('fields' => 'parents,trashed', 'supportsAllDrives' => 'true'),
+                '', $id, $key, $token);
+        });
+        if ($allowed) return driveTransfer($file, $url, $head, $range, $token);
+    } catch (RuntimeException $e) {
+        // Keep public playback available when credentials expire or a file is no longer shared.
+    }
+    return null;
+}
+
 function driveStream($file, $head = false) {
     $range = $_SERVER['HTTP_RANGE'] ?? '';
     if (!driveRange($range)) driveAnswer(array('error' => 'Rango de vídeo no válido.'), 416);
     @set_time_limit(0); @ini_set('zlib.output_compression', '0');
     while (ob_get_level()) { if (!@ob_end_clean()) break; }
     $api = 'https://www.googleapis.com/drive/v3/files/' . $file['id'] . '?alt=media&supportsAllDrives=true';
-    $status = driveTransfer($file, $api, $head, $range);
+    $authorizedStatus = driveServiceMedia($file, $api, $head, $range);
+    $status = $authorizedStatus === 416 ? 416 : driveTransfer($file, $api, $head, $range);
     // Google can allow an anonymous shared download even when its API cannot deliver that file.
     if ($status !== 416) {
         $publicStatus = driveTransfer($file, drivePublicDownload($file), $head, $range);
         $status = $status === 429 ? 429 : $publicStatus;
     }
-    if ($status === 429) driveAnswer(array('error' => 'Google Drive ha alcanzado la cuota de descarga de este vídeo.'), 429);
+    if ($status === 429 || $authorizedStatus === 429) driveAnswer(array('error' => 'Google Drive ha alcanzado la cuota de descarga de este vídeo.'), 429);
     driveAnswer(array('error' => 'Google Drive no ha entregado el vídeo. Comprueba que siga compartido y tenga cuota disponible.',
         'upstream_http' => $status), $status === 416 ? 416 : 502);
 }
@@ -325,7 +436,7 @@ function driveMain() {
     header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
     if ($method === 'OPTIONS') { http_response_code(204); exit; }
     if ($method === 'GET' && ($_GET['status'] ?? '') === '1')
-        driveAnswer(array('bridge' => 'drive-hls-v1', 'ready' => driveCompatReady()));
+        driveAnswer(array('bridge' => 'drive-hls-v1', 'ready' => driveCompatReady(), 'drive_authorized' => driveServiceConfig() !== null));
     if (!function_exists('curl_init') || !function_exists('openssl_encrypt')) driveAnswer(array('error' => 'Falta cURL u OpenSSL en el hosting.'), 503);
     try {
         $secret = driveSecret();
