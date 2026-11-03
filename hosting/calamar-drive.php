@@ -90,12 +90,14 @@ function driveMenu($data, $name, $key, $secret) {
 }
 function driveRange($range) { return $range === '' || (is_string($range) && preg_match('/^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$/D', $range)); }
 
-function driveStream($file, $head = false) {
-    $url = 'https://www.googleapis.com/drive/v3/files/' . $file['id'] . '?alt=media&supportsAllDrives=true';
-    $range = $_SERVER['HTTP_RANGE'] ?? '';
-    if (!driveRange($range)) driveAnswer(array('error' => 'Rango de vídeo no válido.'), 416);
-    @set_time_limit(0); @ini_set('zlib.output_compression', '0');
-    while (ob_get_level()) { if (!@ob_end_clean()) break; }
+function drivePublicDownload($file) {
+    $params = array('id' => $file['id'], 'export' => 'download', 'confirm' => 't');
+    if (($file['resourceKey'] ?? '') !== '') $params['resourcekey'] = $file['resourceKey'];
+    return 'https://drive.usercontent.google.com/download?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+}
+
+/** Sends the media and exits, or returns the last HTTP status before any bytes were sent. */
+function driveTransfer($file, $url, $head, $range) {
     for ($redirect = 0; $redirect < 5; $redirect++) {
         $ch = driveCurl($url, $file['key'], $file['id'], $file['resourceKey'], $range);
         if (!$ch) break;
@@ -125,9 +127,22 @@ function driveStream($file, $head = false) {
         if ($head && $send()) exit;
         if ($sent) exit;
         if ($status >= 300 && $status < 400 && isset($headers['location']) && driveAllowedUrl($headers['location'])) { $url = $headers['location']; continue; }
-        driveAnswer(array('error' => 'Google Drive no ha entregado el vídeo. Comprueba que siga compartido y tenga cuota disponible.'), $status === 416 ? 416 : 502);
+        return $status;
     }
-    driveAnswer(array('error' => 'No se pudo conectar con el vídeo de Google Drive.'), 502);
+    return 0;
+}
+
+function driveStream($file, $head = false) {
+    $range = $_SERVER['HTTP_RANGE'] ?? '';
+    if (!driveRange($range)) driveAnswer(array('error' => 'Rango de vídeo no válido.'), 416);
+    @set_time_limit(0); @ini_set('zlib.output_compression', '0');
+    while (ob_get_level()) { if (!@ob_end_clean()) break; }
+    $api = 'https://www.googleapis.com/drive/v3/files/' . $file['id'] . '?alt=media&supportsAllDrives=true';
+    $status = driveTransfer($file, $api, $head, $range);
+    // Google can allow an anonymous shared download even when its API cannot deliver that file.
+    if ($status !== 416) $status = driveTransfer($file, drivePublicDownload($file), $head, $range);
+    driveAnswer(array('error' => 'Google Drive no ha entregado el vídeo. Comprueba que siga compartido y tenga cuota disponible.',
+        'upstream_http' => $status), $status === 416 ? 416 : 502);
 }
 function driveMain() {
     ini_set('display_errors', '0'); header('Cache-Control: no-store'); header('X-Robots-Tag: noindex, nofollow'); header('Referrer-Policy: no-referrer');

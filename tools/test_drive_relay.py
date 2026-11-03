@@ -20,6 +20,11 @@ def php(code):
 
 
 class DriveRelayTest(unittest.TestCase):
+    def test_public_download_has_the_same_id_and_resource_key_without_api_credentials(self):
+        url = php('echo drivePublicDownload(["id"=>"episode123","resourceKey"=>"r_key","key"=>"PRIVATE_GOOGLE_KEY"]);')
+        self.assertEqual(url, 'https://drive.usercontent.google.com/download?id=episode123&export=download&confirm=t&resourcekey=r_key')
+        self.assertNotIn('PRIVATE_GOOGLE_KEY', url)
+
     def test_encrypted_link_survives_reload_and_rejects_tampering(self):
         result = json.loads(php('$secret=hex2bin("' + SECRET + '"); $file=["id"=>"movie123","mimeType"=>"video/mp4","resourceKey"=>"r_key"];'
             '$token=driveToken($file,"AIza_TEST_KEY",$secret); $bad=$token; $bad[10]=$bad[10]==="A"?"B":"A";'
