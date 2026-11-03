@@ -1003,7 +1003,12 @@ try {
     const body = new URLSearchParams(route.request().postData());
     assert.equal(route.request().method(), 'POST');
     assert.equal(body.get('key'), 'vidara-test-key');
-    const json = body.get('action') === 'folders' ? { folders: [{ fld_id: 5, name: 'Películas', videos: 2 }] }
+    if (updatedVidaraBridge && body.get('id') === '4') return route.fulfill({ status: 502,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: { bridge: 3, error: 'vidara_upstream', upstream_http: 500, upstream_status: 0 } });
+    const json = body.get('action') === 'folders' ? { folders: [
+      { fld_id: 4, name: 'Documentales' }, { fld_id: 5, name: 'Películas', videos: 2 },
+    ] }
       : updatedVidaraBridge ? { complete_inventory: true, page: 1, total_pages: 1, total: 2, videos: [
         { filecode: 'KILxn38HjQjsv', title: 'Película Vidara 2024.mp4', file_active: 1 },
         { filecode: 'VIDQUEUE1234', title: 'Película en cola.mp4', file_active: 0 },
@@ -1019,11 +1024,12 @@ try {
   assert.equal(await category.inputValue(), 'movies');
   await vidaraPage.getByText('Archivos en Vidara · 2', { exact: true }).waitFor();
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
-  await vidaraPage.getByText(/Sustituye calamar-vidara.php/).waitFor();
+  await vidaraPage.getByText(/«Películas».*Sustituye calamar-vidara.php/).waitFor();
   assert.deepEqual(await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
   updatedVidaraBridge = true;
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await vidaraPage.getByText(/2 archivos detectados \(1 sin reproducción disponible\)/).waitFor();
+  await vidaraPage.getByText(/«Documentales».*Vidara HTTP 500/).waitFor();
   await vidaraPage.waitForFunction(() => window.__libraryParts.parts['movies-0'].items.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
   assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
   await vidaraPage.close();

@@ -18,11 +18,12 @@ export function videoKey(address) {
 
 const providerOf = key => key.startsWith('drive_') ? 'drive' : key.startsWith('vidara_') ? 'vidara' : /^[A-Za-z0-9]{8,20}$/.test(key) ? 'lulu' : '';
 const inventories = scan => scan.complete === true && Array.isArray(scan.inventory) ? scan.inventory : [];
+const canRemoveMissing = (source, scan) => source.provider !== 'vidara' || !scan.partialVidara;
 const coverageCache = new WeakMap();
 function coverage(scan) {
   if (!coverageCache.has(scan)) coverageCache.set(scan, {
     codes: new Set(inventories(scan).flatMap(source => source.links.map(videoKey))),
-    sections: new Set(inventories(scan).map(source => `${source.provider}:${source.section}`)),
+    sections: new Set(inventories(scan).filter(source => canRemoveMissing(source, scan)).map(source => `${source.provider}:${source.section}`)),
   });
   return coverageCache.get(scan);
 }
@@ -38,7 +39,7 @@ export function managedByScan(record, section, scan) {
 export function reconcileScan(sections, scan) {
   const inventory = inventories(scan), removed = { films: 0, shows: 0, episodes: 0 };
   if (!inventory.length) return { sections, removed };
-  const scopes = new Set(inventory.map(source => source.id)), seen = new Map();
+  const scopes = new Set(inventory.filter(source => canRemoveMissing(source, scan)).map(source => source.id)), seen = new Map();
   for (const source of inventory) for (const link of source.links) {
     const code = videoKey(link), entry = seen.get(code) || { link, scopes: new Set() };
     entry.scopes.add(source.id); seen.set(code, entry);

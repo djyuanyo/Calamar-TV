@@ -1204,14 +1204,20 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const next = {...settings, sourceFolders:sources}; await saveSettings(next); settings=next;
       folderNote.textContent='Leyendo carpetas…';
       const scan = await scanFolders(sources, settings, {onFolder:name=>{folderNote.textContent=`Leyendo «${name}»…`;}});
+      folderReport.replaceChildren(...scan.vidaraReport.map(({ name, count, unavailable, error }) =>
+        el('p', { class: 'note' }, error ? `Vidara · «${name}» · ${error}`
+          : `Vidara · «${name}» · ${count} ${count === 1 ? 'archivo detectado' : 'archivos detectados'}${unavailable ? ` (${unavailable} sin reproducción disponible)` : ''}.`)));
+      if (!scan.inventory.length) {
+        folderNote.textContent = 'No se pudo leer ninguna de las carpetas seleccionadas.';
+        return;
+      }
       const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
         onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
       if (result.changed) await store(result.sections);
-      const vidaraSummary = scan.vidaraReport.map(({ name, count, unavailable }) =>
-        el('p', { class: 'note' }, `Vidara · «${name}» · ${count} ${count === 1 ? 'archivo detectado' : 'archivos detectados'}${unavailable ? ` (${unavailable} sin reproducción disponible)` : ''}.`));
       const pending = result.added.pending ? ' Revisa los títulos sin ficha en «No identificadas».' : '';
       folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.${pending}`;
-      folderReport.replaceChildren(...vidaraSummary, ...result.unknown.map(line => el('p', { class: 'note' }, line)));
+      if (scan.partialVidara) folderNote.append(' Se conservaron los enlaces de Vidara que el escaneo no pudo verificar.');
+      folderReport.append(...result.unknown.map(line => el('p', { class: 'note' }, line)));
     } catch(error) { folderNote.textContent=error.message; }
     finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
   } }, 'Buscar e importar carpetas');
@@ -1501,7 +1507,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       el('p', { class: 'note' }, 'Pega tu clave de Vidara. Se guarda en la configuración privada del administrador.'),
       field('Clave de Vidara', vidaraKey), el('div', { class: 'actions' }, saveVidara)),
     el('h3',{},'Carpetas de Google Drive y LuluStream'),
-    el('p',{class:'note'},'Puedes importar de Google Drive, LuluStream y Vidara en la misma búsqueda. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si queda otra copia del mismo título o capítulo, se conserva; una serie sin capítulos desaparece. Si falla la lectura, no se publica ningún cambio. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
+    el('p',{class:'note'},'Puedes importar de Google Drive, LuluStream y Vidara en la misma búsqueda. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si falla una carpeta de Vidara, se conservan sus enlaces y puedes importar las demás. Si queda otra copia del mismo título o capítulo, se conserva. En series, usa Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
     el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
     el('h3', {}, 'Carpetas de Vidara'),

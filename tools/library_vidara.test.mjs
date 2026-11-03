@@ -84,5 +84,39 @@ test('reports unavailable uploads, preserves them in the inventory and imports p
 
   const empty = (_, { body }) => body.get('action') === 'folders' ? folders.clone()
     : response({ complete_inventory: true, page: 1, total_pages: 0, total: 0, videos: [] });
-  await assert.rejects(scanFolders(sources, settings, { fetcher: empty }), /tiene 3 archivos, pero su lista está vacía/);
+  const partial = await scanFolders(sources, settings, { fetcher: empty });
+  assert.equal(partial.partialVidara, true);
+  assert.match(partial.vidaraReport[0].error, /tiene 3 archivos, pero su lista está vacía/);
+  assert.deepEqual(partial.inventory, []);
+});
+
+test('an upstream error in the first Vidara folder does not block movies or remove unverified links', async () => {
+  const sources = [
+    { provider: 'vidara', id: '11', name: 'Documentales', section: 'documentaries' },
+    { provider: 'vidara', id: '12', name: 'Películas', section: 'movies' },
+  ];
+  const scan = await scanFolders(sources, { vidara: key }, { fetcher: (_, { body }) => {
+    if (body.get('action') === 'folders') return response({ folders: [
+      { fld_id: 11, name: 'Documentales' }, { fld_id: 12, name: 'Películas', videos: 1 },
+    ] });
+    if (body.get('id') === '11') return new Response(JSON.stringify({
+      bridge: 3, error: 'vidara_upstream', upstream_http: 500, upstream_status: 0, msg: key,
+    }), { status: 502 });
+    return response({ complete_inventory: true, page: 1, total_pages: 1, total: 1,
+      videos: [{ filecode: 'VIDMOVIE1234', title: 'Película nueva.mp4' }] });
+  } });
+  assert.equal(scan.partialVidara, true);
+  assert.match(scan.vidaraReport[0].error, /Vidara HTTP 500/);
+  assert.ok(!JSON.stringify(scan).includes(key));
+  assert.equal(scan.films.length, 1);
+  const old = { id: 'm1', kind: 'movie', title: 'Anterior', fromFolder: true, url: 'https://vidara.to/v/VIDOLDER1234',
+    folderSources: { vidara_VIDOLDER1234: ['vidara:12'] } };
+  const legacy = { id: 'm2', kind: 'movie', title: 'Antigua', fromFolder: true, url: 'https://vidara.to/v/VIDOTHER1234' };
+  const result = await libraryFromScan(scan, { movies: [old, legacy], documentaries: [] }, 'tmdb', {
+    skipDuplicates: true, fetcher: () => response({ results: [] }),
+  });
+  assert.equal(result.added.pending, 1);
+  assert.equal(result.removed.films, 0);
+  assert.deepEqual(result.sections.movies.find(movie => movie.id === old.id).folderSources, old.folderSources);
+  assert.ok(result.sections.movies.some(movie => movie.id === legacy.id));
 });

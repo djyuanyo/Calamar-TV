@@ -24,7 +24,18 @@ async function vidaraApi(action, params, key, fetcher) {
   }
   if (!response.ok || !data || typeof data !== 'object' || data.error) {
     if (response.status === 404 || !data) throw Error('Instala calamar-vidara.php en tu hosting para leer tus carpetas.');
-    throw Error('Vidara no ha devuelto la lista. Vuelve a intentarlo en un momento.');
+    if (data.error === 'curl') throw Error('El hosting necesita la extensión cURL de PHP para consultar Vidara.');
+    if (data.error === 'vidara_unavailable' || data.error === 'vidara_response' && !data.bridge) {
+      throw Error('El puente antiguo no indica por qué falló Vidara. Sustituye calamar-vidara.php por la versión nueva.');
+    }
+    const codes = [
+      ['Vidara HTTP', data.upstream_http], ['estado de la API', data.upstream_status], ['cURL', data.curl_error],
+    ].filter(([, value]) => Number.isSafeInteger(value) && value > 0).map(([label, value]) => `${label} ${value}`);
+    const diagnostic = codes.length ? codes.join(', ') : `puente HTTP ${response.status}`;
+    const message = data.error === 'vidara_transport' ? 'El hosting no pudo completar la conexión con Vidara'
+      : data.error === 'vidara_response' ? 'Vidara devolvió una lista con un formato inesperado'
+      : 'Vidara rechazó la consulta o su API está temporalmente indisponible';
+    throw Error(`${message} (${diagnostic}).`);
   }
   return data;
 }

@@ -52,7 +52,7 @@ const mostlyEpisodes = (files, strict = false) => {
   return marked > 0 && marked * 2 >= files.length;
 };
 
-/** One combined scan; publication happens only after every configured folder has been read. */
+/** One combined scan. Failed Vidara folders do not make other folders unreadable. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
   const films = [], series = [], unknown = [], cache = new Map(), providers = new Set(), inventory = [], vidaraReport = [];
   let count = 0, vidaraIndex;
@@ -68,7 +68,7 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
       if (!selected) throw Error('Una carpeta de Vidara ya no está disponible. Actualiza la selección de carpetas.');
       const files = await vidaraVideos(folder.id, settings.vidara, fetcher);
       if (!files.length && selected.count > 0) {
-        throw Error(`Vidara indica que «${selected.name}» tiene ${selected.count} archivos, pero su lista está vacía. No se ha actualizado el catálogo.`);
+        throw Error(`Vidara indica que tiene ${selected.count} archivos, pero su lista está vacía.`);
       }
       data = { name: selected.name, files, folders: [] };
     } else data = folder.provider === 'drive' ? await driveFolder(folder, settings.drive, fetcher)
@@ -114,8 +114,15 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     let ref = source.provider === 'vidara' ? { provider: 'vidara', id: String(source.id), name: source.name } : folderReference(source.url);
     providers.add(ref.provider);
     if (ref.provider === 'lulu') ref = await luluId(ref);
-    const data = await read(ref);
-    const files = await videos(ref);
+    let data, files;
+    try {
+      data = await read(ref);
+      files = await videos(ref);
+    } catch (error) {
+      if (ref.provider !== 'vidara') throw error;
+      vidaraReport.push({ name: ref.name || `Carpeta ${ref.id}`, error: error.message });
+      continue;
+    }
     inventory.push({ id: `${ref.provider}:${ref.id}`, provider: ref.provider, section: source.section, links: files.map(f => f.link) });
     // An unavailable file still exists in Vidara and must not be reconciled as a deletion.
     const all = ref.provider === 'vidara' ? files.filter(f => !f.unavailable) : files;
@@ -156,5 +163,6 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     }
   }
   // Which sites were read: a copy missing from a site read in full was deleted there.
-  return { films, series, unknown, providers: [...providers], inventory, vidaraReport, complete: true };
+  return { films, series, unknown, providers: [...providers], inventory, vidaraReport,
+    partialVidara: vidaraReport.some(row => !!row.error), complete: true };
 }
