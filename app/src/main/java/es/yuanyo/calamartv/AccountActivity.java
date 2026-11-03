@@ -42,12 +42,16 @@ public class AccountActivity extends Activity {
   private TextView status;
   private String editing; // null, "new" or the id of the profile being edited
   private final Profiles.Listener redraw = () -> runOnUiThread(this::draw);
+  static final String REQUIRED = "required_sign_in";
   private FirebaseAuth.AuthStateListener authListener;
+  private boolean required;
+  private Runnable stopAccess;
 
   @Override
   protected void onCreate(Bundle state) {
     super.onCreate(state);
     Profiles.start(this);
+    required = getIntent().getBooleanExtra(REQUIRED, false);
     editing = getIntent().getStringExtra("editing");
     draw();
   }
@@ -56,6 +60,12 @@ public class AccountActivity extends Activity {
   protected void onStart() {
     super.onStart();
     Profiles.listen(redraw);
+    if (required) stopAccess = AppAccess.observe(this, state -> {
+      if (state == AppAccess.State.ALLOWED || state == AppAccess.State.BLOCKED || state == AppAccess.State.ERROR) {
+        setResult(RESULT_OK);
+        finish();
+      }
+    });
     try {
       authListener = auth -> runOnUiThread(this::draw);
       SharedCatalog.auth(this).addAuthStateListener(authListener);
@@ -64,6 +74,7 @@ public class AccountActivity extends Activity {
 
   @Override
   protected void onStop() {
+    if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     Profiles.forget(redraw);
     if (authListener != null) SharedCatalog.auth(this).removeAuthStateListener(authListener);
     stopPhoneLogin();
@@ -127,7 +138,7 @@ public class AccountActivity extends Activity {
   private void draw() {
     if (isFinishing()) return;
     if (phone != null && !phoneInline) return; // The phone sign-in screen stays until it ends.
-    if (Profiles.user(this) == null) { signIn(); return; }
+    if (required || Profiles.user(this) == null) { signIn(); return; }
     if (editing != null && !editing.equals("all") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
     JSONObject current = Profiles.active();
     if ("all".equals(editing) || current == null) { manage(current == null); return; }
@@ -419,9 +430,12 @@ public class AccountActivity extends Activity {
     scroll.addView(outer);
     setContentView(scroll);
     body = outer;
-    Button back = button("‹ Volver", Ui.Kind.GHOST, () -> { stopPhoneLogin(); finish(); });
-    LinearLayout.LayoutParams bl = (LinearLayout.LayoutParams) back.getLayoutParams();
-    bl.width = -2; bl.gravity = Gravity.START;
+    if (!required) {
+      Button back = button("‹ Volver", Ui.Kind.GHOST, () -> { stopPhoneLogin(); finish(); });
+      LinearLayout.LayoutParams bl = (LinearLayout.LayoutParams) back.getLayoutParams();
+      bl.width = -2;
+      bl.gravity = Gravity.START;
+    }
     // The brand, half over the card.
     LinearLayout brand = new LinearLayout(this);
     brand.setGravity(Gravity.CENTER_VERTICAL);

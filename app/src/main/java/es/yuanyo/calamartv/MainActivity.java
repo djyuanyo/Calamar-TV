@@ -77,10 +77,21 @@ public class MainActivity extends Activity {
   AppLink pendingAppLink;
   private Runnable stopAccess;
   private boolean contentAdmitted;
+  private AppAccess.State admission = AppAccess.State.LOADING;
+  private boolean requiredLoginOpen;
+  private static final int REQUIRED_LOGIN = 218;
+
+  private void openRequiredLogin() {
+    if (!resumed || admission != AppAccess.State.LOGIN || requiredLoginOpen || isFinishing()) return;
+    requiredLoginOpen = true;
+    startActivityForResult(new Intent(this, AccountActivity.class)
+        .putExtra(AccountActivity.REQUIRED, true), REQUIRED_LOGIN);
+  }
   private final List<Dialog> contentDialogs = new ArrayList<>();
 
   private void showAccess(AppAccess.State state) {
     if (isFinishing() || isDestroyed()) return;
+    admission = state;
     if (state == AppAccess.State.ALLOWED) {
       if (!contentAdmitted) {
         contentAdmitted = true;
@@ -97,6 +108,14 @@ public class MainActivity extends Activity {
       contentDialogs.clear();
       pauseContent();
     }
+    if (state == AppAccess.State.LOGIN) {
+      // Keep a blank host behind the account activity so Back never opens the catalog.
+      View background = new View(this);
+      background.setBackgroundColor(Ui.BG);
+      setContentView(background);
+      openRequiredLogin();
+      return;
+    }
     LinearLayout screen = new LinearLayout(this);
     screen.setOrientation(LinearLayout.VERTICAL);
     screen.setGravity(Gravity.CENTER);
@@ -105,14 +124,13 @@ public class MainActivity extends Activity {
     screen.setFitsSystemWindows(true);
     screen.addView(label("Calamar TV", 30, FG));
     String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido"
-        : state == AppAccess.State.LOGIN ? "Inicia sesión o crea una cuenta para continuar."
         : state == AppAccess.State.ERROR ? "No se pudo comprobar el acceso." : "Comprobando acceso…";
     TextView note = label(message, 17, MUTED);
     note.setGravity(Gravity.CENTER);
     screen.addView(note);
     if (state != AppAccess.State.LOADING) {
       boolean retry = state == AppAccess.State.ERROR;
-      Button action = Ui.pill(this, retry ? "Reintentar" : state == AppAccess.State.BLOCKED ? "Mi cuenta" : "Iniciar sesión o registrarse", Ui.Kind.ACCENT, true);
+      Button action = Ui.pill(this, retry ? "Reintentar" : "Mi cuenta", Ui.Kind.ACCENT, true);
       action.setOnClickListener(v -> {
         if (retry) AppAccess.retry(this);
         else startActivity(new Intent(this, AccountActivity.class));
@@ -1502,6 +1520,7 @@ public class MainActivity extends Activity {
     super.onResume();
     resumed = true;
     if (contentAdmitted) resumeContent();
+    else openRequiredLogin();
   }
 
   private void resumeContent() {
@@ -2570,8 +2589,10 @@ public class MainActivity extends Activity {
     if (Profiles.signedIn() && Profiles.active() != null && !entry.optString("section").isEmpty())
       Profiles.markWatched(this, Library.page(entry.optString("section")), entry.optString("item"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
+    String vidara = ProviderPlayers.vidara(url);
     String embed = Library.Media.embed(url);
-    if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
+    if (vidara != null) intent.putExtra("page_url", vidara);
+    else if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
       intent.putExtra("page_url", embed);
       intent.putExtra("football_fallback", true);
     } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
@@ -3158,6 +3179,11 @@ public class MainActivity extends Activity {
   @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
+    if (request == REQUIRED_LOGIN) {
+      requiredLoginOpen = false;
+      if (result != RESULT_OK && admission == AppAccess.State.LOGIN) finish();
+      return;
+    }
     if (request != PLAY_LIBRARY) return;
     render();
     String key = result == RESULT_OK && data != null ? data.getStringExtra("ended") : null;

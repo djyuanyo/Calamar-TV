@@ -1124,7 +1124,7 @@ final class Library {
     }
 
     static boolean allowed(String address) {
-      if (embed(address) != null || anonmp4(address) != null) return true;
+      if (embed(address) != null || anonmp4(address) != null || ProviderPlayers.vidara(address) != null) return true;
       try {
         java.net.URI u = java.net.URI.create(address);
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);

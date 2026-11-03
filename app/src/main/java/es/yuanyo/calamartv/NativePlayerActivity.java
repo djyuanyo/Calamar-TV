@@ -634,6 +634,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playDirect();
       return;
     }
+    if (ProviderPlayers.embed(pageUrl) != null) {
+      openWeb();
+      return;
+    }
     webMode = false;
     clearWeb();
     resolving = true;
@@ -1451,7 +1455,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playerView.setVisibility(View.GONE);
     browser = new WebView(this);
     final int browserGeneration = generation;
+    final String embed = ProviderPlayers.embed(pageUrl);
     browser.getSettings().setJavaScriptEnabled(true);
+    if (embed != null) browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
     browser.getSettings().setDomStorageEnabled(true);
     browser.getSettings().setAllowFileAccess(false);
     browser.getSettings().setAllowContentAccess(false);
@@ -1460,7 +1466,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new WebViewClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return !url.startsWith("https://") || AppSources.webOnly(url);
+            return !url.startsWith("https://") || AppSources.webOnly(url)
+                || (embed != null && ProviderPlayers.embed(url) == null);
+          }
+
+          @Override
+          public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            return request.isForMainFrame() && shouldOverrideUrlLoading(view, request.getUrl().toString());
           }
 
           @Override
@@ -1469,7 +1481,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             String url = request.getUrl().toString();
             if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
                 new java.io.ByteArrayInputStream(new byte[0]));
-            if (!zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
+            if (embed == null && !zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
                     if (generation == browserGeneration) detected(url);
@@ -1482,6 +1494,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           public void onPageFinished(WebView view, String url) {
             if (!active || !webMode || generation != browserGeneration || browser != view) return;
             documentUrl = url;
+            if (embed != null) { status.setText(""); return; }
             view.evaluateJavascript(
                 "(function(){var v=document.querySelector('video');return"
                     + " v?(v.currentSrc||v.src||''):'';})()",
@@ -1495,8 +1508,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           }
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
-    status.setText("Modo web · Pulsa ▶ para detectar el vídeo.");
-    browser.loadUrl(pageUrl);
+    status.setText(embed == null ? "Modo web · Pulsa ▶ para detectar el vídeo." : "Abriendo reproductor…");
+    browser.loadUrl(embed == null ? pageUrl : embed);
     browser.requestFocus();
   }
 

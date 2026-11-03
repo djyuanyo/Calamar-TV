@@ -1,3 +1,4 @@
+import { vidaraFolders, vidaraVideos } from './library-vidara.js';
 import { cleanTitle, episodeOf, luluFolder } from './library-lulu.js';
 
 export const DRIVE_ENDPOINT = 'https://calamarmenciano.com/calamar-drive.php';
@@ -54,13 +55,19 @@ const mostlyEpisodes = (files, strict = false) => {
 /** One combined scan; publication happens only after every configured folder has been read. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
   const films = [], series = [], unknown = [], cache = new Map(), providers = new Set(), inventory = [];
-  let count = 0;
+  let count = 0, vidaraIndex;
   const read = async (folder) => {
     const key = `${folder.provider}:${folder.id}`;
     if (cache.has(key)) return cache.get(key);
     if (++count > 1000) throw Error('La importación supera 1000 carpetas. Divide los enlaces en grupos más pequeños.');
     onFolder(folder.name || folder.id);
-    const data = folder.provider === 'drive' ? await driveFolder(folder, settings.drive, fetcher)
+    let data;
+    if (folder.provider === 'vidara') {
+      vidaraIndex ||= vidaraFolders(settings.vidara, fetcher);
+      const selected = (await vidaraIndex).find(entry => entry.id === folder.id);
+      if (!selected) throw Error('Una carpeta de Vidara ya no está disponible. Actualiza la selección de carpetas.');
+      data = { name: selected.name, files: await vidaraVideos(folder.id, settings.vidara, fetcher), folders: [] };
+    } else data = folder.provider === 'drive' ? await driveFolder(folder, settings.drive, fetcher)
       : await luluFolder(folder.id, settings.lulu, fetcher);
     const result = { ...data, name: data.name || folder.name || 'Carpeta',
       folders: data.folders.map(f => ({ ...f, provider: folder.provider })),
@@ -100,13 +107,35 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
   };
   for (const source of sources) {
     if (!['movies', 'series', 'documentaries'].includes(source.section)) throw Error('Sección de carpeta no válida.');
-    let ref = folderReference(source.url);
+    let ref = source.provider === 'vidara' ? { provider: 'vidara', id: String(source.id), name: source.name } : folderReference(source.url);
     providers.add(ref.provider);
     if (ref.provider === 'lulu') ref = await luluId(ref);
     const data = await read(ref);
     const all = await videos(ref);
     inventory.push({ id: `${ref.provider}:${ref.id}`, provider: ref.provider, section: source.section, links: all.map(f => f.link) });
     if (source.section === 'movies') { for (const f of all) film(f, source.section); continue; }
+    if (ref.provider === 'vidara') {
+      // Vidara has flat folders. Use the prefix before the episode marker to separate series.
+      const shows = new Map();
+      for (const file of all) {
+        const marker = file.title.match(EPISODE_NAME);
+        const episode = (source.section === 'series' || marker) && episodeOf(file.title, data.name);
+        if (!episode) {
+          if (source.section === 'documentaries') film(file, source.section);
+          else unknown.push(`${file.title}: indica el capítulo con 1x01 o S01E01.`);
+          continue;
+        }
+        const prefix = marker ? file.title.slice(0, marker.index).replace(/[ ._–—-]+$/u, '').trim() : '';
+        const generic = /^(series|documentales|documentaries)$/i.test(data.name);
+        const title = prefix || (!generic ? data.name : '');
+        if (!title) { unknown.push(`${file.title}: indica el nombre de la serie antes del capítulo.`); continue; }
+        const key = cleanTitle(title).title.toLocaleLowerCase('es');
+        if (!shows.has(key)) shows.set(key, { title, files: [] });
+        shows.get(key).files.push(file);
+      }
+      for (const item of shows.values()) show(item.title, item.files, source.section);
+      continue;
+    }
     // A documentaries folder is one series only when most of its videos name an episode (1x01, S01E01, «Capítulo 3»…)
     // or it has season folders: a film whose name starts with a number («11M (2022)») does not make it a series.
     const isShow = (source.section === 'documentaries' ? mostlyEpisodes(data.files, true) : data.files.some(f => episodeOf(f.title))) || data.folders.some(f => /^(?:temporada|season|T\s*\d)/i.test(f.name));

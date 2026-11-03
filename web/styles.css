@@ -1460,3 +1460,7 @@ body.gate-open { overflow: hidden; }
 .stats-watching > div, .stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
 .stats-viewer-names { list-style: none; margin: 0 0 6px; padding: 6px 10px; border-left: 2px solid #ffffff2a; }
 .stats-viewer-names a { overflow-wrap: anywhere; }
+
+/* Required sign-in uses the same form, on its own screen. */
+.access-signin .top, .access-signin .foot { display: none; }
+.access-signin #view { padding-top: clamp(20px, 5vh, 54px); }

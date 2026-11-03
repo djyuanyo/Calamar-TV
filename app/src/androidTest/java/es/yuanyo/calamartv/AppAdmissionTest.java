@@ -9,6 +9,10 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -17,12 +21,12 @@ public class AppAdmissionTest {
   @Test public void guestWallOpensAndClosesTheCatalogWhenTheSharedPolicyChanges() {
     policy(AppAccess.State.LOGIN);
     try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(CatalogFixtureActivity.class)) {
+      onView(withText("Continuar con Google")).check(matches(isDisplayed()));
+      onView(withText("Crear cuenta")).check(matches(isDisplayed()));
+      policy(AppAccess.State.ALLOWED);
+      onView(withText("Multipantalla")).check(matches(isDisplayed()));
       scenario.onActivity(activity -> {
         View content = activity.findViewById(android.R.id.content);
-        assertTrue(hasText(content, "Iniciar sesión o registrarse"));
-        assertFalse(hasText(content, "Multipantalla"));
-        AppAccess.useTestState(AppAccess.State.ALLOWED);
-        assertTrue(hasText(content, "Multipantalla"));
         AppAccess.useTestState(AppAccess.State.BLOCKED);
         assertTrue(hasText(content, "Acceso suspendido"));
         assertFalse(hasText(content, "Multipantalla"));

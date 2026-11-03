@@ -1,3 +1,4 @@
+import { dailymotionEmbed, vidaraEmbed } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
@@ -281,6 +282,10 @@ export function webPlayback(url, { pages = false } = {}) {
   if (pages && playerEndpoint(url)
       && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
     return { ok: true, kind: 'hls', page: true, renewable: true };
+  const dm = pages && dailymotionEmbed(url);
+  if (dm) return { ok: true, kind: 'frame', page: true, address: dm };
+  const vidara = vidaraEmbed(url);
+  if (vidara) return { ok: true, kind: 'frame', address: vidara };
   const anon = anonmp4Embed(url);
   if (anon) return { ok: true, kind: 'frame', address: anon };
   const embed = lulustreamEmbed(url);

@@ -531,7 +531,7 @@ try {
   });
   await page.getByLabel('Carpetas de Películas',{exact:true}).fill('https://drive.google.com/drive/folders/films');
   await page.getByLabel('Carpetas de Series',{exact:true}).fill('https://drive.google.com/drive/folders/paco');
-  await page.getByRole('button',{name:'Buscar e importar de ambos sitios',exact:true}).click();
+  await page.getByRole('button',{name:'Buscar e importar carpetas',exact:true}).click();
   await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor().catch(async error => {
     console.log('Mixed folder status', await page.locator('[role=status]').allTextContents());
     throw error;
@@ -894,6 +894,18 @@ try {
   assert.ok((await page.evaluate(() => window.__hlsSources)).some(url => new URL(url).hostname === 'cdn.example'));
   assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
+  // Dailymotion is shown in the video screen with the original provider configuration.
+  const dmPage = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
+  await page.route(dmPage, route => route.fulfill({ body: '<video controls></video>', contentType: 'text/html' }));
+  await page.evaluate(url => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.find(c => c.id === 'zico').streams = [url];
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  }, dmPage);
+  await page.goto(base + '/?dailymotion=1#/canal/canal-zico');
+  await page.locator('#player-frame').waitFor();
+  assert.equal(await page.locator('#player-frame').getAttribute('src'), dmPage);
+  await page.locator('#player-close').click();
   // A sync that only deletes files must publish too. Exercise the actual admin handlers and readers.
   const syncPage = await browser.newPage();
   const driveLink = id => `https://calamarmenciano.com/calamar-drive.php?id=${id}&v=${'A'.repeat(80)}`;
@@ -926,12 +938,12 @@ try {
   await syncPage.route('https://luluvido.com/api/folder/list*', route => route.fulfill({ json: { status: 200, result: { files: [], folders: [] } } }));
   await syncPage.goto(base + '/#/admin/biblioteca');
   await syncPage.getByText('Retirar Drive', { exact: false }).waitFor();
-  await syncPage.getByRole('button', { name: 'Buscar e importar de ambos sitios', exact: true }).click();
+  await syncPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await syncPage.getByText('Falló la carpeta de series: catálogo conservado', { exact: true }).waitFor();
   assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount || 0), 0, 'a failure after an empty folder never publishes deletions');
   assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts), syncSeed);
   failSeries = false;
-  await syncPage.getByRole('button', { name: 'Buscar e importar de ambos sitios', exact: true }).click();
+  await syncPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await syncPage.getByText(/Retirados: 1 películas o documentales, 1 series y 1 capítulos/).waitFor();
   assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 1, 'zero additions still publishes the removals');
   assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.map(item => item.id)), ['m-sync-lulu']);
@@ -941,6 +953,39 @@ try {
   assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 2);
   assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
   await syncPage.close();
+  // Vidara uses the administrator's key in POST, and publishes only the video link.
+  const vidaraPage = await browser.newPage();
+  await vidaraPage.addInitScript(() => {
+    window.__libraryParts = { index: { sections: { movies: 1, series: 0, documentaries: 0 } },
+      parts: { 'movies-0': { items: [] } } };
+  });
+  await vidaraPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await vidaraPage.route('https://firestore.googleapis.com/**/calamarLibrary/*', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const data = await vidaraPage.evaluate(name => name === 'index' ? window.__libraryParts.index : window.__libraryParts.parts[name], name);
+    await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
+  });
+  await vidaraPage.route('https://api.themoviedb.org/**', route => route.fulfill({ json: { results: [] } }));
+  await vidaraPage.route('https://calamarmenciano.com/calamar-vidara.php', route => {
+    const body = new URLSearchParams(route.request().postData());
+    assert.equal(route.request().method(), 'POST');
+    assert.equal(body.get('key'), 'vidara-test-key');
+    const json = body.get('action') === 'folders' ? { folders: [{ fld_id: 5, name: 'Cine' }] }
+      : { page: 1, total_pages: 1, total: 1, videos: [{ filecode: 'KILxn38HjQjsv', title: 'Película Vidara 2024.mp4' }] };
+    return route.fulfill({ json, headers: { 'Access-Control-Allow-Origin': '*' } });
+  });
+  await vidaraPage.goto(base + '/#/admin/biblioteca');
+  await vidaraPage.locator('summary', { hasText: 'Configuración' }).click();
+  await vidaraPage.getByLabel('Clave de Vidara', { exact: true }).fill('vidara-test-key');
+  await vidaraPage.getByRole('button', { name: 'Guardar clave de Vidara', exact: true }).click();
+  const category = vidaraPage.getByLabel('Categoría para Cine', { exact: true });
+  await category.waitFor();
+  assert.equal(await category.inputValue(), 'movies');
+  await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await vidaraPage.waitForFunction(() => window.__libraryParts.parts['movies-0'].items.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
+  assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
+  await vidaraPage.close();
+
   // Several competitions keep their own groups under one Calamar TV header.
   const crestImage = 'data:image/png;base64,' + (await readFile('web/assets/favicon-32.png')).toString('base64');
   const livePage = await browser.newPage({ viewport: { width: 390, height: 844 } });

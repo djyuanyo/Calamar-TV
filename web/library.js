@@ -1,3 +1,4 @@
+import { suggestedVidaraSection, vidaraFolders } from './library-vidara.js';
 import { coverFromFile } from './image-file.js';
 import { withArtwork, keepArtwork } from './library-art.js';
 import { youtubeId, trailerId } from './trailer.js';
@@ -971,7 +972,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://luluvido.com/… o https://anonmp4.art/v/…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
     const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
-    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…), de AnonMP4 (https://anonmp4.art/v/…) o un vídeo MP4/HLS por HTTPS.`); }
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…), de Vidara o AnonMP4, o un vídeo MP4/HLS por HTTPS.`); }
   };
 
   // ---- Search ----
@@ -1026,7 +1027,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
-        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (luluvido.com, lulustream.com, luluvdo.com…) o de AnonMP4 (anonmp4.art/v/…).'),
+        editor.replaceChildren(head, field('Enlace del vídeo', link, 'Pega un enlace de LuluStream, Vidara, AnonMP4 o un vídeo directo.'),
           el('div', { class: 'actions' }, save, del, close), note);
         link.focus();
         return;
@@ -1132,8 +1133,57 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   } }, 'Guardar clave de Google Drive');
   const folderInputs = LIBRARY_SECTIONS.map(section => ({ section,
     input: el('textarea', { rows: 3, placeholder: 'Un enlace de carpeta por línea, de Google Drive o LuluStream', 'aria-label': `Carpetas de ${section.label}` }) }));
-  const configuredFolders = () => folderInputs.flatMap(({section,input}) => input.value.split(/\r?\n/).map(url=>url.trim()).filter(Boolean)
-    .map(url => { folderReference(url); return { section:section.key, url }; }));
+  const vidaraKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de Vidara' });
+  const vidaraRows = el('div', { class: 'library-vidara-folders' });
+  const vidaraNote = el('p', { class: 'note', role: 'status' });
+  let vidaraChoices = [];
+  const vidaraSources = () => vidaraChoices.filter(choice => choice.select.value).map(({ folder, select }) => ({
+    provider: 'vidara', id: folder.id, name: folder.name, section: select.value,
+  }));
+  const drawVidaraFolders = (folders, selected, suggest = false) => {
+    const sections = new Map(selected.map(folder => [String(folder.id), folder.section]));
+    vidaraChoices = folders.map(folder => {
+      const select = el('select', { 'aria-label': `Categoría para ${folder.name}` },
+        el('option', { value: '' }, 'No importar'),
+        LIBRARY_SECTIONS.map(section => el('option', { value: section.key }, section.label)));
+      select.value = sections.get(folder.id) || (suggest ? suggestedVidaraSection(folder.name) : '');
+      return { folder, select };
+    });
+    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(folder.name, select)));
+  };
+  const readVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    readVidara.disabled = true;
+    vidaraNote.textContent = 'Leyendo carpetas…';
+    try {
+      const selected = vidaraSources();
+      const folders = await vidaraFolders(settings.vidara);
+      drawVidaraFolders(folders, selected, !vidaraChoices.length);
+      vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
+    } catch (error) { vidaraNote.textContent = error.message; }
+    finally { readVidara.disabled = false; }
+  } }, 'Cargar carpetas de Vidara');
+  const saveVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    saveVidara.disabled = true;
+    say('Comprobando la clave en Vidara…');
+    try {
+      const value = vidaraKey.value.trim();
+      const folders = await vidaraFolders(value);
+      const next = { ...settings, vidara: value };
+      await saveSettings(next);
+      settings = next;
+      vidaraKey.value = '';
+      vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      drawVidaraFolders(folders, vidaraSources(), !vidaraChoices.length);
+      say('Clave de Vidara guardada en la configuración privada.');
+      vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
+    } catch (error) { say(error.message, true); }
+    finally { saveVidara.disabled = false; }
+  } }, 'Guardar clave de Vidara');
+  const configuredFolders = () => [
+    ...folderInputs.flatMap(({ section, input }) => input.value.split(/\r?\n/).map(url => url.trim()).filter(Boolean)
+      .map(url => { folderReference(url); return { section: section.key, url }; })),
+    ...vidaraSources(),
+  ];
   const folderNote = el('p', { class: 'note', role: 'status' });
   const saveFolders = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     saveFolders.disabled = true;
@@ -1145,7 +1195,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     mixedScan.disabled = true; scanButton.disabled = true; saveFolders.disabled = true;
     try {
       const sources = configuredFolders();
-      if (!sources.length) throw Error('Añade al menos un enlace de carpeta.');
+      if (!sources.length) throw Error('Añade o selecciona al menos una carpeta.');
       const tmdb = tmdbKey();
       const next = {...settings, sourceFolders:sources}; await saveSettings(next); settings=next;
       folderNote.textContent='Leyendo carpetas…';
@@ -1157,7 +1207,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       scanReport.replaceChildren(...result.unknown.map(line=>el('p',{class:'note'},line)));
     } catch(error) { folderNote.textContent=error.message; }
     finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
-  } }, 'Buscar e importar de ambos sitios');
+  } }, 'Buscar e importar carpetas');
 
   // ---- LuluStream folders: Peliculas/, Series/<Nombre>/Temporada N/, Documentales/ ----
   const scanNote = el('p', { class: 'note', role: 'status' });
@@ -1391,8 +1441,11 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     try {
       settings = await readSettings();
       if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      if (settings.vidara) vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      const savedVidara = (settings.sourceFolders || []).filter(source => source.provider === 'vidara');
+      drawVidaraFolders(savedVidara.map(source => ({ id: String(source.id), name: source.name || `Carpeta ${source.id}` })), savedVidara);
       if (settings.drive) driveKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
-      for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key).map(s=>s.url).join('\n');
+      for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key && s.url).map(s=>s.url).join('\n');
       if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       current = await fetchLibrary({ fresh: true });
       drawList();
@@ -1431,15 +1484,20 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('div', { class: 'actions' }, reviewLink),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB, LuluStream y Google Drive'),
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB, LuluStream, Google Drive y Vidara'),
       el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
       field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey),
       el('p', { class: 'note' }, 'La clave de la API de LuluStream (LuluStream → API) sirve para leer tus carpetas. También es privada.'),
       field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu),
       el('p', {class:'note'}, 'Para Drive, añade una clave de Google Cloud con Google Drive API habilitada. Se guarda solo para el administrador y viaja cifrada en los enlaces de vídeo.'),
-      field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive)),
+      field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive),
+      el('p', { class: 'note' }, 'Pega tu clave de Vidara. Se guarda en la configuración privada del administrador.'),
+      field('Clave de Vidara', vidaraKey), el('div', { class: 'actions' }, saveVidara)),
+    el('h3', {}, 'Carpetas de Vidara'),
+    el('p', { class: 'note' }, 'Asigna cada carpeta a Películas, Series o Documentales. Para distinguir series en una carpeta compartida, usa nombres como «Nombre de la serie S01E01».'),
+    readVidara, vidaraNote, vidaraRows,
     el('h3',{},'Carpetas de Google Drive y LuluStream'),
-    el('p',{class:'note'},'Puedes mezclar los dos sitios. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si queda otra copia del mismo título o capítulo, se conserva; una serie sin capítulos desaparece. Si falla la lectura, no se publica ningún cambio. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
+    el('p',{class:'note'},'Puedes importar de Google Drive, LuluStream y Vidara en la misma búsqueda. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si queda otra copia del mismo título o capítulo, se conserva; una serie sin capítulos desaparece. Si falla la lectura, no se publica ningún cambio. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
     el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
     el('div',{class:'actions'},saveFolders,mixedScan),folderNote,

@@ -1438,6 +1438,7 @@ async function route() {
   const accessPage = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
   const locked = admission.decision !== 'allowed';
   document.body.classList.toggle('access-locked', locked);
+  document.body.classList.toggle('access-signin', admission.decision === 'login' && accessPage !== 'tv');
   if (locked) {
     if (casting) { casting = false; cast.stop(); }
     closeGate();
@@ -1445,7 +1446,7 @@ async function route() {
     closeMultiPicker(); closeMulti(); inlineMulti = null;
     stopHighlight();
     if (stopMusic) { stopMusic(); stopMusic = null; }
-    if (!['admin', 'cuenta', 'tv'].includes(accessPage)) {
+    if (!['admin', 'cuenta', 'tv'].includes(accessPage) || (admission.decision === 'login' && accessPage !== 'tv')) {
       if (!accessReturnHash) accessReturnHash = location.hash || '#/';
       for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
       const ticket = ++routeVersion;

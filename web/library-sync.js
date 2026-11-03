@@ -1,7 +1,10 @@
+import { vidaraCode } from './provider-players.js';
 import { lulustreamEmbed } from './catalog.js';
 
 // Stable identities: Drive changes the encrypted playback token on every scan.
 export function videoKey(address) {
+  const vidara = vidaraCode(address);
+  if (vidara) return `vidara_${vidara}`;
   const lulu = lulustreamEmbed(String(address || ''))?.split('/').pop();
   if (lulu) return lulu;
   try {
@@ -13,7 +16,7 @@ export function videoKey(address) {
   } catch { return ''; }
 }
 
-const providerOf = key => key.startsWith('drive_') ? 'drive' : /^[A-Za-z0-9]{8,20}$/.test(key) ? 'lulu' : '';
+const providerOf = key => key.startsWith('drive_') ? 'drive' : key.startsWith('vidara_') ? 'vidara' : /^[A-Za-z0-9]{8,20}$/.test(key) ? 'lulu' : '';
 const inventories = scan => scan.complete === true && Array.isArray(scan.inventory) ? scan.inventory : [];
 const coverageCache = new WeakMap();
 function coverage(scan) {
