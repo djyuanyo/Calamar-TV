@@ -1140,24 +1140,26 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const vidaraSources = () => vidaraChoices.filter(choice => choice.select.value).map(({ folder, select }) => ({
     provider: 'vidara', id: folder.id, name: folder.name, section: select.value,
   }));
-  const drawVidaraFolders = (folders, selected, suggest = false) => {
+  const vidaraCategories = () => vidaraChoices.map(({ folder, select }) => ({ id: folder.id, section: select.value }));
+  const drawVidaraFolders = (folders, selected) => {
     const sections = new Map(selected.map(folder => [String(folder.id), folder.section]));
     vidaraChoices = folders.map(folder => {
       const select = el('select', { 'aria-label': `Categoría para ${folder.name}` },
         el('option', { value: '' }, 'No importar'),
         LIBRARY_SECTIONS.map(section => el('option', { value: section.key }, section.label)));
-      select.value = sections.get(folder.id) || (suggest ? suggestedVidaraSection(folder.name) : '');
+      select.value = sections.get(folder.id) ?? suggestedVidaraSection(folder.name);
       return { folder, select };
     });
-    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(`Categoría para ${folder.name}`, select)));
+    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(`Categoría para ${folder.name}`, select,
+      folder.count == null ? '' : `Archivos en Vidara · ${folder.count}`)));
   };
   const readVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     readVidara.disabled = true;
     vidaraNote.textContent = 'Leyendo carpetas…';
     try {
-      const selected = vidaraSources();
+      const selected = vidaraCategories();
       const folders = await vidaraFolders(settings.vidara);
-      drawVidaraFolders(folders, selected, !vidaraChoices.length);
+      drawVidaraFolders(folders, selected);
       vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
     } catch (error) { vidaraNote.textContent = error.message; }
     finally { readVidara.disabled = false; }
@@ -1173,7 +1175,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       settings = next;
       vidaraKey.value = '';
       vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
-      drawVidaraFolders(folders, vidaraSources(), !vidaraChoices.length);
+      drawVidaraFolders(folders, vidaraCategories());
       say('Clave de Vidara guardada en la configuración privada.');
       vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
     } catch (error) { say(error.message, true); }
@@ -1185,6 +1187,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     ...vidaraSources(),
   ];
   const folderNote = el('p', { class: 'note', role: 'status' });
+  const folderReport = el('div', { class: 'library-folder-report' });
   const saveFolders = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     saveFolders.disabled = true;
     try { const next = {...settings, sourceFolders: configuredFolders()}; await saveSettings(next); settings=next; folderNote.textContent='Carpetas guardadas.'; }
@@ -1193,6 +1196,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const mixedScan = el('button', { class:'btn', type:'button', onclick: async () => {
     if (scanButton.disabled) return;
     mixedScan.disabled = true; scanButton.disabled = true; saveFolders.disabled = true;
+    folderReport.replaceChildren();
     try {
       const sources = configuredFolders();
       if (!sources.length) throw Error('Añade o selecciona al menos una carpeta.');
@@ -1203,8 +1207,11 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
         onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
       if (result.changed) await store(result.sections);
-      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.`;
-      scanReport.replaceChildren(...result.unknown.map(line=>el('p',{class:'note'},line)));
+      const vidaraSummary = scan.vidaraReport.map(({ name, count, unavailable }) =>
+        el('p', { class: 'note' }, `Vidara · «${name}» · ${count} ${count === 1 ? 'archivo detectado' : 'archivos detectados'}${unavailable ? ` (${unavailable} sin reproducción disponible)` : ''}.`));
+      const pending = result.added.pending ? ' Revisa los títulos sin ficha en «No identificadas».' : '';
+      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.${pending}`;
+      folderReport.replaceChildren(...vidaraSummary, ...result.unknown.map(line => el('p', { class: 'note' }, line)));
     } catch(error) { folderNote.textContent=error.message; }
     finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
   } }, 'Buscar e importar carpetas');
@@ -1493,14 +1500,14 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive),
       el('p', { class: 'note' }, 'Pega tu clave de Vidara. Se guarda en la configuración privada del administrador.'),
       field('Clave de Vidara', vidaraKey), el('div', { class: 'actions' }, saveVidara)),
-    el('h3', {}, 'Carpetas de Vidara'),
-    el('p', { class: 'note' }, 'Asigna cada carpeta a Películas, Series o Documentales. Para distinguir series en una carpeta compartida, usa nombres como «Nombre de la serie S01E01».'),
-    readVidara, vidaraNote, vidaraRows,
     el('h3',{},'Carpetas de Google Drive y LuluStream'),
     el('p',{class:'note'},'Puedes importar de Google Drive, LuluStream y Vidara en la misma búsqueda. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si queda otra copia del mismo título o capítulo, se conserva; una serie sin capítulos desaparece. Si falla la lectura, no se publica ningún cambio. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
     el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
-    el('div',{class:'actions'},saveFolders,mixedScan),folderNote,
+    el('h3', {}, 'Carpetas de Vidara'),
+    el('p', { class: 'note' }, 'Carga las carpetas, asigna su categoría y pulsa «Buscar e importar carpetas». Para distinguir series en una carpeta compartida, usa nombres como «Nombre de la serie S01E01».'),
+    readVidara, vidaraNote, vidaraRows,
+    el('div',{class:'actions'},saveFolders,mixedScan),folderNote,folderReport,
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
     el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,

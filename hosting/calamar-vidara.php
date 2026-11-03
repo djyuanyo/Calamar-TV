@@ -49,7 +49,7 @@ if ($action === 'folders') {
         vidaraReply(['error' => 'folder'], 400);
     }
     $path = 'video/list';
-    $query += ['fld_id' => $id, 'page' => $page, 'limit' => 100, 'status' => 'active'];
+    $query += ['fld_id' => $id, 'page' => $page, 'limit' => 100];
 } else {
     vidaraReply(['error' => 'action'], 400);
 }
@@ -83,13 +83,14 @@ $result = $data['result'];
 if ($action === 'folders') {
     if (!is_array($result['folders'] ?? null)) vidaraReply(['error' => 'vidara_response'], 502);
     vidaraReply(['folders' => array_map(function ($row) {
-        return is_array($row) ? array_intersect_key($row, array_flip(['fld_id', 'name'])) : null;
+        return is_array($row) ? array_intersect_key($row, array_flip(['fld_id', 'name', 'videos'])) : null;
     }, $result['folders'])]);
 }
 if (!is_array($result['videos'] ?? null)) vidaraReply(['error' => 'vidara_response'], 502);
 vidaraReply([
+    'complete_inventory' => true,
     'videos' => array_map(function ($row) {
-        return is_array($row) ? array_intersect_key($row, array_flip(['filecode', 'title', 'uploaded'])) : null;
+        return is_array($row) ? array_intersect_key($row, array_flip(['filecode', 'title', 'uploaded', 'status', 'file_active'])) : null;
     }, $result['videos']),
     'page' => $result['page'] ?? null,
     'total_pages' => $result['total_pages'] ?? null,

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { dailymotionEmbed, vidaraEmbed } from '../web/provider-players.js';
 import { webPlayback } from '../web/catalog.js';
 import { scanFolders } from '../web/library-folders.js';
+import { libraryFromScan } from '../web/library-lulu.js';
 import { vidaraVideos, VIDARA_ENDPOINT } from '../web/library-vidara.js';
 import { videoKey } from '../web/library-sync.js';
 
@@ -36,7 +37,7 @@ test('scans paginated Vidara folders and groups separate series in a flat folder
     const movie = { filecode: 'VIDMOVIE1234', title: 'Mi película 2024.mp4', uploaded: '2026-11-03 12:00:00' };
     const show = { filecode: page === 1 ? 'VIDSERIE1234' : 'VIDSERIE5678', title: page === 1 ? 'Primera serie S02E03.mp4' : 'Segunda serie 1x02.mp4' };
     const doc = { filecode: 'VIDDOCUM1234', title: '11M (2022).mp4' };
-    return response({ page, total_pages: id === '13' ? 2 : 1, total: id === '13' ? 2 : 1, videos: [id === '12' ? movie : id === '13' ? show : doc] });
+    return response({ complete_inventory: true, page, total_pages: id === '13' ? 2 : 1, total: id === '13' ? 2 : 1, videos: [id === '12' ? movie : id === '13' ? show : doc] });
   };
   const scan = await scanFolders(folders.map((f, i) => ({ provider: 'vidara', id: String(f.fld_id), section: ['movies','series','documentaries'][i] })), { vidara: key }, { fetcher });
   assert.deepEqual(requests, [['folders', null, 0], ['videos', '12', 1], ['videos', '13', 1], ['videos', '13', 2], ['videos', '14', 1]]);
@@ -50,8 +51,38 @@ test('scans paginated Vidara folders and groups separate series in a flat folder
 test('a failed, partial or repeated Vidara page cannot publish a shortened inventory', async () => {
   const file = { filecode: 'VIDMOVIE1234', title: 'Película.mp4' };
   await assert.rejects(vidaraVideos('12', key, (_, { body }) => response({
-    page: Number(body.get('page')), total_pages: 2, total: 2, videos: [file],
+    complete_inventory: true, page: Number(body.get('page')), total_pages: 2, total: 2, videos: [file],
   })), /duplicado/);
-  await assert.rejects(vidaraVideos('12', key, () => response({ page: 1, total_pages: 1, total: 2, videos: [file] })), /Faltan vídeos/);
+  await assert.rejects(vidaraVideos('12', key, () => response({ complete_inventory: true, page: 1, total_pages: 1, total: 2, videos: [file] })), /Faltan vídeos/);
+  await assert.rejects(vidaraVideos('12', key, () => response({ page: 1, total_pages: 0, total: 0, videos: [] })), /Sustituye calamar-vidara.php/);
   await assert.rejects(vidaraVideos('12', key, () => new Response('{}', { status: 401 })), /no acepta la clave/);
+});
+
+test('reports unavailable uploads, preserves them in the inventory and imports playable files without a TMDB match', async () => {
+  const sources = [{ provider: 'vidara', id: '12', section: 'movies' }];
+  const settings = { vidara: key };
+  const files = [
+    { filecode: 'VIDMOVIE1234', title: 'Película lista.mp4', status: 'active', file_active: 1 },
+    { filecode: 'VIDQUEUE1234', title: 'Película en cola.mp4', status: 'active', file_active: '0' },
+    { filecode: 'VIDERROR1234', title: 'Película con error.mp4', status: 'error', file_active: 1 },
+  ];
+  const folders = response({ folders: [{ fld_id: 12, name: 'Películas', videos: 3 }] });
+  const fetcher = (_, { body }) => body.get('action') === 'folders'
+    ? folders.clone()
+    : response({ complete_inventory: true, page: 1, total_pages: 1, total: 3, videos: files });
+  const scan = await scanFolders(sources, settings, { fetcher });
+  assert.deepEqual(scan.vidaraReport, [{ name: 'Películas', count: 3, unavailable: 2 }]);
+  assert.deepEqual(scan.films.map(f => f.link), ['https://vidara.to/v/VIDMOVIE1234']);
+  assert.equal(scan.inventory[0].links.length, 3);
+  const old = { id: 'm1', kind: 'movie', title: 'En cola', fromFolder: true, url: 'https://vidara.to/v/VIDQUEUE1234' };
+  const result = await libraryFromScan(scan, { movies: [old] }, 'tmdb', {
+    skipDuplicates: true, fetcher: () => response({ results: [] }),
+  });
+  assert.equal(result.removed.films, 0);
+  assert.equal(result.added.pending, 1);
+  assert.ok(result.sections.movies.some(movie => movie.url === old.url));
+
+  const empty = (_, { body }) => body.get('action') === 'folders' ? folders.clone()
+    : response({ complete_inventory: true, page: 1, total_pages: 0, total: 0, videos: [] });
+  await assert.rejects(scanFolders(sources, settings, { fetcher: empty }), /tiene 3 archivos, pero su lista está vacía/);
 });

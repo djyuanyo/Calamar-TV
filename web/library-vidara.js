@@ -39,7 +39,8 @@ export async function vidaraFolders(key, fetcher = globalThis.fetch) {
       throw Error('Vidara devolvió una carpeta no válida.');
     }
     ids.add(id);
-    return { id, name: folder.name.trim() };
+    const count = /^\d+$/.test(String(folder.videos)) ? Number(folder.videos) : NaN;
+    return { id, name: folder.name.trim(), count: Number.isSafeInteger(count) ? count : null };
   });
 }
 
@@ -49,6 +50,9 @@ export async function vidaraVideos(id, key, fetcher = globalThis.fetch) {
   let pages, total;
   for (let page = 1; page <= (pages ?? 1); page++) {
     const data = await vidaraApi('videos', { id, page }, key, fetcher);
+    if (data.complete_inventory !== true) {
+      throw Error('Sustituye calamar-vidara.php por la versión nueva en el hosting y vuelve a buscar.');
+    }
     const count = Number(data.total), lastPage = Number(data.total_pages);
     if (!Array.isArray(data.videos) || data.total == null || data.total_pages == null || !Number.isSafeInteger(count) || count < 0
         || !Number.isSafeInteger(lastPage) || lastPage < 0 || lastPage > 250
@@ -64,7 +68,10 @@ export async function vidaraVideos(id, key, fetcher = globalThis.fetch) {
         throw Error('Vidara devolvió un vídeo duplicado o no válido. No se ha actualizado el catálogo.');
       }
       seen.add(code);
-      files.push({ code, title: video.title, link: vidaraVideo(code), uploaded: String(video.uploaded || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '' });
+      const unavailable = ['blocked', 'error'].includes(String(video.status).toLowerCase())
+        || ['0', 'false'].includes(String(video.file_active));
+      files.push({ code, title: video.title, link: vidaraVideo(code), unavailable,
+        uploaded: String(video.uploaded || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '' });
     }
   }
   if (files.length !== total) throw Error('Faltan vídeos en la lista de Vidara. No se ha actualizado el catálogo.');

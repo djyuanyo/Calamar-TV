@@ -998,22 +998,32 @@ try {
     await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
   });
   await vidaraPage.route('https://api.themoviedb.org/**', route => route.fulfill({ json: { results: [] } }));
+  let updatedVidaraBridge = false;
   await vidaraPage.route('https://calamarmenciano.com/calamar-vidara.php', route => {
     const body = new URLSearchParams(route.request().postData());
     assert.equal(route.request().method(), 'POST');
     assert.equal(body.get('key'), 'vidara-test-key');
-    const json = body.get('action') === 'folders' ? { folders: [{ fld_id: 5, name: 'Cine' }] }
-      : { page: 1, total_pages: 1, total: 1, videos: [{ filecode: 'KILxn38HjQjsv', title: 'Película Vidara 2024.mp4' }] };
+    const json = body.get('action') === 'folders' ? { folders: [{ fld_id: 5, name: 'Películas', videos: 2 }] }
+      : updatedVidaraBridge ? { complete_inventory: true, page: 1, total_pages: 1, total: 2, videos: [
+        { filecode: 'KILxn38HjQjsv', title: 'Película Vidara 2024.mp4', file_active: 1 },
+        { filecode: 'VIDQUEUE1234', title: 'Película en cola.mp4', file_active: 0 },
+      ] } : { page: 1, total_pages: 0, total: 0, videos: [] };
     return route.fulfill({ json, headers: { 'Access-Control-Allow-Origin': '*' } });
   });
   await vidaraPage.goto(base + '/#/admin/biblioteca');
   await vidaraPage.locator('summary', { hasText: 'Configuración' }).click();
   await vidaraPage.getByLabel('Clave de Vidara', { exact: true }).fill('vidara-test-key');
   await vidaraPage.getByRole('button', { name: 'Guardar clave de Vidara', exact: true }).click();
-  const category = vidaraPage.getByLabel('Categoría para Cine', { exact: true });
+  const category = vidaraPage.getByLabel('Categoría para Películas', { exact: true });
   await category.waitFor();
   assert.equal(await category.inputValue(), 'movies');
+  await vidaraPage.getByText('Archivos en Vidara · 2', { exact: true }).waitFor();
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await vidaraPage.getByText(/Sustituye calamar-vidara.php/).waitFor();
+  assert.deepEqual(await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
+  updatedVidaraBridge = true;
+  await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await vidaraPage.getByText(/2 archivos detectados \(1 sin reproducción disponible\)/).waitFor();
   await vidaraPage.waitForFunction(() => window.__libraryParts.parts['movies-0'].items.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
   assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
   await vidaraPage.close();
