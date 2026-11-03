@@ -45,5 +45,29 @@ export const recordMember=async()=>{};
 export const setUserBlocked=async(uid,blocked)=>{blocks.set(uid,blocked);window.__lastUserBlock={uid,blocked};for(const next of blockWatchers.get(uid)||[])next(blocked);};
 window.__setUserBlocked=setUserBlocked;
 export const readUserDirectory=async()=>({members:[{uid:'admin-fixture',name:'Administrador',email:'admin@example.com',provider:'google.com'},{uid:'member-fixture',name:'Álvaro',email:'alvaro@example.com',provider:'password',registeredAt:1760000000000,lastSeen:1790000000000}],profiles:[{uid:'member-fixture',json:JSON.stringify({profiles:[{id:'main',name:'Alvaro'}]})}],access:[...blocks].map(([uid,blocked])=>({uid,blocked}))});
+const privateHistory = new Map(), liveViewers = new Map();
+window.__privateHistory = [];
+export const showViewing = async (record, first) => {
+  if (first) privateHistory.set(record.id, {...record, startedAt: Date.now()});
+  liveViewers.set(record.id, record);
+  window.__privateHistory = [...privateHistory.values()];
+  return true;
+};
+export const hideViewing = async (record, finished) => {
+  liveViewers.delete(record.id);
+  if (finished && privateHistory.has(record.id)) privateHistory.get(record.id).endedAt = Date.now();
+  window.__privateHistory = [...privateHistory.values()];
+};
+export const readUserDetails = async uid => {
+  const directory = await readUserDirectory();
+  const member = directory.members.find(m => m.uid === uid);
+  return member && {...member, blocked: blocks.get(uid) === true, profiles: uid === 'member-fixture'
+    ? [{id: 'main', name: 'Álvaro', data: {favorites: {'sport-one': {at: Date.now()}}}}] : []};
+};
+export const readViewingHistory = async uid => ({entries: [...privateHistory.values()].filter(v => v.uid === uid), cursor: null});
+export const readLiveViewers = async () => [
+  ...[...liveViewers.values()].map(record => ({...record, name: 'Álvaro'})),
+  {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'tv', target: 'c:sport-one'},
+];
 window.__setAuthFixture=user=>{auth.currentUser=user;for(const cb of window.__authWatchers||[])cb(user);};
 `;

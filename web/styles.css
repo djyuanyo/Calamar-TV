@@ -1424,14 +1424,39 @@ body.gate-open { overflow: hidden; }
 
 /* Admission screens use the existing account form and keep account/administrator access reachable. */
 .access-locked .nav, .access-locked .top .search, .access-locked .hero, .access-locked .skip { display: none !important; }
-.access-switch { display: flex; gap: 12px; align-items: center; margin: 18px 0; }
-.access-switch input { width: 24px; height: 24px; accent-color: var(--accent); }
-.users-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; }
-.users-tools input { flex: 1; min-width: 220px; background: var(--surface); color: var(--fg); border: 1px solid #ffffff30; border-radius: 10px; padding: 12px; }
-.users-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
-.user-card { padding: 18px; border: 1px solid #ffffff26; border-radius: 14px; background: #ffffff06; overflow-wrap: anywhere; }
-.user-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+/* Users are scanned as compact cards; account data lives in its own view. */
+.users-page { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+.users-page [hidden] { display: none !important; }
+.users-page h1, .users-page h2, .users-page h3, .users-page p { margin-block: 0; }
+.user-back { justify-self: start; text-decoration: none; }
+.user-surface, .user-card { padding: 18px; border: 1px solid #ffffff26; border-radius: 14px; background: #ffffff07; overflow-wrap: anywhere; }
+.user-surface { display: grid; gap: 14px; }
+.access-switch { display: flex; gap: 12px; align-items: center; }
+.access-switch input { width: 24px; height: 24px; accent-color: var(--accent); flex: none; }
+.users-tools { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.users-tools input { flex: 1 1 175px; min-width: 0; background: var(--surface, #191d23); color: var(--fg); border: 1px solid #ffffff30; border-radius: 10px; padding: 12px; font: inherit; }
+.users-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; margin-top: 10px; }
+.user-card { display: grid; gap: 12px; align-content: space-between; }
+.user-card-head { display: flex; align-items: center; gap: 10px; }
+.user-initial { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: #bfff0024; color: var(--accent); font-weight: 800; }
+.user-identity { flex: 1; min-width: 0; }
+.user-identity h3 { font-size: 16px; }
+.user-identity p { color: var(--muted); font-size: 13px; }
+.user-card > a { justify-self: start; }
+.user-detail { display: grid; gap: 14px; }
+.user-facts { display: grid; grid-template-columns: minmax(105px, auto) 1fr; gap: 8px 12px; margin: 0; }
+.user-facts dt, .user-entries small, .stats-viewer-names small { color: var(--muted); }
+.user-facts dd { margin: 0; }
+.user-access-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .user-status { font-size: 12px; border: 1px solid #ffffff35; border-radius: 20px; padding: 4px 9px; }
 .user-status.blocked { color: #ff9191; border-color: #ff616170; }
-.user-card dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 13px; }
-.user-card dt { color: var(--muted); } .user-card dd { margin: 0; }
+.user-entries { list-style: none; padding: 0; margin: 8px 0 0; }
+.user-entries li { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid #ffffff14; }
+.user-entries li:last-child { border-bottom: 0; }
+.user-favorites summary { font-weight: 700; cursor: pointer; }
+.user-day + .user-day { margin-top: 12px; }
+.user-day h3 { color: var(--muted); font-size: 14px; }
+.stats-rank li.stats-watching { display: grid; gap: 5px; }
+.stats-watching > div, .stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+.stats-viewer-names { list-style: none; margin: 0 0 6px; padding: 6px 10px; border-left: 2px solid #ffffff2a; }
+.stats-viewer-names a { overflow-wrap: anywhere; }

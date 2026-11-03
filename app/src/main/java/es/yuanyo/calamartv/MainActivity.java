@@ -75,6 +75,61 @@ public class MainActivity extends Activity {
       };
 
   AppLink pendingAppLink;
+  private Runnable stopAccess;
+  private boolean contentAdmitted;
+  private final List<Dialog> contentDialogs = new ArrayList<>();
+
+  private void showAccess(AppAccess.State state) {
+    if (isFinishing() || isDestroyed()) return;
+    if (state == AppAccess.State.ALLOWED) {
+      if (!contentAdmitted) {
+        contentAdmitted = true;
+        home();
+        if (Profiles.needsPick()) profileGate();
+        if (resumed) resumeContent();
+      }
+      return;
+    }
+    if (contentAdmitted) {
+      contentAdmitted = false;
+      if (gate != null) gate.dismiss();
+      for (Dialog dialog : new ArrayList<>(contentDialogs)) dialog.dismiss();
+      contentDialogs.clear();
+      pauseContent();
+    }
+    LinearLayout screen = new LinearLayout(this);
+    screen.setOrientation(LinearLayout.VERTICAL);
+    screen.setGravity(Gravity.CENTER);
+    screen.setPadding(dp(24), dp(24), dp(24), dp(24));
+    screen.setBackgroundColor(Ui.BG);
+    screen.setFitsSystemWindows(true);
+    screen.addView(label("Calamar TV", 30, FG));
+    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido"
+        : state == AppAccess.State.LOGIN ? "Inicia sesión o crea una cuenta para continuar."
+        : state == AppAccess.State.ERROR ? "No se pudo comprobar el acceso." : "Comprobando acceso…";
+    TextView note = label(message, 17, MUTED);
+    note.setGravity(Gravity.CENTER);
+    screen.addView(note);
+    if (state != AppAccess.State.LOADING) {
+      boolean retry = state == AppAccess.State.ERROR;
+      Button action = Ui.pill(this, retry ? "Reintentar" : state == AppAccess.State.BLOCKED ? "Mi cuenta" : "Iniciar sesión o registrarse", Ui.Kind.ACCENT, true);
+      action.setOnClickListener(v -> {
+        if (retry) AppAccess.retry(this);
+        else startActivity(new Intent(this, AccountActivity.class));
+      });
+      screen.addView(action);
+      action.requestFocus();
+    }
+    setContentView(screen);
+  }
+
+  private void showContentDialog(Dialog dialog) {
+    if (!contentAdmitted) return;
+    contentDialogs.removeIf(d -> !d.isShowing());
+    contentDialogs.add(dialog);
+    dialog.show();
+  }
+
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -93,10 +148,8 @@ public class MainActivity extends Activity {
     // Accounts and profiles: «Elige tu perfil» each time the app opens, and each profile's own rows.
     Profiles.start(this);
     Profiles.listen(profilesChanged);
-    home();
     receiveAppLink(getIntent());
-    // A signed-in account: «Elige tu perfil» at once, with the profiles kept on this device.
-    if (Profiles.needsPick()) profileGate();
+    stopAccess = AppAccess.observe(this, this::showAccess);
   }
 
   @Override protected void onNewIntent(Intent intent) {
@@ -112,7 +165,7 @@ public class MainActivity extends Activity {
     pendingAppLink = link;
     handler.post(this::openPendingAppLink);
     handler.postDelayed(() -> {
-      if (pendingAppLink == link && !Profiles.needsPick()) {
+      if (pendingAppLink == link && contentAdmitted && !Profiles.needsPick()) {
         pendingAppLink = null;
         Toast.makeText(this, "No se ha encontrado esta página. Actualiza el catálogo y vuelve a abrir el enlace.", Toast.LENGTH_LONG).show();
       }
@@ -121,7 +174,7 @@ public class MainActivity extends Activity {
 
   /** Keep a new shared page pending while the catalog loads or the viewer chooses a profile. */
   void openPendingAppLink() {
-    if (pendingAppLink == null || !resumed || Profiles.needsPick() || isFinishing()) return;
+    if (!contentAdmitted || pendingAppLink == null || !resumed || Profiles.needsPick() || isFinishing()) return;
     AppLink link = pendingAppLink;
     String destination = null;
     Catalog.Channel selected = null;
@@ -170,7 +223,7 @@ public class MainActivity extends Activity {
   /** «Elige tu perfil» while it is on screen. */
   Dialog gate;
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
-    if (isFinishing()) return;
+    if (isFinishing() || !contentAdmitted) return;
     syncFavorites();
     if (Profiles.needsPick()) profileGate();
     else if (gate != null && gate.isShowing()) gate.dismiss();
@@ -189,6 +242,7 @@ public class MainActivity extends Activity {
    * the account, «Añadir» and «Modificar». Once each time the app opens.
    */
   void profileGate() {
+    if (!contentAdmitted) return;
     if (gate != null && gate.isShowing()) return;
     FrameLayout root = new FrameLayout(this);
     root.setBackgroundColor(Ui.BG);
@@ -458,6 +512,7 @@ public class MainActivity extends Activity {
   }
 
   void home() {
+    if (!contentAdmitted) return;
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(dp(gutter()), 0, dp(gutter()), 0);
@@ -1308,6 +1363,7 @@ public class MainActivity extends Activity {
 
   /** Multi-screen: pick 2 to 4 channels or events (events first) and watch them together. */
   void pickMulti() {
+    if (!contentAdmitted) return;
     final List<Catalog.Channel> options = new ArrayList<>();
     for (Catalog.Channel c : Catalog.events(channels, custom)) if (directMedia(c)) options.add(c);
     for (Catalog.Channel c : channels) if (directMedia(c)) options.add(c);
@@ -1351,7 +1407,7 @@ public class MainActivity extends Activity {
       ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",AppSources.forAndroid(c.streams)));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
       dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
     });
-    multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});dialog.show();
+    multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});showContentDialog(dialog);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,-1);
     dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
@@ -1363,6 +1419,7 @@ public class MainActivity extends Activity {
   }
 
   void open(Catalog.Channel c) {
+    if (!contentAdmitted) return;
     if (isLibraryHero(c)) { openLibraryHero(c, false); return; }
     if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis())){Toast.makeText(this,"El evento ha finalizado",Toast.LENGTH_SHORT).show();return;}
     if (c.pending) {
@@ -1424,10 +1481,15 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
+    resumed = false;
+    pauseContent();
+  }
+
+  private void pauseContent() {
     if (trailerPreview != null) { trailerPreview.evaluateJavascript("window.pauseTrailer && window.pauseTrailer()", null); trailerPreview.onPause(); }
     if (updater != null) updater.pause();
     sharedSession++;
-    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
+    handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
     handler.removeCallbacks(searchRender);
     if (sharedListener != null) {
@@ -1438,6 +1500,11 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
+    resumed = true;
+    if (contentAdmitted) resumeContent();
+  }
+
+  private void resumeContent() {
     if (trailerPreview != null) trailerPreview.onResume();
     if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
@@ -1445,7 +1512,7 @@ public class MainActivity extends Activity {
     // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
     if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }
-    resumed = true; handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
+    handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (!television && heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);
@@ -1510,6 +1577,7 @@ public class MainActivity extends Activity {
 
   protected void onDestroy() {
     Profiles.forget(profilesChanged);
+    if (stopAccess != null) stopAccess.run();
     if (gate != null && gate.isShowing()) gate.dismiss();
     if (updater != null) updater.close();
     handler.removeCallbacksAndMessages(null);
@@ -1976,6 +2044,7 @@ public class MainActivity extends Activity {
   private android.webkit.WebView trailerPreview;
 
   void libraryDetail(final String section, final Library.Item item) {
+    if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(0xff000000);
@@ -2196,7 +2265,7 @@ public class MainActivity extends Activity {
     if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
 
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
-    dialog.show();
+    showContentDialog(dialog);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
     dialog.getWindow().setLayout(-1, -1);
   }
@@ -2244,7 +2313,7 @@ public class MainActivity extends Activity {
       final List<Integer> numbers = new ArrayList<>(seasons.keySet());
       String[] labels = new String[numbers.size()];
       for (int i = 0; i < labels.length; i++) labels[i] = "Temporada " + numbers.get(i);
-      new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { current[0] = numbers.get(which); draw.run(); }).show();
+      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { current[0] = numbers.get(which); draw.run(); }).create());
     });
     draw.run();
     LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
@@ -2469,7 +2538,7 @@ public class MainActivity extends Activity {
     }
     if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
-    dialog.show();
+    showContentDialog(dialog);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
     dialog.getWindow().setLayout(-1, -1);
   }
@@ -2481,6 +2550,7 @@ public class MainActivity extends Activity {
    * count in the channel audience. When one ends the player says so and the next episode starts.
    */
   void playEntry(JSONObject entry, boolean restart) {
+    if (!contentAdmitted) return;
     if (entry.optString("url").isEmpty()) {
       // Left half watched on another device: the link and the marks come from the library.
       JSONObject full = libraryEntry(entry);
@@ -2494,7 +2564,7 @@ public class MainActivity extends Activity {
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
     String anon = Library.Media.anonmp4(url);
-    if (anon != null) { embedPlayer(entry.optString("title"), anon); return; }
+    if (anon != null) { embedPlayer(entry.optString("title"), anon, AudienceModel.libraryTarget(entry.optString("item"))); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     // What the profile watches feeds «Recomendado para ti».
     if (Profiles.signedIn() && Profiles.active() != null && !entry.optString("section").isEmpty())
@@ -2518,7 +2588,8 @@ public class MainActivity extends Activity {
    * AnonMP4: its embed page (the address its API gives for other sites) with its own player, full screen.
    * Back closes it. «Continuar viendo» cannot know where it was left, as the player is AnonMP4's.
    */
-  void embedPlayer(String title, String address) {
+  void embedPlayer(String title, String address, String target) {
+    if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
     final FrameLayout box = new FrameLayout(this);
     box.setBackgroundColor(0xff000000);
@@ -2552,8 +2623,26 @@ public class MainActivity extends Activity {
     });
     box.addView(web, new FrameLayout.LayoutParams(-1, -1));
     dialog.setContentView(box);
-    dialog.setOnDismissListener(d -> { web.loadUrl("about:blank"); web.destroy(); });
-    dialog.show();
+    AudienceSession audience = new AudienceSession(this, target, null, title, null);
+    Runnable measure = new Runnable() {
+      @Override public void run() {
+        if (!dialog.isShowing()) return;
+        if (resumed && contentAdmitted) {
+          web.evaluateJavascript("(function(){var v=document.querySelector('video');return !!v&&!v.paused&&v.readyState>=2})()",
+              playing -> audience.watching(resumed && contentAdmitted && "true".equals(playing)));
+        } else audience.watching(false);
+        handler.postDelayed(this, 2000);
+      }
+    };
+    dialog.setOnDismissListener(d -> {
+      handler.removeCallbacks(measure);
+      audience.close();
+      web.loadUrl("about:blank");
+      web.destroy();
+    });
+    audience.open();
+    handler.post(measure);
+    showContentDialog(dialog);
     web.loadUrl(address);
     web.requestFocus();
     Toast.makeText(this, title, Toast.LENGTH_SHORT).show();

@@ -1,4 +1,4 @@
-// Web admission is independent of Android guest playback. Missing settings require a real account.
+// The same policy is used on the web, Android and Android TV. Missing settings require a real account.
 export const DEFAULT_WEB_ACCESS = Object.freeze({ requireLogin: true });
 export const webPolicy = value => ({ requireLogin: value?.requireLogin !== false });
 export const registeredAccount = user => !!user && user.isAnonymous !== true && user.pending !== true;
@@ -14,9 +14,10 @@ export function accessDecision(s) {
 export function mergeUserDirectory(members, profiles, access) {
   const rows = new Map(profiles.map(p => {
     let account = {}; try { account = JSON.parse(p.json || '{}'); } catch {}
-    return [p.uid, { uid: p.uid, name: account.profiles?.[0]?.name || 'Usuario', profileCount: account.profiles?.length || 0 }];
+    const profiles = Array.isArray(account?.profiles) ? account.profiles : [];
+    return [p.uid, { uid: p.uid, name: profiles[0]?.name || 'Usuario', profileCount: profiles.length }];
   }));
-  for (const member of members) rows.set(member.uid, { ...rows.get(member.uid), ...member });
+  for (const member of members) rows.set(member.uid, { ...rows.get(member.uid), ...member, name: member.name || rows.get(member.uid)?.name });
   for (const status of access) rows.set(status.uid, { ...rows.get(status.uid), uid: status.uid, blocked: status.blocked === true });
   return [...rows.values()].sort((a,b) => String(a.name || a.email || a.uid).localeCompare(String(b.name || b.email || b.uid), 'es'));
 }

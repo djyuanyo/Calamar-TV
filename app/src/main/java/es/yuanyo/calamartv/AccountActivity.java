@@ -467,6 +467,7 @@ public class AccountActivity extends Activity {
     tabs.addView(tab("Iniciar sesión", !creating, () -> { creating = false; signIn(); }), new LinearLayout.LayoutParams(0, dp(46), 1));
     tabs.addView(tab("Crear cuenta", creating, () -> { creating = true; byQr = false; stopPhoneLogin(); signIn(); }), new LinearLayout.LayoutParams(0, dp(46), 1));
     card.addView(tabs, new LinearLayout.LayoutParams(-1, -2));
+    body.addView(label("Con tu cuenta, el historial de reproducción y la actividad en directo se muestran en administración.", 13, Ui.MUTED));
     TextView title = label(creating ? "Crea tu cuenta" : "Entra", 32, Ui.FG);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setPadding(0, dp(22), 0, dp(2));

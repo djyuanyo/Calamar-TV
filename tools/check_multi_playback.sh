@@ -11,7 +11,7 @@ if [ "${1:-mobile}" = tv ]; then
     adb exec-out run-as es.yuanyo.calamartv cat files/multi-focus.png > app/build/reports/androidTests/connected/multi-focus.png || true
     exit 1
   }
-  gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest,es.yuanyo.calamartv.AppLinksTest,es.yuanyo.calamartv.IptvHostedPlaybackTest,es.yuanyo.calamartv.HttpIptvDataSourceTest
+  gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest,es.yuanyo.calamartv.AppAdmissionTest,es.yuanyo.calamartv.AppLinksTest,es.yuanyo.calamartv.IptvHostedPlaybackTest,es.yuanyo.calamartv.HttpIptvDataSourceTest
 else
   gradle --no-daemon :app:connectedDebugAndroidTest
 fi
