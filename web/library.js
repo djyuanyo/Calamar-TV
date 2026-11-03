@@ -7,7 +7,8 @@ import { youtubeId, trailerId } from './trailer.js';
 // `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded,
+  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { scanFolders, folderReference } from './library-folders.js';
 import { videoKey } from './library-sync.js';
@@ -1003,8 +1004,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
     try {
       const { info, seasons } = await tmdbDetails(tmdbId, kind, tmdbKey());
-      const id = `${kind === 'tv' ? 's' : 'm'}${info.id}`;
-      const existing = Object.values(current.sections).flat().find((item) => item.id === id);
+      const existing = findTmdbTitle(current.sections, kind, info.id);
+      const id = existing?.id || freeTmdbTitleId(current.sections, kind, info.id);
       const inSection = existing ? sectionOf(id) : section;
       const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
       const del = existing ? el('button', { class: 'ghost danger', type: 'button', onclick: async () => {
@@ -1023,7 +1024,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             if (!link.value.trim()) throw new Error('Pega el enlace del vídeo.');
             checkLinks([link]);
             save.disabled = true; note.textContent = 'Guardando…';
-            await upsert(where.value, movieItem(info, link.value.trim()));
+            await upsert(where.value, movieItem(info, link.value.trim(), id));
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
@@ -1033,18 +1034,24 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         return;
       }
       // Series: choose the season, then paste the link of each episode.
-      const seasonPick = el('select', { 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: s.season },
+      const tmdbSeasons = new Set(seasons.map(s => s.season));
+      const extraSeasons = [...new Set((existing?.episodes || []).map(e => e.season))]
+        .filter(season => !tmdbSeasons.has(season)).map(season => ({ season, name: `Temporada ${season}` }));
+      const editableSeasons = [...seasons, ...extraSeasons];
+      const seasonPick = el('select', { 'aria-label': 'Temporada' }, editableSeasons.map((s) => el('option', { value: s.season },
         `${s.name}${s.episodes ? ` · ${s.episodes} capítulos` : ''}${(existing?.episodes || []).some((e) => e.season === s.season) ? ' ✓' : ''}`)));
-      const firstWithLinks = seasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
-      seasonPick.value = String((firstWithLinks || seasons.find((s) => s.season > 0) || seasons[0])?.season ?? 1);
+      const firstWithLinks = editableSeasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
+      seasonPick.value = String((firstWithLinks || editableSeasons.find((s) => s.season > 0) || editableSeasons[0])?.season ?? 1);
       const rows = el('div', { class: 'library-episodes' });
       let episodes = [], inputs = {};
       const loadSeason = async () => {
         rows.replaceChildren(el('p', { class: 'note' }, 'Cargando capítulos…'));
         const season = Number(seasonPick.value);
         try {
-          episodes = await seasonEpisodes(info.id, season, tmdbKey());
-          const saved = new Map((current.sections[sectionOf(id)] || []).find((item) => item.id === id)?.episodes?.filter((e) => e.season === season).map((e) => [e.episode, e.url]) || []);
+          episodes = tmdbSeasons.has(season) ? await seasonEpisodes(info.id, season, tmdbKey()) : [];
+          const savedEpisodes = (current.sections[sectionOf(id)] || []).find(item => item.id === id)?.episodes?.filter(e => e.season === season) || [];
+          episodes = [...episodes, ...savedEpisodes.filter(e => !episodes.some(found => found.episode === e.episode))].sort((a, b) => a.episode - b.episode);
+          const saved = new Map(savedEpisodes.map(e => [e.episode, e.url]));
           inputs = Object.fromEntries(episodes.map((e) => [e.episode, linkInput(saved.get(e.episode), `Enlace del capítulo ${e.episode}`)]));
           rows.replaceChildren(...episodes.map((e) => el('label', { class: 'library-episode-row' },
             el('span', {}, el('b', {}, `${e.episode}.`), ` ${e.name || `Capítulo ${e.episode}`}`), inputs[e.episode])));
@@ -1058,7 +1065,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
           const links = Object.fromEntries(Object.entries(inputs).map(([n, input]) => [n, input.value]));
           const season = Number(seasonPick.value);
           const before = Object.values(current.sections).flat().find((item) => item.id === id);
-          const item = seriesWithSeason(before, info, season, episodes, links);
+          const item = seriesWithSeason(before, info, season, episodes, links, id);
           if (!item.episodes.length) throw new Error('Pega el enlace de al menos un capítulo.');
           save.disabled = true; note.textContent = 'Guardando…';
           await upsert(where.value, item);
@@ -1258,8 +1265,9 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   function openMatcher(sectionKey, item) {
     editor.hidden = false;
     const kind = item.kind === 'tv' ? 'tv' : 'movie';
-    const words = el('input', { type: 'search', value: item.title || '', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar su ficha en TMDB' });
-    let lookup = 0;
+    const correcting = !unidentifiedItem(item);
+    const words = el('input', { type: 'search', value: itemTitle(item) || '', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar su ficha en TMDB' });
+    let lookup = 0, applying = false;
     const found = el('div', { class: 'library-results' });
     const note = el('p', { class: 'note', role: 'status' });
     const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
@@ -1269,7 +1277,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } }, 'Quitar');
     const search = async (event) => {
       event?.preventDefault();
-      if (!words.value.trim()) return;
+      if (applying || !words.value.trim()) return;
       const request = ++lookup;
       found.replaceChildren(el('p', { class: 'note' }, 'Buscando…'));
       try {
@@ -1282,11 +1290,26 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       } catch (error) { if (request === lookup) found.replaceChildren(el('p', { class: 'error' }, error.message)); }
     };
     const choose = async (r) => {
+      if (applying) return;
+      applying = true;
       lookup++;
-      found.replaceChildren(); note.textContent = 'Pasando los enlaces a la ficha de TMDB…';
+      note.textContent = 'Guardando la ficha de TMDB…';
       try {
-        const existing = Object.values(current.sections).flat().find((x) => x.id === `${kind === 'tv' ? 's' : 'm'}${r.id}`);
-        const next = keepArtwork(item, await matchUnmatched(item, r.id, existing, tmdbKey()));
+        const latest = current.sections[sectionKey]?.find(x => x.id === item.id);
+        if (!latest) throw new Error('Este título ya no está en el catálogo.');
+        const existing = findTmdbTitle(current.sections, kind, r.id);
+        if (correcting) {
+          if (existing?.id === item.id) { note.textContent = 'Esta ficha ya está vinculada al título.'; return; }
+          if (existing) throw new Error(`La ficha ya está vinculada a «${itemTitle(existing)}» en el catálogo.`);
+          const next = keepArtwork(latest, await correctTmdbTitle(latest, r.id, tmdbKey()));
+          if (!found.isConnected) return;
+          await upsert(sectionKey, next);
+          say(`Ficha corregida. «${itemTitle(next)}» conserva sus enlaces de vídeo.`);
+          openTitleEditor(sectionKey, next);
+          return;
+        }
+        const id = existing?.id || freeTmdbTitleId(current.sections, kind, r.id);
+        const next = keepArtwork(latest, await matchUnmatched(latest, r.id, existing, tmdbKey(), globalThis.fetch, id));
         const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id && x.id !== next.id)]));
         const where = existing ? sectionOf(existing.id) : sectionKey;
         sections[where] = [...sections[where], next].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
@@ -1294,15 +1317,19 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         say(`«${item.title}» es ahora «${itemTitle(next)}», con ${kind === 'tv' ? `sus ${item.episodes.length} capítulos` : 'su vídeo'}.`);
         await openEditor(where, r.id, kind);
       } catch (error) { note.textContent = error.message; }
+      finally { applying = false; }
     };
     editor.replaceChildren(
       el('div', { class: 'library-editor-head' }, el('span', { class: 'thumb' }),
-        el('div', {}, el('h3', {}, item.title), el('p', { class: 'note' },
-          `Sin ficha de TMDB. ${kind === 'tv' ? `Carpeta «${item.folder || item.title}», ${item.episodes.length} capítulos.` : `Archivo «${item.file || item.title}».`} Busca su ficha o pega su enlace de TMDB y elígela: ${kind === 'tv' ? 'los capítulos' : 'el vídeo'} pasarán a ella.`))),
+        el('div', {}, el('h3', {}, correcting ? `Corregir ficha de TMDB · ${itemTitle(item)}` : itemTitle(item)),
+          correcting ? el('a', { href: `https://www.themoviedb.org/${kind}/${Number(item.tmdb.id)}`, target: '_blank', rel: 'noopener noreferrer' }, `Ver ficha actual de TMDB · ${item.tmdb.id}`) : null,
+          el('p', { class: 'note' }, correcting
+            ? 'Busca el título correcto o pega el enlace exacto de TMDB. Al elegir la ficha se conservan los vídeos y el progreso.'
+            : `Sin ficha de TMDB. ${kind === 'tv' ? `Carpeta «${item.folder || item.title}», ${item.episodes.length} capítulos.` : `Archivo «${item.file || item.title}».`} Busca su ficha o pega su enlace de TMDB y elígela.`))),
       el('form', { class: 'library-search-form', onsubmit: search }, el('div', { class: 'library-search-row' }, words, el('button', { class: 'btn', type: 'submit' }, 'Buscar'))),
       found, el('div', { class: 'actions' }, del, close), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    search();
+    if (correcting) words.focus(); else search();
   }
 
   function openTitleEditor(sectionKey, item) {
@@ -1349,8 +1376,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     editor.replaceChildren(el('h3', {}, `Editar · ${itemTitle(item)}`),
       el('div', { class: 'library-art-grid' }, artwork('poster', 'Carátula', 'Imagen vertical para las tarjetas del catálogo.'), artwork('backdrop', 'Imagen de portada', 'Imagen horizontal para la cabecera y el enlace compartido.')),
       el('div', { class: 'actions' }, save, del,
-        unidentifiedItem(item) ? el('button', { type: 'button', class: 'ghost', onclick: () => openMatcher(sectionKey, item) }, 'Buscar en TMDB')
-          : el('button', { type: 'button', class: 'ghost', onclick: () => openEditor(sectionKey, item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar enlaces y temporadas'),
+        el('button', { type: 'button', class: 'ghost', onclick: () => openMatcher(sectionKey, item) },
+          unidentifiedItem(item) ? 'Buscar en TMDB' : 'Corregir ficha de TMDB'),
+        unidentifiedItem(item) ? null : el('button', { type: 'button', class: 'ghost',
+          onclick: () => openEditor(sectionKey, item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar enlaces y temporadas'),
         el('button', { type: 'button', class: 'ghost', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }

@@ -27,7 +27,7 @@ export function vidaraCode(address) {
 }
 
 export const vidaraVideo = code => `https://vidara.to/v/${code}`;
-export function vidaraEmbed(address) {
+export function vidaraPlayback(address) {
   const code = vidaraCode(address);
-  return code ? `https://vidara.to/e/${code}` : null;
+  return code ? `https://calamarmenciano.com/calamar-vidara.php?code=${code}&hls=1` : null;
 }

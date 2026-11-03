@@ -24,9 +24,10 @@ public final class CastSource {
     return null;
   }
 
-  /** A LuluStream film through the hosting (calamar-lulu.php): an HLS list the TV can read, not live. */
+  /** A provider film through the hosting: an HLS list the TV can read, not live. */
   public static boolean onDemand(String address) {
-    return address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1");
+    return ProviderPlayers.isVidaraStream(address)
+        || (address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1"));
   }
 
   public static boolean live(String type) {

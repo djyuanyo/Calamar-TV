@@ -644,6 +644,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(renewal);
     final int request = ++generation;
     status.setText("Buscando una fuente de vídeo vigente…");
+    String vidaraStream = ProviderPlayers.vidaraStream(pageUrl);
+    if (vidaraStream != null) {
+      resolving = false;
+      sources.clear();
+      sources.add(new VideoResolver.Source("Vídeo", vidaraStream));
+      selection = 0;
+      updateSourceButton();
+      playSource(sources.get(0));
+      return;
+    }
     if (VideoResolver.isMedia(pageUrl)) {
       resolving = false;
       sources.clear();
@@ -1012,7 +1022,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     MediaItem.Builder item = new MediaItem.Builder().setUri(source.url);
     String path = Uri.parse(source.url).getPath();
-    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+    if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT)
+        || ProviderPlayers.isVidaraStream(source.url) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
     if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
@@ -1145,7 +1156,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (++automaticAttempts > limit || (directUrl == null && VideoResolver.isMedia(pageUrl))) {
       // Every video of this source failed: the channel's next source, if it has one.
       if (switchChannelSource()) return;
-      if (footballFallback && directUrl == null) {
+      if (footballFallback && directUrl == null && ProviderPlayers.vidara(pageUrl) == null) {
         openWeb();
         status.setText("La fuente directa falló. Modo web del proveedor.");
         return;

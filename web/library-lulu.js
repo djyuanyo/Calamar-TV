@@ -5,7 +5,7 @@ import { keepArtwork } from './library-art.js';
 // The key lives only in the admin-only settings; when the browser cannot call the API directly
 // (CORS), the request goes through the hosting (calamar-lulu.php), which only relays the JSON.
 import { LULU_ENDPOINT } from './catalog.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason } from './library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, findTmdbTitle, freeTmdbTitleId } from './library-tmdb.js';
 import { videoKey as codeOf, managedByScan, reconcileScan } from './library-sync.js';
 
 // LuluStream moved to luluvido.com (lulustream.com stopped answering): the same API, tried there first.
@@ -235,27 +235,27 @@ export const unmatchedSeries = (s) => {
  * Gives a series the episode links [{ season, episode, link }] with TMDB's names, season by season. Links
  * already saved in those seasons stay unless a new one replaces them; episodes TMDB does not list are kept.
  */
-export async function seriesWithLinks(item, info, links, key, fetcher) {
+export async function seriesWithLinks(item, info, links, key, fetcher, id) {
   for (const season of [...new Set(links.map((e) => e.season))].sort((a, b) => a - b)) {
     const mine = links.filter((e) => e.season === season);
     const known = await seasonEpisodes(info.id, season, key, fetcher).catch(() => []);
     const urls = Object.fromEntries((item?.episodes || []).filter((e) => e.season === season).map((e) => [e.episode, e.url]));
     for (const e of mine) urls[e.episode] = e.link;
     const list = [...known, ...Object.keys(urls).map(Number).filter((n) => !known.some((k) => k.episode === n)).map((n) => ({ episode: n, name: '', overview: '', still: '' }))];
-    item = seriesWithSeason(item, info, season, list, urls);
+    item = seriesWithSeason(item, info, season, list, urls, id);
   }
   return item;
 }
 
 /** A title without a TMDB record, matched by hand to TMDB's id: its links move to that record. */
-export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch) {
+export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch, id) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    return { ...item, ...movieItem(info, item.url) };
+    return { ...item, ...movieItem(info, item.url, existing?.id || id) };
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
   const base = { ...item, ...existing, episodes: [...(existing?.episodes || []).filter(e => !item.episodes.some(old => old.season === e.season && old.episode === e.episode)), ...item.episodes] };
-  const series = await seriesWithLinks(base, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher);
+  const series = await seriesWithLinks(base, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher, existing?.id || id);
   return { ...series, ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}), folder: item.folder || existing?.folder || info.title };
 }
 
@@ -332,13 +332,14 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
       continue;
     }
-    if (skipDuplicates && find(`m${match.id}`)) {
-      keepCopy(filmEntries().find((x) => x.item.id === `m${match.id}`), f.file, f.link);
+    const matchedTitle = findTmdbTitle(sections, 'movie', match.id);
+    if (skipDuplicates && matchedTitle) {
+      keepCopy(filmEntries().find((x) => x.item.id === matchedTitle.id), f.file, f.link);
       skipped.films++; continue;
     }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
     drop(unmatchedFilm(f).id);
-    put(f.section, arrived(movieItem(info, f.link)));
+    put(f.section, arrived(movieItem(info, f.link, matchedTitle?.id || freeTmdbTitleId(sections, 'movie', info.id))));
     films++;
   }
   // Older callers without complete folder inventories retain the historical mirror handling.
@@ -357,7 +358,8 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
-    let known = (skipDuplicates ? namedItem(sections, s, 'tv') : null) || byFolder.get(plain(s.folder)) || s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv');
+    let known = s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv')
+      || byFolder.get(plain(s.folder)) || (skipDuplicates ? namedItem(sections, s, 'tv') : null);
     if (skipDuplicates && known) {
       const latest = find(known.item.id) || known.item;
       const item = { ...latest, episodes: latest.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
@@ -386,7 +388,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
     }
     // Links pasted by hand stay; the folder adds or replaces its own episodes.
-    let before = find(`s${info.id}`) || (skipDuplicates ? known?.item : null);
+    let before = findTmdbTitle(sections, 'tv', info.id) || (skipDuplicates ? known?.item : null);
     if (skipDuplicates && before) {
       const section = Object.entries(sections).find(([, items]) => items.some(item => item.id === before.id))?.[0] || s.section;
       before = { ...before, episodes: before.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
@@ -400,7 +402,8 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       return !duplicate;
     }) : s.episodes;
     if (skipDuplicates && !incoming.length) continue;
-    const linked = await seriesWithLinks(before, info, incoming, key, fetcher);
+    const linked = await seriesWithLinks(before, info, incoming, key, fetcher,
+      before?.tmdb?.id ? before.id : freeTmdbTitleId(sections, 'tv', info.id));
     // Each episode arrived the day LuluStream received it (for «Nuevo episodio»).
     const uploads = new Map((skipDuplicates ? incoming : s.episodes).filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
     const item = linked && { ...linked, episodes: (linked.episodes || []).map(e => {

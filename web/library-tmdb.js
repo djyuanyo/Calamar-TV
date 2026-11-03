@@ -25,7 +25,11 @@ async function tmdb(path, params, key, fetcher, attempt = 1) {
   }
   if (response.status === 401) throw new Error('TMDB no acepta la clave. Revísala en Pelis y series → Configuración.');
   if ((response.status === 429 || response.status >= 500) && attempt < 2) { await wait(response.status === 429 ? 3000 : 1500); return tmdb(path, params, key, fetcher, attempt + 1); }
-  if (response.status !== 200 || !data) throw new Error('TMDB no responde ahora. Vuelve a intentarlo.');
+  if (response.status !== 200 || !data) {
+    const error = new Error(response.status === 404 ? 'TMDB no encuentra esa ficha.' : 'TMDB no responde ahora. Vuelve a intentarlo.');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 export const checkTmdbKey = (key, fetcher = globalThis.fetch) => tmdb('/configuration', {}, key, fetcher);
@@ -185,22 +189,52 @@ export async function seasonEpisodes(id, season, key, fetcher = globalThis.fetch
 }
 
 /** The library item of a film (or documentary film) with its video link. */
-export const movieItem = (info, url) => ({ id: `m${info.id}`, kind: 'movie', title: info.title, year: info.year, file: '', url, status: 'matched', tmdb: info });
+export const movieItem = (info, url, id = `m${info.id}`) => ({ id, kind: 'movie', title: info.title, year: info.year, file: '', url, status: 'matched', tmdb: info });
+
+export const findTmdbTitle = (sections, kind, id) => Object.values(sections).flat()
+  .find(item => item.kind === kind && item.status !== 'unmatched' && Number(item.tmdb?.id) === Number(id));
+
+/** Catalogue IDs are permanent even if their TMDB reference changes. */
+export function freeTmdbTitleId(sections, kind, id) {
+  const base = `${kind === 'tv' ? 's' : 'm'}${id}`;
+  const occupied = new Set(Object.values(sections).flat().map(item => item.id));
+  let candidate = base;
+  for (let n = 2; occupied.has(candidate); n++) candidate = `${base}-${n}`;
+  return candidate;
+}
+
+export async function correctTmdbTitle(item, tmdbId, key, fetcher = globalThis.fetch) {
+  const { info, seasons } = await tmdbDetails(tmdbId, item.kind, key, fetcher);
+  const { trend, ...previous } = item;
+  const next = { ...previous, title: info.title, year: info.year, status: 'matched', tmdb: info };
+  if (item.kind !== 'tv') return next;
+  const saved = item.episodes || [];
+  const catalogSeasons = new Set(seasons.map(s => s.season));
+  const seasonNumbers = [...new Set(saved.map(e => e.season))].filter(season => catalogSeasons.has(season));
+  const episodeData = new Map(await Promise.all(seasonNumbers.map(async season => [
+    season, new Map((await seasonEpisodes(info.id, season, key, fetcher)).map(e => [e.episode, e])),
+  ])));
+  next.episodes = saved.map(({ name, overview, still, runtime, aired, ...episode }) => ({
+    name: '', overview: '', still: '', ...episode, ...episodeData.get(episode.season)?.get(episode.episode),
+  }));
+  return next;
+}
 
 /**
  * A series with the links of one season saved: episodes of other seasons are kept, episodes of this season
  * take the new links, and an episode without a link is left out (it is not shown to viewers).
  */
-export function seriesWithSeason(existing, info, season, episodes, links) {
+export function seriesWithSeason(existing, info, season, episodes, links, id = existing?.tmdb?.id ? existing.id : `s${info.id}`) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
   const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => {
     const url = String(links[e.episode]).trim();
     const old = existing?.episodes?.find(saved => saved.season === season && saved.episode === e.episode && videoKey(saved.url) === videoKey(url));
-    return { ...old, id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
+    const episodeId = existing?.tmdb?.id && old?.id || `e${id.replace(/^s/, '')}x${season}x${e.episode}`;
+    return { ...old, id: episodeId, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
   });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
-  return { ...(existing || {}), id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };
+  return { ...(existing || {}), id, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };
 }
 
 /** The library in Firestore parts of up to ~850 KB: { index, parts: { 'movies-0': {...} } }. */

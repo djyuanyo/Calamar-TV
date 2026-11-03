@@ -1,8 +1,9 @@
 <?php
-// Read-only bridge for Vidara's API. The key arrives in POST and is not stored or returned.
+// Vidara catalogue and playback. The catalogue key arrives in POST and is never stored or returned.
 const VIDARA_ORIGINS = ['https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com'];
 const VIDARA_BASE = 'https://api.vidara.so/v1/';
-const VIDARA_BRIDGE = 3;
+const VIDARA_BRIDGE = 4;
+const VIDARA_PLAYER = 'https://vidara.to';
 
 function vidaraReply($body, $status = 200) {
     http_response_code($status);
@@ -10,12 +11,54 @@ function vidaraReply($body, $status = 200) {
     exit;
 }
 
+function vidaraHlsUrl($data, $code) {
+    $url = $data['streaming_url'] ?? null;
+    if (($data['filecode'] ?? null) !== $code || !is_string($url) || strlen($url) > 8192
+        || !filter_var($url, FILTER_VALIDATE_URL) || str_contains($url, chr(92))) return null;
+    $parts = parse_url($url);
+    if (($parts['scheme'] ?? '') !== 'https' || isset($parts['user']) || isset($parts['pass']) || isset($parts['port']) || isset($parts['fragment'])
+        || !preg_match('/^(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]+$/iD', $parts['host'] ?? '')
+        || preg_match('/\.(?:local|localhost|internal|test)$/iD', $parts['host'])
+        || !preg_match('/\.m3u8$/iD', $parts['path'] ?? '')) return null;
+    return $url;
+}
+
+function vidaraPlayback($code) {
+    if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,24}$/D', $code)) vidaraReply(['error' => 'video_code'], 400);
+    if (!function_exists('curl_init')) vidaraReply(['error' => 'curl'], 503);
+    $body = '';
+    $curl = curl_init(VIDARA_PLAYER . '/api/stream');
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode(['filecode' => $code, 'device' => 'web', 'codecs' => []]),
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'Origin: ' . VIDARA_PLAYER],
+        CURLOPT_REFERER => VIDARA_PLAYER . '/e/' . $code,
+        CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 12, CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_WRITEFUNCTION => function ($handle, $chunk) use (&$body) {
+            if (strlen($body) + strlen($chunk) > 65536) return 0;
+            $body .= $chunk;
+            return strlen($chunk);
+        },
+    ]);
+    $received = curl_exec($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    $url = $received && $status === 200 ? vidaraHlsUrl(json_decode($body, true), $code) : null;
+    if (!$url) vidaraReply(['error' => 'vidara_playback', 'upstream_http' => $status], 502);
+    header('Location: ' . $url, true, 302);
+    exit;
+}
+
+$method = $_SERVER['REQUEST_METHOD'] ?? '';
+$play = ($method === 'GET' || $method === 'HEAD' || $method === 'OPTIONS') && ($_GET['hls'] ?? '') === '1';
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin !== '' && !in_array($origin, VIDARA_ORIGINS, true)) {
+if ($origin !== '' && !$play && !in_array($origin, VIDARA_ORIGINS, true)) {
     http_response_code(403);
     exit;
 }
-if ($origin !== '') {
+if ($play) {
+    header('Access-Control-Allow-Origin: *');
+} elseif ($origin !== '') {
     header('Access-Control-Allow-Origin: ' . $origin);
     header('Vary: Origin');
 }
@@ -23,17 +66,18 @@ header('Cache-Control: no-store');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
-    header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
+if ($method === 'OPTIONS') {
+    header('Access-Control-Allow-Methods: GET, HEAD, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Range');
     http_response_code(204);
     exit;
 }
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && ($_GET['status'] ?? '') === '1') {
+if ($play) vidaraPlayback($_GET['code'] ?? '');
+if ($method === 'GET' && ($_GET['status'] ?? '') === '1') {
     vidaraReply(['curl' => function_exists('curl_init')]);
 }
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    header('Allow: POST, OPTIONS');
+if ($method !== 'POST') {
+    header('Allow: GET, HEAD, POST, OPTIONS');
     vidaraReply(['error' => 'method'], 405);
 }
 $key = $_POST['key'] ?? '';

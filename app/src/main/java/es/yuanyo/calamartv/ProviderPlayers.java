@@ -12,6 +12,7 @@ final class ProviderPlayers {
   private static final Pattern DM_VIDEO = Pattern.compile("/(?:embed/)?video/([A-Za-z0-9]{5,32})(?:_[^/]*)?/?");
   private static final Pattern DM_SHORT = Pattern.compile("/([A-Za-z0-9]{5,32})/?");
   private static final Pattern VIDARA_VIDEO = Pattern.compile("/(?:v/|e/)?([A-Za-z0-9]{8,24})/?");
+  private static final String VIDARA_PLAYBACK = "https://calamarmenciano.com/calamar-vidara.php?code=";
 
   private ProviderPlayers() {}
 
@@ -45,8 +46,15 @@ final class ProviderPlayers {
     return match.matches() ? "https://vidara.to/e/" + match.group(1) : null;
   }
 
-  static String embed(String address) {
-    String daily = dailymotion(address);
-    return daily != null ? daily : vidara(address);
+  static String vidaraStream(String address) {
+    String page = vidara(address);
+    return page == null ? null : VIDARA_PLAYBACK + page.substring(page.lastIndexOf('/') + 1) + "&hls=1";
   }
+
+  static boolean isVidaraStream(String address) {
+    return address != null && address.startsWith(VIDARA_PLAYBACK)
+        && address.substring(VIDARA_PLAYBACK.length()).matches("[A-Za-z0-9]{8,24}&hls=1");
+  }
+
+  static String embed(String address) { return dailymotion(address); }
 }

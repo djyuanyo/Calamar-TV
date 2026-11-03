@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts } from '../web/library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts,
+  correctTmdbTitle, findTmdbTitle, freeTmdbTitleId } from '../web/library-tmdb.js';
 import { lulustreamEmbed, webPlayback } from '../web/catalog.js';
 import { validVideoLink } from '../web/library.js';
 
@@ -10,6 +11,46 @@ const fake = (bodies, calls = []) => async (url, init) => {
   const body = Object.entries(bodies).find(([end]) => path.endsWith(end))?.[1];
   return body ? { status: 200, json: async () => body } : { status: 404, json: async () => ({}) };
 };
+
+test('correcting TMDB metadata keeps film IDs, catalogue links and artwork', async () => {
+  const old = { ...movieItem({ id: 6, title: 'Incorrecta' }, 'https://example.test/movie.mp4'),
+    artwork: { poster: 'https://example.test/poster.jpg' }, addedAt: '2026-10-20', featured: 1,
+    mirrors: ['https://example.test/copy.mp4'], folderSources: { video: ['vidara:5'] } };
+  const fixed = await correctTmdbTitle(old, 8, 'tmdb-key', fake({ '/movie/8': { title: 'Correcta', release_date: '2026-01-02' } }));
+  assert.equal(fixed.id, old.id);
+  assert.equal(fixed.url, old.url);
+  assert.deepEqual(fixed.mirrors, old.mirrors);
+  assert.deepEqual(fixed.folderSources, old.folderSources);
+  assert.deepEqual(fixed.artwork, old.artwork);
+  assert.equal(fixed.addedAt, old.addedAt);
+  assert.equal(fixed.featured, 1);
+  assert.deepEqual([fixed.tmdb.id, fixed.title], [8, 'Correcta']);
+  const sections = { documentaries: [fixed] };
+  assert.equal(findTmdbTitle(sections, 'movie', 8), fixed);
+  assert.equal(findTmdbTitle(sections, 'movie', 6), undefined);
+  assert.equal(freeTmdbTitleId(sections, 'movie', 6), 'm6-2');
+});
+
+test('correcting a series refreshes episode metadata while retaining its progress keys and all links', async () => {
+  const ep = { id: 'e6x1x1', season: 1, episode: 1, name: 'Incorrecto', url: 'https://example.test/episode.mp4',
+    mirrors: ['https://example.test/mirror.mp4'], runtime: 44 };
+  const extra = { id: 'e6x9x2', season: 9, episode: 2, name: 'Incorrecto', url: 'https://example.test/extra.mp4' };
+  const before = { id: 's6', kind: 'tv', tmdb: { id: 6 }, episodes: [ep, extra], skip: { intro: [15, 25] } };
+  const fixed = await correctTmdbTitle(before, 8, 'tmdb-key', fake({
+    '/tv/8': { name: 'Correcta', seasons: [{ season_number: 1 }] },
+    '/tv/8/season/1': { episodes: [{ episode_number: 1, name: 'Piloto' }] },
+  }));
+  assert.equal(fixed.id, before.id);
+  assert.deepEqual(fixed.skip, before.skip);
+  assert.deepEqual(fixed.episodes.map(e => [e.id, e.name, e.url]), [
+    [ep.id, 'Piloto', ep.url], [extra.id, '', extra.url],
+  ]);
+  assert.equal(fixed.episodes[0].runtime, undefined);
+  assert.deepEqual(fixed.episodes[0].mirrors, ep.mirrors);
+  const next = seriesWithSeason(fixed, fixed.tmdb, 1, [{ episode: 1, name: 'Piloto' }, { episode: 2, name: 'Dos' }], { 1: ep.url, 2: 'https://example.test/2.mp4' });
+  assert.equal(next.id, 's6');
+  assert.deepEqual(next.episodes.map(e => e.id), ['e6x1x1', 'e6x1x2', 'e6x9x2']);
+});
 
 test('search: films, series, or both for documentaries (people are left out)', async () => {
   const calls = [];

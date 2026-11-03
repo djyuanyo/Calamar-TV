@@ -989,7 +989,8 @@ try {
   const vidaraPage = await browser.newPage();
   await vidaraPage.addInitScript(() => {
     window.__libraryParts = { index: { sections: { movies: 1, series: 0, documentaries: 0 } },
-      parts: { 'movies-0': { items: [] } } };
+      parts: { 'movies-0': { items: [{ id: 'm90001', kind: 'movie', title: 'Ficha equivocada', status: 'matched',
+        tmdb: { id: 90001, title: 'Ficha equivocada' }, url: 'https://example.test/video.mp4' }] } } };
   });
   await vidaraPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
   await vidaraPage.route('https://firestore.googleapis.com/**/calamarLibrary/*', async route => {
@@ -997,7 +998,10 @@ try {
     const data = await vidaraPage.evaluate(name => name === 'index' ? window.__libraryParts.index : window.__libraryParts.parts[name], name);
     await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
   });
-  await vidaraPage.route('https://api.themoviedb.org/**', route => route.fulfill({ json: { results: [] } }));
+  await vidaraPage.route('https://api.themoviedb.org/**', route => route.fulfill({
+    json: new URL(route.request().url()).pathname.endsWith('/movie/90002')
+      ? { id: 90002, title: 'Ficha correcta', release_date: '2024-01-02' } : { results: [] },
+  }));
   let updatedVidaraBridge = false;
   await vidaraPage.route('https://calamarmenciano.com/calamar-vidara.php', route => {
     const body = new URLSearchParams(route.request().postData());
@@ -1025,13 +1029,22 @@ try {
   await vidaraPage.getByText('Archivos en Vidara · 2', { exact: true }).waitFor();
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await vidaraPage.getByText(/«Películas».*Sustituye calamar-vidara.php/).waitFor();
-  assert.deepEqual(await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
+  assert.deepEqual(await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.map(item => item.id)), ['m90001']);
   updatedVidaraBridge = true;
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await vidaraPage.getByText(/2 archivos detectados \(1 sin reproducción disponible\)/).waitFor();
   await vidaraPage.getByText(/«Documentales».*Vidara HTTP 500/).waitFor();
   await vidaraPage.waitForFunction(() => window.__libraryParts.parts['movies-0'].items.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
   assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
+  await vidaraPage.locator('[data-library-id="m90001"]').getByRole('button', { name: 'Editar', exact: true }).click();
+  await vidaraPage.getByRole('button', { name: 'Corregir ficha de TMDB', exact: true }).click();
+  await vidaraPage.getByLabel('Buscar su ficha en TMDB', { exact: true }).fill('https://www.themoviedb.org/movie/90002-ficha-correcta');
+  await vidaraPage.locator('.library-editor').getByRole('button', { name: 'Buscar', exact: true }).click();
+  await vidaraPage.locator('.library-editor .library-result', { hasText: 'Ficha correcta' }).click();
+  await vidaraPage.getByRole('heading', { name: 'Editar · Ficha correcta', exact: true }).waitFor();
+  const fixed = await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.find(item => item.id === 'm90001'));
+  assert.equal(fixed.tmdb.id, 90002);
+  assert.equal(fixed.url, 'https://example.test/video.mp4');
   await vidaraPage.close();
 
   // Several competitions keep their own groups under one Calamar TV header.

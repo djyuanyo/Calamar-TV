@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dailymotionEmbed, vidaraEmbed } from '../web/provider-players.js';
+import { dailymotionEmbed, vidaraPlayback } from '../web/provider-players.js';
 import { webPlayback } from '../web/catalog.js';
 import { scanFolders } from '../web/library-folders.js';
 import { libraryFromScan } from '../web/library-lulu.js';
@@ -15,8 +15,8 @@ test('Dailymotion and Vidara resolve to their own players inside Calamar', () =>
   assert.equal(dailymotionEmbed('https://dai.ly/x84sh87'), 'https://www.dailymotion.com/embed/video/x84sh87');
   assert.equal(dailymotionEmbed('https://geo.dailymotion.com.evil.test/player/x1k3pa.html?video=x84sh87'), null);
   assert.equal(dailymotionEmbed('https://geo.dailymotion.com/player/x1k3pa.html?video=x%2Fz'), null);
-  assert.deepEqual(webPlayback(video), { ok: true, kind: 'frame', address: 'https://vidara.to/e/KILxn38HjQjsv' });
-  assert.equal(vidaraEmbed('https://vidara.to.evil.test/v/KILxn38HjQjsv'), null);
+  assert.deepEqual(webPlayback(video), { ok: true, kind: 'hls', address: 'https://calamarmenciano.com/calamar-vidara.php?code=KILxn38HjQjsv&hls=1' });
+  assert.equal(vidaraPlayback('https://vidara.to.evil.test/v/KILxn38HjQjsv'), null);
   assert.equal(videoKey('https://vidara.so/e/KILxn38HjQjsv'), videoKey(video));
   assert.notEqual(videoKey('https://luluvido.com/e/KILxn38HjQjsv'), videoKey(video));
 });
