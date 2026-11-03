@@ -1149,7 +1149,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       select.value = sections.get(folder.id) || (suggest ? suggestedVidaraSection(folder.name) : '');
       return { folder, select };
     });
-    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(folder.name, select)));
+    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(`Categoría para ${folder.name}`, select)));
   };
   const readVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     readVidara.disabled = true;

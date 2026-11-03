@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 /** Player-page links supported inside the Android video screen. */
 final class ProviderPlayers {
   private static final Pattern VIDEO_ID = Pattern.compile("(?:^|&)video=[A-Za-z0-9]{5,32}(?:&|$)");
-  private static final Pattern DM_PLAYER = Pattern.compile("/player/[A-Za-z0-9]{2,24}\\.html");
+  private static final Pattern DM_PLAYER = Pattern.compile("/player(?:/[A-Za-z0-9]{2,24})?\\.html");
   private static final Pattern DM_VIDEO = Pattern.compile("/(?:embed/)?video/([A-Za-z0-9]{5,32})(?:_[^/]*)?/?");
   private static final Pattern DM_SHORT = Pattern.compile("/([A-Za-z0-9]{5,32})/?");
   private static final Pattern VIDARA_VIDEO = Pattern.compile("/(?:v/|e/)?([A-Za-z0-9]{8,24})/?");

@@ -10,6 +10,7 @@ const daily = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nC
 const video = 'https://vidara.to/v/KILxn38HjQjsv';
 test('Dailymotion and Vidara resolve to their own players inside Calamar', () => {
   assert.deepEqual(webPlayback(daily, { pages: true }), { ok: true, kind: 'frame', page: true, address: daily });
+  assert.equal(dailymotionEmbed('https://geo.dailymotion.com/player.html?video=x84sh87'), 'https://geo.dailymotion.com/player.html?video=x84sh87');
   assert.equal(dailymotionEmbed('https://dai.ly/x84sh87'), 'https://www.dailymotion.com/embed/video/x84sh87');
   assert.equal(dailymotionEmbed('https://geo.dailymotion.com.evil.test/player/x1k3pa.html?video=x84sh87'), null);
   assert.equal(dailymotionEmbed('https://geo.dailymotion.com/player/x1k3pa.html?video=x%2Fz'), null);

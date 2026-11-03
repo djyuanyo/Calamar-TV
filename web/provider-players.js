@@ -9,7 +9,7 @@ function httpsUrl(address) {
 export function dailymotionEmbed(address) {
   const url = httpsUrl(address);
   if (!url) return null;
-  if (url.hostname === 'geo.dailymotion.com' && /^\/player\/[A-Za-z0-9]{2,24}\.html$/.test(url.pathname)
+  if (url.hostname === 'geo.dailymotion.com' && /^\/player(?:\/[A-Za-z0-9]{2,24})?\.html$/.test(url.pathname)
       && /^[A-Za-z0-9]{5,32}$/.test(url.searchParams.get('video') || '')) {
     url.hash = '';
     return url.href;
