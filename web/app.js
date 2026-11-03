@@ -13,6 +13,7 @@ import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShare
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
+import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
@@ -684,14 +685,16 @@ const cast = initCast({
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
-let stopRenewable = null, sourceLookup = null;
+let stopRenewable = null, sourceLookup = null, stopStallWatch = null;
 function stop() {
   if (!casting) watching?.privateViewing.watching(false);
   playbackGeneration++;
   if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
+  if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
   video.onerror = null;
   video.onplaying = null;
+  video.onloadedmetadata = null;
   if (stopTs) { stopTs(); stopTs = null; }
   if (hls) hls.destroy();
   hls = null;
@@ -716,7 +719,7 @@ function recoveryRound(c, now = Date.now()) {
 }
 const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
 
-async function playSource(c, index) {
+async function playSource(c, index, resumeAt = 0) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
@@ -764,18 +767,20 @@ async function playSource(c, index) {
   const next = (data) => {
     if (generation !== playbackGeneration || failureHandled) return;
     failureHandled = true;
+    if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
+    const positionToKeep = c.vod ? resumeAt || video.currentTime : 0;
     if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
-      playSource(c, playable[position + 1].index);
+      playSource(c, playable[position + 1].index, positionToKeep);
     } else if (recoveryRound(c)) {
       // Back to the first source: a server that failed a moment ago often answers again.
       if (hls) hls.stopLoad();
       if (stopTs) { stopTs(); stopTs = null; }
-      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : 'La emisión se ha cortado. Reconectando…';
+      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : 'El vídeo se ha cortado. Reconectando…';
       setTimeout(() => {
         if (generation !== playbackGeneration) return;
-        const latest = state.channels.find((item) => item.id === c.id) || c;
-        playSource(latest, playable[0].index);
+        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, playable[0].index, positionToKeep);
       }, 2000);
     } else {
       // A fatal network error is no longer a buffering state. Keep the failure
@@ -799,8 +804,8 @@ async function playSource(c, index) {
         report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
         // Firebase may have delivered fresh URLs since playback began.
-        const latest = state.channels.find((item) => item.id === c.id) || c;
-        playSource(latest, 0);
+        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, 0, positionToKeep);
       } }, '↻ Reintentar');
       // Direct navigation may work even when hls.js fetches from GitHub Pages are
       // rejected by CORS or by the origin policy of the upstream CDN.
@@ -862,6 +867,10 @@ async function playSource(c, index) {
     return;
   }
   if (source.how.kind === 'frame') { showFrame(); return; }
+  const watchStall = () => {
+    stopStallWatch = watchPlaybackStall(video, () => next({ details: 'playbackStalled',
+      userMessage: 'El vídeo se ha detenido y no se pudo reconectar.' })).stop;
+  };
   if (source.how.kind === 'ts') {
     controls.attach(null);
     // The hosting's adapted HLS of the channel (calamar-cast.php): one continuous connection to the
@@ -887,6 +896,7 @@ async function playSource(c, index) {
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
       else { next({ ...data, details: 'codecUnsupported' }); return; }
       controls.attach(hls);
+      watchStall();
       autoplay(video).catch(() => {
         if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
       });
@@ -916,6 +926,12 @@ async function playSource(c, index) {
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
   const round = roundOf(c);
   const address = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
+  if (c.vod && resumeAt > 0) video.onloadedmetadata = () => {
+    if (generation !== playbackGeneration) return;
+    video.onloadedmetadata = null;
+    if (!Number.isFinite(video.duration) || resumeAt < video.duration) video.currentTime = resumeAt;
+    resumeAt = 0;
+  };
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
@@ -933,6 +949,7 @@ async function playSource(c, index) {
   controls.attach(hls);
   video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
   video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
+  watchStall();
   autoplay(video).catch(() => {
     if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
@@ -1043,12 +1060,9 @@ function open(c, fromRoute = false) {
   if (!c.pending) startAudience(c);
   // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
-  playSource(c, 0);
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
-  if (resume > 0) video.addEventListener('loadedmetadata', () => {
-    if (current === c && (!Number.isFinite(video.duration) || video.duration > resume + 5)) video.currentTime = resume;
-  }, { once: true });
+  playSource(c, 0, resume);
   lastSaved = 0;
 }
 

@@ -642,6 +642,24 @@ try {
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
+  // Simulate an iPhone media element that freezes at minute 15 without reporting an error.
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    let address = '', position = 0;
+    window.__avatarLoads = 0;
+    Object.defineProperties(video, {
+      paused: { configurable: true, get: () => false },
+      duration: { configurable: true, get: () => 9720 },
+      currentTime: { configurable: true, get: () => position, set: value => { position = value; } },
+      src: { configurable: true, get: () => address, set: value => {
+        address = value;
+        window.__avatarLoads++;
+        queueMicrotask(() => video.dispatchEvent(new Event('loadedmetadata')));
+      } },
+    });
+    video.load = () => { address = ''; position = 0; };
+    video.play = async () => { video.dispatchEvent(new Event('playing')); };
+  });
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
@@ -652,8 +670,22 @@ try {
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));
   assert.equal(await page.locator('#player .live-pill').count(), 0);
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    video.currentTime = 900;
+    video.dispatchEvent(new Event('timeupdate'));
+    video.dispatchEvent(new Event('waiting'));
+  });
+  await page.clock.fastForward(30000);
+  await page.getByText('El vídeo se ha cortado. Reconectando…').waitFor();
+  await page.clock.fastForward(2000);
+  await page.waitForFunction(() => window.__avatarLoads === 2 && document.getElementById('video').currentTime === 900);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    for (const name of ['paused', 'duration', 'currentTime', 'src', 'load', 'play']) delete video[name];
+  });
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
   // A series' page as on Netflix: «Reproducir» the first episode, the tabs, and the season drop-down.

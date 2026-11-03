@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pageSources, renewalDelay, mountRenewable } from '../web/renewable-player.js';
 import { renewablePage, webPlayback } from '../web/catalog.js';
+import { watchPlaybackStall } from '../web/playback-stall.js';
 const page = 'https://zicotv.cc/api/player/28';
 const epoch = 1793040000000;
 const media = (seconds, cdn = 'cdn4') => `https://${cdn}.zicotv.cc/live/index.m3u8?token=aaa-bbb-${seconds}-`;
@@ -10,9 +11,17 @@ const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve()
 function fixture(fetcher, NativeHls = true, options = {}) {
   let clock = epoch, id = 0;
   const jobs = new Map(), listeners = new Map(), engines = [], statuses = [], fallbacks = [];
-  const video = { paused: true, src: '', canPlayType: () => NativeHls ? '' : 'maybe',
+  const video = { paused: true, currentTime: 0, src: '', canPlayType: () => NativeHls ? '' : 'maybe',
     play() { this.paused = false; return Promise.resolve(); },
-    addEventListener(name, fn) { listeners.set(name, fn); }, removeEventListener(name) { listeners.delete(name); } };
+    addEventListener(name, fn) {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(fn);
+    },
+    removeEventListener(name, fn) {
+      const group = listeners.get(name);
+      group.delete(fn);
+      if (!group.size) listeners.delete(name);
+    } };
   class Hls {
     static Events = { ERROR: 'error', MANIFEST_LOADED: 'manifest', LEVEL_LOADED: 'level', FRAG_LOADED: 'fragment' };
     static isSupported = () => true;
@@ -27,6 +36,7 @@ function fixture(fetcher, NativeHls = true, options = {}) {
   const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher, timers, now: () => clock, preferDirect: false,
     onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true), ...options });
   return { stop, engines, video, listeners, statuses, fallbacks, jobs,
+    emit(name) { for (const listener of listeners.get(name) || []) listener(); },
     async tick(ms) { clock += ms; for (const [key, job] of [...jobs]) if (job.at <= clock && jobs.has(key)) { jobs.delete(key); job.fn(); } await flush(); } };
 }
 const signed = upstream => 'https://calamarmenciano.com/calamar-player.php?seg=' + Buffer.from(upstream).toString('base64url') + '&p=page&sig=signature&l=1';
@@ -78,7 +88,10 @@ test('native HLS allows slow hosting startup and retries a real 30-second stall'
   let calls = 0;
   const f = fixture(async () => { calls++; return response(media(1793041200)); }, false);
   await flush(); assert.equal(f.video.src, signed(media(1793041200)));
-  f.listeners.get('stalled')(); await f.tick(8000); assert.equal(calls, 1);
+  f.video.currentTime = 900;
+  f.emit('playing');
+  f.emit('waiting'); await f.tick(8000); assert.equal(calls, 1);
+  f.emit('progress'); f.emit('timeupdate'); f.emit('waiting');
   await f.tick(22000); await f.tick(250);
   assert.equal(calls, 2); f.stop();
 });
@@ -126,7 +139,7 @@ test('the source menu is loaded after the first picture and never blocks the aut
     return response(media(1793041200));
   }, true, { onSources: rows => menus.push(rows) });
   await flush(); assert.equal(f.engines.length, 1); assert.equal(calls.length, 1);
-  f.listeners.get('playing')(); await flush(); assert.equal(calls.length, 2);
+  f.emit('playing'); await flush(); assert.equal(calls.length, 2);
   finishMenu({ ok: true, json: async () => ({ sources: 3 }) }); await flush();
   assert.equal(menus[0].length, 3); assert.equal(f.engines.length, 1); f.stop(); assert.equal(f.jobs.size, 0);
 });
@@ -188,10 +201,33 @@ test('direct lookup never plays locked sources or expired tokens', async () => {
 test('slow master and fragment progress restart the startup deadline', async () => {
   let calls = 0;
   const f = fixture(async () => { calls++; return response(media(1793041200)); });
-  await flush(); f.listeners.get('waiting')(); await f.tick(25000);
+  await flush(); f.emit('waiting'); await f.tick(25000);
   f.engines[0].manifest(); await f.tick(25000); assert.equal(calls, 1);
   f.engines[0].fragment(); await f.tick(25000); assert.equal(calls, 1);
-  f.listeners.get('timeupdate')(); await f.tick(30000); assert.equal(calls, 1); f.stop();
+  f.video.currentTime = 1; f.emit('timeupdate'); await f.tick(25000); assert.equal(calls, 1); f.stop();
+});
+
+test('watchdog ignores background time, user pause, and downloads without playback progress', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const video = Object.assign(new EventTarget(), { paused: false, currentTime: 899 });
+  const document = Object.assign(new EventTarget(), { hidden: false });
+  let stalls = 0;
+  const watch = watchPlaybackStall(video, () => stalls++, { document });
+  const emit = name => video.dispatchEvent(new Event(name));
+  emit('playing');
+  t.mock.timers.tick(29000);
+  video.currentTime = 900; emit('timeupdate');
+  document.hidden = true; document.dispatchEvent(new Event('visibilitychange'));
+  t.mock.timers.tick(31000); assert.equal(stalls, 0);
+  document.hidden = false; document.dispatchEvent(new Event('visibilitychange'));
+  t.mock.timers.tick(20000);
+  video.paused = true; emit('pause');
+  t.mock.timers.tick(31000); assert.equal(stalls, 0);
+  video.paused = false; emit('play');
+  t.mock.timers.tick(20000); emit('progress'); emit('timeupdate');
+  t.mock.timers.tick(10000); assert.equal(stalls, 1);
+  watch.stop(); emit('play');
+  t.mock.timers.tick(30000); assert.equal(stalls, 1);
 });
 
 test('a failed hosting hostname uses its own www alias and preserves manual selection on renewal', async () => {

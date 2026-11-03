@@ -1,6 +1,7 @@
 import { streamExpiry, renewablePage, PLAYER_ENDPOINT, PLAYER_ALTERNATE_ENDPOINT, playerEndpoint } from './catalog.js';
 import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.js';
 import { autoplay } from './autoplay.js';
+import { watchPlaybackStall } from './playback-stall.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
 export function pageSources(html, page) {
@@ -52,7 +53,7 @@ export function hostedPage(address) {
 export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null,
   fetcher = globalThis.fetch, timers = globalThis, now = Date.now, preferDirect = true }) {
   const original = hostedPage(page);
-  let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, watchdog = null, engine = null;
+  let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, engine = null;
   let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false;
   const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
   selected.searchParams.set('cast', '1');
@@ -63,13 +64,13 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
   const retry = (networkFailure = false) => {
-    if (stopped || request || recovering) return;
-    if (networkFailure && !deviceRoute && !alternateHosting) alternateHosting = true;
-    else if (automatic && networkFailure) deviceRoute = !deviceRoute;
+    if (stopped || recovering) return;
+    if (!request && networkFailure && !deviceRoute && !alternateHosting) alternateHosting = true;
+    else if (!request && automatic && networkFailure) deviceRoute = !deviceRoute;
     failures++; recovering = true;
     onStatus('Probando otra señal disponible…');
     // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
-    schedule(failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4)));
+    if (!request) schedule(failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4)));
   };
   const install = url => {
     const shouldPlay = !loaded || !video.paused;
@@ -81,8 +82,8 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
         const networkFailure = data.response?.code === 0 || (!data.response?.code && data.type === 'networkError');
         if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry(networkFailure);
       });
-      for (const name of ['MANIFEST_LOADED','LEVEL_LOADED','FRAG_LOADED']) if (Hls.Events[name])
-        instance.on(Hls.Events[name], () => { if (!stopped && engine === instance && watchdog) stalled(); });
+      for (const name of ['MANIFEST_LOADED', 'LEVEL_LOADED', 'FRAG_LOADED']) if (Hls.Events[name])
+        instance.on(Hls.Events[name], () => { if (engine === instance) watch.download(); });
       instance.loadSource(url); instance.attachMedia(video); onAttach(instance);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = url;
     else { cleanup(); onFallback(); return; }
@@ -158,20 +159,13 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     }).finally(() => { timers.clearTimeout(menuTimer); });
   };
   const failed = () => { if (!stopped) retry(); };
-  const stalled = () => {
-    timers.clearTimeout(watchdog);
-    // A signed master, media list and first segment can take over 8 seconds on shared hosting.
-    // Give the network time to finish, and restart this deadline when real lists/fragments arrive.
-    watchdog = timers.setTimeout(() => { if (!stopped && !video.paused) failed(); }, 30000);
-  };
-  const progressing = () => { timers.clearTimeout(watchdog); watchdog = null; };
-  const downloaded = () => { if (watchdog) stalled(); };
-  video.addEventListener('playing', playing); video.addEventListener('timeupdate', progressing);
-  video.addEventListener('progress', downloaded);
-  video.addEventListener('error', failed); video.addEventListener('waiting', stalled); video.addEventListener('stalled', stalled);
+  const watch = watchPlaybackStall(video, failed, { timers });
+  video.addEventListener('playing', playing);
+  video.addEventListener('error', failed);
   function cleanup() {
-    stopped = true; request?.abort(); menu?.abort(); clearRefresh(); timers.clearTimeout(menuTimer); timers.clearTimeout(watchdog); destroyEngine();
-    for (const [name, listener] of [['playing', playing], ['timeupdate', progressing], ['progress', downloaded], ['error', failed], ['waiting', stalled], ['stalled', stalled]]) video.removeEventListener(name, listener);
+    stopped = true; request?.abort(); menu?.abort(); clearRefresh(); timers.clearTimeout(menuTimer); watch.stop(); destroyEngine();
+    video.removeEventListener('playing', playing);
+    video.removeEventListener('error', failed);
   }
   onStatus('Conectando con la primera señal disponible…'); void refresh(); return cleanup;
 }
