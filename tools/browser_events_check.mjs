@@ -437,10 +437,10 @@ try {
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
   await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
-  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
+  await page.getByLabel('Enlace del vídeo', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   await page.getByText(/^Enlace no válido/).waitFor(); // a folder link is refused
-  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/abc123def456');
+  await page.getByLabel('Enlace del vídeo', { exact: false }).fill('https://lulustream.com/abc123def456');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   await page.getByText('Guardado y publicado.', { exact: true }).waitFor();
   let parts = await page.evaluate(() => window.__libraryParts);
@@ -481,7 +481,7 @@ try {
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
   await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
+  assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   // Artwork is edited without asking TMDB; both uploaded images and HTTPS URLs persist.
   assert.equal(await page.getByRole('link', { name: 'Descargar aplicación' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
@@ -573,7 +573,7 @@ try {
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/nadanada1234');
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
+  assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
   await page.getByRole('link', { name: 'Películas · 2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByRole('link', { name: 'Series · 2', exact: true }).click();
