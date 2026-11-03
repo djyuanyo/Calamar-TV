@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1793139488517,
+ "updated_at": 1793748382767,
  "channels": [
   {
    "id": "la-1",
@@ -1331,7 +1331,7 @@
    "name": "Huelva TV",
    "group": "Autonómicos",
    "region": "Andalucía",
-   "logo": "https://pbs.twimg.com/profile_images/2016115597247918080/0fbRUb7v_200x200.jpg",
+   "logo": "https://graph.facebook.com/huelvatv/picture?width=200&height=200",
    "web": "https://alacarta.huelvatv.com/directo/",
    "streams": [],
    "geo": false
@@ -2162,11 +2162,11 @@
    "geo": false
   },
   {
-   "id": "tenerife-plus-tv",
-   "name": "Tenerife Plus TV",
+   "id": "tenerife-mas-tv",
+   "name": "Tenerife Más TV",
    "group": "Autonómicos",
    "region": "Canarias",
-   "logo": "https://pbs.twimg.com/profile_images/1881490196564164608/p0cGwxKE_200x200.jpg",
+   "logo": "https://graph.facebook.com/tenerifemastv/picture?width=200&height=200",
    "web": "https://www.tenerifeplus.tv",
    "streams": [
     "https://k20.usastreams.com:8081/tenerifeplus/index.m3u8"
@@ -2728,6 +2728,16 @@
    "geo": false
   },
   {
+   "id": "radio-evolucion-burgos",
+   "name": "Radio Evolución Burgos",
+   "group": "Autonómicos",
+   "region": "Castilla y León",
+   "logo": "https://graph.facebook.com/Radioevolucionburgos/picture?width=200&height=200",
+   "web": "https://radioevolucion.es/directo",
+   "streams": [],
+   "geo": false
+  },
+  {
    "id": "cortes-de-castilla-y-leon",
    "name": "Cortes de Castilla y León",
    "group": "Autonómicos",
@@ -3011,7 +3021,7 @@
    "name": "El 9 TV",
    "group": "Autonómicos",
    "region": "Cataluña",
-   "logo": "https://graph.facebook.com/el9nou/picture?width=200&height=200",
+   "logo": "https://pbs.twimg.com/profile_images/1501487846317867013/T7_Kdba8_200x200.jpg",
    "web": "https://el9nou.cat/el9tv/",
    "streams": [],
    "geo": false
@@ -4948,7 +4958,7 @@
    "name": "Conexión Berazategui Argentina",
    "group": "Música",
    "region": "",
-   "logo": "https://graph.facebook.com/conexionberaok/picture?width=200&height=200",
+   "logo": "https://graph.facebook.com/conexionberatv/picture?width=200&height=200",
    "web": "https://www.conexionberazategui.com.ar/tvenvivo/",
    "streams": [
     "https://lbgo.bozztv.com/ssh101/ssh101/conexionbera/playlist.m3u8"
