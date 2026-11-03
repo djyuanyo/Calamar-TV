@@ -101,7 +101,7 @@ function driveTransfer($file, $url, $head, $range) {
     for ($redirect = 0; $redirect < 5; $redirect++) {
         $ch = driveCurl($url, $file['key'], $file['id'], $file['resourceKey'], $range);
         if (!$ch) break;
-        $status = 0; $headers = array(); $sent = false;
+        $status = 0; $headers = array(); $sent = false; $failure = '';
         curl_setopt_array($ch, array(CURLOPT_TIMEOUT => 0, CURLOPT_LOW_SPEED_LIMIT => 1, CURLOPT_LOW_SPEED_TIME => 45, CURLOPT_NOBODY => $head));
         curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $line) use (&$status, &$headers) {
             if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $m)) { $status = (int)$m[1]; $headers = array(); }
@@ -118,14 +118,18 @@ function driveTransfer($file, $url, $head, $range) {
             }
             return true;
         };
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $data) use (&$status, $send) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $data) use (&$status, &$failure, $send) {
             if ($status >= 300 && $status < 400) return strlen($data);
-            if (!$send()) return 0;
+            if (!$send()) {
+                $failure .= substr($data, 0, 16384 - strlen($failure));
+                return strlen($failure) < 16384 ? strlen($data) : 0;
+            }
             echo $data; flush(); return connection_aborted() ? 0 : strlen($data);
         });
         curl_exec($ch); curl_close($ch);
         if ($head && $send()) exit;
         if ($sent) exit;
+        if ($status === 429 || preg_match('/Google Drive.{0,20}Quota exceeded|downloadQuotaExceeded/i', $failure)) return 429;
         if ($status >= 300 && $status < 400 && isset($headers['location']) && driveAllowedUrl($headers['location'])) { $url = $headers['location']; continue; }
         return $status;
     }
@@ -140,7 +144,11 @@ function driveStream($file, $head = false) {
     $api = 'https://www.googleapis.com/drive/v3/files/' . $file['id'] . '?alt=media&supportsAllDrives=true';
     $status = driveTransfer($file, $api, $head, $range);
     // Google can allow an anonymous shared download even when its API cannot deliver that file.
-    if ($status !== 416) $status = driveTransfer($file, drivePublicDownload($file), $head, $range);
+    if ($status !== 416) {
+        $publicStatus = driveTransfer($file, drivePublicDownload($file), $head, $range);
+        $status = $status === 429 ? 429 : $publicStatus;
+    }
+    if ($status === 429) driveAnswer(array('error' => 'Google Drive ha alcanzado la cuota de descarga de este vídeo.'), 429);
     driveAnswer(array('error' => 'Google Drive no ha entregado el vídeo. Comprueba que siga compartido y tenga cuota disponible.',
         'upstream_http' => $status), $status === 416 ? 416 : 502);
 }
@@ -181,7 +189,7 @@ function driveCompatWorker($dir) {
 function driveCompatInput($url) {
     $args = array('-protocol_whitelist', 'https,tls,tcp', '-format_whitelist',
         'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpegts,mpeg,flv,ogg,asf,rm,wtv,mxf,dv,nut,ivf,yuv4mpegpipe',
-        '-tls_verify', '1', '-verifyhost', 'calamarmenciano.com', '-rw_timeout', '8000000',
+        '-tls_verify', '1', '-verifyhost', 'calamarmenciano.com', '-rw_timeout', '16000000',
         '-seekable', '1', '-threads', '2');
     foreach (array('/etc/pki/tls/certs/ca-bundle.crt', '/etc/ssl/certs/ca-certificates.crt') as $ca) {
         if (is_readable($ca)) { array_push($args, '-ca_file', $ca); break; }
@@ -200,7 +208,20 @@ function driveCompatInspect($url) {
     $output = array();
     // Listing streams alone avoids decoding or downloading the whole file.
     driveCompatExec(driveCompatInput($url), $output);
-    return driveCompatMetadata(implode("\n", $output));
+    $description = implode("\n", $output);
+    try {
+        return driveCompatMetadata($description);
+    } catch (RuntimeException $error) {
+        $reason = 'formato';
+        if (preg_match('/(?:HTTP error|Server returned) 429/i', $description))
+            throw new RuntimeException('Google Drive ha alcanzado la cuota de descarga de este vídeo.', 429);
+        if (preg_match('/(?:timed out|timeout|Operation canceled)/i', $description)) $reason = 'tiempo de espera';
+        elseif (preg_match('/(?:certificate|verifyhost|TLS)/i', $description)) $reason = 'conexión TLS';
+        elseif (preg_match('/(?:HTTP error|Server returned) (\d{3})/i', $description, $match)) $reason = 'HTTP ' . $match[1];
+        elseif (preg_match('/(?:failed to resolve|connection refused|network is unreachable)/i', $description)) $reason = 'conexión';
+        elseif (preg_match('/(?:Option not found|Unrecognized option|not on whitelist)/i', $description)) $reason = 'configuración del conversor';
+        throw new RuntimeException($error->getMessage() . ' Motivo: ' . $reason . '.');
+    }
 }
 
 function driveCompatMetadata($description) {
@@ -251,9 +272,10 @@ function driveCompat($file, $token, $head) {
     if (!driveCompatReady()) driveAnswer(array('error' => 'El hosting no tiene disponible el conversor de vídeo.'), 503);
     $dir = driveCompatCache();
     $url = DRIVE_COMPAT_ORIGIN . '?' . http_build_query(array('id' => $file['id'], 'v' => $token));
+    $inputUrl = $url;
     $key = hash('sha256', 'drive-hls-v1:' . $token);
-    $meta = driveCompatCacheFile($dir, $key, 'info', function($tmp) use ($url) {
-        if (file_put_contents($tmp, json_encode(driveCompatInspect($url))) === false)
+    $meta = driveCompatCacheFile($dir, $key, 'info', function($tmp) use ($inputUrl) {
+        if (file_put_contents($tmp, json_encode(driveCompatInspect($inputUrl))) === false)
             throw new RuntimeException('No se pudo guardar la información del vídeo.');
     });
     $info = json_decode(stream_get_contents($meta), true);
@@ -279,8 +301,8 @@ function driveCompat($file, $token, $head) {
         driveAnswer(array('error' => 'Segmento fuera de rango.'), 404);
     $start = (int)$part * DRIVE_SEGMENT_SECONDS;
     $length = min(DRIVE_SEGMENT_SECONDS, $info['duration'] - $start);
-    $segment = driveCompatCacheFile($dir, hash('sha256', $key . ':' . $part), 'segment', function($tmp) use ($url, $start, $length, $info) {
-        $args = driveCompatSegmentArguments(driveCompatInput($url), $start, $length, $info['audio'], $tmp);
+    $segment = driveCompatCacheFile($dir, hash('sha256', $key . ':' . $part), 'segment', function($tmp) use ($inputUrl, $start, $length, $info) {
+        $args = driveCompatSegmentArguments(driveCompatInput($inputUrl), $start, $length, $info['audio'], $tmp);
         $output = array();
         if (!driveCompatExec($args, $output) || !is_file($tmp) || filesize($tmp) < 188)
             throw new RuntimeException('El hosting no ha podido convertir este tramo del vídeo.');
@@ -324,6 +346,6 @@ function driveMain() {
             'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'pageToken' => $pageToken), $key, $id, $resourceKey);
         if (!empty($data['incompleteSearch'])) throw new RuntimeException('Drive ha devuelto una búsqueda incompleta. Vuelve a intentarlo.');
         driveAnswer(driveMenu($data, $folder['name'], $key, $secret));
-    } catch (Exception $e) { driveAnswer(array('error' => $e->getMessage()), 502); }
+    } catch (Exception $e) { driveAnswer(array('error' => $e->getMessage()), $e->getCode() === 429 ? 429 : 502); }
 }
 if (PHP_SAPI !== 'cli') driveMain();

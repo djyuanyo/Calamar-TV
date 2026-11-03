@@ -779,7 +779,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     } else if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, playable[position + 1].index, positionToKeep);
-    } else if (recoveryRound(c)) {
+    } else if ((!compatible || data?.response?.code !== 429) && recoveryRound(c)) {
       // Back to the first source: a server that failed a moment ago often answers again.
       if (hls) hls.stopLoad();
       if (stopTs) { stopTs(); stopTs = null; }
@@ -947,6 +947,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       if (data.fatal && source.how.address && !source.how.page && !compatible && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
       // Player pages read by the hosting (calamar-player.php): what failed, in plain words.
       if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
+      if (data.fatal && compatible && data.response?.code === 429) data.userMessage = 'Google Drive ha alcanzado la cuota de descarga de este vídeo.';
       if (data.fatal && compatible && data.response?.code === 503) data.userMessage = 'El hosting está adaptando otros vídeos. Pulsa Reintentar en un momento.';
       if (data.fatal) next(data);
     });
