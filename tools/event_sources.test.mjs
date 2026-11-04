@@ -43,9 +43,9 @@ const row = (id, extra = {}) => ({
 const payload = (...data) => ({ total: data.length, data });
 const catalog = { channels: [], events: [], featured: [], hidden: [] };
 
-test('fetches the documented public soccer endpoint without credentials', async () => {
+test('fetches the documented all-sports endpoint without credentials', async () => {
   const result = await fetchZicoAgenda(async (url, options) => {
-    assert.equal(url, 'https://bp.zicotv.cc/api/v1/events?sport=Soccer');
+    assert.equal(url, 'https://bp.zicotv.cc/api/v1/events');
     assert.equal(options.credentials, 'omit');
     assert.equal(options.headers, undefined);
     return { ok: true, json: async () => payload(row(1)) };
@@ -54,7 +54,7 @@ test('fetches the documented public soccer endpoint without credentials', async 
   await assert.rejects(fetchZicoAgenda(async () => ({ ok: false, status: 429 })), /429/);
 });
 
-test('publishes active football with crests and pending matches, and excludes premium sources', () => {
+test('publishes active events across sports, with fresh lookup links and no private token', () => {
   const result = applyZicoAgenda(catalog, payload(
     row(1, { status: 'live', sources: [
       { type: 'direct', url: direct },
@@ -64,16 +64,20 @@ test('publishes active football with crests and pending matches, and excludes pr
       { type: 'direct', url: 'https://example.com/locked.m3u8', locked: true },
     ] }),
     row(2), row(3, { status: 'finished' }), row(4, { status: 'cancelled' }),
-    row(5, { sport_category: 'Basketball' }),
+    row(5, { sport_category: 'Basketball', league: '', sources: [
+      { source: 'own', type: 'iframe', url: 'https://bp.zicotv.cc/api/player/15', is_premium: true },
+    ] }),
   ));
-  assert.equal(result.count, 2);
+  assert.equal(result.count, 3);
   assert.equal(result.pending, 1);
   validateCatalog(result.data);
-  const [live, scheduled] = events([], result.data, now);
-  assert.deepEqual(live.streams, [agendaPlayer, direct]);
+  const [live, scheduled, basketball] = events([], result.data, now);
+  assert.deepEqual(live.streams, ['https://bp.zicotv.cc/events/1', agendaPlayer, direct]);
   assert.equal(live.startAt, '2026-11-04T20:00:00.000Z');
   assert.equal(live.homeLogo, cover);
-  assert.equal(scheduled.pending, true);
+  assert.deepEqual(scheduled.streams, ['https://bp.zicotv.cc/events/2']);
+  assert.deepEqual(basketball.streams, ['https://bp.zicotv.cc/events/5', 'https://bp.zicotv.cc/api/player/15']);
+  assert.match(basketball.meta, /Baloncesto/);
 });
 
 test('refresh is idempotent, preserves manual changes, skips duplicates and removes ended feed entries', () => {
@@ -84,6 +88,16 @@ test('refresh is idempotent, preserves manual changes, skips duplicates and remo
   assert.deepEqual(applyZicoAgenda(before, first).data, before);
   before.events[1] = { ...before.events[1], name: 'Mi título', cover, streams: [direct] };
   const after = applyZicoAgenda(before, payload(row(1, { status: 'live' }), row(2, { status: 'finished' }))).data;
-  assert.deepEqual(after.events.map(e => [e.name, e.streams]), [[manual.name, [direct]], ['Mi título', [direct]]]);
+  assert.deepEqual(after.events.map(e => [e.name, e.streams]), [[manual.name, [direct]], ['Mi título', ['https://bp.zicotv.cc/events/1', direct]]]);
   assert.throws(() => applyZicoAgenda(before, { total: 2, data: [] }), /formato/);
+});
+
+test('managed agenda events prefer hosting and keep public and catalog fallbacks', async () => {
+  const result = await expandEventSources([page, player], { preferHosted: true, fetcher: async url => ({
+    ok: true, json: async () => url.startsWith('https://calamarmenciano.com/')
+      ? { data: { sources: [{ name: 'Premium', player_url: agendaPlayer }] } }
+      : data,
+  }) });
+  assert.deepEqual(result.map(source => source.url), [agendaPlayer, player]);
+  assert.equal(result[0].origin, page);
 });

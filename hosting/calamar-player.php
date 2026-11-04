@@ -26,11 +26,119 @@ function playerSecret() {
     if (@file_put_contents($path, '<?php return ' . var_export($secret, true) . ";\n", LOCK_EX) !== false) @chmod($path, 0600);
     return $secret;
 }
+function playerZicoConfigPath() {
+    return getenv('CALAMAR_ZICO_CONFIG') ?: dirname(__DIR__) . '/calamar-zico-config.php';
+}
+function playerZicoTokenValid($token) {
+    return is_string($token) && preg_match('/^[!-~]{16,512}$/D', $token);
+}
+function playerZicoToken() {
+    static $token;
+    if ($token !== null) return $token;
+    $path = playerZicoConfigPath();
+    $saved = is_file($path) ? @include $path : null;
+    return $token = playerZicoTokenValid($saved) ? $saved : '';
+}
+function playerSaveZicoToken($token) {
+    $path = playerZicoConfigPath();
+    $dir = realpath(dirname($path));
+    $public = realpath($_SERVER['DOCUMENT_ROOT'] ?? '/nonexistent');
+    if ($dir === false || ($public !== false && ($dir === $public || strpos($dir, $public . DIRECTORY_SEPARATOR) === 0))) return false;
+    $temp = @tempnam($dir, '.calamar-zico-');
+    if ($temp === false) return false;
+    try {
+        if (!@chmod($temp, 0600) || @file_put_contents($temp, '<?php return ' . var_export($token, true) . ";\n", LOCK_EX) === false
+            || !@rename($temp, $path)) return false;
+        if (function_exists('opcache_invalidate')) @opcache_invalidate($path, true);
+        return true;
+    } finally { if (is_file($temp)) @unlink($temp); }
+}
+function playerZicoConfig($method) {
+    $answer = ['zicoConfig' => 1];
+    if ($method === 'GET') playerAnswer($answer + ['configured' => playerZicoToken() !== '']);
+    if ($method !== 'POST') playerAnswer($answer + ['error' => 'Método no permitido.'], 405);
+    $images = __DIR__ . '/calamar-images.php';
+    if (!is_file($images)) playerAnswer($answer + ['error' => 'Falta calamar-images.php en el hosting.'], 503);
+    require_once $images;
+    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    try {
+        $admin = preg_match('/^Bearer ([A-Za-z0-9_.-]{1,8192})$/D', $header, $auth) && imageAdministrator($auth[1]);
+    } catch (Throwable $error) { playerAnswer($answer + ['error' => 'No se pudo verificar la sesión de Google.'], 502); }
+    if (!$admin) playerAnswer($answer + ['error' => 'Entra con la cuenta administradora de Google.'], 401);
+    $raw = file_get_contents('php://input', false, null, 0, 4097);
+    $data = is_string($raw) && strlen($raw) <= 4096 ? json_decode($raw, true) : null;
+    $token = $data['token'] ?? null;
+    if ($token !== '' && !playerZicoTokenValid($token)) playerAnswer($answer + ['error' => 'El token tiene un formato no válido.'], 400);
+    if (!playerSaveZicoToken($token)) playerAnswer($answer + ['error' => 'El hosting no pudo guardar el token fuera de la carpeta pública.'], 503);
+    playerAnswer($answer + ['configured' => $token !== '']);
+}
+
+function playerZicoPage($url) {
+    if (!is_string($url)) return '';
+    $p = parse_url($url);
+    if (($p['scheme'] ?? '') !== 'https' || !in_array(strtolower($p['host'] ?? ''), ['bp.zicotv.cc', 'zicotv.cc'], true)
+        || isset($p['user']) || isset($p['port']) || isset($p['fragment'])
+        || !preg_match('#^/api/player/([0-9]{1,16})/?$#D', $p['path'] ?? '', $id)) return '';
+    return 'https://bp.zicotv.cc/api/player/' . $id[1];
+}
+function playerZicoProof($page, $event, $secret) {
+    return substr(hash_hmac('sha256', "zico-event\n" . $page . "\n" . $event, $secret), 0, 32);
+}
+function playerZicoSignedSource($page, $catalog, $secret) {
+    $clean = playerZicoPage($page);
+    $query = parse_url($page, PHP_URL_QUERY);
+    if ($clean === '' || !is_string($query) || !preg_match('/^ct_event=([0-9]{1,16})&ct_sig=([a-f0-9]{32})$/D', $query, $m)) return false;
+    $event = 'https://bp.zicotv.cc/events/' . $m[1];
+    return isset($catalog[$event]) && hash_equals(playerZicoProof($clean, $event, $secret), $m[2]);
+}
+function playerContainsZicoToken($value, $token) {
+    if ($token === '' || !is_string($value)) return false;
+    for ($i = 0; $i < 3; $i++) {
+        if (strpos($value, $token) !== false) return true;
+        $decoded = rawurldecode($value);
+        if ($decoded === $value) break;
+        $value = $decoded;
+    }
+    return false;
+}
+function playerOpenPage($page, $token, $get = 'playerGet') {
+    $clean = playerZicoPage($page);
+    $query = parse_url($page, PHP_URL_QUERY);
+    if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
+    if ($token === '') return $get($query === null ? $page : $clean, '');
+    // The documented credential only goes to this exact player host. Its URL is never returned or used as a Referer.
+    [$status, $body] = $get($clean . '?token=' . rawurlencode($token), 'https://calamarmenciano.com/', 3145728, 1);
+    return [$status, $body, $clean];
+}
+function playerZicoEventSources($data, $event, $catalog, $secret, $token) {
+    $sources = [];
+    foreach (($data['data']['sources'] ?? []) as $source) {
+        if (!is_array($source)) continue;
+        $url = $source['player_url'] ?? $source['url'] ?? '';
+        $clean = playerZicoPage($url);
+        if ($clean === '') continue;
+        if ((!empty($source['is_premium']) || !empty($source['locked'])) && ($token === '' || ($source['source'] ?? '') !== 'own')) continue;
+        if ($token === '' && !empty(parse_url($url, PHP_URL_QUERY))) continue;
+        if ($event === 'https://bp.zicotv.cc/events/' . basename($event) && !isset($catalog[$clean])) {
+            $clean .= '?ct_event=' . basename($event) . '&ct_sig=' . playerZicoProof($clean, $event, $secret);
+        } elseif (!isset($catalog[$clean]) && $token === '') {
+            $clean = $url;
+        }
+        $name = (string)($source['name'] ?? 'Fuente del evento');
+        if (playerContainsZicoToken($name, $token)) $name = 'Fuente del evento';
+        $sources[$clean] = ['name' => $name, 'player_url' => $clean];
+    }
+    return array_values($sources);
+}
+
 function playerB64($text) { return rtrim(strtr(base64_encode($text), '+/', '-_'), '='); }
 function playerUnB64($text) { return base64_decode(strtr((string)$text, '-_', '+/'), true); }
 /** The page the video comes from goes with each piece: its servers only answer visits from that page. */
 function playerSign($url, $page, $secret) { return substr(hash_hmac('sha256', $url . "\n" . $page, $secret), 0, 32); }
 function playerRelayed($url, $page, $secret) {
+    $token = playerZicoToken();
+    if (playerContainsZicoToken($url, $token) || playerContainsZicoToken($page, $token))
+        playerAnswer(['error' => 'No se pudo preparar una dirección segura del vídeo.'], 502);
     return 'calamar-player.php?seg=' . playerB64($url) . '&p=' . playerB64($page) . '&sig=' . playerSign($url, $page, $secret);
 }
 
@@ -48,6 +156,7 @@ function playerResolve($base, $ref) {
 
 /** Every address of an HLS list (variants, pieces, keys, subtitles) goes through the relay. */
 function playerRewrite($list, $base, $page, $secret) {
+    if (playerContainsZicoToken($list, playerZicoToken())) playerAnswer(['error' => 'No se pudo preparar una lista segura del vídeo.'], 502);
     $out = array();
     foreach (preg_split('/\r?\n/', $list) as $line) {
         $trimmed = trim($line);
@@ -195,8 +304,8 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     return $ch;
 }
 /** Status, body and final address of a page or list (redirects followed, each to a public server). */
-function playerGet($url, $page, $limit = 3145728) {
-    for ($hop = 0; $hop < 5; $hop++) {
+function playerGet($url, $page, $limit = 3145728, $maxHops = 5) {
+    for ($hop = 0; $hop < $maxHops; $hop++) {
         $ch = playerCurl($url, $page, 15);
         if ($ch === null) return array(0, null, $url);
         curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_ENCODING => '', CURLOPT_HEADER => false));
@@ -343,7 +452,8 @@ function playerMain() {
     if ($origin !== '') { header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
     if (!function_exists('curl_init')) playerAnswer(array('error' => 'cURL no disponible.'), 502);
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
-    if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET'); header('Access-Control-Allow-Headers: Range'); http_response_code(204); exit; }
+    if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET, POST, OPTIONS'); header('Access-Control-Allow-Headers: Range, Content-Type, Authorization'); http_response_code(204); exit; }
+    if (isset($_GET['zico_config'])) playerZicoConfig($method);
     if ($method !== 'GET') playerAnswer(array('error' => 'Método no permitido.'), 405);
     $secret = playerSecret();
 
@@ -364,42 +474,37 @@ function playerMain() {
     // Resolve catalog event sources from the hosting when the device's operator resets Zico API requests.
     if (isset($_GET['event'])) {
         $event = trim((string)$_GET['event']);
+        $catalog = playerCatalogStreams();
         $parts = parse_url($event);
         $host = strtolower($parts['host'] ?? '');
         if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -strlen('.zicotv.cc')) !== '.zicotv.cc')
             || isset($parts['user']) || isset($parts['port']) || isset($parts['query']) || isset($parts['fragment'])
             || !preg_match('#^/events/([0-9]+)/?$#', $parts['path'] ?? '', $match)
-            || !isset(playerCatalogStreams()[$event])) playerAnswer(array('error' => 'Evento fuera del catálogo.'), 403);
+            || !isset($catalog[$event])) playerAnswer(array('error' => 'Evento fuera del catálogo.'), 403);
         list($status, $body) = playerGet('https://' . $host . '/api/v1/events/' . $match[1], '');
         if ($status !== 200 || !is_string($body)) playerAnswer(array('error' => 'La API del evento no responde.'), 502);
         $data = json_decode($body, true);
-        $sources = array();
-        foreach (($data['data']['sources'] ?? array()) as $source) {
-            if (!is_array($source) || !empty($source['locked']) || !empty($source['is_premium'])) continue;
-            $url = $source['player_url'] ?? $source['url'] ?? '';
-            $target = parse_url($url);
-            $sourceHost = strtolower($target['host'] ?? '');
-            if (($target['scheme'] ?? '') !== 'https' || ($sourceHost !== 'zicotv.cc' && substr($sourceHost, -strlen('.zicotv.cc')) !== '.zicotv.cc')
-                || isset($target['user']) || isset($target['port']) || !preg_match('#^/api/player/[0-9]+/?$#', $target['path'] ?? '')) continue;
-            $sources[] = array('name' => (string)($source['name'] ?? 'Fuente del evento'), 'player_url' => $url);
-        }
-        playerAnswer(array('data' => array('sources' => $sources)));
+        $sources = playerZicoEventSources($data, $event, $catalog, $secret, playerZicoToken());
+        playerAnswer(['data' => ['sources' => $sources]]);
+
     }
 
     $page = trim((string)($_GET['page'] ?? ''));
     if (!preg_match('#^https://#i', $page) || strlen($page) > 2048) playerAnswer(array('error' => 'Enlace de reproductor no válido.'), 400);
     // Only channels of the catalog: the hosting is not a relay for any page on the internet.
-    if (!playerAllowedPage($page, playerCatalogStreams())) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
+    $catalog = playerCatalogStreams();
+    if (!playerZicoSignedSource($page, $catalog, $secret) && !playerAllowedPage($page, $catalog)) playerAnswer(array('error' => 'Este enlace no es de ningún canal del catálogo. Si lo acabas de añadir, espera un minuto.'), 403);
     // cast=1: the signed address of the list instead of the list, for Chromecast (it cannot send the page).
     $cast = isset($_GET['cast']);
-    list($status, $html, $final) = playerGet($page, '');
+    $token = playerZicoToken();
+    list($status, $html, $final) = playerOpenPage($page, $token);
     if ($status !== 200 || $html === null) playerAnswer(array('error' => 'La página del reproductor no responde (' . $status . ').'), 502);
     // The «page» is already an HLS list without .m3u8 in its address.
     if (playerIsList($html)) {
         if ($cast) playerAnswer(array('url' => playerRelayed($final, $final, $secret) . '&l=1'));
         playerList(playerRewrite($html, $final, $final, $secret));
     }
-    $sources = playerSources($html, $final);
+    $sources = array_values(array_filter(playerSources($html, $final), function ($url) use ($token) { return !playerContainsZicoToken($url, $token); }));
     if (!$sources) playerAnswer(array('error' => 'No se encontró ningún vídeo en la página del reproductor.'), 404);
     $pick = $_GET['src'] ?? '';
     if (is_string($pick) && preg_match('/^\d{1,2}$/', $pick) && isset($sources[(int)$pick])) $sources = array($sources[(int)$pick]);
@@ -412,6 +517,7 @@ function playerMain() {
     if (isset($_GET['list'])) playerAnswer(array('sources' => count($sources)));
     list($status, $body, $at) = playerFirstList($sources, $final);
     if ($status === 200) {
+        if (playerContainsZicoToken($body, $token)) playerAnswer(['error' => 'No se pudo preparar una lista segura del vídeo.'], 502);
         if ($cast) playerAnswer(array('url' => playerRelayed($at, $final, $secret) . '&l=1'));
         playerList(playerRewrite($body, $at, $final, $secret));
     }

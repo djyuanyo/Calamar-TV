@@ -10,6 +10,7 @@ import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
+import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
 import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 
@@ -452,6 +453,7 @@ export async function render(state) {
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }).concat(reviewRoute ? [] : platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
         eventRoute[1] ? null : zicoAgendaPanel(rerender, state),
+        eventRoute[1] ? null : zicoTokenPanel(),
         eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
@@ -508,7 +510,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${count} partidos publicados, ${pending} con canal por confirmar.`;
+      notice = `Guardado. Agenda de ZicoTV: ${count} eventos publicados, ${pending} sin señal al importar.`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -518,7 +520,38 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Publica los partidos de fútbol en directo y programados en la web y la app. Los partidos sin fuente se muestran con canal por confirmar. Puedes volver a importar para actualizar la agenda.'), button, status);
+    el('p', { class: 'note' }, 'Publica los eventos en directo y programados de todos los deportes. Al abrir uno, Calamar TV busca las señales disponibles en ZicoTV.'), button, status);
+}
+
+function zicoTokenPanel() {
+  const input = el('input', { type: 'password', autocomplete: 'new-password', maxlength: '512', required: true });
+  const status = el('p', { class: 'note', role: 'status' }, 'Comprobando la conexión con el hosting…');
+  const save = el('button', { type: 'submit', class: 'btn secondary', disabled: true }, 'Guardar token Premium');
+  const install = el('a', { class: 'ghost', hidden: true, target: '_blank', rel: 'noopener noreferrer',
+    href: 'https://github.com/djyuanyo/Calamar-TV/blob/main/hosting/calamar-player.php' }, 'Descargar archivo para el hosting');
+  const remove = el('button', { type: 'button', class: 'ghost', hidden: true, onclick: () => {
+    if (confirm('¿Quitar el token Premium de ZicoTV?')) update('');
+  } }, 'Quitar token');
+  const show = result => {
+    remove.hidden = !result.configured;
+    status.textContent = result.configured ? 'Token Premium guardado en el hosting.' : 'Puedes guardar el token de tu perfil de ZicoTV.';
+  };
+  async function update(token) {
+    save.disabled = remove.disabled = true;
+    status.textContent = 'Actualizando el token…';
+    try {
+      const result = await saveZicoToken(token, await auth.currentUser.getIdToken());
+      input.value = '';
+      show(result);
+    } catch (error) { status.textContent = explain(error); }
+    finally { save.disabled = remove.disabled = false; }
+  }
+  zicoTokenStatus().then(result => { show(result); save.disabled = false; }).catch(error => {
+    status.textContent = error.message;
+    install.hidden = false;
+  });
+  return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y se usa al abrir los canales de ZicoTV.'), el('div', { class: 'actions' }, save, remove, install), status);
 }
 
 function eventForm(existing, rerender, catalogState) {

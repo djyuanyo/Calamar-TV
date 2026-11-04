@@ -17,7 +17,7 @@ export function eventPlayerSources(data) {
       if (!entry || entry.locked || entry.is_premium) continue;
       try {
         const u = new URL(entry.player_url || entry.url);
-        if (u.protocol !== 'https:' || u.username || u.password || zicoEventApi(u.href)) continue;
+        if (u.protocol !== 'https:' || u.username || u.password || u.searchParams.has('token') || zicoEventApi(u.href)) continue;
         if (!found.has(u.href)) found.set(u.href, { url: u.href, name: String(entry.name || source.name || 'Fuente del evento') + (entry !== source && entry.language ? ` · ${entry.language}` : '') });
       } catch { /* Ignore incomplete sources. */ }
     }
@@ -25,15 +25,30 @@ export function eventPlayerSources(data) {
   return [...found.values()];
 }
 
-export async function expandEventSources(streams, { fetcher = globalThis.fetch, signal } = {}) {
+const HOSTED_EVENTS = 'https://calamarmenciano.com/calamar-player.php?event=';
+async function hostedEventSources(event, fetcher, signal) {
+  try {
+    const timeout = AbortSignal.timeout(5500);
+    const response = await fetcher(HOSTED_EVENTS + encodeURIComponent(event), { credentials: 'omit', cache: 'no-store',
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    return response.ok ? eventPlayerSources(await response.json()) : [];
+  } catch { return []; }
+}
+
+export async function expandEventSources(streams, { fetcher = globalThis.fetch, signal, preferHosted = false } = {}) {
   const rows = await Promise.all(streams.map(async url => {
     const api = zicoEventApi(url);
     if (!api) return [{ url }];
     try {
-      const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
-      if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);
-      const sources = eventPlayerSources(await response.json());
-      if (!sources.length) throw Error('Zico TV todavía no publica fuentes disponibles para este evento.');
+      const hosted = preferHosted ? hostedEventSources(url, fetcher, signal) : [];
+      const direct = (async () => {
+        const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
+        if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);
+        return eventPlayerSources(await response.json());
+      })();
+      const [preferred, publicSources] = await Promise.allSettled([hosted, direct]);
+      const sources = [...(preferred.value || []), ...(publicSources.value || [])];
+      if (!sources.length) throw publicSources.reason || Error('ZicoTV todavía no publica fuentes disponibles para este evento.');
       return sources.map(source => ({ ...source, origin: url }));
     } catch (error) {
       return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];

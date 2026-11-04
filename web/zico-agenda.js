@@ -1,7 +1,7 @@
 import { zicoEventApi } from './event-sources.js';
 
 const ORIGIN = 'https://bp.zicotv.cc';
-const AGENDA = ORIGIN + '/api/v1/events?sport=Soccer';
+const AGENDA = ORIGIN + '/api/v1/events';
 const ownId = /^zico-event-\d+$/;
 export const isZicoAgendaEvent = event => ownId.test(event?.id || '');
 
@@ -36,20 +36,25 @@ function addEntity(list, name, badge, prefix) {
   return id;
 }
 
-function publicSources(row) {
+function catalogSources(row) {
   const sources = Array.isArray(row.sources) ? row.sources : [];
   const own = [], direct = [], external = [];
   for (const source of sources) {
-    if (!source || source.is_premium || source.locked) continue;
+    if (!source) continue;
     const url = httpsUrl(source.player_url || source.url);
     if (!url || url.href.length > 2048 || url.searchParams.has('token')) continue;
     if (source.source === 'own' && ['bp.zicotv.cc', 'zicotv.cc'].includes(url.hostname)
-      && /^\/api\/player\/\d+\/?$/.test(url.pathname)) own.push(url.origin + url.pathname);
+      && /^\/api\/player\/\d+\/?$/.test(url.pathname)) own.push(ORIGIN + url.pathname.replace(/\/$/, ''));
+    else if (source.is_premium || source.locked) continue;
     else if (source.type === 'direct') direct.push(url.href);
     else if (source.type === 'iframe' && !zicoEventApi(url.href)) external.push(url.href);
   }
   return [...new Set([...own, ...direct, ...external])].slice(0, 12);
 }
+
+const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis',
+  'Ice Hockey': 'Hockey sobre hielo', Handball: 'Balonmano', Volleyball: 'Voleibol',
+  Motorsport: 'Motor', Futsal: 'Fútbol sala', Cycling: 'Ciclismo', Fighting: 'Combate', Other: 'Otros deportes' };
 
 export function applyZicoAgenda(catalog, payload, fixtures = []) {
   if (!Array.isArray(payload?.data) || payload.data.length !== payload.total
@@ -66,7 +71,7 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
   let count = 0, pending = 0;
   const seen = new Set();
   for (const row of payload.data) {
-    if (row.sport_category !== 'Soccer' || !['live', 'scheduled'].includes(row.status)) continue;
+    if (!['live', 'scheduled'].includes(row.status)) continue;
     const name = clean(row.title), start = Date.parse(row.start_time);
     if (!name || !Number.isFinite(start)) continue;
     const id = `zico-event-${row.id}`, startAt = new Date(start).toISOString();
@@ -76,10 +81,12 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
     occupied.add(match);
 
     const old = previous.get(id);
-    const zicoStreams = publicSources(row);
+    const sources = catalogSources(row);
+    const zicoStreams = [`${ORIGIN}/events/${row.id}`, ...sources];
     const manualStreams = (old?.streams || []).filter(url => !old.zicoStreams?.includes(url));
-    const streams = [...new Set([...manualStreams, ...zicoStreams])].slice(0, 50);
-    const leagueId = old?.leagueId || addEntity(leagues, clean(row.league), null, 'zico-liga-');
+    const streams = [...new Set([zicoStreams[0], ...manualStreams, ...sources])].slice(0, 50);
+    const competition = clean(row.league) || sportNames[row.sport_category] || clean(row.sport_category);
+    const leagueId = old?.leagueId || addEntity(leagues, competition, null, 'zico-liga-');
     const homeTeamId = old?.homeTeamId || addEntity(teams, clean(row.home_team), httpsUrl(row.home_team_badge), 'zico-equipo-');
     const awayTeamId = old?.awayTeamId || addEntity(teams, clean(row.away_team), httpsUrl(row.away_team_badge), 'zico-equipo-');
     events.push({
@@ -89,7 +96,7 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
       cover: old?.cover || '', streams, zicoStreams,
     });
     count++;
-    if (!streams.length && !old?.channelId) pending++;
+    if (!sources.length && !manualStreams.length && !old?.channelId) pending++;
   }
   return { data: { ...catalog, events, leagues, teams }, count, pending };
 }

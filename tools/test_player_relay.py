@@ -142,6 +142,57 @@ class PlayerRelayTest(unittest.TestCase):
                 text=True, env={**os.environ, 'TMPDIR': tmp, 'CALAMAR_PLAYER_SECRET': SECRET})
         self.assertEqual(json.loads(out), [True, True, False, False])
 
+    def test_premium_is_authorized_for_the_catalog_event_and_credential_stays_on_the_player_host(self):
+        data = {'data': {'sources': [
+            {'source': 'own', 'name': 'Canal Premium', 'url': 'https://bp.zicotv.cc/api/player/22', 'is_premium': True},
+            {'source': 'manual', 'url': 'https://outside.example/api/player/22', 'locked': True},
+        ]}}
+        code = f'''
+        $data = json_decode({json.dumps(json.dumps(data))}, true);
+        $event = "https://bp.zicotv.cc/events/98019";
+        $catalog = [$event => true];
+        $token = "test-token-with+private/chars";
+        $sources = playerZicoEventSources($data, $event, $catalog, playerSecret(), $token);
+        $page = $sources[0]["player_url"];
+        $proof = playerZicoSignedSource($page, $catalog, playerSecret());
+        $tampered = playerZicoSignedSource(str_replace("player/22", "player/23", $page), $catalog, playerSecret());
+        $other = playerZicoSignedSource($page, [], playerSecret());
+        $request = [];
+        $result = playerOpenPage($page, $token, function($url,$referer,$limit,$hops) use (&$request) {{
+            $request = [$url,$referer,$hops];
+            return [200,"body",$url];
+        }});
+        echo json_encode([$sources,$proof,$tampered,$other,$request,$result,
+            playerZicoEventSources($data,$event,$catalog,playerSecret(),"")]);
+        '''
+        sources, proof, tampered, other, request, result, public = json.loads(php(code))
+        self.assertEqual(len(sources), 1)
+        self.assertNotIn('token=', sources[0]['player_url'])
+        self.assertEqual([proof, tampered, other], [True, False, False])
+        self.assertEqual(request, ['https://bp.zicotv.cc/api/player/22?token=test-token-with%2Bprivate%2Fchars',
+                                   'https://calamarmenciano.com/', 1])
+        self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
+        self.assertEqual(public, [])
+
+    def test_zico_credentials_can_only_be_saved_outside_document_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            public = pathlib.Path(tmp, 'public')
+            public.mkdir()
+            private_file = pathlib.Path(tmp, 'private.php')
+            public_file = public / 'config.php'
+            code = f'''
+            $_SERVER["DOCUMENT_ROOT"] = {json.dumps(str(public))};
+            putenv("CALAMAR_ZICO_CONFIG=" . {json.dumps(str(public_file))});
+            $unsafe = playerSaveZicoToken("only-used-in-this-test");
+            putenv("CALAMAR_ZICO_CONFIG=" . {json.dumps(str(private_file))});
+            $saved = playerSaveZicoToken("only-used-in-this-test");
+            echo json_encode([$unsafe,$saved,playerZicoToken(),playerContainsZicoToken("a%6fnly-used-in-this-test","only-used-in-this-test")]);
+            '''
+            unsafe, saved, token, exposed = json.loads(php(code))
+            self.assertEqual([unsafe, saved, token, exposed], [False, True, 'only-used-in-this-test', True])
+            self.assertFalse(public_file.exists())
+            self.assertEqual(private_file.stat().st_mode & 0o777, 0o600)
+
     def test_unsigned_addresses_other_sites_and_unknown_pages_are_refused(self):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]
