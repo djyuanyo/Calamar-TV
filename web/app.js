@@ -537,18 +537,7 @@ function channelsPage(selected) {
   for (const [group, channels] of map) {
     if (selected && selected !== group) continue;
     nodes.push(sectionHead(group, el('span', {}, channels.length === 1 ? '1 canal' : `${channels.length} canales`)));
-    const sorted = [...channels].sort((a, b) => a.region.localeCompare(b.region, 'es') || Number(b.playable) - Number(a.playable));
-    let region = null;
-    let grid = null;
-    for (const c of sorted) {
-      if (c.region && c.region !== region) {
-        region = c.region;
-        nodes.push(el('p', { class: 'region' }, region.toUpperCase()));
-        grid = null;
-      }
-      if (!grid) nodes.push((grid = el('div', { class: 'grid' })));
-      grid.append(card(c));
-    }
+    nodes.push(el('div', { class: 'grid' }, channels.map((c) => card(c))));
   }
   return nodes;
 }

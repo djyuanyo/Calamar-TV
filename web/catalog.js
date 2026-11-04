@@ -10,6 +10,7 @@ const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
 export const GROUP_ORDER = [OWN_GROUP, 'Generalistas', 'Deportes', 'Informativos', 'Infantiles', 'Música', 'Autonómicos'];
+const channelNames = new Intl.Collator('es', { sensitivity: 'base' });
 /** Card background of each category until the administrator picks another one. */
 export const CATEGORY_COLORS = { [OWN_GROUP]: '#5a6b12', Generalistas: '#1f4f8f', Deportes: '#1d7a40', Informativos: '#8f2c2c', Infantiles: '#b35c14', 'Música': '#6a2f8f', 'Autonómicos': '#1c7373' };
 const EXTRA_COLORS = ['#7a5418', '#2d5a8a', '#8a2d63', '#4a6b2a', '#5c3d8a', '#8a4a2d', '#2d7a6b', '#6b6b2d'];
@@ -155,7 +156,7 @@ export function groups(channels, order = []) {
   for (const g of [...extra.keys()].sort()) map.set(g, extra.get(g));
   for (const [g, list] of map) {
     if (!list.length) map.delete(g);
-    else list.sort((a, b) => Number(b.playable) - Number(a.playable));
+    else list.sort((a, b) => channelNames.compare(a.name, b.name));
   }
   return map;
 }

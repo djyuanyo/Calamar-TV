@@ -80,13 +80,19 @@ public class CatalogTest {
   }
 
   @Test
-  public void groupsUseFixedOrderWithPlayableFirst() throws Exception {
+  public void groupsKeepCategoryOrderAndSortChannelsByName() throws Exception {
     LinkedHashMap<String, List<Catalog.Channel>> groups =
         Catalog.groups(Catalog.merge(tdt(), new JSONObject()));
     assertEquals(
         Arrays.asList("Generalistas", "Deportes", "Autonómicos"),
         new ArrayList<>(groups.keySet()));
-    assertEquals("la-1", groups.get("Generalistas").get(0).id);
+    assertEquals("cuatro", groups.get("Generalistas").get(0).id);
+    JSONObject regional = new JSONObject().put("channels", new JSONArray()
+        .put(channel("zeta", "Autonómicos", "https://example.com/zeta.m3u8").put("region", "Andalucía"))
+        .put(channel("alfa", "Autonómicos").put("name", "Álfa").put("region", "Valencia")));
+    List<Catalog.Channel> ordered = Catalog.groups(Catalog.merge(regional, null)).get("Autonómicos");
+    assertEquals("alfa", ordered.get(0).id);
+    assertEquals("zeta", ordered.get(1).id);
   }
 
   @Test

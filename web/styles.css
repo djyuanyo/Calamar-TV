@@ -180,7 +180,6 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 @media (hover: none) { .rail-btn { display: none; } }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(160px, 15vw, 220px), 1fr)); gap: clamp(12px, 1.4vw, 20px); }
-.region { color: var(--accent); font-size: 13px; letter-spacing: 0.1em; font-weight: 800; margin: 24px 0 10px; }
 
 .card {
   --h: 220;

@@ -1335,47 +1335,11 @@ public class MainActivity extends Activity {
   }
 
   void grid() {
-    int columns = wide() ? 4 : 2;
-    int width = gridWidth(columns);
     for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels, custom).entrySet()) {
       if (!group.equals("Todos") && !group.equals(e.getKey())) continue;
       heading(e.getKey(), e.getValue().size() + " canales");
-      if (television) { channelGrid(regionSorted(e.getValue())); continue; }
-      String region = null;
-      LinearLayout r = null;
-      int i = 0;
-      for (Catalog.Channel c : regionSorted(e.getValue())) {
-        if (!c.region.isEmpty() && !c.region.equals(region)) {
-          region = c.region;
-          TextView regionLabel =
-              label(region.toUpperCase(new Locale("es", "ES")), 12, Ui.ACC);
-          regionLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-          regionLabel.setLetterSpacing(0.1f);
-          regionLabel.setPadding(dp(4), dp(16), 0, dp(4));
-          list.addView(regionLabel);
-          i = 0;
-        }
-        if (i++ % columns == 0) {
-          r = row();
-          r.setGravity(Gravity.TOP);
-          list.addView(r);
-        }
-        r.addView(card(c, width));
-      }
+      channelGrid(e.getValue());
     }
-  }
-
-  List<Catalog.Channel> regionSorted(List<Catalog.Channel> in) {
-    List<Catalog.Channel> out = new ArrayList<>(in);
-    Collections.sort(
-        out,
-        new Comparator<Catalog.Channel>() {
-          public int compare(Catalog.Channel a, Catalog.Channel b) {
-            int r = a.region.compareTo(b.region);
-            return r != 0 ? r : Boolean.compare(b.playable(), a.playable());
-          }
-        });
-    return out;
   }
 
   /** Multi-screen: pick 2 to 4 channels or events (events first) and watch them together. */

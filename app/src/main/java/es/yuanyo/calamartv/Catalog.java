@@ -1,5 +1,6 @@
 package es.yuanyo.calamartv;
 
+import java.text.Collator;
 import java.util.*;
 import org.json.*;
 
@@ -377,16 +378,10 @@ public final class Catalog {
     out.putAll(extra);
     Iterator<Map.Entry<String, List<Channel>>> it = out.entrySet().iterator();
     while (it.hasNext()) if (it.next().getValue().isEmpty()) it.remove();
-    for (List<Channel> bucket : out.values()) {
-      // Playable channels first; stable sort keeps the source order otherwise.
-      Collections.sort(
-          bucket,
-          new Comparator<Channel>() {
-            public int compare(Channel a, Channel b) {
-              return Boolean.compare(b.playable(), a.playable());
-            }
-          });
-    }
+    Collator names = Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    names.setStrength(Collator.PRIMARY);
+    for (List<Channel> bucket : out.values())
+      Collections.sort(bucket, (a, b) -> names.compare(a.name, b.name));
     return out;
   }
 
