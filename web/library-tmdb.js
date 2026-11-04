@@ -12,7 +12,8 @@ export const TMDB_TIMEOUT_MS = 20000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function tmdb(path, params, key, fetcher, attempt = 1) {
   const bearer = key.includes('.'); // v4 read token (JWT) or v3 key
-  const query = new URLSearchParams({ ...params, language: 'es-ES', ...(bearer ? {} : { api_key: key }) });
+  const query = new URLSearchParams({ language: 'es-ES', ...params, ...(bearer ? {} : { api_key: key }) });
+  if (params.language === null) query.delete('language');
   const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) } : {};
   let response, data;
   try {
@@ -35,6 +36,23 @@ async function tmdb(path, params, key, fetcher, attempt = 1) {
 export const checkTmdbKey = (key, fetcher = globalThis.fetch) => tmdb('/configuration', {}, key, fetcher);
 const image = (path, size) => path ? `${TMDB_IMAGE}${size}${path}` : '';
 const yearOf = (date) => date ? Number(String(date).slice(0, 4)) || null : null;
+const titleImageLanguages = 'es,en,null';
+
+async function titleLogo(details, path, key, fetcher) {
+  if (!Array.isArray(details.images?.logos)) return undefined;
+  const valid = (logos) => logos.filter((logo) => /^\/[\w-]+\.(?:png|svg)$/i.test(logo?.file_path || ''));
+  let logos = valid(details.images.logos);
+  if (!logos.length) {
+    const all = await tmdb(`${path}/images`, { language: null }, key, fetcher).catch(() => null);
+    if (!Array.isArray(all?.logos)) return undefined;
+    logos = valid(all.logos);
+  }
+  const languages = [...new Set(['es', details.original_language || 'en', 'en', null])];
+  const rank = (logo) => languages.includes(logo.iso_639_1) ? languages.indexOf(logo.iso_639_1) : languages.length;
+  const logo = logos.sort((a, b) => rank(a) - rank(b) || (b.vote_average || 0) - (a.vote_average || 0)
+    || (b.width || 0) - (a.width || 0))[0];
+  return logo ? image(logo.file_path, /\.svg$/i.test(logo.file_path) ? 'original' : 'w500') : '';
+}
 
 /** A public TMDB record URL (its slug/language are optional); only its type and numeric id are used. */
 export function tmdbReference(value) {
@@ -74,12 +92,15 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 
 /** A film's or series' details in Spanish; for series also its seasons [{ season, name, episodes }]. */
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
-  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers,videos', include_video_language: 'es' }, key, fetcher);
+  const path = `/${kind}/${Number(id)}`;
+  const d = await tmdb(path, { append_to_response: 'credits,watch/providers,videos,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
+  const logo = await titleLogo(d, path, key, fetcher);
   const info = { id: Number(id), kind, trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
     released: d.release_date || d.first_air_date || '', providers: providersOf(d), logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
+  if (logo !== undefined) info.titleLogo = logo;
   const seasons = kind === 'tv' ? (d.seasons || []).map((s) => ({ season: s.season_number, name: s.name || `Temporada ${s.season_number}`, episodes: s.episode_count || 0 }))
     .sort((a, b) => (a.season === 0) - (b.season === 0) || a.season - b.season) : [];
   return { info, seasons };
@@ -103,9 +124,12 @@ export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) 
 
 /** Popularity, release date and the platforms where it can be watched in Spain, in one request. */
 export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
-  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers,videos,credits', include_video_language: 'es' }, key, fetcher);
+  const path = `/${kind}/${Number(id)}`;
+  const d = await tmdb(path, { append_to_response: 'watch/providers,videos,credits,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
+  const logo = await titleLogo(d, path, key, fetcher);
   return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
-    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d) };
+    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d),
+    ...(logo !== undefined ? { titleLogo: logo } : {}) };
 }
 
 /** The logo of each of those platforms (TMDB's square icons): { «Netflix»: «https://image.tmdb.org/…» }. */

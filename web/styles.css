@@ -1185,6 +1185,7 @@ button.mc-porra-tile:hover { border-color: var(--muted, #aab2bd); }
 .title-body { max-width: 980px; padding: 0 var(--gutter); margin-top: -28px; position: relative; }
 .title-brand { margin: 0; color: #e50914; font-weight: 900; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; }
 .title-body h1 { margin: 2px 0 8px; font-size: clamp(32px, 5vw, 52px); font-weight: 900; line-height: 1.02; }
+.title-logo { display: block; width: auto; height: auto; max-width: min(100%, 420px); max-height: clamp(88px, 17vw, 155px); object-fit: contain; object-position: left center; filter: drop-shadow(0 4px 14px #000b); }
 .title-body .library-facts { color: var(--muted); font-size: 17px; margin: 0 0 14px; }
 .title-body .library-actions { display: grid; gap: 10px; }
 .title-body .library-actions .btn { width: 100%; justify-content: center; background: #fff; color: #111; border-color: #fff; font-size: 19px; font-weight: 800; border-radius: 6px; }
@@ -1336,8 +1337,6 @@ body.gate-open { overflow: hidden; }
 .auth-submit:disabled { opacity: .6; }
 .auth-note { min-height: 1em; margin: 12px 0 0; text-align: center; color: rgba(255,255,255,.75); }
 .auth-note.error { color: #ff7b72; }
-.auth-foot { width: min(440px, 100% - 32px); margin: 0 auto 40px; text-align: center; font-size: 13px; color: rgba(255,255,255,.55); }
-.auth-foot a { color: rgba(255,255,255,.8); }
 
 /* «Perfil», as the profile sheet of Netflix. */
 .profile-sheet { width: min(560px, 100% - 32px); margin: 24px auto 40px; padding: 8px 18px 24px; border-radius: 22px; background: #232323; display: grid; gap: 16px; }
@@ -1372,10 +1371,21 @@ body.gate-open { overflow: hidden; }
 .app-updates { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
 .app-updates .chips { margin: 0; }
 
-.download-app { display: flex; align-items: center; gap: 9px; width: fit-content; margin: 12px auto; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: #0b0d10; font-weight: 800; text-decoration: none; }
+.download-app {
+  display: flex; align-items: center; gap: 12px; width: fit-content; max-width: calc(100% - 24px);
+  margin: 12px auto; padding: 8px 13px 8px 8px; border: 1px solid #d6ff0050; border-radius: 16px;
+  background: radial-gradient(ellipse at left top, #d6ff0024, transparent 70%), #131719;
+  box-shadow: 0 8px 22px #0005; color: #f8faf4; text-decoration: none;
+}
 .download-app[hidden] { display: none; }
-
-.download-app svg { width: 24px; height: 24px; fill: currentColor; }
+.download-app:hover, .download-app:focus-visible { border-color: var(--accent); }
+.download-app:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.download-app-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: var(--accent); color: #141900; }
+.download-app-icon svg { width: 24px; height: 24px; fill: currentColor; }
+.download-app-copy { display: grid; gap: 2px; line-height: 1.2; }
+.download-app-copy strong { font-size: 15px; font-weight: 800; }
+.download-app-copy small { font-size: 12px; color: #c2c9b8; }
+.download-app-arrow { flex: none; width: 20px; height: 20px; margin-left: 3px; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .library-art-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; }
 .library-art-field { min-width: 0; display: grid; align-content: start; gap: 10px; }
 .library-art-preview { width: 100%; max-height: 240px; object-fit: contain; background: #171a20; border-radius: 8px; }

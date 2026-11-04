@@ -881,7 +881,7 @@ function platformsPanel(rerender, state) {
     const saved = Array.isArray(data.platforms) ? data.platforms : [];
     const names = [...saved.map((p) => p.name).filter((n) => counts.has(n)), ...[...counts.keys()].filter((n) => !saved.some((p) => p.name === n)).sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b, 'es'))];
     for (const name of names) row({ ...(saved.find((p) => p.name === name) || { name }), count: counts.get(name), tmdbLogo: logos.get(name) || '' });
-    status.textContent = names.length ? '' : 'Todavía no hay plataformas: se rellenan desde TMDB con «Actualizar el top y las plataformas con TMDB».';
+    status.textContent = names.length ? '' : 'Todavía no hay plataformas. Se rellenan desde Pelis y series → «Actualizar top, plataformas y logos con TMDB».';
   }).catch((error) => { status.textContent = error.message; status.className = 'error'; });
   return [el('section', { class: 'league-order' },
     el('div', { class: 'section-head' }, el('h2', {}, 'Plataformas')),

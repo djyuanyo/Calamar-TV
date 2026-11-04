@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts,
+import { searchTmdb, tmdbDetails, tmdbFacts, seasonEpisodes, movieItem, seriesWithSeason, libraryParts,
   correctTmdbTitle, findTmdbTitle, freeTmdbTitleId } from '../web/library-tmdb.js';
 import { lulustreamEmbed, webPlayback } from '../web/catalog.js';
 import { validVideoLink } from '../web/library.js';
@@ -11,6 +11,33 @@ const fake = (bodies, calls = []) => async (url, init) => {
   const body = Object.entries(bodies).find(([end]) => path.endsWith(end))?.[1];
   return body ? { status: 200, json: async () => body } : { status: 404, json: async () => ({}) };
 };
+
+test('title logos prefer Spanish and reach the library metadata refresh', async () => {
+  const calls = [];
+  const fetcher = fake({ '/movie/8': { title: 'Planeta', images: { logos: [
+    { iso_639_1: 'en', file_path: '/English.png', vote_average: 9 },
+    { iso_639_1: 'es', file_path: '/Espanol.svg', vote_average: 5 },
+    { iso_639_1: 'es', file_path: 'https://example.test/bad.png', vote_average: 10 },
+  ] } } }, calls);
+  const expected = 'https://image.tmdb.org/t/p/original/Espanol.svg';
+  assert.equal((await tmdbDetails(8, 'movie', 'key', fetcher)).info.titleLogo, expected);
+  assert.equal((await tmdbFacts(8, 'movie', 'key', fetcher)).titleLogo, expected);
+  assert.equal(calls.length, 2);
+  assert.match(new URL(calls[0][0]).searchParams.get('append_to_response'), /\bimages\b/);
+  assert.equal(new URL(calls[0][0]).searchParams.get('include_image_language'), 'es,en,null');
+});
+
+test('title logos can use other languages and preserve existing metadata when images are unavailable', async () => {
+  const calls = [];
+  const show = { name: 'Serie', original_language: 'ko', images: { logos: [] } };
+  const found = await tmdbFacts(7, 'tv', 'key', fake({
+    '/tv/7': show, '/tv/7/images': { logos: [{ iso_639_1: 'ko', file_path: '/Korean.png' }] },
+  }, calls));
+  assert.equal(found.titleLogo, 'https://image.tmdb.org/t/p/w500/Korean.png');
+  assert.equal(new URL(calls[1][0]).searchParams.has('language'), false);
+  assert.equal((await tmdbFacts(7, 'tv', 'key', fake({ '/tv/7': show }))).titleLogo, undefined);
+  assert.equal((await tmdbFacts(7, 'tv', 'key', fake({ '/tv/7': show, '/tv/7/images': { logos: [] } }))).titleLogo, '');
+});
 
 test('correcting TMDB metadata keeps film IDs, catalogue links and artwork', async () => {
   const old = { ...movieItem({ id: 6, title: 'Incorrecta' }, 'https://example.test/movie.mp4'),

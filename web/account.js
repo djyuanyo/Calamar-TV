@@ -89,7 +89,6 @@ export function signIn(el, f, done) {
       el('h1', {}, creating ? 'Crea tu cuenta' : 'Entra'),
       el('p', { class: 'auth-lead' }, creating ? 'Regístrate con:' : 'Inicia sesión o regístrate con:'),
       google,
-      el('p', { class: 'note' }, 'Con tu cuenta, el historial de reproducción y la actividad en directo se muestran en administración.'),
       el('div', { class: 'auth-divider' }, el('span', {}, 'O continuar con')),
       el('p', { class: 'auth-method' }, 'Email y contraseña'),
       el('form', { class: 'auth-form', onsubmit: (event) => {
@@ -104,7 +103,7 @@ export function signIn(el, f, done) {
       note);
   };
   draw();
-  return [card, el('p', { class: 'auth-foot' }, 'Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.')];
+  return [card];
 }
 
 /** A profile's form: name and colour, «Guardar», and «Borrar perfil» (never the main one). */

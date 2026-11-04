@@ -786,6 +786,7 @@ export function resumeEpisode(item, saved = () => null) {
  */
 export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = []) {
   const info = item.tmdb || {};
+  const title = itemTitle(item);
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
   const seasons = series ? [...new Set(item.episodes.map((e) => e.season))].sort((a, b) => a - b) : [];
@@ -818,7 +819,8 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹')),
     el('div', { class: 'title-body' },
       brand ? el('p', { class: 'title-brand' }, info.logos?.[brand] ? el('img', { class: 'title-platform-logo', src: info.logos[brand], alt: brand, referrerpolicy: 'no-referrer', onerror: (event) => { event.target.replaceWith(brand); } }) : brand) : null,
-      el('h1', {}, itemTitle(item)),
+      el('h1', {}, info.titleLogo ? el('img', { class: 'title-logo', src: info.titleLogo, alt: title, referrerpolicy: 'no-referrer',
+        onerror: (event) => event.target.replaceWith(title) }) : title),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
       action, !series ? soundNote(el, item.file, item.url) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
@@ -1419,7 +1421,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   }
 
   // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
-  const TOP_REFRESHED = 'calamar-top-refreshed-v2'; // v2: a top for films and another for series
+  const TOP_REFRESHED = 'calamar-top-refreshed-v3'; // Refresh existing titles for their artwork too.
   const topNote = el('p', { class: 'note', role: 'status' });
   async function refreshTop(quiet = false) {
     const key = tmdbKey();
@@ -1429,7 +1431,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     // The same request brings the release date and the platforms of each title (the filters of the lists).
     const popularity = {}, facts = {};
     for (const [n, item] of titles.entries()) {
-      if (!quiet) topNote.textContent = `Popularidad y plataformas en TMDB ${n + 1} de ${titles.length}: ${itemTitle(item)}…`;
+      if (!quiet) topNote.textContent = `Consultando plataformas y logos en TMDB (${n + 1} de ${titles.length}) · ${itemTitle(item)}`;
       const kind = item.kind === 'tv' ? 'tv' : 'movie';
       const found = await tmdbFacts(item.tmdb.id, kind, key).catch(() => null);
       popularity[`${kind}:${item.tmdb.id}`] = found?.popularity || 0;
@@ -1439,6 +1441,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}),
         ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}),
         logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}),
+        ...(facts[item.id].titleLogo !== undefined ? { titleLogo: facts[item.id].titleLogo } : {}),
         ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
@@ -1451,7 +1454,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     topButton.disabled = true;
     try { await refreshTop(); } catch (error) { topNote.textContent = error.message; } finally { topButton.disabled = false; }
-  } }, 'Actualizar el top y las plataformas con TMDB');
+  } }, 'Actualizar top, plataformas y logos con TMDB');
 
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));

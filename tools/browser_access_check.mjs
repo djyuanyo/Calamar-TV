@@ -25,10 +25,13 @@ try{
   await page.addInitScript(()=>{window.__initialAuth=null;window.__initialWebAccess={requireLogin:true};window.__fakeLogin=true;});
   await page.goto(base+'/#/canal/sports-one');
   await page.getByRole('heading',{name:'Entra',exact:true}).waitFor();
+  const oldAccountNotes=page.getByText(/Con tu cuenta, (el historial de reproducción|lo que ves)/);
+  assert.equal(await oldAccountNotes.count(),0);
   assert.equal(await page.locator('#player').isVisible(),false);assert.equal(media.length,0,'A direct link cannot load media before Firebase confirms admission');
   assert.equal(await page.locator('.nav').isVisible(),false);assert.equal(await page.getByRole('button',{name:'Google',exact:true}).locator('svg').count(),1);
   await mkdir('tools/ui-artifacts',{recursive:true});await page.screenshot({path:'tools/ui-artifacts/access-login.png'});
   await page.getByRole('tab',{name:'Crear cuenta',exact:true}).click();
+  assert.equal(await oldAccountNotes.count(),0);
   await page.getByPlaceholder('Tu email').fill('pending@example.com');
   await page.locator('input[autocomplete="new-password"]').fill('temporary-password');
   await page.getByRole('button',{name:'Crear cuenta',exact:true}).click();

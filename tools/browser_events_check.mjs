@@ -391,14 +391,15 @@ try {
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
-      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
+      tmdb: { title: 'Avatar', titleLogo: 'https://image.tmdb.org/t/p/w500/TestAvatar.png', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
       { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
-    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
+    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', titleLogo: 'https://image.tmdb.org/t/p/w500/NoSuchLogo.png', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
   // The library comes from Firestore (index + parts), published by the admin page; no hosting involved.
   const libraryDocs = { index: { sections: { movies: 1, series: 1, documentaries: 1 }, attribution: library.attribution },
     'movies-0': { items: library.sections.movies }, 'series-0': { items: library.sections.series }, 'documentaries-0': { items: [] } };
+  await page.route('https://image.tmdb.org/t/p/w500/TestAvatar.png', route => route.fulfill({ path: 'web/assets/calamar-menciano-tv.png' }));
   await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', async route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
     const published = await page.evaluate(() => window.__libraryParts || null);
@@ -484,8 +485,9 @@ try {
   assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   // Artwork is edited without asking TMDB; both uploaded images and HTTPS URLs persist.
-  assert.equal(await page.getByRole('link', { name: 'Descargar aplicación' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
-  assert.equal(await page.locator('#download-app svg').count(), 1);
+  assert.equal(await page.getByRole('link', { name: 'Descargar app Android' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
+  assert.equal(await page.locator('#download-app .download-app-icon svg').count(), 1);
+  assert.equal(await page.locator('#download-app .download-app-arrow').count(), 1);
   assert.equal(await page.locator('#open-in-app').count(), 0);
   for (const id of ['m76600', 's4500']) {
     await page.locator(`[data-library-id="${id}"]`).getByRole('button', { name: 'Editar', exact: true }).click();
@@ -640,6 +642,8 @@ try {
   await page.locator('.poster-card').first().waitFor();
   await page.locator('.poster-card', { hasText: 'Avatar' }).first().click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
+  await page.waitForFunction(() => document.querySelector('.title-logo')?.naturalWidth > 0);
+  assert.equal(await page.locator('.title-body h1').textContent(), '');
   assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
   // Simulate an iPhone media element that freezes at minute 15 without reporting an error.
@@ -689,6 +693,7 @@ try {
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
   // A series' page as on Netflix: «Reproducir» the first episode, the tabs, and the season drop-down.
+  await page.waitForFunction(() => document.querySelector('.title-body h1')?.textContent === 'Los hombres de Paco');
   assert.equal(await page.getByLabel('Temporada', { exact: true }).inputValue(), '10');
   await page.getByRole('button', { name: '▶ Reproducir T10:E1', exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Tráileres y más' }).click();
