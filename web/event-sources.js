@@ -31,8 +31,10 @@ async function hostedEventSources(event, fetcher, signal) {
     const timeout = AbortSignal.timeout(5500);
     const response = await fetcher(HOSTED_EVENTS + encodeURIComponent(event), { credentials: 'omit', cache: 'no-store',
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
-    return response.ok ? eventPlayerSources(await response.json()) : [];
-  } catch { return []; }
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return Array.isArray(payload?.data?.sources) ? eventPlayerSources(payload) : null;
+  } catch { return null; }
 }
 
 export async function expandEventSources(streams, { fetcher = globalThis.fetch, signal, preferHosted = false } = {}) {
@@ -44,11 +46,16 @@ export async function expandEventSources(streams, { fetcher = globalThis.fetch, 
       const direct = (async () => {
         const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
         if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);
-        return eventPlayerSources(await response.json());
+        const payload = await response.json();
+        if (!Array.isArray(payload?.data?.sources)) throw Error('No se pudieron consultar las fuentes de este evento.');
+        return eventPlayerSources(payload);
       })();
       const [preferred, publicSources] = await Promise.allSettled([hosted, direct]);
       const sources = [...(preferred.value || []), ...(publicSources.value || [])];
-      if (!sources.length) throw publicSources.reason || Error('Zico TV todavía no publica fuentes disponibles para este evento.');
+      if (!sources.length) {
+        if (publicSources.status === 'fulfilled' && preferred.value !== null) return [{ url, unavailable: true }];
+        throw publicSources.reason || Error('No se pudieron consultar las fuentes de este evento.');
+      }
       return sources.map(source => ({ ...source, origin: url }));
     } catch (error) {
       return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];

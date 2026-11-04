@@ -530,7 +530,7 @@ function zicoAgendaPanel(rerender, state) {
       const payload = await fetchZicoAgenda();
       if (!button.isConnected || !file || saving) return;
       const fixtures = (file.data.fixtures || []).map(fixture => fixtureEvent(fixture, file.data));
-      const { data, count, pending } = applyZicoAgenda(file.data, payload, fixtures);
+      const { data, count, skipped } = applyZicoAgenda(file.data, payload, fixtures);
       data.channels = syncTdtCopies(data, state.tdt);
       validateCatalog(data, { checkSize: false });
       if (JSON.stringify(data) !== JSON.stringify(file.data)) {
@@ -539,7 +539,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${count} eventos publicados, ${pending} sin señal al importar.`;
+      notice = `Guardado. Agenda de ZicoTV: ${count} eventos publicados, ${skipped} omitidos por falta de señal.`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -549,7 +549,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Publica los eventos en directo y programados de todos los deportes. Al abrir uno, Calamar TV busca las señales disponibles en ZicoTV.'), button, status);
+    el('p', { class: 'note' }, 'Publica los eventos en directo y programados que ya tienen señal, de todos los deportes.'), button, status);
 }
 
 function zicoTokenPanel() {

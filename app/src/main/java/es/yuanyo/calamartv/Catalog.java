@@ -238,6 +238,8 @@ public final class Catalog {
         String link = extra.optString(i).trim();
         if ((link.startsWith("https://") || link.startsWith("http://")) && !sources.contains(link)) sources.add(link);
       }
+      if (event.optString("id").matches("zico-event-[0-9]+")
+          && sources.stream().allMatch(link -> VideoResolver.eventApi(link) != null)) continue;
       if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
         JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));

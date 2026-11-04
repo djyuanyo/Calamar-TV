@@ -908,10 +908,11 @@ try {
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
-  await page.getByText('Zico TV todavía no publica fuentes disponibles para este evento.', {exact:false}).waitFor();
-  assert.equal(await page.locator('#player-frame').count(), 0);
+  await page.waitForFunction(() => location.hash === '#/' && document.querySelector('#player').hidden);
+  assert.equal(await page.getByText('Evento Zico Manual', {exact:true}).filter({visible:true}).count(), 0);
+  assert.equal(await page.getByText(/todavía no publica fuentes/).count(), 0);
   eventReady = true;
-  await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
+  await page.goto(base + '/?event-zico=3#/evento/evento-zico-manual');
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
   await page.locator('#player-close').click();
   // The 2.20.67 direct route keeps playing even when our hosting domain cannot be reached.

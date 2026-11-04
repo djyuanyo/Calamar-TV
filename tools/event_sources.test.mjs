@@ -23,11 +23,16 @@ test('manual event expands while existing sources and selection origin are prese
   }});
   assert.equal(result.length, 2); assert.equal(result[1].url, player); assert.equal(result[1].origin, page);
 });
-test('empty events and failed requests remain retryable with a visible explanation', async () => {
-  for (const response of [{ok:true,json:async()=>({data:{sources:[]}})}, {ok:false,status:503}]) {
-    const result = await expandEventSources([page, player], {fetcher:async()=>response});
-    assert.equal(result[0].url, page); assert.ok(result[0].error); assert.equal(result[1].url, player);
-  }
+test('an empty source list is distinct from a temporary failure and leaves fallbacks intact', async () => {
+  const empty = {ok:true,json:async()=>({data:{sources:[]}})};
+  const down = {ok:false,status:503};
+  const result = await expandEventSources([page, player], {fetcher:async()=>empty});
+  assert.deepEqual(result, [{url:page, unavailable:true}, {url:player}]);
+  assert.match((await expandEventSources([page], {fetcher:async()=>down}))[0].error, /503/);
+  const premium = await expandEventSources([page], {preferHosted:true,
+    fetcher:async url => url.startsWith('https://calamarmenciano.com/') ? down : empty});
+  assert.ok(premium[0].error);
+  assert.equal(premium[0].unavailable, undefined);
 });
 
 const now = Date.parse('2026-11-04T19:00:00Z');
@@ -68,14 +73,13 @@ test('publishes active events across sports, with fresh lookup links and no priv
       { source: 'own', type: 'iframe', url: 'https://bp.zicotv.cc/api/player/15', is_premium: true },
     ] }),
   ));
-  assert.equal(result.count, 3);
-  assert.equal(result.pending, 1);
+  assert.equal(result.count, 2);
+  assert.equal(result.skipped, 1);
   validateCatalog(result.data);
-  const [live, scheduled, basketball] = events([], result.data, now);
+  const [live, basketball] = events([], result.data, now);
   assert.deepEqual(live.streams, ['https://bp.zicotv.cc/events/1', agendaPlayer, direct]);
   assert.equal(live.startAt, '2026-11-04T20:00:00.000Z');
   assert.equal(live.homeLogo, cover);
-  assert.deepEqual(scheduled.streams, ['https://bp.zicotv.cc/events/2']);
   assert.deepEqual(basketball.streams, ['https://bp.zicotv.cc/events/5', 'https://bp.zicotv.cc/api/player/15']);
   assert.match(basketball.meta, /Baloncesto/);
 });
@@ -83,12 +87,13 @@ test('publishes active events across sports, with fresh lookup links and no priv
 test('refresh is idempotent, preserves manual changes, skips duplicates and removes ended feed entries', () => {
   const manual = { id: 'local', name: 'Evento propio', startAt: '2026-11-04T20:00:00Z', cover, streams: [direct] };
   const base = { ...catalog, events: [manual] };
-  const first = payload(row(1), row(2), row(3, { title: manual.name }));
+  const listed = [{type:'direct', url:direct}];
+  const first = payload(row(1, {sources:listed}), row(2, {sources:listed}), row(3, { title: manual.name }));
   const before = applyZicoAgenda(base, first).data;
   assert.deepEqual(applyZicoAgenda(before, first).data, before);
-  before.events[1] = { ...before.events[1], name: 'Mi título', cover, streams: [direct] };
+  before.events[1] = { ...before.events[1], name: 'Mi título', cover, streams: ['https://example.com/manual.m3u8'] };
   const after = applyZicoAgenda(before, payload(row(1, { status: 'live' }), row(2, { status: 'finished' }))).data;
-  assert.deepEqual(after.events.map(e => [e.name, e.streams]), [[manual.name, [direct]], ['Mi título', ['https://bp.zicotv.cc/events/1', direct]]]);
+  assert.deepEqual(after.events.map(e => [e.name, e.streams]), [[manual.name, [direct]], ['Mi título', ['https://bp.zicotv.cc/events/1', 'https://example.com/manual.m3u8']]]);
   assert.throws(() => applyZicoAgenda(before, { total: 2, data: [] }), /formato/);
 });
 
@@ -100,4 +105,14 @@ test('managed agenda events prefer hosting and keep public and catalog fallbacks
   }) });
   assert.deepEqual(result.map(source => source.url), [agendaPlayer, player]);
   assert.equal(result[0].origin, page);
+});
+
+test('legacy agenda lookup-only events stay out of public lists until a source exists', () => {
+  const item = { id:'zico-event-2', name:'Sin señal', startAt:new Date(now).toISOString(), imported:true,
+    streams:['https://bp.zicotv.cc/events/2'] };
+  const data = {...catalog, events:[item]};
+  assert.deepEqual(events([], data, now, {allWeeks:true, finished:true}), []);
+  const updated = applyZicoAgenda(data, payload(row(2, {sources:[{type:'direct',url:direct}]}))).data;
+  assert.equal(events([], updated, now)[0].id, item.id);
+  assert.equal(applyZicoAgenda(updated, payload(row(2))).data.events.length, 0);
 });

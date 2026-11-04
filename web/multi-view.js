@@ -79,7 +79,7 @@ export function playTile(video, channel, onStatus) {
       onStatus('Consultando fuentes del evento…'); lookupTimer = setTimeout(() => lookup.abort(), 15000);
       const resolved = await expandEventSources(streams, { signal: lookup.signal, preferHosted: isZicoAgendaEvent(channel) });
       clearTimeout(lookupTimer); if (stopped) return;
-      streams = resolved.filter(s => !s.error).map(s => s.url);
+      streams = resolved.filter(s => !s.error && !s.unavailable).map(s => s.url);
     }
     sources = sourceOptions(streams).filter(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind));
     if (channel.vod && channel.position > 0) video.addEventListener('loadedmetadata', () => {

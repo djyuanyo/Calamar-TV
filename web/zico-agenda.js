@@ -68,7 +68,8 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
   const manual = [...events, ...fixtures];
   const manualLinks = new Set(manual.flatMap(event => event.streams || []).map(link => zicoEventApi(link)?.split('/').at(-1)).filter(Boolean));
   const occupied = new Set(manual.map(event => matchKey(event.name, event.startAt)));
-  let count = 0, pending = 0;
+  let count = 0, skipped = 0;
+  const channels = new Map((catalog.channels || []).map(channel => [channel.id, channel]));
   const seen = new Set();
   for (const row of payload.data) {
     if (!['live', 'scheduled'].includes(row.status)) continue;
@@ -78,12 +79,17 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
     const match = matchKey(name, startAt);
     if (seen.has(id) || manualLinks.has(String(row.id)) || occupied.has(match)) continue;
     seen.add(id);
-    occupied.add(match);
 
     const old = previous.get(id);
     const sources = catalogSources(row);
     const zicoStreams = [`${ORIGIN}/events/${row.id}`, ...sources];
     const manualStreams = (old?.streams || []).filter(url => !old.zicoStreams?.includes(url));
+    const channel = channels.get(old?.channelId);
+    if (![...sources, ...manualStreams, ...(channel?.streams || [])].some(url => !zicoEventApi(url))) {
+      skipped++;
+      continue;
+    }
+    occupied.add(match);
     const streams = [...new Set([zicoStreams[0], ...manualStreams, ...sources])].slice(0, 50);
     const competition = clean(row.league) || sportNames[row.sport_category] || clean(row.sport_category);
     const leagueId = old?.leagueId || addEntity(leagues, competition, null, 'zico-liga-');
@@ -96,7 +102,6 @@ export function applyZicoAgenda(catalog, payload, fixtures = []) {
       cover: old?.cover || '', streams, zicoStreams,
     });
     count++;
-    if (!sources.length && !manualStreams.length && !old?.channelId) pending++;
   }
-  return { data: { ...catalog, events, leagues, teams }, count, pending };
+  return { data: { ...catalog, events, leagues, teams }, count, skipped };
 }

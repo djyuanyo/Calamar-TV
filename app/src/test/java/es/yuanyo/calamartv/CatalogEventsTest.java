@@ -31,6 +31,15 @@ public class CatalogEventsTest {
     event.put("streams", new JSONArray().put("javascript:alert(1)"));
     try { SharedCatalog.validate(data); fail("Invalid link accepted"); } catch (JSONException expected) {}
   }
+  @Test public void agendaLookupWithoutASourceIsHidden() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "")
+        .put("streams", new JSONArray().put("https://bp.zicotv.cc/events/98019"));
+    long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
+    assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
+    event.getJSONArray("streams").put("https://bp.zicotv.cc/api/player/22");
+    assertEquals(1, Catalog.events(Collections.emptyList(), data, now, true).size());
+  }
   @Test public void leaguePageIncludesOnlyLinkedMatchesOfCurrentMadridWeek() throws Exception {
     JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
     base.put("leagueId", "l");

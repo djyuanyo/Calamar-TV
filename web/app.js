@@ -741,12 +741,18 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
-    c = { ...c, streams: resolved.map(s => s.url), eventSourcesExpanded: true,
-      sourceNames: Object.fromEntries(resolved.map(s => [s.url, s.name])),
-      sourceErrors: Object.fromEntries(resolved.filter(s => s.error).map(s => [s.url, s.error])),
+    if (c.event && resolved.length && resolved.every(source => source.unavailable)) {
+      state.custom = { ...state.custom, events: (state.custom.events || []).filter(event => event.id !== c.eventId) };
+      closePlayer();
+      return;
+    }
+    const sources = resolved.filter(source => !source.unavailable);
+    c = { ...c, streams: sources.map(s => s.url), eventSourcesExpanded: true,
+      sourceNames: Object.fromEntries(sources.map(s => [s.url, s.name])),
+      sourceErrors: Object.fromEntries(sources.filter(s => s.error).map(s => [s.url, s.error])),
       originalStreams: c.streams };
-    const chosen = resolved.findIndex(s => !s.error && (s.url === requested || s.origin === requested));
-    index = chosen >= 0 ? chosen : Math.max(0, resolved.findIndex(s => !s.error));
+    const chosen = sources.findIndex(s => !s.error && (s.url === requested || s.origin === requested));
+    index = chosen >= 0 ? chosen : Math.max(0, sources.findIndex(s => !s.error));
   }
   const streams = c.vod ? c.streams.slice(0, 1) : c.streams;
   const allSources = sourceOptions(streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
