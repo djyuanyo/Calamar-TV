@@ -93,8 +93,13 @@ final class SharedCatalog {
       for (int i = 0; i < events.length(); i++) {
         JSONObject event = events.getJSONObject(i);
         String id = event.getString("id"), cover = event.getString("cover");
+        String channel = event.optString("channelId");
+        JSONArray streams = event.optJSONArray("streams");
+        boolean agenda = Catalog.isZicoAgendaEvent(event) && event.optBoolean("imported");
+        boolean validSource = agenda ? channel.isEmpty() || ids.contains(channel)
+            : ids.contains(channel) || (streams != null && streams.length() > 0);
         if (id.isEmpty() || !eventIds.add(id) || event.getString("name").trim().isEmpty()
-            || (!ids.contains(event.optString("channelId")) && (event.optJSONArray("streams") == null || event.getJSONArray("streams").length() == 0)) || !validCover(cover))
+            || !validSource || (!(agenda && cover.isEmpty()) && !validCover(cover)))
           throw new JSONException("Cada evento necesita nombre, portada y un canal creado");
       }
     }

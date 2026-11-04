@@ -33,12 +33,15 @@ public class CatalogEventsTest {
   }
   @Test public void agendaLookupWithoutASourceIsHidden() throws Exception {
     JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
-    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "")
+    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "").put("cover", "")
         .put("streams", new JSONArray().put("https://bp.zicotv.cc/events/98019"));
+    SharedCatalog.validate(data);
     long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
     assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
     event.getJSONArray("streams").put("https://bp.zicotv.cc/api/player/22");
     assertEquals(1, Catalog.events(Collections.emptyList(), data, now, true).size());
+    event.put("imported", false);
+    try { SharedCatalog.validate(data); fail("A manual event still needs a cover"); } catch (JSONException expected) {}
   }
   @Test public void leaguePageIncludesOnlyLinkedMatchesOfCurrentMadridWeek() throws Exception {
     JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);

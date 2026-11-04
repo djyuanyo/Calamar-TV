@@ -217,6 +217,10 @@ public final class Catalog {
     return events(channels, custom, now, allWeeks, false);
   }
 
+  static boolean isZicoAgendaEvent(JSONObject event) {
+    return event.optString("id").matches("zico-event-[0-9]+");
+  }
+
   static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks, boolean includeFinished) {
     List<Channel> out = new ArrayList<>();
     if (custom == null) return out;
@@ -238,7 +242,7 @@ public final class Catalog {
         String link = extra.optString(i).trim();
         if ((link.startsWith("https://") || link.startsWith("http://")) && !sources.contains(link)) sources.add(link);
       }
-      if (event.optString("id").matches("zico-event-[0-9]+")
+      if (isZicoAgendaEvent(event)
           && sources.stream().allMatch(link -> VideoResolver.eventApi(link) != null)) continue;
       if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
