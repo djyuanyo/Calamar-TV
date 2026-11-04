@@ -84,9 +84,18 @@ test('imports Vidara season folders as one series, including short episode names
   ]);
   assert.deepEqual(scan.inventory.map(folder => folder.links.length), [0, 1, 1]);
   const rootOnly = await scanFolders(sources.slice(0, 1), { vidara: key }, { fetcher });
-  assert.equal(rootOnly.partialVidara, true);
-  assert.deepEqual(rootOnly.inventory, []);
-  assert.match(rootOnly.vidaraReport[0].error, /temporadas por separado/);
+  assert.equal(rootOnly.partialVidara, false);
+  assert.deepEqual(rootOnly.series, scan.series);
+  assert.deepEqual(rootOnly.inventory, scan.inventory);
+
+  const partial = await scanFolders(sources.slice(0, 1), { vidara: key }, {
+    fetcher: (url, options) => options.body.get('id') === '12'
+      ? new Response(JSON.stringify({ error: 'vidara_upstream', upstream_http: 500 }), { status: 502 })
+      : fetcher(url, options),
+  });
+  assert.equal(partial.partialVidara, true);
+  assert.deepEqual(partial.series[0].episodes.map(episode => episode.season), [1]);
+  assert.match(partial.vidaraReport.find(row => row.name === 'Tulsa King (Temporada 2)').error, /Vidara HTTP 500/);
 });
 
 test('a selected Vidara root includes named descendant paths and skips unrelated folders', async () => {

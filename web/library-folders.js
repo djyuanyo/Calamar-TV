@@ -56,8 +56,12 @@ const mostlyEpisodes = (files, strict = false) => {
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
   const films = [], series = [], unknown = [], cache = new Map(), providers = new Set(), inventory = [], vidaraReport = [];
   const vidaraShows = new Map();
-  const selectedVidaraSeries = new Set(sources.filter(s => s.provider === 'vidara' && s.section === 'series').map(s => String(s.id)));
+  const selectedVidara = sources.filter(source => source.provider === 'vidara');
+  const selectedVidaraIds = new Set(selectedVidara.map(source => String(source.id)));
+  const rootOnly = selectedVidara.filter(source => source.section === 'series').length === 1;
+  const pendingSources = [...sources];
   let count = 0, vidaraIndex;
+  const readVidaraIndex = () => vidaraIndex ||= vidaraFolders(settings.vidara, fetcher);
   const read = async (folder) => {
     const key = `${folder.provider}:${folder.id}`;
     if (cache.has(key)) return cache.get(key);
@@ -65,8 +69,7 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     onFolder(folder.name || folder.id);
     let data;
     if (folder.provider === 'vidara') {
-      vidaraIndex ||= vidaraFolders(settings.vidara, fetcher);
-      const index = await vidaraIndex;
+      const index = await readVidaraIndex();
       const selected = index.find(entry => entry.id === folder.id);
       if (!selected) throw Error('Una carpeta de Vidara ya no está disponible. Actualiza la selección de carpetas.');
       const files = await vidaraVideos(folder.id, settings.vidara, fetcher);
@@ -112,19 +115,27 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     }
     if (episodes.length) series.push({ section, ...cleanTitle(name), folder: name, episodes });
   };
-  for (const source of sources) {
+  for (const source of pendingSources) {
     if (!['movies', 'series', 'documentaries'].includes(source.section)) throw Error('Sección de carpeta no válida.');
     let ref = source.provider === 'vidara' ? { provider: 'vidara', id: String(source.id), name: source.name } : folderReference(source.url);
     providers.add(ref.provider);
     if (ref.provider === 'lulu') ref = await luluId(ref);
     let data, files;
     try {
+      if (ref.provider === 'vidara' && source.section === 'series' && rootOnly) {
+        const index = await readVidaraIndex();
+        const root = index.find(folder => folder.id === ref.id);
+        if (root && /^series$/i.test(root.name) && !root.parentId) {
+          // Vidara can list season folders beside «Series», without a parent ID or path.
+          for (const folder of index) {
+            if (!folder.parentId && !folder.name.includes('/') && vidaraSeriesTitle(folder.name) && !selectedVidaraIds.has(folder.id)) {
+              pendingSources.push({ provider: 'vidara', id: folder.id, name: folder.name, section: 'series' });
+            }
+          }
+        }
+      }
       data = await read(ref);
       files = await videos(ref);
-      if (ref.provider === 'vidara' && source.section === 'series' && /^series$/i.test(data.name) && !files.length
-          && selectedVidaraSeries.size === 1 && (await vidaraIndex).some(folder => !folder.parentId && vidaraSeriesTitle(folder.name))) {
-        throw Error('Vidara lista las temporadas por separado. Pulsa «Cargar carpetas de Vidara» y selecciona las carpetas de temporada como Series.');
-      }
     } catch (error) {
       if (ref.provider !== 'vidara') throw error;
       vidaraReport.push({ name: ref.name || `Carpeta ${ref.id}`, error: error.message });
