@@ -24,9 +24,10 @@ public class AppAdmissionTest {
       onView(withText("Continuar con Google")).check(matches(isDisplayed()));
       onView(withText("Crear cuenta")).check(matches(isDisplayed()));
       policy(AppAccess.State.ALLOWED);
-      onView(withText("Multipantalla")).check(matches(isDisplayed()));
       scenario.onActivity(activity -> {
+        // The sign-in activity can still have window focus while its finish animation runs.
         View content = activity.findViewById(android.R.id.content);
+        assertTrue(hasText(content, "Multipantalla"));
         AppAccess.useTestState(AppAccess.State.BLOCKED);
         assertTrue(hasText(content, "Acceso suspendido"));
         assertFalse(hasText(content, "Multipantalla"));
