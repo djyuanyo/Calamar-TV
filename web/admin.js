@@ -10,6 +10,7 @@ import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
+import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
@@ -450,6 +451,7 @@ export async function render(state) {
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }).concat(reviewRoute ? [] : platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+        eventRoute[1] ? null : zicoAgendaPanel(rerender, state),
         eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
@@ -487,10 +489,43 @@ function findEvent(id) {
   return fixture ? fixtureEvent(fixture, file.data) : null;
 }
 
+function zicoAgendaPanel(rerender, state) {
+  const status = el('p', { class: 'note', role: 'status' });
+  const button = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    if (saving || button.disabled) return;
+    button.disabled = true;
+    status.textContent = 'Consultando la agenda de ZicoTV…';
+    try {
+      const payload = await fetchZicoAgenda();
+      if (!button.isConnected || !file || saving) return;
+      const fixtures = (file.data.fixtures || []).map(fixture => fixtureEvent(fixture, file.data));
+      const { data, count, pending } = applyZicoAgenda(file.data, payload, fixtures);
+      data.channels = syncTdtCopies(data, state.tdt);
+      validateCatalog(data, { checkSize: false });
+      if (JSON.stringify(data) !== JSON.stringify(file.data)) {
+        file.data = data;
+        status.textContent = 'Publicando la agenda…';
+        await saveFile();
+      }
+      if (!button.isConnected) return;
+      notice = `Guardado. Agenda de ZicoTV: ${count} partidos publicados, ${pending} con canal por confirmar.`;
+      rerender();
+    } catch (error) {
+      status.textContent = explain(error);
+      status.className = 'error';
+    } finally {
+      button.disabled = false;
+    }
+  } }, 'Importar / actualizar agenda de ZicoTV');
+  return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
+    el('p', { class: 'note' }, 'Publica los partidos de fútbol en directo y programados en la web y la app. Los partidos sin fuente se muestran con canal por confirmar. Puedes volver a importar para actualizar la agenda.'), button, status);
+}
+
 function eventForm(existing, rerender, catalogState) {
   const data = file.data;
   // Imported matches may have no cover (the league's background and crests) and no channel yet.
   const imported = !!existing?.imported;
+  const fixtureImport = imported && !isZicoAgendaEvent(existing);
   const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
   const league = selectField(data.leagues, existing?.leagueId, 'Sin liga');
   const home = selectField(data.teams, existing?.homeTeamId, 'Seleccionar local');
@@ -601,7 +636,7 @@ function eventForm(existing, rerender, catalogState) {
           : existing?.matchUrl === link && existing.startAt === entry.startAt && existing.matchId ? existing : await checkMatch();
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
-      if (imported) {
+      if (fixtureImport) {
         // Only what differs from the import is kept, so the catalog stays small.
         const raw = data.fixtures.find((f) => f.id === existing.id);
         const fixture = { ...raw, ...entry };
