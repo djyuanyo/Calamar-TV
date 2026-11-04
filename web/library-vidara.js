@@ -3,6 +3,18 @@ import { vidaraVideo } from './provider-players.js';
 export const VIDARA_ENDPOINT = 'https://calamarmenciano.com/calamar-vidara.php';
 const folderId = /^[1-9]\d{0,11}$/;
 const fileCode = /^[A-Za-z0-9]{8,24}$/;
+const folderPath = name => name.split('/').map(part => part.trim()).filter(Boolean);
+const seasonSuffix = /(?:^|[\s._(-])(?:temporada|season|t)[ ._-]*\d{1,2}\s*\)?$/iu;
+
+/** A season can be a named folder or the last component of a path supplied as its name. */
+export function vidaraSeriesTitle(name) {
+  const path = folderPath(name);
+  const leaf = path.at(-1) || '';
+  const season = leaf.match(seasonSuffix);
+  if (!season) return '';
+  const title = leaf.slice(0, season.index).trim() || path.at(-2) || '';
+  return /^(series|documentales|documentaries)$/i.test(title) ? '' : title;
+}
 
 async function vidaraApi(action, params, key, fetcher) {
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(key || '')) throw Error('Añade una clave válida de Vidara en Configuración.');
@@ -44,7 +56,7 @@ export async function vidaraFolders(key, fetcher = globalThis.fetch) {
   const { folders } = await vidaraApi('folders', {}, key, fetcher);
   if (!Array.isArray(folders)) throw Error('Vidara devolvió una lista de carpetas incompleta.');
   const ids = new Set();
-  return folders.map(folder => {
+  const rows = folders.map(folder => {
     const id = String(folder?.fld_id ?? '');
     if (!folderId.test(id) || typeof folder.name !== 'string' || !folder.name.trim() || ids.has(id)) {
       throw Error('Vidara devolvió una carpeta no válida.');
@@ -53,6 +65,17 @@ export async function vidaraFolders(key, fetcher = globalThis.fetch) {
     const count = /^\d+$/.test(String(folder.videos)) ? Number(folder.videos) : NaN;
     return { id, name: folder.name.trim(), count: Number.isSafeInteger(count) ? count : null };
   });
+  // The public API is flat. Some accounts name a folder with its full path.
+  const paths = new Map(rows.map(row => [folderPath(row.name).join('/').toLowerCase(), row.id]));
+  for (const row of rows) {
+    const path = folderPath(row.name);
+    while (path.length > 1) {
+      path.pop();
+      const parentId = paths.get(path.join('/').toLowerCase());
+      if (parentId) { row.parentId = parentId; break; }
+    }
+  }
+  return rows;
 }
 
 export async function vidaraVideos(id, key, fetcher = globalThis.fetch) {
@@ -90,6 +113,7 @@ export async function vidaraVideos(id, key, fetcher = globalThis.fetch) {
 }
 
 export function suggestedVidaraSection(name) {
-  const text = name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-  return ({ peliculas: 'movies', cine: 'movies', movies: 'movies', series: 'series', documentales: 'documentaries', documentaries: 'documentaries' })[text] || '';
+  const root = folderPath(name)[0]?.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return ({ peliculas: 'movies', cine: 'movies', movies: 'movies', series: 'series', documentales: 'documentaries', documentaries: 'documentaries' })[root]
+    || (vidaraSeriesTitle(name) ? 'series' : '');
 }

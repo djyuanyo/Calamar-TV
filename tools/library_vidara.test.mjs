@@ -4,7 +4,7 @@ import { dailymotionEmbed, vidaraPlayback } from '../web/provider-players.js';
 import { webPlayback } from '../web/catalog.js';
 import { scanFolders } from '../web/library-folders.js';
 import { libraryFromScan } from '../web/library-lulu.js';
-import { vidaraVideos, VIDARA_ENDPOINT } from '../web/library-vidara.js';
+import { suggestedVidaraSection, vidaraVideos, VIDARA_ENDPOINT } from '../web/library-vidara.js';
 import { videoKey } from '../web/library-sync.js';
 
 const daily = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
@@ -56,6 +56,61 @@ test('a failed, partial or repeated Vidara page cannot publish a shortened inven
   await assert.rejects(vidaraVideos('12', key, () => response({ complete_inventory: true, page: 1, total_pages: 1, total: 2, videos: [file] })), /Faltan vídeos/);
   await assert.rejects(vidaraVideos('12', key, () => response({ page: 1, total_pages: 0, total: 0, videos: [] })), /Sustituye calamar-vidara.php/);
   await assert.rejects(vidaraVideos('12', key, () => new Response('{}', { status: 401 })), /no acepta la clave/);
+});
+
+test('imports Vidara season folders as one series, including short episode names', async () => {
+  const folders = [
+    { fld_id: 10, name: 'Series', videos: 0 },
+    { fld_id: 11, name: 'Tulsa King (Temporada 1)', videos: 1 },
+    { fld_id: 12, name: 'Tulsa King (Temporada 2)', videos: 1 },
+  ];
+  const files = {
+    '11': [{ filecode: 'VIDTULSA0101', title: 'Tulsa King 1x01.mp4' }],
+    '12': [{ filecode: 'VIDTULSA0201', title: 'Capítulo 1.mp4' }],
+  };
+  const fetcher = (_, { body }) => {
+    if (body.get('action') === 'folders') return response({ folders });
+    const videos = files[body.get('id')] || [];
+    return response({ complete_inventory: true, page: 1, total_pages: videos.length, total: videos.length, videos });
+  };
+  const sources = folders.map(folder => ({
+    provider: 'vidara', id: String(folder.fld_id), section: suggestedVidaraSection(folder.name),
+  }));
+  assert.deepEqual(sources.map(source => source.section), ['series', 'series', 'series']);
+  const scan = await scanFolders(sources, { vidara: key }, { fetcher });
+  assert.equal(scan.partialVidara, false);
+  assert.deepEqual(scan.series.map(show => [show.title, show.episodes.map(e => [e.season, e.episode])]), [
+    ['Tulsa King', [[1, 1], [2, 1]]],
+  ]);
+  assert.deepEqual(scan.inventory.map(folder => folder.links.length), [0, 1, 1]);
+  const rootOnly = await scanFolders(sources.slice(0, 1), { vidara: key }, { fetcher });
+  assert.equal(rootOnly.partialVidara, true);
+  assert.deepEqual(rootOnly.inventory, []);
+  assert.match(rootOnly.vidaraReport[0].error, /temporadas por separado/);
+});
+
+test('a selected Vidara root includes named descendant paths and skips unrelated folders', async () => {
+  const folders = [
+    { fld_id: 10, name: 'Series', videos: 0 },
+    { fld_id: 11, name: 'Series/Tulsa King (Temporada 1)', videos: 1 },
+    { fld_id: 12, name: 'Series/Tulsa King/Temporada 2', videos: 1 },
+    { fld_id: 13, name: 'Otras/Título (Temporada 1)', videos: 1 },
+  ];
+  const requested = [];
+  const scan = await scanFolders([{ provider: 'vidara', id: '10', section: 'series' }], { vidara: key }, {
+    fetcher: (_, { body }) => {
+      if (body.get('action') === 'folders') return response({ folders });
+      const id = body.get('id');
+      requested.push(id);
+      const videos = id === '10' ? [] : [{ filecode: 'VIDTULSA000' + id, title: '01.mp4' }];
+      return response({ complete_inventory: true, page: 1, total_pages: videos.length, total: videos.length, videos });
+    },
+  });
+  assert.deepEqual(requested, ['10', '11', '12']);
+  assert.deepEqual(scan.inventory.map(folder => [folder.id, folder.links.length]), [['vidara:10', 2]]);
+  assert.deepEqual(scan.series.map(show => [show.title, show.episodes.map(e => [e.season, e.episode])]), [
+    ['Tulsa King', [[1, 1], [2, 1]]],
+  ]);
 });
 
 test('reports unavailable uploads, preserves them in the inventory and imports playable files without a TMDB match', async () => {

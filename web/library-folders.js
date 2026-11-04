@@ -1,4 +1,4 @@
-import { vidaraFolders, vidaraVideos } from './library-vidara.js';
+import { vidaraFolders, vidaraSeriesTitle, vidaraVideos } from './library-vidara.js';
 import { cleanTitle, episodeOf, luluFolder } from './library-lulu.js';
 
 export const DRIVE_ENDPOINT = 'https://calamarmenciano.com/calamar-drive.php';
@@ -55,6 +55,8 @@ const mostlyEpisodes = (files, strict = false) => {
 /** One combined scan. Failed Vidara folders do not make other folders unreadable. */
 export async function scanFolders(sources, settings, { fetcher = globalThis.fetch, onFolder = () => {} } = {}) {
   const films = [], series = [], unknown = [], cache = new Map(), providers = new Set(), inventory = [], vidaraReport = [];
+  const vidaraShows = new Map();
+  const selectedVidaraSeries = new Set(sources.filter(s => s.provider === 'vidara' && s.section === 'series').map(s => String(s.id)));
   let count = 0, vidaraIndex;
   const read = async (folder) => {
     const key = `${folder.provider}:${folder.id}`;
@@ -64,13 +66,14 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     let data;
     if (folder.provider === 'vidara') {
       vidaraIndex ||= vidaraFolders(settings.vidara, fetcher);
-      const selected = (await vidaraIndex).find(entry => entry.id === folder.id);
+      const index = await vidaraIndex;
+      const selected = index.find(entry => entry.id === folder.id);
       if (!selected) throw Error('Una carpeta de Vidara ya no está disponible. Actualiza la selección de carpetas.');
       const files = await vidaraVideos(folder.id, settings.vidara, fetcher);
       if (!files.length && selected.count > 0) {
         throw Error(`Vidara indica que tiene ${selected.count} archivos, pero su lista está vacía.`);
       }
-      data = { name: selected.name, files, folders: [] };
+      data = { name: selected.name, files, folders: index.filter(entry => entry.parentId === folder.id) };
     } else data = folder.provider === 'drive' ? await driveFolder(folder, settings.drive, fetcher)
       : await luluFolder(folder.id, settings.lulu, fetcher);
     const result = { ...data, name: data.name || folder.name || 'Carpeta',
@@ -118,6 +121,10 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     try {
       data = await read(ref);
       files = await videos(ref);
+      if (ref.provider === 'vidara' && source.section === 'series' && /^series$/i.test(data.name) && !files.length
+          && selectedVidaraSeries.size === 1 && (await vidaraIndex).some(folder => !folder.parentId && vidaraSeriesTitle(folder.name))) {
+        throw Error('Vidara lista las temporadas por separado. Pulsa «Cargar carpetas de Vidara» y selecciona las carpetas de temporada como Series.');
+      }
     } catch (error) {
       if (ref.provider !== 'vidara') throw error;
       vidaraReport.push({ name: ref.name || `Carpeta ${ref.id}`, error: error.message });
@@ -129,25 +136,27 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     if (ref.provider === 'vidara') vidaraReport.push({ name: data.name, count: files.length, unavailable: files.length - all.length });
     if (source.section === 'movies') { for (const f of all) film(f, source.section); continue; }
     if (ref.provider === 'vidara') {
-      // Vidara has flat folders. Use the prefix before the episode marker to separate series.
-      const shows = new Map();
       for (const file of all) {
         const marker = file.title.match(EPISODE_NAME);
-        const episode = (source.section === 'series' || marker) && episodeOf(file.title, data.name);
+        const seasonTitle = vidaraSeriesTitle(file.folder);
+        const episode = (source.section === 'series' || marker || seasonTitle) && episodeOf(file.title, file.folder);
         if (!episode) {
           if (source.section === 'documentaries') film(file, source.section);
           else unknown.push(`${file.title}: indica el capítulo con 1x01 o S01E01.`);
           continue;
         }
         const prefix = marker ? file.title.slice(0, marker.index).replace(/[ ._–—-]+$/u, '').trim() : '';
-        const generic = /^(series|documentales|documentaries)$/i.test(data.name);
-        const title = prefix || (!generic ? data.name : '');
-        if (!title) { unknown.push(`${file.title}: indica el nombre de la serie antes del capítulo.`); continue; }
-        const key = cleanTitle(title).title.toLocaleLowerCase('es');
-        if (!shows.has(key)) shows.set(key, { title, files: [] });
-        shows.get(key).files.push(file);
+        const leaf = file.folder.split('/').pop().trim();
+        const title = seasonTitle || prefix || leaf;
+        const clean = cleanTitle(title);
+        if (!clean.title || /^(series|documentales|documentaries)$/i.test(title)) {
+          unknown.push(`${file.title}: indica el nombre de la serie antes del capítulo.`);
+          continue;
+        }
+        const key = JSON.stringify([source.section, clean.title.toLocaleLowerCase('es'), clean.year]);
+        if (!vidaraShows.has(key)) vidaraShows.set(key, { title, section: source.section, files: new Map() });
+        vidaraShows.get(key).files.set(file.link, file);
       }
-      for (const item of shows.values()) show(item.title, item.files, source.section);
       continue;
     }
     // A documentaries folder is one series only when most of its videos name an episode (1x01, S01E01, «Capítulo 3»…)
@@ -162,6 +171,7 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
       else show(child.name, content, source.section);
     }
   }
+  for (const item of vidaraShows.values()) show(item.title, item.files.values(), item.section);
   // Which sites were read: a copy missing from a site read in full was deleted there.
   return { films, series, unknown, providers: [...providers], inventory, vidaraReport,
     partialVidara: vidaraReport.some(row => !!row.error), complete: true };

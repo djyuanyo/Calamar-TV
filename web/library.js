@@ -1156,11 +1156,12 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const select = el('select', { 'aria-label': `Categoría para ${folder.name}` },
         el('option', { value: '' }, 'No importar'),
         LIBRARY_SECTIONS.map(section => el('option', { value: section.key }, section.label)));
-      select.value = sections.get(folder.id) ?? suggestedVidaraSection(folder.name);
+      select.value = sections.get(folder.id) ?? (folder.parentId ? '' : suggestedVidaraSection(folder.name));
       return { folder, select };
     });
     vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(`Categoría para ${folder.name}`, select,
-      folder.count == null ? '' : `Archivos en Vidara · ${folder.count}`)));
+      [folder.count == null ? '' : `Archivos en Vidara · ${folder.count}`,
+        folder.parentId ? 'Incluida al importar la carpeta superior.' : ''].filter(Boolean).join(' '))));
   };
   const readVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     readVidara.disabled = true;
@@ -1542,7 +1543,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
     el('h3', {}, 'Carpetas de Vidara'),
-    el('p', { class: 'note' }, 'Carga las carpetas, asigna su categoría y pulsa «Buscar e importar carpetas». Para distinguir series en una carpeta compartida, usa nombres como «Nombre de la serie S01E01».'),
+    el('p', { class: 'note' }, 'Carga las carpetas, revisa su categoría y pulsa «Buscar e importar carpetas». Si Vidara lista las temporadas por separado, se proponen como Series las carpetas con nombres como «Tulsa King (Temporada 1)». Los capítulos pueden llamarse «Tulsa King 1x01» o «Capítulo 1».'),
     readVidara, vidaraNote, vidaraRows,
     el('div',{class:'actions'},saveFolders,mixedScan),folderNote,folderReport,
     el('h3', {}, 'Leer las carpetas de LuluStream'),
