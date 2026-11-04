@@ -37,7 +37,8 @@ async function refreshCalendars(rerender) {
     try { localStorage.setItem(CALENDARS_KEY, String(Date.now())); } catch {}
     notice = `Guardado. Calendarios actualizados: ${seasons.length} competiciones con sus próximas 5 semanas.`;
   } catch (error) { notice = `No se pudieron actualizar los calendarios: ${explain(error)}`; }
-  if (location.hash.startsWith('#/admin')) rerender();
+  // Calendar changes do not affect the channel list. Keep a channel draft on screen.
+  if (location.hash.startsWith('#/admin/') && !location.hash.startsWith('#/admin/editar/')) rerender();
 }
 
 let saving = false;
@@ -95,16 +96,29 @@ function validStreams(text) {
 }
 
 /** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
-function allCategories(state) {
-  const list = categoryList(file.data);
-  const used = [...merge(state.tdt || { channels: [] }, null).map((c) => c.category), ...file.data.channels.map((c) => c.group || OWN_GROUP)];
+function allCategories(state, data = file.data) {
+  const list = categoryList(data);
+  const used = [...merge(state.tdt || { channels: [] }, null).map((c) => c.category), ...data.channels.map((c) => c.group || OWN_GROUP)];
   for (const g of used) if (!list.some((c) => c.id === g || c.name === g)) list.push({ id: g, name: g, color: defaultColor(g) });
   return list;
 }
 
+async function saveChannel(change, retryConflict) {
+  if (!file) await loadFile();
+  file.data = change(file.data);
+  try {
+    await saveFile();
+  } catch (error) {
+    // saveFile has reloaded the catalog. Reapply a new channel once over concurrent changes.
+    if (!retryConflict || error.code !== 'catalog-conflict' || !file) throw error;
+    file.data = change(file.data);
+    await saveFile();
+  }
+}
+
 const NEW_GROUP = '\u0000nueva';
 function channelForm(existing, rerender, state) {
-  const data = file.data;
+  let draftId = existing?.id;
   const name = el('input', { required: true, value: existing ? existing.name : '' });
   // Pick an existing category or write a new one.
   const categories = allCategories(state);
@@ -122,7 +136,7 @@ function channelForm(existing, rerender, state) {
   const updatePreview = () => { preview.hidden = !validCover(selectedLogo); if (!preview.hidden) preview.src = selectedLogo; else preview.removeAttribute('src'); };
   const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
   const streams = el('textarea', { required: true, placeholder: 'https://servidor/canal/index.m3u8', spellcheck: 'false' }, existing ? (existing.streams || []).join('\n') : '');
-  const star = el('input', { type: 'checkbox', checked: existing ? data.featured.includes(existing.id) : false });
+  const star = el('input', { type: 'checkbox', checked: existing ? file.data.featured.includes(existing.id) : false });
   const status = el('p', { class: 'note', 'aria-live': 'polite' });
   const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
     const image = upload.files?.[0]; if (!image) return;
@@ -152,11 +166,16 @@ function channelForm(existing, rerender, state) {
       class: 'form',
       onsubmit: async (e) => {
         e.preventDefault();
-        if (saving || preparingLogo) return;
+        if (preparingLogo) return;
+        if (saving) {
+          status.textContent = 'Hay otra publicación en curso. Tu canal sigue en el formulario; vuelve a pulsar Guardar.';
+          return;
+        }
         try {
           if (selectedLogo && !validCover(selectedLogo)) throw new Error('El logo debe ser una imagen o un enlace HTTPS válido.');
+          draftId ||= `mio-${slug(name.value)}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
           const channel = {
-            id: existing ? existing.id : `mio-${slug(name.value)}-${Date.now().toString(36)}`,
+            id: draftId,
             name: name.value.trim(),
             group: group.value.trim(),
             logo: selectedLogo,
@@ -164,23 +183,33 @@ function channelForm(existing, rerender, state) {
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
           if (!channel.group) throw new Error('Escribe el nombre de la nueva categoría.');
-          if (groupSelect.value === NEW_GROUP) {
-            // A name already in use joins that category; a new one is added at the end with its colour.
-            const same = categories.find((c) => c.name.toLocaleLowerCase('es') === channel.group.toLocaleLowerCase('es'));
-            if (same) channel.group = same.id;
-            else data.categories = [...categories, { id: channel.group, name: channel.group, color: defaultColor(channel.group) }];
-          }
-          if (existing) data.channels[data.channels.findIndex((c) => c.id === existing.id)] = channel;
-          else data.channels.push(channel);
-          data.featured = data.featured.filter((id) => id !== channel.id);
-          if (star.checked) data.featured.unshift(channel.id);
+          const newGroup = groupSelect.value === NEW_GROUP;
+          const highlighted = star.checked;
+          status.className = 'note';
           status.textContent = 'Guardando…';
-          await saveFile(`admin: ${existing ? 'editar' : 'añadir'} ${channel.name}`);
+          submit.disabled = true;
+          await saveChannel(data => {
+            const next = { ...data };
+            const previous = data.channels.find(c => c.id === channel.id);
+            if (existing && !previous) throw new Error('El canal ya no está en el catálogo. Recarga la lista de canales.');
+            const entry = { ...previous, ...channel };
+            if (newGroup) {
+              const options = allCategories(state, data);
+              const same = options.find(c => c.name.toLocaleLowerCase('es') === entry.group.toLocaleLowerCase('es'));
+              if (same) entry.group = same.id;
+              else next.categories = [...options, { id: entry.group, name: entry.group, color: defaultColor(entry.group) }];
+            }
+            next.channels = previous ? data.channels.map(c => c.id === entry.id ? entry : c) : [...data.channels, entry];
+            next.featured = data.featured.filter(id => id !== entry.id);
+            if (highlighted) next.featured.unshift(entry.id);
+            return next;
+          }, !existing);
           rerender();
         } catch (err) {
           status.textContent = explain(err);
           status.className = 'error';
-
+        } finally {
+          submit.disabled = preparingLogo;
         }
       },
     },

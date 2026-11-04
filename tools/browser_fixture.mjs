@@ -9,7 +9,19 @@ export const connectImageService = async () => ({configured: true});
 export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };
 export const login = async () => {}, logout = async () => {}, explain = e => e.message;
 export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
-export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
+export const publishCatalog = async (data, expected = revision) => {
+  const beforePublish = window.__beforeCatalogPublish;
+  if (beforePublish) {
+    delete window.__beforeCatalogPublish;
+    catalog = beforePublish(structuredClone(catalog));
+    revision++;
+  }
+  if (expected !== revision) throw Object.assign(new Error('El catálogo cambió en otro dispositivo.'), { code: 'catalog-conflict' });
+  catalog = structuredClone(validateCatalog(data));
+  window.__published = catalog;
+  sessionStorage.setItem('catalog', JSON.stringify(catalog));
+  return ++revision;
+};
 export const watchCatalog = (fallback, next) => { const send = () => next({ data: structuredClone(catalog) }); if (sessionStorage.getItem('slowCatalog')) setTimeout(send, 1500); else send(); return () => {}; };
 const present = new Map();
 window.__visits = [];

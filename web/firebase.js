@@ -157,7 +157,8 @@ export async function publishCatalog(data, expectedRevision) {
   await runTransaction(db, async (tx) => {
     const current = await tx.get(catalog);
     const revision = current.exists() ? current.data().revision : 0;
-    if (revision !== expectedRevision) throw new Error('El catálogo cambió en otro dispositivo. Se ha recargado; vuelve a aplicar el cambio.');
+    if (revision !== expectedRevision) throw Object.assign(
+      new Error('El catálogo cambió en otro dispositivo. Se ha recargado; vuelve a aplicar el cambio.'), { code: 'catalog-conflict' });
     tx.set(catalog, { json, revision: revision + 1, updatedAt: serverTimestamp() });
   });
   Object.assign(data, prepared);

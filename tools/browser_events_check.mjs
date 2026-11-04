@@ -1141,9 +1141,27 @@ try {
   await channelPage.getByText('Imagen preparada.', { exact: true }).waitFor();
   const uploadedLogo = await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src');
   assert.match(uploadedLogo, /^data:image\/(png|webp);base64,/);
+  await channelPage.evaluate(() => {
+    window.__beforeCatalogPublish = () => { throw new Error('Conexión interrumpida durante la publicación.'); };
+  });
+  await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await channelPage.getByText('Conexión interrumpida durante la publicación.', { exact: true }).waitFor();
+  assert.equal(await channelPage.getByLabel('Nombre', { exact: true }).inputValue(), 'Canal con imagen');
+  assert.equal(await channelPage.getByLabel('Enlaces', { exact: true }).inputValue(), 'https://example.com/channel.m3u8');
+  await channelPage.evaluate(() => {
+    window.__beforeCatalogPublish = catalog => {
+      catalog.channels.push({ id: 'concurrent-channel', name: 'Canal de otro dispositivo', streams: ['https://example.com/other.m3u8'] });
+      return catalog;
+    };
+  });
   await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
   await channelPage.waitForFunction(() => window.__published?.channels.some(c => c.name === 'Canal con imagen'));
-  const imageChannelId = await channelPage.evaluate(() => window.__published.channels.find(c => c.name === 'Canal con imagen').id);
+  assert.equal(await channelPage.evaluate(() => window.__published.channels.filter(c => c.name === 'Canal con imagen').length), 1);
+  assert.equal(await channelPage.evaluate(() => window.__published.channels.some(c => c.id === 'concurrent-channel')), true);
+  await channelPage.reload();
+  await channelPage.getByText('Canal con imagen', { exact: true }).waitFor();
+  await channelPage.getByText('Canal de otro dispositivo', { exact: true }).waitFor();
+  const imageChannelId = await channelPage.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).channels.find(c => c.name === 'Canal con imagen').id);
   const editChannel = async () => {
     await channelPage.goto(base + '/#/admin/editar/' + imageChannelId);
     await channelPage.getByRole('heading', { name: /Editar Canal con imagen/ }).waitFor();
