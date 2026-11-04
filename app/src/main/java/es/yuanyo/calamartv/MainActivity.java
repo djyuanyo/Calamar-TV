@@ -565,17 +565,16 @@ public class MainActivity extends Activity {
     updates.setContentDescription("Actualizaciones");
     updates.setOnClickListener(v -> { if (updater != null) updater.check(true); });
     addButton(mast, updates);
-    // Icon only (account silhouette); the name stays for screen readers and as a tooltip.
-    ImageButton admin = new ImageButton(this);
-    admin.setImageDrawable(Ui.icon(Ui.Icon.ADMIN, Ui.MUTED, dp(22)));
-    admin.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
-    admin.setContentDescription("Mi cuenta");
-    if (android.os.Build.VERSION.SDK_INT >= 26) admin.setTooltipText("Mi cuenta");
-    // «Mi cuenta»: sign in, the profiles and, from there, «Administración».
-    admin.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
-    LinearLayout.LayoutParams adminSize = new LinearLayout.LayoutParams(dp(44), dp(44));
-    adminSize.setMargins(dp(4), dp(4), dp(4), dp(4));
-    mast.addView(admin, adminSize);
+    ImageButton profile = new ImageButton(this);
+    profile.setImageDrawable(Ui.icon(Ui.Icon.PROFILE, Ui.MUTED, dp(22)));
+    profile.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
+    String profileLabel = Profiles.user(this) == null ? "Mi cuenta" : "Cambiar de perfil";
+    profile.setContentDescription(profileLabel);
+    if (android.os.Build.VERSION.SDK_INT >= 26) profile.setTooltipText(profileLabel);
+    profile.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+    LinearLayout.LayoutParams profileSize = new LinearLayout.LayoutParams(dp(44), dp(44));
+    profileSize.setMargins(dp(4), dp(4), dp(4), dp(4));
+    mast.addView(profile, profileSize);
     root.addView(mast);
     EditText search = new EditText(this);
     search.setSingleLine(true);
@@ -1528,7 +1527,7 @@ public class MainActivity extends Activity {
     if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
     if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
-    // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
+    // Signing in or out as administrator shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
     if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }
     handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);

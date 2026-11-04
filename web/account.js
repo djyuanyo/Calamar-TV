@@ -125,7 +125,6 @@ function profileForm(el, profile, done, say) {
 const ICON = {
   account: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   help: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.2-2.5 4"/><circle cx="12" cy="17.3" r=".6" fill="currentColor"/></svg>',
-  admin: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 4h6v16h-6M10 8l-4 4 4 4M6 12h10"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20l1-5L16 4l4 4L9 19zM14 6l4 4"/></svg>',
 };
@@ -133,8 +132,8 @@ const svg = (el, name, cls = '') => { const span = el('span', { class: cls, 'ari
 
 /**
  * #/cuenta. Without an account: the sign-in. With one, as the «Perfil» sheet of Netflix: the profile watching
- * (✎ to edit it), the others and «Añadir», «Administrar perfiles», and «Cuenta», «Ayuda», «Administración»
- * (for the administrator) and «Cerrar sesión». `chosen` runs after picking a profile (back to the home page).
+ * (✎ to edit it), the others and «Añadir», «Administrar perfiles», «Cuenta», «Ayuda» and «Cerrar sesión».
+ * `chosen` runs after picking a profile (back to the home page).
  */
 export function accountPage(el, f, { rerender, chosen, editing = null, setEditing = () => {} }) {
   const user = signedUser();
@@ -195,7 +194,6 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
     el('ul', { class: 'sheet-menu' },
       item('account', 'Cuenta', () => go('cuenta')),
       item('help', 'Ayuda', () => go('ayuda')),
-      f.administrator?.(user) ? item('admin', 'Administración', () => { setEditing(null); location.hash = '#/admin'; }) : null,
       item('out', 'Cerrar sesión', async () => { await f.logout(); setEditing(null); rerender(); })),
     note)];
 }

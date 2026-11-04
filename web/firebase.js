@@ -370,9 +370,9 @@ export async function readLiveViewers() {
   const entries = live.docs.map(d => d.data());
   const uids = [...new Set(entries.map(entry => entry.uid))];
   const names = new Map(await Promise.all(uids.map(async uid => {
-    const member = await getDocFromServer(doc(db, 'calamarMembers', uid));
-    if (member.data()?.name) return [uid, member.data().name];
-    const account = await readJson(doc(db, USERS_PATH, uid), null);
+    const member = await getDocFromServer(doc(db, 'calamarMembers', uid)).catch(() => null);
+    if (member?.data()?.name) return [uid, member.data().name];
+    const account = await readJson(doc(db, USERS_PATH, uid), null).catch(() => null);
     return [uid, account?.profiles?.[0]?.name || ''];
   })));
   return entries.map(entry => ({ ...entry, name: names.get(entry.uid) || entry.profile || 'Usuario registrado' }));

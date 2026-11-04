@@ -217,7 +217,7 @@ final class Ui {
     PLAY,
     EYE,
     BACK,
-    ADMIN,
+    PROFILE,
     SHARE,
     MULTI
   }
@@ -261,8 +261,7 @@ final class Ui {
         paint.setStyle(Paint.Style.FILL_AND_STROKE);
         paint.setStrokeWidth(2.2f);
         paint.setStrokeCap(Paint.Cap.ROUND);
-      } else if (icon == Icon.ADMIN) {
-        // Account silhouette: head and shoulders, as the web's admin button.
+      } else if (icon == Icon.PROFILE) {
         path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);
         path.moveTo(5f, 20f);
         path.cubicTo(5f, 15.8f, 8.1f, 13.4f, 12f, 13.4f);

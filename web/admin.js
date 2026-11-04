@@ -1107,7 +1107,7 @@ function statsPanel(state) {
       }
       liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
       updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-      const viewer = (person, title, sessions = [person]) => {
+      const viewer = (person, title, sessions) => {
         const subtitle = sessions.map(session => [
           session.profile !== person.name ? session.profile : '',
           viewerDevice(session.device), session.title !== title ? session.title : '',
@@ -1120,8 +1120,6 @@ function statsPanel(state) {
       const focusedLink = focused && document.activeElement.getAttribute('href');
       const rank = item => {
         const label = [el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))];
-        if (item.target.startsWith('l:')) return el('li', { class: 'stats-watching' }, el('div', {}, label),
-          item.people.length ? el('ul', { class: 'stats-viewer-names' }, item.people.map(person => viewer(person, item.name))) : null);
         const accounts = new Map();
         for (const person of item.people) {
           if (!accounts.has(person.uid)) accounts.set(person.uid, []);

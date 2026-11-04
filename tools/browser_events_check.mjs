@@ -181,7 +181,8 @@ try {
   assert.equal(await page.locator('.multi').evaluate(m => m.classList.contains('idle')), true);
   await page.goBack();
   await page.waitForFunction(() => !document.querySelector('.multi'));
-  await page.locator('.admin-link').click();
+  assert.equal(await page.locator('header a[href="#/admin"]').count(), 0);
+  await page.goto(base + '/#/admin');
   await page.locator('.admin-stats a').filter({ hasText: 'Estadísticas' }).click();
   await page.getByRole('heading', { name: 'En vivo ahora', exact: true }).waitFor();
   await page.locator('.stats-table').filter({ hasText: 'Sports One' }).waitFor();
@@ -211,7 +212,7 @@ try {
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
-  await page.locator('.admin-link').click();
+  await page.goto(base + '/#/admin');
   await page.locator('.admin-stats a').filter({ hasText: 'Canales' }).click();
   await page.locator('.item').filter({ hasText: 'Sports Two' }).filter({ hasText: 'enlace(s)' }).getByRole('button', { name: 'Eliminar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.length === 0 && window.__published.channels.length === 1);
@@ -667,6 +668,8 @@ try {
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
+  await page.waitForFunction(() => window.__audienceTargets().includes('l:mavatar')
+    && window.__privateHistory.some(record => record.target === 'l:mavatar' && record.uid === 'admin-fixture'));
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
   assert.equal(await page.locator('#ctl-multi').isVisible(),false);
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
@@ -686,6 +689,7 @@ try {
   await page.waitForFunction(() => window.__avatarLoads === 2 && document.getElementById('video').currentTime === 900);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
+  await page.waitForFunction(() => !window.__audienceTargets().includes('l:mavatar'));
   await page.evaluate(() => {
     const video = document.getElementById('video');
     for (const name of ['paused', 'duration', 'currentTime', 'src', 'load', 'play']) delete video[name];

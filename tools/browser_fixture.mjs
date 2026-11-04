@@ -24,6 +24,7 @@ export const publishCatalog = async (data, expected = revision) => {
 };
 export const watchCatalog = (fallback, next) => { const send = () => next({ data: structuredClone(catalog) }); if (sessionStorage.getItem('slowCatalog')) setTimeout(send, 1500); else send(); return () => {}; };
 const present = new Map();
+window.__audienceTargets = () => [...present.values()];
 window.__visits = [];
 export const beat = async (session, target) => { present.set(session, target); };
 export const leave = async session => { present.delete(session); };
@@ -90,6 +91,8 @@ export const readLiveViewers = async () => [
   {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'tv', target: 'c:sport-one'},
   {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'android', target: 'c:sport-one'},
   {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Águilas vs Betis', device: 'web', target: 'e:game'},
+  {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Tulsa King · T1 · Piloto', device: 'android', target: 'l:tulsa-king'},
+  {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Avatar', device: 'web', target: 'l:avatar'},
 ];
 window.__setAuthFixture=user=>{auth.currentUser=user;for(const cb of window.__authWatchers||[])cb(user);};
 `;

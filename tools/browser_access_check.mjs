@@ -69,6 +69,12 @@ try{
   await page.evaluate(()=>window.__setUserBlocked('member-fixture',false));await page.locator('#player:not([hidden])').waitFor();
   // The administrator is exempt from their own wall, can change the policy and cannot block themselves.
   await page.evaluate(()=>window.__setAuthFixture({uid:'admin-fixture',email:'admin@example.com',displayName:'Administrador'}));
+  await page.evaluate(()=>{location.hash='#/admin';});
+  await page.locator('.admin-stats').waitFor();
+  assert.equal(await page.locator('.top a[href="#/admin"]').count(),0);
+  await page.locator('#account-link').click();
+  await page.locator('.profile-sheet').waitFor();
+  assert.equal(await page.getByRole('button',{name:'Administración',exact:true}).count(),0);
   await page.evaluate(()=>{location.hash='#/admin/usuarios';});await page.getByRole('heading',{name:'Usuarios',exact:true}).waitFor();assert.equal(await page.locator('#player').isVisible(),false);assert.equal(await page.locator('#view').evaluate(n=>n.inert),false);
   await page.getByLabel('Buscar usuarios').fill('alvaro');await page.waitForFunction(()=>document.querySelectorAll('.user-card').length===1);assert.equal(await page.getByLabel('Buscar usuarios').inputValue(),'alvaro');
   await page.setViewportSize({width:393,height:852});
@@ -108,6 +114,12 @@ try{
   assert.equal(await eventNamed.isVisible(),false);
   await eventViewers.locator('summary').press('Enter');
   await eventNamed.waitFor();
+  for (const [target, title] of [['l:tulsa-king', 'Tulsa King · T1 · Piloto'], ['l:avatar', 'Avatar']]) {
+    const row=page.locator(`details[data-target="${target}"]`);
+    await row.locator('summary').click();
+    await row.getByRole('link',{name:'Álvaro'}).waitFor();
+    assert.ok((await row.textContent()).includes(title));
+  }
   await page.screenshot({path:'tools/ui-artifacts/named-viewers.png',fullPage:true});
   await named.click();
   page.once('dialog',dialog=>dialog.dismiss());

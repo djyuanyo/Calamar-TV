@@ -35,8 +35,7 @@ import org.json.JSONObject;
 
 /**
  * «Mi cuenta», as on the web (#/cuenta): sign in with Google, with email and password or from the phone
- * (QR and code, for televisions), then the profiles of the account (add, rename, colour, delete) and
- * «Administración». Whatever each profile saves is in Profiles.
+ * (QR and code, for televisions), then the profiles of the account (add, rename, colour, delete).
  */
 public class AccountActivity extends Activity {
   private LinearLayout body;
@@ -200,7 +199,6 @@ public class AccountActivity extends Activity {
     body.addView(manage, mp);
     menuItem("👤", "Cuenta", () -> { editing = "cuenta"; draw(); });
     menuItem("？", "Ayuda", () -> { editing = "ayuda"; draw(); });
-    if (SharedCatalog.administrator(Profiles.user(this))) menuItem("⚙", "Administración", () -> startActivity(new Intent(this, AdminActivity.class)));
     menuItem("⇥", "Cerrar sesión", () -> SharedCatalog.auth(this).signOut());
     body.addView(status);
     manage.requestFocus();
@@ -523,7 +521,6 @@ public class AccountActivity extends Activity {
     TextView foot = label("Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.", 13, 0x88ffffff);
     foot.setGravity(Gravity.CENTER);
     outer.addView(foot);
-    // No separate administration sign-in: the administrator's own account shows «Administración» in «Perfil».
     (byQr ? google : tabs.getChildAt(creating ? 1 : 0)).requestFocus();
   }
 

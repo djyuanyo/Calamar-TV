@@ -1001,16 +1001,17 @@ function startAudience(c, visit = true) {
   if (watching?.key === playbackKey) return;
   stopAudience();
   const id = sessionId();
-  const session = { target, key: playbackKey, id, timers: [], privateViewing: viewingSession(shared, c, id) };
+  const session = { key: playbackKey, id, livePlayer: !c.vod, timers: [], privateViewing: viewingSession(shared, c, id, c.vod) };
   watching = session;
   if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
   // Films and series count in the statistics too, but their player shows no «people watching».
-  const count = () => c.vod ? Promise.resolve() : shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
-  const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
-  beat().then(() => { if (live()) count(); });
-  session.timers.push(setInterval(beat, HEARTBEAT_MS));
-  if (!c.vod) session.timers.push(setInterval(count, COUNT_MS));
+  if (!c.vod) {
+    const count = () => shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
+    const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
+    beat().then(() => { if (live()) count(); });
+    session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
+  }
   // One visit per opening; refreshes of the same player are not new visits. An event also counts
   // as a visit to the channel it plays on. The rules accept one counter per write, so each goes alone.
   if (visit) {
@@ -1027,10 +1028,15 @@ function stopAudience() {
   session.privateViewing.close();
   for (const timer of session.timers) clearInterval(timer);
   showViewers(0);
-  shared().then((f) => f.leave(session.id)).catch(() => {});
+  if (session.livePlayer) shared().then((f) => f.leave(session.id)).catch(() => {});
 }
 window.addEventListener('pagehide', stopAudience);
-window.addEventListener('pageshow', (e) => { if (e.persisted && current && !player.hidden) startAudience(current, false); });
+window.addEventListener('pageshow', (e) => {
+  if (!e.persisted || !current || player.hidden || current.pending) return;
+  startAudience(current, false);
+  if (casting || document.getElementById('player-frame') || (!video.paused && !video.ended && video.readyState >= 3))
+    watching?.privateViewing.watching(true);
+});
 
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
 let current = null;
@@ -1450,9 +1456,6 @@ function showGate() {
   document.body.classList.add('gate-open');
   gate.querySelector('.gate-profile')?.focus();
 }
-// The administration icon only for the administrator's own account (there is no separate sign-in).
-const adminLink = document.querySelector('.admin-link');
-shared().then((f) => f.watchAuth((user) => { adminLink.hidden = !f.administrator(user); })).catch(() => {});
 onProfilesChanged(() => {
   paintAccountButton(el, accountLink);
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];

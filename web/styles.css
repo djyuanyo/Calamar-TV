@@ -82,13 +82,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .search input::placeholder { color: var(--faint); }
 .search input:hover { background: rgba(255, 255, 255, 0.12); }
 .search input:focus { background: var(--bg); border-color: var(--accent); outline: none; }
-.admin-link {
-  flex: none; padding: 8px 14px; border-radius: 999px; text-decoration: none; font-size: 13px; font-weight: 700;
-  letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--line); transition: color 0.15s, border-color 0.15s;
-}
-.admin-link:hover, .admin-link[aria-current="page"] { color: var(--fg); border-color: var(--muted); }
-/* Icon only: a round button with the account silhouette. */
-.admin-link { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; }
 
 main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px; width: 100%; margin: 0 auto; }
 .status { color: var(--muted); }
@@ -438,7 +431,6 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
   .top-inner { flex-wrap: wrap; gap: 0 14px; padding-top: 6px; }
   .brand { min-height: 44px; }
   .brand-name { font-size: 15px; }
-  .admin-link { margin-left: auto; }
   .search svg { left: 15px; }
   .nav { order: 3; flex-basis: 100%; align-self: auto; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--gutter) * -1); padding: 0 var(--gutter); min-height: 44px; }
   .nav::-webkit-scrollbar { display: none; }
@@ -488,7 +480,6 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 /* Search sits directly below the header on phones, desktop and TV. */
 .top-inner { flex-wrap: wrap; }
 .top-inner .search { order: 10; flex: 1 0 100%; max-width: none; margin: 4px 0 12px; }
-.top-inner .admin-link { margin-left: auto; }
 .card .art > img.event-cover { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: inherit; }
 .event-hero-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .event-hero .hero-body, .event-hero .hero-picks { z-index: 2; }
@@ -1267,7 +1258,6 @@ a.league-head::after { content: '›'; font-size: 1.2em; opacity: .7; }
 .title-action[aria-pressed="true"] { color: var(--accent); }
 .fav-btn[aria-pressed="true"] { --fav-fill: currentColor; color: #ff5a6e; }
 .top-inner .account-link { margin-left: auto; }
-.top-inner .account-link + .admin-link { margin-left: 10px; }
 .account-card .actions { justify-content: center; }
 
 .live-page-head { margin: 22px 0 6px; }
@@ -1470,7 +1460,7 @@ body.gate-open { overflow: hidden; }
 .user-day + .user-day { margin-top: 12px; }
 .user-day h3 { color: var(--muted); font-size: 14px; }
 .stats-rank li.stats-watching { display: grid; gap: 5px; }
-.stats-watching > div, .stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+.stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
 .stats-disclosure > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0; }
 .stats-disclosure > summary::-webkit-details-marker { display: none; }
 .stats-disclosure > summary::before { content: '›'; color: var(--muted); }
