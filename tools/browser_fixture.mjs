@@ -2,6 +2,7 @@ export const fakeFirebase = fixture => `
 import { validateCatalog } from './shared-catalog.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
 export const ready = Promise.resolve(), auth = { currentUser: Object.prototype.hasOwnProperty.call(window, '__initialAuth') ? window.__initialAuth : { uid: 'admin-fixture', email: 'admin@example.com', getIdToken: async () => 'token' } };
+export const currentUser = () => auth.currentUser?.emailVerified === false ? null : auth.currentUser;
 export const administrator = (user = auth.currentUser) => !!user && user.email === 'admin@example.com';
 export const imageService = async () => ({configured: true});
 export const connectImageService = async () => ({configured: true});
@@ -32,19 +33,25 @@ export const writeProfileData = async (id, data) => { (window.__profileData ||= 
 export const deleteProfileData = async (id) => { delete (window.__profileData || {})[id]; };
 export const readCloudProgress = async () => ({ entries: {}, removed: {} });
 export const writeCloudProgress = async () => {};
-export const loginGoogle = async () => {if(window.__fakeLogin)window.__setAuthFixture({uid:'member-fixture',email:'alvaro@example.com',displayName:'Alvaro',providerData:[{providerId:'google.com'}]});}, registerEmail = async () => {}, loginEmail = async () => {}, resetPassword = async () => {};
+export const loginGoogle = async () => {if(window.__fakeLogin)window.__setAuthFixture({uid:'member-fixture',email:'alvaro@example.com',displayName:'Alvaro',providerData:[{providerId:'google.com'}]});}, resetPassword = async () => {};
+export const registerEmail = async email => { window.__verificationMail = email; return { verification: true, sent: true }; };
+export const loginEmail = async (email, password, resend) => {
+  if (resend) window.__verificationMail = email;
+  return { verification: true, sent: resend };
+};
 
 let webAccess=window.__initialWebAccess || {requireLogin:false};
 export const readWebAccess=async()=>webAccess;
 export const watchWebAccess=next=>{(window.__policyWatchers||=[]).push(next);next(webAccess);return()=>{};};
 window.__setWebAccess=next=>{webAccess=next;for(const cb of window.__policyWatchers||[])cb(next);};
 export const saveWebAccess=async next=>{window.__savedWebAccess=next;window.__setWebAccess(next);};
-const blocks=new Map(),blockWatchers=new Map();
+const blocks=new Map(),blockWatchers=new Map(),deleted=new Set();
 export const watchUserAccess=(uid,next)=>{const watchers=blockWatchers.get(uid)||[];watchers.push(next);blockWatchers.set(uid,watchers);next(blocks.get(uid)===true);return()=>{};};
 export const recordMember=async()=>{};
 export const setUserBlocked=async(uid,blocked)=>{blocks.set(uid,blocked);window.__lastUserBlock={uid,blocked};for(const next of blockWatchers.get(uid)||[])next(blocked);};
+export const deleteUserAccount = async uid => { deleted.add(uid); window.__deletedUser = uid; await setUserBlocked(uid, true); };
 window.__setUserBlocked=setUserBlocked;
-export const readUserDirectory=async()=>({members:[{uid:'admin-fixture',name:'Administrador',email:'admin@example.com',provider:'google.com'},{uid:'member-fixture',name:'Álvaro',email:'alvaro@example.com',provider:'password',registeredAt:1760000000000,lastSeen:1790000000000}],profiles:[{uid:'member-fixture',json:JSON.stringify({profiles:[{id:'main',name:'Alvaro'}]})}],access:[...blocks].map(([uid,blocked])=>({uid,blocked}))});
+export const readUserDirectory=async()=>({members:[{uid:'admin-fixture',name:'Administrador',email:'admin@example.com',provider:'google.com'},{uid:'member-fixture',name:'Álvaro',email:'alvaro@example.com',provider:'password',verified:true,registeredAt:1760000000000,lastSeen:1790000000000}],profiles:[{uid:'member-fixture',json:JSON.stringify({profiles:[{id:'main',name:'Alvaro'}]})}],access:[...blocks].map(([uid,blocked])=>({uid,blocked,deleted:deleted.has(uid)}))});
 const privateHistory = new Map(), liveViewers = new Map();
 window.__privateHistory = [];
 export const showViewing = async (record, first) => {
@@ -59,6 +66,7 @@ export const hideViewing = async (record, finished) => {
   window.__privateHistory = [...privateHistory.values()];
 };
 export const readUserDetails = async uid => {
+  if (deleted.has(uid)) return null;
   const directory = await readUserDirectory();
   const member = directory.members.find(m => m.uid === uid);
   return member && {...member, blocked: blocks.get(uid) === true, profiles: uid === 'member-fixture'
