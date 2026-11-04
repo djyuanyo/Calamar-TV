@@ -116,3 +116,43 @@ test('legacy agenda lookup-only events stay out of public lists until a source e
   assert.equal(events([], updated, now)[0].id, item.id);
   assert.equal(applyZicoAgenda(updated, payload(row(2))).data.events.length, 0);
 });
+
+test('reuses an existing league and links the matching ESPN fixture, preserving its manual signal', () => {
+  const espnLeague = {id:'espn-uefa.europa', name:'Europa League', espn:'uefa.europa'};
+  const teams = [{id:'home',name:'Anderlecht'}, {id:'away',name:'RB Salzburg'}];
+  const manual = 'https://example.com/manual.m3u8';
+  const fixture = {id:'partido-123',matchId:'123',leagueId:espnLeague.id,homeTeamId:'home',awayTeamId:'away',
+    startAt:'2026-11-04T20:05:00.000Z',streams:[manual],round:'Jornada 4'};
+  const base = {...catalog, leagues:[espnLeague], teams, fixtures:[fixture],
+    events:[{id:'zico-event-7',name:'Duplicado de ZicoTV',cover:'',imported:true,streams:[direct]}]};
+  const signal = {source:'own',type:'iframe',player_url:agendaPlayer};
+  const match = row(7, {title:'Anderlecht vs Red Bull Salzburg', home_team:'Anderlecht', away_team:'Red Bull Salzburg',
+    league:'UEFA Europa League', sources:[signal]});
+  const unrelated = row(8, {title:'Otro partido',league:'UEFA Europa League',sources:[signal]});
+  const feed = payload(match, unrelated);
+  const result = applyZicoAgenda(base, feed);
+  assert.equal(result.linked, 1);
+  assert.equal(result.data.events.length, 1);
+  assert.equal(result.data.events[0].leagueId, espnLeague.id);
+  assert.deepEqual(result.data.leagues, [espnLeague]);
+  assert.deepEqual(result.data.fixtures[0], {...fixture, streams:[manual,'https://bp.zicotv.cc/events/7',agendaPlayer],
+    zicoEventId:'7',zicoStreams:['https://bp.zicotv.cc/events/7',agendaPlayer]});
+  validateCatalog(result.data);
+  assert.deepEqual(applyZicoAgenda(result.data, feed).data, result.data);
+  assert.deepEqual(applyZicoAgenda(result.data, payload({...match,sources:[]})).data.fixtures, [fixture]);
+});
+
+test('leaves a manually created event intact and does not attach a signal from another competition', () => {
+  const match = row(9, {title:'Real Madrid vs Liverpool',home_team:'Real Madrid',away_team:'Liverpool',
+    league:'UEFA Champions League',sources:[{type:'direct',url:direct}]});
+  const original = {id:'manual',name:'Real Madrid vs Liverpool',startAt:'2026-11-04T20:00:00Z',
+    leagueId:'cup',cover,streams:['https://example.com/original.m3u8'],featured:true};
+  const data = {...catalog, events:[original], leagues:[{id:'cup',name:'Champions League',espn:'uefa.champions'}]};
+  const result = applyZicoAgenda(data,payload(match));
+  assert.equal(result.linked, 1);
+  assert.deepEqual(result.data.events[0], {...original, zicoEventId:'9', zicoStreams:['https://bp.zicotv.cc/events/9',direct],
+    streams:[...original.streams,'https://bp.zicotv.cc/events/9',direct]});
+  const other = applyZicoAgenda(data,payload({...match,league:'UEFA Europa League'}));
+  assert.equal(other.linked, 0);
+  assert.deepEqual(other.data.events[0], original);
+});

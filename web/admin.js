@@ -529,8 +529,7 @@ function zicoAgendaPanel(rerender, state) {
     try {
       const payload = await fetchZicoAgenda();
       if (!button.isConnected || !file || saving) return;
-      const fixtures = (file.data.fixtures || []).map(fixture => fixtureEvent(fixture, file.data));
-      const { data, count, skipped } = applyZicoAgenda(file.data, payload, fixtures);
+      const { data, count, skipped, linked } = applyZicoAgenda(file.data, payload);
       data.channels = syncTdtCopies(data, state.tdt);
       validateCatalog(data, { checkSize: false });
       if (JSON.stringify(data) !== JSON.stringify(file.data)) {
@@ -539,7 +538,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${count} eventos publicados, ${skipped} omitidos por falta de señal.`;
+      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin señal.`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -549,7 +548,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Publica los eventos en directo y programados que ya tienen señal, de todos los deportes.'), button, status);
+    el('p', { class: 'note' }, 'Vincula las señales a los partidos de tus ligas. Los demás eventos que tengan señal se añaden a la agenda.'), button, status);
 }
 
 function zicoTokenPanel() {
