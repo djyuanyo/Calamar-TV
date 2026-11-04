@@ -865,77 +865,53 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // Failed lookup stays in our player and retries; it must never switch to an iframe.
-  let hostedReady = false, tokenVersion = 0;
+  // The browser opens the provider's official player and uses the hosting only to prepare its URL.
+  let eventReady = true;
+  const zicoRequests = [];
   await page.route('https://calamarmenciano.com/calamar-player.php?*', route => {
-    const request = new URL(route.request().url()), page = request.searchParams.get('page');
-    const channel = page ? new URL(page).pathname.split('/').pop() : '';
-    if (!hostedReady && channel === '1') return route.fulfill({status:502,json:{error:'Ninguna fuente responde'}});
-    const signature = channel === '1' ? `fresh${++tokenVersion}` : `event-${channel}`;
-    return route.fulfill({json:{url:`calamar-player.php?seg=manifest&sig=${signature}&l=1`}});
+    const request = new URL(route.request().url());
+    zicoRequests.push([...request.searchParams.keys()]);
+    const player = request.searchParams.get('zico_embed');
+    const sources = eventReady ? [
+      {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
+      {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'},
+    ] : [];
+    return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*' }, json: player
+      ? {url:'https://bp.zicotv.cc/api/player/' + new URL(player).pathname.split('/').pop() + '?token=token_fixture_only'}
+      : { data: { sources } } });
   });
+  await page.route('https://bp.zicotv.cc/api/v1/events/98019', route => route.fulfill({
+    headers: { 'Access-Control-Allow-Origin': '*' }, json: { data: { sources: [] } },
+  }));
+  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({
+    contentType: 'text/html', body: '<button>Reproducir señal oficial</button>',
+  }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
-    sessionStorage.setItem('catalog', JSON.stringify(saved));
-  });
-  await page.goto(base + '/?zico=1#/canal/canal-zico');
-  await page.getByText(/No se pudo conectar con la señal/).waitFor();
-  await page.clock.runFor(90000);
-  assert.equal(await page.locator('#player-frame').count(), 0);
-  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), false);
-  assert.equal(await page.locator('#player-close').isVisible(), true);
-  assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
-  await page.locator('#player-close').click();
-  // If the public provider cannot be reached, playback falls back to the signed hosting route.
-  hostedReady = true;
-
-  await page.goto(base + '/?zico=2#/canal/canal-zico');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
-  assert.equal(await page.locator('#player-frame').count(), 0);
-  assert.ok((await page.evaluate(() => window.__hlsSources)).every(url => new URL(url).hostname === 'calamarmenciano.com'));
-  await page.locator('#player-close').click();
-  // Event page URLs expand into named public players, never an iframe of /events/.
-  let eventReady = true;
-  await page.route('https://bp.zicotv.cc/api/v1/events/98019', route => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ data: { sources: eventReady ? [
-    {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
-    {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'}
-  ] : [] } }) }));
-  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'var ZT_SOURCES = ' + JSON.stringify([{url:`https://cdn.example/event-${route.request().url().split('/').pop()}.m3u8`}]) + ';' }));
-  await page.evaluate(() => {
-    const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.events.push({id:'manual-zico',name:'Evento Zico Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
+  const official = page.frameLocator('#player-frame').frameLocator('iframe[title="Reproductor Premium de ZicoTV"]');
+  await page.goto(base + '/?zico=1#/canal/canal-zico');
+  await official.getByRole('button', { name: 'Reproducir señal oficial' }).waitFor();
+  assert.ok(requests.includes('https://bp.zicotv.cc/api/player/1?token=token_fixture_only'));
+  assert.ok(!(await page.locator('#player-frame').getAttribute('src')).includes('token_fixture_only'));
+  await page.locator('#player-close').click();
   await page.goto(base + '/?event-zico=1#/evento/evento-zico-manual');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  await official.getByRole('button', { name: 'Reproducir señal oficial' }).waitFor();
   assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Canal A','Canal B']);
   await page.getByLabel('Cambiar fuente').selectOption('1');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-23')));
-  assert.equal(await page.locator('#player-source-select').inputValue(), '1');
-  assert.equal(await page.locator('#player-frame').count(), 0);
+  await official.getByRole('button', { name: 'Reproducir señal oficial' }).waitFor();
+  assert.ok(requests.includes('https://bp.zicotv.cc/api/player/23?token=token_fixture_only'));
+  assert.ok(zicoRequests.length >= 4);
+  assert.ok(zicoRequests.every(keys => keys.length === 1 && ['zico_embed', 'event'].includes(keys[0])));
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
   await page.waitForFunction(() => location.hash === '#/' && document.querySelector('#player').hidden);
   assert.equal(await page.getByText('Evento Zico Manual', {exact:true}).filter({visible:true}).count(), 0);
   assert.equal(await page.getByText(/todavía no publica fuentes/).count(), 0);
-  eventReady = true;
-  await page.goto(base + '/?event-zico=3#/evento/evento-zico-manual');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
-  await page.locator('#player-close').click();
-  // The 2.20.67 direct route keeps playing even when our hosting domain cannot be reached.
-  await page.route('https://calamarmenciano.com/calamar-player.php?*', route => route.abort());
-  await page.evaluate(() => {
-    const saved = JSON.parse(sessionStorage.getItem('catalog'));
-    saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4'];
-    sessionStorage.setItem('catalog', JSON.stringify(saved));
-  });
-  await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-4')));
-  assert.ok((await page.evaluate(() => window.__hlsSources)).some(url => new URL(url).hostname === 'cdn.example'));
-  assert.equal(await page.locator('#player-frame').count(), 0);
-  await page.locator('#player-close').click();
   // Dailymotion is shown in the video screen with the original provider configuration.
   const dmPage = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
   await page.route(dmPage, route => route.fulfill({ body: '<video controls></video>', contentType: 'text/html' }));

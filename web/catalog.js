@@ -265,6 +265,15 @@ export function anonmp4Embed(url) {
 }
 
 const FRAME_HOSTS = ['zicotv.cc'];
+export function zicoEmbedAddress(address) {
+  if (!renewablePage(address)) return null;
+  const url = new URL(address);
+  if (!['bp.zicotv.cc', 'zicotv.cc'].includes(url.hostname) || url.port || url.hash
+      || !/^\/api\/player\/[0-9]{1,16}\/?$/.test(url.pathname)) return null;
+  // Pass only the catalog identity or the hosting's signed event proof, never a supplied provider token.
+  const query = /^\?ct_event=\d{1,16}&ct_sig=[a-f0-9]{32}$/.test(url.search) ? url.search : '';
+  return './zico-player.html?' + new URLSearchParams({ page: url.origin + url.pathname + query });
+}
 export function framedPage(url) {
   try {
     const u = new URL(url);
@@ -282,8 +291,10 @@ export function webPlayback(url, { pages = false } = {}) {
   }
   const path = u.pathname.toLowerCase();
   if (pages && playerEndpoint(url)
-      && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
-    return { ok: true, kind: 'hls', page: true, renewable: true };
+      && !u.username && !u.password && u.searchParams.get('cast') === '1') {
+    const embedded = zicoEmbedAddress(u.searchParams.get('page'));
+    if (embedded) return { ok: true, kind: 'frame', page: true, address: embedded, zico: true };
+  }
   const dm = pages && dailymotionEmbed(url);
   if (dm) return { ok: true, kind: 'frame', page: true, address: dm };
   const vidara = vidaraPlayback(url);
@@ -311,7 +322,8 @@ export function webPlayback(url, { pages = false } = {}) {
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
   if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
-  if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
+  const zico = pages && zicoEmbedAddress(url);
+  if (zico) return { ok: true, kind: 'frame', page: true, address: zico, zico: true };
   if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };

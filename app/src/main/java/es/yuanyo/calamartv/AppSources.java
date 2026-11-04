@@ -28,6 +28,12 @@ final class AppSources {
     return out;
   }
 
+  static ArrayList<String> forMulti(List<String> sources) {
+    ArrayList<String> compatible = forAndroid(sources);
+    compatible.removeIf(url -> VideoResolver.renewablePage(url) || VideoResolver.eventApi(url) != null);
+    return compatible;
+  }
+
   /** A link of ZicoTV (zicotv.cc or any of its subdomains). */
   static boolean zico(String address) {
     try {

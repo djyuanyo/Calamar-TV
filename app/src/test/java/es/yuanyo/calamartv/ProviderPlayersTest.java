@@ -6,6 +6,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProviderPlayersTest {
+  @Test public void zicoEmbedsUseThePublicCalamarTvOrigin() {
+    assertEquals("https://djyuanyo.github.io/Calamar-TV/zico-player.html?page=https%3A%2F%2Fbp.zicotv.cc%2Fapi%2Fplayer%2F22",
+        ProviderPlayers.zico("https://bp.zicotv.cc/api/player/22?token=ignored"));
+    assertNull(ProviderPlayers.zico("https://bp.zicotv.cc.example/api/player/22"));
+  }
+
   @Test public void normalizesOnlyKnownPlayerLinks() {
     String daily = "https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W";
     assertEquals(daily, ProviderPlayers.embed(daily));

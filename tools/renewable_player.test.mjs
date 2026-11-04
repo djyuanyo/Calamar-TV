@@ -45,7 +45,7 @@ const response = upstream => ({ ok: true, json: async () => ({ url: signed(upstr
 test('only HTTPS public player endpoints resolve; direct video and other hosts do not', () => {
   for (const url of [page, 'https://bp.zicotv.cc/api/player/1?token=a']) assert.equal(renewablePage(url), true);
   for (const url of ['http://zicotv.cc/api/player/1', 'https://zicotv.cc.evil.example/api/player/1', 'https://zicotv.cc/channels/1', 'https://user:pass@zicotv.cc/api/player/1']) assert.equal(renewablePage(url), false);
-  assert.equal(webPlayback(page, { pages: true }).renewable, true);
+  assert.equal(webPlayback(page, { pages: true }).zico, true);
 });
 test('JSON parsing handles escaped slashes, quotes and brackets; excludes locked, non-media and credentials', () => {
   const html = `var ZT_SOURCES = ${JSON.stringify([{ label: 'CDN ] "', url: media(1793041200) }, { url: media(1793041200), locked: true },
@@ -150,7 +150,7 @@ test('an explicitly chosen hosted signal is preserved on renewal and error retry
   const f = fixture(async url => { calls.push(new URL(url)); return response(media(1793041200)); }, true, { page: chosen });
   await flush(); f.engines[0].emitError(); await f.tick(250);
   assert.equal(calls.length, 2); assert.ok(calls.every(u => u.searchParams.get('src') === '1' && !u.searchParams.has('intento')));
-  assert.equal(webPlayback(chosen, { pages: true }).renewable, true); f.stop();
+  assert.equal(webPlayback(chosen, { pages: true }).zico, true); f.stop();
 });
 
 

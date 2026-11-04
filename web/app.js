@@ -726,7 +726,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
-    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal, preferHosted: usesZicoAgenda(c) });
+    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal, preferHosted: true });
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
@@ -837,7 +837,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
     frame.addEventListener('load', () => {
-      if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
+      if (generation === playbackGeneration) watching?.privateViewing.watching(true);
     }, { once: true });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');

@@ -1385,8 +1385,8 @@ public class MainActivity extends Activity {
     search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});
     watch.setOnClickListener(v -> {
       if(selected.size()<2)return;
-      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",AppSources.forAndroid(c.streams)));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
-      dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
+      ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",AppSources.forMulti(c.streams)));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
+      dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putExtra("zico_embed", true).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
     });
     multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});showContentDialog(dialog);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,-1);
@@ -1395,7 +1395,7 @@ public class MainActivity extends Activity {
 
   /** Channel and player-page sources that the independent native tiles can resolve. */
   boolean directMedia(Catalog.Channel c) {
-    List<String> sources = AppSources.forAndroid(c.streams);
+    List<String> sources = AppSources.forMulti(c.streams);
     return !sources.isEmpty();
   }
 
@@ -1430,6 +1430,7 @@ public class MainActivity extends Activity {
     intent.putExtra("title", c.name);
     // Every link of the channel: when one source fails the player moves on to the next.
     intent.putStringArrayListExtra("channel_streams", playableSources);
+    intent.putExtra("zico_embed", true);
     intent.putExtra("audience_target",AudienceModel.target(c.event,c.id));intent.putExtra("audience_channel",c.event?c.channelId:c.id);
     if(c.event && !c.matchId.isEmpty())intent.putExtra("match_id",c.matchId);
     // Events open with the match under the video on phones; without a match link, with the event's own data.

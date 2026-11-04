@@ -14,11 +14,12 @@ test('picker searches every event by name without case or accents, keeping event
   assert.equal(searchMultiEvents(rows,'ninguno').length,0);
   assert.notEqual(multiKey(rows[0]),multiKey({...rows[0],event:false,eventId:undefined}));
 });
-test('available events include renewable Zico pages and event APIs and exclude pending/iframe-only sources', () => {
+test('multipantalla keeps direct sources and excludes embedded players and pending events', () => {
   const rows=[event('a','Canal', ['https://zicotv.cc/api/player/1']),event('b','Evento',['https://zicotv.cc/events/123']),
-    {...event('c','Pendiente'),playable:false},event('d','Iframe',['https://anonmp4.art/embed/abcdefghijkl'])];
-  assert.equal(multiPlayable(rows[0]),true);
-  assert.deepEqual(availableMultiEvents(rows).map(e=>e.id),['a','b']);
+    {...event('c','Pendiente'),playable:false},event('d','Iframe',['https://anonmp4.art/embed/abcdefghijkl']),
+    event('e','Directo',['https://zicotv.cc/api/player/1','https://cdn.example/live.m3u8'])];
+  assert.equal(multiPlayable(rows[0]),false);
+  assert.deepEqual(availableMultiEvents(rows).map(e=>e.id),['e']);
 });
 test('movies, episodes and documentaries cannot be multi-screen candidates even with valid HLS URLs',()=>{
   for(const page of ['peliculas','series','documentales']){
