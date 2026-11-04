@@ -48,7 +48,7 @@ export async function expandEventSources(streams, { fetcher = globalThis.fetch, 
       })();
       const [preferred, publicSources] = await Promise.allSettled([hosted, direct]);
       const sources = [...(preferred.value || []), ...(publicSources.value || [])];
-      if (!sources.length) throw publicSources.reason || Error('ZicoTV todavía no publica fuentes disponibles para este evento.');
+      if (!sources.length) throw publicSources.reason || Error('Zico TV todavía no publica fuentes disponibles para este evento.');
       return sources.map(source => ({ ...source, origin: url }));
     } catch (error) {
       return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];
