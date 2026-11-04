@@ -1103,21 +1103,36 @@ function statsPanel(state) {
       const lists = { c: [], e: [], l: [] };
       for (const [target, viewers] of counts) {
         const people = named.get(target) || [];
-        lists[target[0]]?.push({ name: names.get(target) || people[0]?.title || target.slice(2), viewers, people });
+        lists[target[0]]?.push({ target, name: names.get(target) || people[0]?.title || target.slice(2), viewers, people });
       }
       liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
       updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-      const viewer = (person, title) => {
-        const subtitle = [
-          person.profile !== person.name ? person.profile : '',
-          viewerDevice(person.device), person.title !== title ? person.title : '',
-        ].filter(Boolean).join(' · ');
+      const viewer = (person, title, sessions = [person]) => {
+        const subtitle = sessions.map(session => [
+          session.profile !== person.name ? session.profile : '',
+          viewerDevice(session.device), session.title !== title ? session.title : '',
+        ].filter(Boolean).join(' · ')).filter(Boolean);
         return el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
-          el('small', {}, subtitle));
+          el('small', {}, [...new Set(subtitle)].join(' / ')));
       };
-      const rank = item => el('li', { class: 'stats-watching' },
-        el('div', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))),
-        item.people.length ? el('ul', { class: 'stats-viewer-names' }, item.people.map(person => viewer(person, item.name))) : null);
+      const open = new Set([...liveBody.querySelectorAll('details[open]')].map(item => item.dataset.target));
+      const focused = liveBody.contains(document.activeElement) ? document.activeElement.closest('details') : null;
+      const focusedLink = focused && document.activeElement.getAttribute('href');
+      const rank = item => {
+        const label = [el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))];
+        if (item.target.startsWith('l:')) return el('li', { class: 'stats-watching' }, el('div', {}, label),
+          item.people.length ? el('ul', { class: 'stats-viewer-names' }, item.people.map(person => viewer(person, item.name))) : null);
+        const accounts = new Map();
+        for (const person of item.people) {
+          if (!accounts.has(person.uid)) accounts.set(person.uid, []);
+          accounts.get(person.uid).push(person);
+        }
+        return el('li', { class: 'stats-watching' },
+          el('details', { class: 'stats-disclosure', 'data-target': item.target, ...(open.has(item.target) ? { open: '' } : {}) },
+            el('summary', {}, label),
+            accounts.size ? el('ul', { class: 'stats-viewer-names' }, [...accounts.values()].map(sessions => viewer(sessions[0], item.name, sessions)))
+              : el('p', { class: 'note' }, viewersResult.unavailable ? 'No se pudieron cargar los nombres.' : 'No hay usuarios identificados en este momento.')));
+      };
       const column = (title, list, empty) => el('div', { class: 'stats-card' }, el('h3', {}, title),
         list.length ? el('ol', { class: 'stats-rank' },
           list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es')).map(rank))
@@ -1125,6 +1140,11 @@ function statsPanel(state) {
       liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'),
         column('Películas, series y documentales', lists.l, 'Nadie está viendo títulos ahora.'),
         viewersResult.unavailable ? el('p', { class: 'note' }, 'Los nombres de los espectadores no están disponibles en este momento.') : null);
+      if (focused) {
+        const replacement = [...liveBody.querySelectorAll('details')].find(item => item.dataset.target === focused.dataset.target);
+        const next = focusedLink && [...(replacement?.querySelectorAll('a') || [])].find(link => link.getAttribute('href') === focusedLink);
+        (next || replacement?.querySelector('summary'))?.focus({ preventScroll: true });
+      }
     } catch (error) { liveBody.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer los espectadores: ${explain(error)}`)); }
   };
   // Stops by itself once the panel leaves the page; a redrawn panel starts its own timer.

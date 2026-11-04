@@ -1461,6 +1461,11 @@ body.gate-open { overflow: hidden; }
 .user-day h3 { color: var(--muted); font-size: 14px; }
 .stats-rank li.stats-watching { display: grid; gap: 5px; }
 .stats-watching > div, .stats-rank .stats-viewer-names li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+.stats-disclosure > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0; }
+.stats-disclosure > summary::-webkit-details-marker { display: none; }
+.stats-disclosure > summary::before { content: '›'; color: var(--muted); }
+.stats-disclosure[open] > summary::before { transform: rotate(90deg); }
+.stats-disclosure > summary span { flex: 1; min-width: 0; }
 .stats-viewer-names { list-style: none; margin: 0 0 6px; padding: 6px 10px; border-left: 2px solid #ffffff2a; }
 .stats-viewer-names a { overflow-wrap: anywhere; }
 

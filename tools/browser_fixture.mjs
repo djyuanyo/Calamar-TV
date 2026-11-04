@@ -88,6 +88,8 @@ export const readViewingHistory = async uid => ({entries: [...privateHistory.val
 export const readLiveViewers = async () => [
   ...[...liveViewers.values()].map(record => ({...record, name: 'Álvaro'})),
   {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'tv', target: 'c:sport-one'},
+  {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'android', target: 'c:sport-one'},
+  {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Águilas vs Betis', device: 'web', target: 'e:game'},
 ];
 window.__setAuthFixture=user=>{auth.currentUser=user;for(const cb of window.__authWatchers||[])cb(user);};
 `;
