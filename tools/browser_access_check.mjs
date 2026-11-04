@@ -55,6 +55,9 @@ try{
   await page.evaluate(()=>{location.hash='#/admin/usuarios';});
   await page.getByText('Esta cuenta no es de administración.',{exact:false}).waitFor();
   assert.equal(await page.locator('.users-panel').count(),0);assert.equal(await page.locator('#player').isVisible(),false);
+  await page.locator('#account-link').click();
+  await page.getByRole('heading',{name:'Perfil',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Administración',exact:true}).count(),0);
   await page.evaluate(()=>{location.hash='#/canal/sports-one';});await page.locator('#player:not([hidden])').waitFor();
   await page.locator('#ctl-multi').click();const picker=page.getByRole('dialog',{name:'Añadir evento',exact:true});await picker.waitFor();
   assert.equal(await picker.locator('.multi-event-choice .multi-event-art .crest').count(),2);assert.equal(await picker.locator('.multi-event-details b').evaluate(n=>n.getBoundingClientRect().bottom<=n.closest('.multi-event-list').getBoundingClientRect().bottom),true,'Card title must be visible below the crests without scrolling a giant image');await page.screenshot({path:'tools/ui-artifacts/event-picker-cards.png'});
@@ -73,8 +76,8 @@ try{
   await page.locator('.admin-stats').waitFor();
   assert.equal(await page.locator('.top a[href="#/admin"]').count(),0);
   await page.locator('#account-link').click();
-  await page.locator('.profile-sheet').waitFor();
-  assert.equal(await page.getByRole('button',{name:'Administración',exact:true}).count(),0);
+  await page.getByRole('button',{name:'Administración',exact:true}).click();
+  await page.locator('.admin-stats').waitFor();
   await page.evaluate(()=>{location.hash='#/admin/usuarios';});await page.getByRole('heading',{name:'Usuarios',exact:true}).waitFor();assert.equal(await page.locator('#player').isVisible(),false);assert.equal(await page.locator('#view').evaluate(n=>n.inert),false);
   await page.getByLabel('Buscar usuarios').fill('alvaro');await page.waitForFunction(()=>document.querySelectorAll('.user-card').length===1);assert.equal(await page.getByLabel('Buscar usuarios').inputValue(),'alvaro');
   await page.setViewportSize({width:393,height:852});

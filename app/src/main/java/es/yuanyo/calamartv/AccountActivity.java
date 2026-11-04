@@ -199,6 +199,9 @@ public class AccountActivity extends Activity {
     body.addView(manage, mp);
     menuItem("👤", "Cuenta", () -> { editing = "cuenta"; draw(); });
     menuItem("？", "Ayuda", () -> { editing = "ayuda"; draw(); });
+    if (SharedCatalog.administrator(Profiles.user(this))) {
+      menuItem("⚙", "Administración", () -> startActivity(new Intent(this, AdminActivity.class)));
+    }
     menuItem("⇥", "Cerrar sesión", () -> SharedCatalog.auth(this).signOut());
     body.addView(status);
     manage.requestFocus();
