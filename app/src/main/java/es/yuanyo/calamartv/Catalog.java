@@ -239,8 +239,8 @@ public final class Catalog {
       if (target != null) sources.addAll(target.streams);
       JSONArray extra = event.optJSONArray("streams");
       if (extra != null) for (int i = 0; i < extra.length(); i++) {
-        String link = extra.optString(i).trim();
-        if ((link.startsWith("https://") || link.startsWith("http://")) && !sources.contains(link)) sources.add(link);
+        String link = UserChannels.normalizeEventSource(extra.optString(i).trim());
+        if (link != null && !sources.contains(link)) sources.add(link);
       }
       if (isZicoAgendaEvent(event)
           && sources.stream().allMatch(link -> VideoResolver.eventApi(link) != null)) continue;

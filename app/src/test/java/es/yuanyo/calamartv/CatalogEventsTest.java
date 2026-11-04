@@ -43,6 +43,20 @@ public class CatalogEventsTest {
     event.put("imported", false);
     try { SharedCatalog.validate(data); fail("A manual event still needs a cover"); } catch (JSONException expected) {}
   }
+  @Test public void agendaPlayerWithBracketsInPathSurvivesValidationAndReachesPlayback() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    String original = "https://example.com/embed/Football/Local-[ES]/1?quality=hd";
+    String player = "https://example.com/embed/Football/Local-%5BES%5D/1?quality=hd";
+    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "").put("cover", "")
+        .put("streams", new JSONArray().put("https://bp.zicotv.cc/events/98019").put(original));
+    SharedCatalog.validate(data);
+    long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
+    Catalog.Channel card = Catalog.events(Collections.emptyList(), data, now, true).get(0);
+    assertEquals(player, AppSources.forAndroid(card.streams).get(0));
+    assertEquals(original, event.getJSONArray("streams").getString(1));
+    assertEquals("http://[::1]/one.m3u8", UserChannels.normalizeEventSource("http://[::1]/one.m3u8"));
+    assertNull(UserChannels.normalizeEventSource("https://user@example.com/embed/[ES]"));
+  }
   @Test public void leaguePageIncludesOnlyLinkedMatchesOfCurrentMadridWeek() throws Exception {
     JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
     base.put("leagueId", "l");

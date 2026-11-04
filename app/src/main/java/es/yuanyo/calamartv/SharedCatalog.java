@@ -78,13 +78,9 @@ final class SharedCatalog {
         if (!entry.has("streams")) continue;
         JSONArray links = entry.getJSONArray("streams");
         if (links.length() > 50) throw new JSONException("Máximo 50 fuentes por evento");
-        for (int j = 0; j < links.length(); j++) {
-          try {
-            java.net.URI uri = new java.net.URI(links.getString(j));
-            if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null)
-              throw new Exception("URL inválida");
-          } catch (Exception invalid) { throw new JSONException("Fuente de evento no válida"); }
-        }
+        for (int j = 0; j < links.length(); j++)
+          if (UserChannels.normalizeEventSource(links.getString(j)) == null)
+            throw new JSONException("Fuente de evento no válida");
       }
     }
     Set<String> eventIds = new HashSet<>();
