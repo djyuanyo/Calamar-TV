@@ -47,7 +47,11 @@ final class Profiles {
   static void forget(Listener listener) { LISTENERS.remove(listener); }
 
   static FirebaseUser user(Context c) {
-    try { return SharedCatalog.auth(c).getCurrentUser(); } catch (RuntimeException unavailable) { return null; }
+    try { return verifiedUser(SharedCatalog.auth(c).getCurrentUser()); } catch (RuntimeException unavailable) { return null; }
+  }
+
+  static FirebaseUser verifiedUser(FirebaseUser user) {
+    return user != null && user.isEmailVerified() ? user : null;
   }
   static boolean signedIn() { return uid != null; }
   static List<JSONObject> profiles() { return ProfileData.profiles(account); }
@@ -94,7 +98,7 @@ final class Profiles {
   }
 
   private static void load(Context app, FirebaseAuth auth) {
-    FirebaseUser user = auth.getCurrentUser();
+    FirebaseUser user = verifiedUser(auth.getCurrentUser());
     String now = user == null ? null : user.getUid();
     if (now == null) {
       confirmed = true;

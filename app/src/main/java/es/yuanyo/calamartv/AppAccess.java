@@ -73,7 +73,7 @@ final class AppAccess {
       auth = SharedCatalog.auth(app);
       authListener = source -> {
         if (current != generation) return;
-        FirebaseUser user = source.getCurrentUser();
+        FirebaseUser user = Profiles.verifiedUser(source.getCurrentUser());
         String next = user == null || user.isAnonymous() ? null : user.getUid();
         boolean admin = next != null && SharedCatalog.administrator(user);
         if (authReady && java.util.Objects.equals(uid, next) && administrator == admin) return;

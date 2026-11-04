@@ -57,7 +57,8 @@ function directory(el, service) {
         el('div', { class: 'user-card-head' },
           el('div', { class: 'user-initial', 'aria-hidden': 'true' }, name(user).slice(0, 1).toLocaleUpperCase('es')),
           el('div', { class: 'user-identity' }, el('h3', {}, name(user)), el('p', {}, email(user))),
-          user.blocked ? el('span', { class: 'user-status blocked' }, 'Bloqueado') : null),
+          user.blocked ? el('span', { class: 'user-status blocked' }, 'Bloqueado')
+            : user.provider === 'password' && user.verified === false ? el('span', { class: 'user-status' }, 'Correo sin verificar') : null),
         el('a', { class: 'btn secondary', href: uidPath(user.uid), 'aria-label': `Editar a ${name(user)}` }, 'Editar'))));
     if (!found.length) rows.append(el('p', { class: 'note' }, 'No hay usuarios con ese nombre o correo.'));
     pages.replaceChildren();
@@ -100,6 +101,17 @@ function accessAction(el, service, user) {
     } catch (error) { note.textContent = service.explain(error); }
     finally { action.disabled = self; }
   });
+  const remove = self ? null : button(el, 'Eliminar cuenta', () => {
+    const confirmed = window.confirm(`¿Eliminar la cuenta de ${name(user)} (${user.email || user.uid})? Se cerrará su acceso y la eliminación no se puede deshacer. Google te pedirá confirmar tu identidad.`);
+    if (!confirmed) return;
+    action.disabled = remove.disabled = true;
+    note.textContent = 'Eliminando cuenta…';
+    service.deleteUserAccount(user.uid).then(() => {
+      location.hash = '#/admin/usuarios';
+    }).catch(error => { note.textContent = service.explain(error); })
+      .finally(() => { action.disabled = remove.disabled = false; });
+  });
+  remove?.classList.add('user-delete');
   const draw = () => {
     status.textContent = self ? 'Administrador' : user.blocked ? 'Acceso bloqueado' : 'Acceso activo';
     status.classList.toggle('blocked', user.blocked);
@@ -107,7 +119,7 @@ function accessAction(el, service, user) {
   };
   action.disabled = self;
   draw();
-  return el('div', { class: 'user-access-actions' }, status, action, note);
+  return el('div', { class: 'user-access-actions' }, status, action, remove, note);
 }
 
 function favoriteLists(el, profile, names) {
@@ -172,6 +184,7 @@ function userDetails(el, service, state, uid) {
       ['Registro', format(user.registeredAt, { dateStyle: 'medium', timeStyle: 'short' })],
       ['Último acceso', format(user.lastSeen, { dateStyle: 'medium', timeStyle: 'short' })],
       ['Método de acceso', provider],
+      ...(user.provider === 'password' ? [['Correo', user.verified ? 'Verificado' : 'Sin verificar']] : []),
       ['Perfiles', String(user.profiles.length)],
     ];
     const names = new Map((state.channels || []).map(channel => [channel.id, channel.name]));

@@ -27,6 +27,7 @@ import androidx.credentials.exceptions.GetCredentialException;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.Source;
@@ -45,6 +46,8 @@ public class AccountActivity extends Activity {
   static final String REQUIRED = "required_sign_in";
   private FirebaseAuth.AuthStateListener authListener;
   private boolean required;
+  private boolean emailWorking;
+  private String emailValue = "";
   private Runnable stopAccess;
 
   @Override
@@ -136,7 +139,7 @@ public class AccountActivity extends Activity {
   private static final int SHEET = 0xff232323, CARD = 0xff2e2e2e;
 
   private void draw() {
-    if (isFinishing()) return;
+    if (isFinishing() || emailWorking) return;
     if (phone != null && !phoneInline) return; // The phone sign-in screen stays until it ends.
     if (required || Profiles.user(this) == null) { signIn(); return; }
     if (editing != null && !editing.equals("all") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
@@ -419,6 +422,7 @@ public class AccountActivity extends Activity {
   private boolean creating, byQr, phoneInline;
 
   private void signIn() {
+    if (emailWorking) return;
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(Ui.BG);
     scroll.setFillViewport(true);
@@ -581,6 +585,7 @@ public class AccountActivity extends Activity {
     if (creating) { fieldLabel(card, "NOMBRE"); name = field(card, "Cómo te llamas", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS); }
     fieldLabel(card, "EMAIL");
     final EditText email = field(card, "Tu email", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+    email.setText(emailValue);
     LinearLayout passRow = new LinearLayout(this);
     passRow.setGravity(Gravity.CENTER_VERTICAL);
     TextView passLabel = label("CONTRASEÑA", 12, 0xbbffffff);
@@ -635,20 +640,63 @@ public class AccountActivity extends Activity {
     sp.setMargins(0, dp(22), 0, 0);
     card.addView(submit, sp);
     final EditText nameField = name;
-    submit.setOnClickListener(v -> {
-      String e = email.getText().toString().trim(), p = password.getText().toString();
-      if (e.isEmpty() || p.length() < 6) { say("Escribe tu email y una contraseña de al menos 6 caracteres."); return; }
-      if (!creating) {
-        say("Entrando…");
-        SharedCatalog.auth(this).signInWithEmailAndPassword(e, p).addOnFailureListener(error -> say(explain(error)));
-        return;
-      }
-      final String n = nameField == null ? "" : nameField.getText().toString().trim();
-      say("Creando la cuenta…");
-      SharedCatalog.auth(this).createUserWithEmailAndPassword(e, p)
-          .addOnSuccessListener(result -> { if (!n.isEmpty() && result.getUser() != null) result.getUser().updateProfile(new UserProfileChangeRequest.Builder().setDisplayName(n).build()); })
-          .addOnFailureListener(error -> say(explain(error)));
-    });
+    submit.setOnClickListener(v -> emailAction(email, password, nameField, false));
+    if (!creating) {
+      Button resend = Ui.pill(this, "Reenviar correo de verificación", Ui.Kind.GHOST, false);
+      resend.setOnClickListener(v -> emailAction(email, password, null, true));
+      card.addView(resend, new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+  }
+
+  private void emailAction(EditText email, EditText password, EditText name, boolean resend) {
+    if (emailWorking) return;
+    final String address = email.getText().toString().trim(), pass = password.getText().toString();
+    if (address.isEmpty() || pass.length() < 6) { say("Escribe tu email y una contraseña de al menos 6 caracteres."); return; }
+    final boolean register = name != null;
+    final String displayName = register ? name.getText().toString().trim() : "";
+    emailWorking = true;
+    emailValue = address;
+    say(register ? "Creando la cuenta…" : resend ? "Enviando correo…" : "Entrando…");
+    FirebaseAuth auth = SharedCatalog.auth(this);
+    auth.setLanguageCode("es");
+    (register ? auth.createUserWithEmailAndPassword(address, pass) : auth.signInWithEmailAndPassword(address, pass))
+        .addOnSuccessListener(result -> {
+          FirebaseUser user = result.getUser();
+          if (user == null) { emailWorking = false; say("No se pudo comprobar la cuenta."); return; }
+          if (user.isEmailVerified()) { emailWorking = false; draw(); return; }
+          if (!register && !resend) {
+            finishVerification(auth, user, address, false, false, null);
+            return;
+          }
+          Runnable send = () -> user.sendEmailVerification().addOnCompleteListener(sent -> {
+            Runnable finish = () -> finishVerification(auth, user, address, register, sent.isSuccessful(), sent.getException());
+            if (register) UserDirectory.touch(getApplicationContext(), user).addOnCompleteListener(ignored -> finish.run());
+            else finish.run();
+          });
+          if (!displayName.isEmpty()) user.updateProfile(new UserProfileChangeRequest.Builder().setDisplayName(displayName).build())
+              .addOnCompleteListener(ignored -> send.run());
+          else send.run();
+        })
+        .addOnFailureListener(error -> { emailWorking = false; say(explain(error)); });
+  }
+
+  private void finishVerification(FirebaseAuth auth, FirebaseUser user, String address, boolean register, boolean sent, Exception failure) {
+    FirebaseUser current = auth.getCurrentUser();
+    if (current != null && user.getUid().equals(current.getUid())) auth.signOut();
+    emailWorking = false;
+    creating = false;
+    byQr = false;
+    if (isFinishing() || isDestroyed()) return;
+    signIn();
+    String message = sent
+        ? "Abre el enlace que enviamos a " + address + " para poder iniciar sesión. Si no lo ves, revisa la carpeta de spam."
+        : register
+            ? "Tu cuenta está creada, pero no se pudo enviar el correo. Escribe tu correo y contraseña y pulsa «Reenviar correo de verificación». Revisa también la carpeta de spam."
+            : failure == null
+                ? "Abre el enlace de verificación para poder iniciar sesión. Revisa la carpeta de spam o pulsa «Reenviar correo de verificación»."
+                : "No se pudo reenviar el correo. " + explain(failure);
+    new AlertDialog.Builder(this).setTitle("Verifica tu correo").setMessage(message)
+        .setPositiveButton("Entendido", (dialog, which) -> {}).show();
   }
 
   /** «Con QR»: the phone's camera opens the page, signs in with Google and confirms the code. */
@@ -696,6 +744,7 @@ public class AccountActivity extends Activity {
   }
 
   private void google() {
+    if (emailWorking) return;
     say("Abriendo Google…");
     try {
       GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(SharedCatalog.GOOGLE_CLIENT_ID).build();

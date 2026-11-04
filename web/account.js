@@ -25,6 +25,7 @@ function colorPicker(el, chosen) {
  */
 export function signIn(el, f, done) {
   let mode = 'login';
+  let emailValue = '';
   const card = el('section', { class: 'auth-card' });
   const draw = () => {
     const note = el('p', { class: 'auth-note', role: 'status' });
@@ -35,7 +36,7 @@ export function signIn(el, f, done) {
     };
     const creating = mode === 'create';
     const field = (label, input, extra = null) => el('label', { class: 'auth-field' }, el('span', { class: 'auth-label' }, el('span', {}, label), extra), input);
-    const email = el('input', { type: 'email', autocomplete: 'email', required: true, placeholder: 'Tu email' });
+    const email = el('input', { type: 'email', autocomplete: 'email', required: true, placeholder: 'Tu email', value: emailValue });
     const password = el('input', { type: 'password', autocomplete: creating ? 'new-password' : 'current-password', minlength: '6', required: true, placeholder: 'Contraseña' });
     const name = el('input', { type: 'text', autocomplete: 'given-name', placeholder: 'Cómo te llamas', maxlength: '24' });
     const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': 'Mostrar la contraseña', onclick: () => {
@@ -52,6 +53,31 @@ export function signIn(el, f, done) {
     } }, '¿Olvidaste tu contraseña?');
     const submit = el('button', { class: 'auth-submit', type: 'submit' }, creating ? 'Crear cuenta' : 'Iniciar sesión');
     const google = el('button', { class: 'auth-provider', type: 'button', onclick: () => busy(google, () => f.loginGoogle()) });
+    const resend = creating ? null : el('button', { class: 'auth-link', type: 'submit' }, 'Reenviar correo de verificación');
+    const emailAction = async (resending) => {
+      for (const action of [submit, google, resend]) if (action) action.disabled = true;
+      say(resending ? 'Enviando correo…' : '');
+      emailValue = email.value.trim();
+      try {
+        const result = creating
+          ? await f.registerEmail(emailValue, password.value, name.value.trim())
+          : await f.loginEmail(emailValue, password.value, resending);
+        if (!result.verification) { done(); return; }
+        if (creating) { mode = 'login'; draw(); }
+        const message = result.sent
+          ? `Abre el enlace que enviamos a ${emailValue} para poder iniciar sesión. Si no lo ves, revisa la carpeta de spam.`
+          : creating
+            ? 'Tu cuenta está creada, pero no se pudo enviar el correo. Escribe tu correo y contraseña y pulsa «Reenviar correo de verificación». Revisa también la carpeta de spam.'
+            : 'Abre el enlace de verificación para poder iniciar sesión. Revisa la carpeta de spam o pulsa «Reenviar correo de verificación».';
+        const dialog = el('dialog', { class: 'auth-verification auth-card', 'aria-label': 'Verifica tu correo' },
+          el('h2', {}, 'Verifica tu correo'), el('p', {}, message),
+          el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Entendido'));
+        dialog.addEventListener('close', () => dialog.remove(), { once: true });
+        document.body.append(dialog);
+        dialog.showModal();
+      } catch (error) { say(f.explain(error), true); }
+      finally { for (const action of [submit, google, resend]) if (action) action.disabled = false; }
+    };
     google.innerHTML = GOOGLE_G;
     google.append('Google');
     const tab = (key, label) => el('button', { class: 'auth-tab', type: 'button', role: 'tab', 'aria-selected': String(mode === key),
@@ -68,15 +94,13 @@ export function signIn(el, f, done) {
       el('p', { class: 'auth-method' }, 'Email y contraseña'),
       el('form', { class: 'auth-form', onsubmit: (event) => {
         event.preventDefault();
-        busy(submit, () => {
-          if (!email.value.trim() || password.value.length < 6) throw Error('Escribe tu email y una contraseña de al menos 6 caracteres.');
-          return creating ? f.registerEmail(email.value.trim(), password.value, name.value.trim()) : f.loginEmail(email.value.trim(), password.value);
-        });
+        if (!email.value.trim() || password.value.length < 6) { say('Escribe tu email y una contraseña de al menos 6 caracteres.', true); return; }
+        void emailAction(resend !== null && event.submitter === resend);
       } },
         creating ? field('Nombre', name) : null,
         field('Email', email),
         field('Contraseña', el('span', { class: 'auth-password' }, password, eye), forgot),
-        submit),
+        submit, resend),
       note);
   };
   draw();

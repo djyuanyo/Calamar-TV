@@ -138,7 +138,7 @@ test('each account reads and writes only its own «Continuar viendo»', async ()
   await assertFails(getDocs(collection(mine, 'calamarProgress')));
 });
 test('each account reads and writes only its own profiles, their data and their «Continuar viendo»', async () => {
-  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', email_verified: true, firebase: { sign_in_provider: 'password' } }).firestore();
   const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
   const value = (overrides = {}) => ({ json: '{}', updatedAt: serverTimestamp(), ...overrides });
   for (const path of ['calamarUsers/user-a', 'calamarUsers/user-a/profiles/p2', 'calamarUsers/user-a/progress/p2']) {
@@ -185,6 +185,29 @@ test('only the administrator can suspend web access; owners cannot remove the bl
 test('unverified email/password registrations can register their own directory identity',async()=>{
   const email=env.authenticatedContext('email-member',claims({email:'email@example.com',email_verified:false,firebase:{sign_in_provider:'password'}})).firestore();
   await assertSucceeds(setDoc(doc(email,'calamarMembers/email-member'),{name:'Email',email:'email@example.com',photo:'',verified:false,provider:'password',createdAt:serverTimestamp(),lastSeen:serverTimestamp()}));
+});
+
+test('unverified and deleted accounts cannot access private playback or profile data', async () => {
+  const uid = 'member';
+  const identity = { email: 'member@example.com', firebase: { sign_in_provider: 'password' } };
+  const pending = env.authenticatedContext(uid, { ...identity, email_verified: false }).firestore();
+  const verified = env.authenticatedContext(uid, { ...identity, email_verified: true }).firestore();
+  const access = doc(admin(), 'calamarUserAccess', uid);
+  const data = { json: '{}', updatedAt: serverTimestamp() };
+  for (const path of ['calamarProgress/member', 'calamarUsers/member', 'calamarUsers/member/profiles/main']) {
+    await assertFails(setDoc(doc(pending, path), data));
+    await assertSucceeds(setDoc(doc(verified, path), data));
+    await assertFails(getDoc(doc(pending, path)));
+  }
+  await assertFails(setDoc(doc(verified, access.path), { blocked: true, deleted: true, updatedAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(pending, access.path)));
+  await assertFails(setDoc(access, { blocked: false, deleted: true, updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(access, { blocked: true, deleted: true, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(access, { blocked: false, updatedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(access));
+  await assertFails(getDoc(doc(verified, 'calamarProgress/member')));
+  await assertFails(setDoc(doc(verified, 'calamarUsers/member/profiles/main'), data));
+  await assertSucceeds(getDoc(doc(verified, access.path)));
 });
 
 test('only the owner and administrator can read the private history; only the owner can record it', async () => {

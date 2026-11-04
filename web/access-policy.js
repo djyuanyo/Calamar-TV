@@ -1,7 +1,7 @@
 // The same policy is used on the web, Android and Android TV. Missing settings require a real account.
 export const DEFAULT_WEB_ACCESS = Object.freeze({ requireLogin: true });
 export const webPolicy = value => ({ requireLogin: value?.requireLogin !== false });
-export const registeredAccount = user => !!user && user.isAnonymous !== true && user.pending !== true;
+export const registeredAccount = user => !!user && user.isAnonymous !== true && user.pending !== true && user.emailVerified !== false;
 export function accessDecision(s) {
   if (s.administrator && s.authReady) return 'allowed';
   if (s.error || s.policyError || s.authError || s.blockError) return 'error';
@@ -18,7 +18,10 @@ export function mergeUserDirectory(members, profiles, access) {
     return [p.uid, { uid: p.uid, name: profiles[0]?.name || 'Usuario', profileCount: profiles.length }];
   }));
   for (const member of members) rows.set(member.uid, { ...rows.get(member.uid), ...member, name: member.name || rows.get(member.uid)?.name });
-  for (const status of access) rows.set(status.uid, { ...rows.get(status.uid), uid: status.uid, blocked: status.blocked === true });
+  for (const status of access) {
+    if (status.deleted === true) rows.delete(status.uid);
+    else rows.set(status.uid, { ...rows.get(status.uid), uid: status.uid, blocked: status.blocked === true });
+  }
   return [...rows.values()].sort((a,b) => String(a.name || a.email || a.uid).localeCompare(String(b.name || b.email || b.uid), 'es'));
 }
 export const findUsers = (rows, text) => {

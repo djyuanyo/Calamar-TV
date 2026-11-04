@@ -27,7 +27,7 @@ export function createWebAccess(shared, changed, { timeout = 12000 } = {}) {
         }
         notify();
       };
-      account(f.auth.currentUser);
+      account(f.currentUser());
       stopAuth = f.watchAuth(account);
       stopPolicy = f.watchWebAccess(policy => { if (mine !== generation) return; state.policy = policy; state.policyReady = true; state.policyError = null; notify(); }, error => { if (mine !== generation) return; state.policyError = error; notify(); });
     }).catch(error => { if (mine !== generation) return; state.authError = error; notify(); });

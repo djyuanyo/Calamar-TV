@@ -96,8 +96,8 @@ service cloud.firestore {
     // «Continuar viendo» of each signed-in account, shared by its web and app sessions: only that
     // account reads or writes its own document.
     match /calamarProgress/{uid} {
-      allow get, delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
+      allow get, delete: if owner(uid);
+      allow create, update: if owner(uid)
         && request.resource.data.keys().hasAll(['json', 'updatedAt'])
         && request.resource.data.keys().hasOnly(['json', 'updatedAt'])
         && request.resource.data.json is string
@@ -108,7 +108,17 @@ service cloud.firestore {
     // Accounts (Google or email and password): the profiles of each account and, per profile, its
     // «Continuar viendo» (the main profile keeps calamarProgress/<uid>), My list, likes and favourite
     // channels. Only that account reads or writes them.
-    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function sameAccount(uid) { return request.auth != null && request.auth.uid == uid; }
+    function verifiedAccount(uid) {
+      return sameAccount(uid) && request.auth.token.get('email_verified', false) == true;
+    }
+    function accountDeleted(uid) {
+      let path = /databases/$(database)/documents/calamarUserAccess/$(uid);
+      return exists(path) && get(path).data.get('deleted', false) == true;
+    }
+    function owner(uid) {
+      return verifiedAccount(uid) && !accountDeleted(uid);
+    }
     function jsonDoc(limit) {
       let p = request.resource.data;
       return p.keys().hasAll(['json', 'updatedAt']) && p.keys().hasOnly(['json', 'updatedAt'])
@@ -154,21 +164,27 @@ service cloud.firestore {
         && (!('registeredAt' in p) || p.registeredAt is timestamp);
     }
     match /calamarMembers/{uid} {
-      allow get: if owner(uid) || administrator();
+      // Pending registrations may only record their own token-validated directory identity.
+      allow get: if (sameAccount(uid) && !accountDeleted(uid)) || administrator();
       allow list: if administrator();
-      allow create: if owner(uid) && memberData() && request.resource.data.createdAt == request.time;
-      allow update: if owner(uid) && memberData() && request.resource.data.createdAt == resource.data.createdAt;
+      allow create: if sameAccount(uid) && !accountDeleted(uid)
+        && memberData() && request.resource.data.createdAt == request.time;
+      allow update: if sameAccount(uid) && !accountDeleted(uid)
+        && memberData() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
     }
     // Kept separate from editable profiles: changing/deleting a profile cannot undo a block.
     match /calamarUserAccess/{uid} {
-      allow get: if owner(uid) || administrator();
+      allow get: if verifiedAccount(uid) || administrator();
       allow list: if administrator();
       allow create, update: if administrator() && uid != request.auth.uid
         && request.resource.data.keys().hasAll(['blocked', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['blocked', 'updatedAt'])
-        && request.resource.data.blocked is bool && request.resource.data.updatedAt == request.time;
-      allow delete: if administrator() && uid != request.auth.uid;
+        && request.resource.data.keys().hasOnly(['blocked', 'deleted', 'updatedAt'])
+        && request.resource.data.blocked is bool && request.resource.data.updatedAt == request.time
+        && (('deleted' in request.resource.data)
+          ? request.resource.data.deleted == true && request.resource.data.blocked
+          : !accountDeleted(uid));
+      allow delete: if administrator() && uid != request.auth.uid && !accountDeleted(uid);
     }
     // Authenticated viewing never puts account identifiers in public audience counters.
     function viewer(uid) {

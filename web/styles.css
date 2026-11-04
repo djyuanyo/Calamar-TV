@@ -1450,6 +1450,9 @@ body.gate-open { overflow: hidden; }
 .user-access-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .user-status { font-size: 12px; border: 1px solid #ffffff35; border-radius: 20px; padding: 4px 9px; }
 .user-status.blocked { color: #ff9191; border-color: #ff616170; }
+.user-access-actions .user-delete { color: #ffaaaa; border-color: #ff616170; }
+.auth-verification.auth-card { position: fixed; width: min(440px, calc(100% - 32px)); margin: auto; padding: 24px; color: var(--fg); }
+.auth-verification::backdrop { background: #000a; }
 .user-entries { list-style: none; padding: 0; margin: 8px 0 0; }
 .user-entries li { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid #ffffff14; }
 .user-entries li:last-child { border-bottom: 0; }

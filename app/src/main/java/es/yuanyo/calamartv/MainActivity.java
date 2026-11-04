@@ -2743,7 +2743,7 @@ public class MainActivity extends Activity {
   /** The signed-in user's first name, for «Seguir viendo para …» (empty without an account). */
   String userName() {
     try {
-      com.google.firebase.auth.FirebaseUser user = SharedCatalog.auth(this).getCurrentUser();
+      com.google.firebase.auth.FirebaseUser user = Profiles.user(this);
       String name = user == null || user.getDisplayName() == null ? "" : user.getDisplayName().trim();
       return name.isEmpty() ? "" : name.split("\\s+")[0];
     } catch (RuntimeException unavailable) {

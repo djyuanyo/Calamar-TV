@@ -1471,7 +1471,7 @@ async function route() {
     if (stopMusic) { stopMusic(); stopMusic = null; }
     if (!['admin', 'cuenta', 'tv'].includes(accessPage) || (admission.decision === 'login' && accessPage !== 'tv')) {
       if (!accessReturnHash) accessReturnHash = location.hash || '#/';
-      for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+      for (const dialog of document.querySelectorAll('dialog[open]:not(.auth-verification)')) dialog.close();
       const ticket = ++routeVersion;
       if (admission.decision === 'login') {
         try { const f = await shared(); if (ticket !== routeVersion) return; view.replaceChildren(...signIn(el, f, route)); }

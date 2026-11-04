@@ -1,6 +1,8 @@
 package es.yuanyo.calamartv;
 
 import android.content.Context;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.*;
 import java.util.*;
@@ -8,10 +10,10 @@ import java.util.*;
 /** Minimal account metadata for the administrator. No credentials, tokens or viewing history. */
 final class UserDirectory {
   private UserDirectory() {}
-  static void touch(Context context, FirebaseUser user) {
-    if (user == null || user.isAnonymous()) return;
-    user.getIdToken(false).addOnSuccessListener(token -> {
-      if (SharedCatalog.auth(context).getCurrentUser() == null || !user.getUid().equals(SharedCatalog.auth(context).getCurrentUser().getUid())) return;
+  static Task<Void> touch(Context context, FirebaseUser user) {
+    if (user == null || user.isAnonymous()) return Tasks.forResult(null);
+    return user.getIdToken(false).onSuccessTask(token -> {
+      if (SharedCatalog.auth(context).getCurrentUser() == null || !user.getUid().equals(SharedCatalog.auth(context).getCurrentUser().getUid())) return Tasks.forResult(null);
       Map<String,Object> claims = token.getClaims(); Object firebase = claims.get("firebase");
       String provider = firebase instanceof Map ? String.valueOf(((Map<?,?>)firebase).get("sign_in_provider")) : "";
       Map<String,Object> value = new HashMap<>();
@@ -21,7 +23,7 @@ final class UserDirectory {
       value.put("verified", Boolean.TRUE.equals(claims.get("email_verified"))); value.put("provider", provider); value.put("lastSeen", FieldValue.serverTimestamp());
       if (user.getMetadata() != null) value.put("registeredAt", new Date(user.getMetadata().getCreationTimestamp()));
       DocumentReference ref = FirebaseFirestore.getInstance(SharedCatalog.app(context)).document("calamarMembers/" + user.getUid());
-      ref.getFirestore().runTransaction(tx -> { DocumentSnapshot before = tx.get(ref); Map<String,Object> update = new HashMap<>(value); if (!before.exists()) update.put("createdAt", FieldValue.serverTimestamp()); tx.set(ref, update, SetOptions.merge()); return null; }).addOnFailureListener(ignored -> {});
-    }).addOnFailureListener(ignored -> {});
+      return ref.getFirestore().runTransaction(tx -> { DocumentSnapshot before = tx.get(ref); Map<String,Object> update = new HashMap<>(value); if (!before.exists()) update.put("createdAt", FieldValue.serverTimestamp()); tx.set(ref, update, SetOptions.merge()); return null; });
+    });
   }
 }

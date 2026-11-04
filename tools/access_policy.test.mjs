@@ -22,7 +22,7 @@ test('existing profiles remain manageable before the next login adds email metad
 });
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('controller ignores cached profiles, closes admission on logout or live policy change, and ignores stale block responses',async()=>{
-  let authNext,policyNext;const blocked=new Map();const f={ready:Promise.resolve(),auth:{currentUser:null},administrator:u=>u?.uid==='admin',recordMember:async()=>{},watchAuth:cb=>{authNext=cb;return()=>{};},watchWebAccess:cb=>{policyNext=cb;return()=>{};},watchUserAccess:(uid,cb)=>{blocked.set(uid,cb);return()=>{};}};
+  let authNext,policyNext;const blocked=new Map();const f={ready:Promise.resolve(),currentUser:()=>null,administrator:u=>u?.uid==='admin',recordMember:async()=>{},watchAuth:cb=>{authNext=cb;return()=>{};},watchWebAccess:cb=>{policyNext=cb;return()=>{};},watchUserAccess:(uid,cb)=>{blocked.set(uid,cb);return()=>{};}};
   const control=createWebAccess(async()=>f,()=>{});control.start();await flush();
   assert.equal(control.current().decision,'loading');policyNext({requireLogin:true});assert.equal(control.current().decision,'login');
   authNext({uid:'a'});assert.equal(control.current().decision,'loading');blocked.get('a')(false);assert.equal(control.current().decision,'allowed');
@@ -34,5 +34,13 @@ test('controller ignores cached profiles, closes admission on logout or live pol
 test('Firebase anonymous sessions and cached profile identities do not count as registration',()=>{
   assert.equal(accessDecision({...base,user:{uid:'anon',isAnonymous:true}}),'login');
   assert.equal(accessDecision({...base,user:{uid:'cached',pending:true}}),'login');
+  assert.equal(accessDecision({...base,user:{uid:'unverified',emailVerified:false}}),'login');
   assert.equal(accessDecision({...base,user:{uid:'anon',isAnonymous:true},policy:{requireLogin:false}}),'allowed');
+});
+
+test('deleted users disappear from the directory even when their old profile exists', () => {
+  const members = [{ uid: 'deleted', email: 'old@example.com' }, { uid: 'blocked', email: 'blocked@example.com' }];
+  const profiles = [{ uid: 'deleted', json: '{"profiles":[{"name":"Old"}]}' }];
+  const access = [{ uid: 'deleted', blocked: true, deleted: true }, { uid: 'blocked', blocked: true }];
+  assert.deepEqual(mergeUserDirectory(members, profiles, access).map(user => user.uid), ['blocked']);
 });
