@@ -10,7 +10,7 @@ const data = { data: { sources: [{ name: 'LaLiga 2', player_url: player }, { url
 test('event URLs resolve through public API, never an iframe of the event page', () => {
   assert.equal(zicoEventApi(page), 'https://bp.zicotv.cc/api/v1/events/98019');
   assert.equal(webPlayback(page, {pages:true}).kind, 'event');
-  assert.equal(webPlayback(player, {pages:true}).renewable, true);
+  assert.equal(webPlayback(player, {pages:true}).zico, true);
   for (const bad of ['https://zicotv.cc.evil.com/events/1', 'https://u:p@bp.zicotv.cc/events/1', 'http://bp.zicotv.cc/events/1']) assert.equal(zicoEventApi(bad), null);
 });
 test('only public valid players, deduplicated and named', () => {

@@ -22,6 +22,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -87,6 +88,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   @Override protected void onResume(){super.onResume();matchActive=true;handler.removeCallbacks(matchRefresh);handler.post(matchRefresh);if(audience!=null)audience.open();handler.removeCallbacks(audiencePlayback);handler.post(audiencePlayback);}
   @Override protected void onPause(){matchActive=false;handler.removeCallbacks(matchRefresh);handler.removeCallbacks(audiencePlayback);if(audience!=null)audience.close();super.onPause();}
   private boolean fullscreen;
+  private View webFullscreen;
+  private WebChromeClient.CustomViewCallback webFullscreenCallback;
+  private boolean webWasFullscreen;
   private NetworkTransport transport;
   private String lastReport = "Aún no se ha consultado la fuente.";
   private boolean diagnosing;
@@ -277,7 +281,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
-        () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
+        () -> officialZico(pageUrl) != null ? null : pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
             : castAddress(!currentUrl.isEmpty() ? currentUrl
                 : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1))),
         title, () -> {
@@ -458,12 +462,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (pageUrl != null) first.add(pageUrl); else if (directUrl != null) first.add(directUrl);
       for (String url : channelPages) if (!first.contains(url)) first.add(url);
       for (String url : directUrls) if (!first.contains(url)) first.add(url);
+      boolean official = getIntent().getBooleanExtra("zico_embed", false);
+      if (official) first = AppSources.forMulti(first);
       if (first.isEmpty()) return;
       java.util.ArrayList<String> titles = new java.util.ArrayList<>(java.util.Arrays.asList(title == null ? "Canal" : title, event.name));
       java.util.ArrayList<String> streams = new java.util.ArrayList<>(java.util.Arrays.asList(android.text.TextUtils.join("\n", first), android.text.TextUtils.join("\n", AppSources.forAndroid(event.streams))));
       java.util.ArrayList<String> targets = new java.util.ArrayList<>(java.util.Arrays.asList(target == null ? "" : target, AudienceModel.target(true, event.id)));
       java.util.ArrayList<String> channels = new java.util.ArrayList<>(java.util.Arrays.asList(getIntent().getStringExtra("audience_channel"), event.channelId));
       Intent intent = new Intent(this, MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES, titles)
+          .putExtra("zico_embed", official)
           .putStringArrayListExtra(MultiPlayerActivity.STREAMS, streams).putStringArrayListExtra("audience_targets", targets).putStringArrayListExtra("audience_channels", channels)
           .putExtra("initial_media", currentUrl).putExtra("initial_page", pageUrl).putExtra("initial_referer", mediaReferer()).putExtra("initial_endpoint", hostingEndpoint).putExtra("initial_signal", hostingSourceId)
           .putExtra("initial_position", progressEntry == null || player == null ? 0 : player.getCurrentPosition());
@@ -631,7 +638,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playDirect();
       return;
     }
-    if (ProviderPlayers.embed(pageUrl) != null) {
+    if (ProviderPlayers.embed(pageUrl) != null || officialZico(pageUrl) != null) {
       openWeb();
       return;
     }
@@ -1372,12 +1379,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
-      if (AppSources.zico(address) && address.equals(pageUrl)) continue;
+      if (AppSources.zico(address) && address.equals(pageUrl) && officialZico(address) == null) continue;
       if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
       names.add(HostingPlayback.label(eventSourceNames.get(address), HostingPlayback.label(title, "Canal") + " · Señal " + (++number)));
       actions.add(() -> selectChannelAddress(address, true));
     }
-    if (zicoPage()) {
+    if (zicoPage() && officialZico(pageUrl) == null) {
       for (HostingPlayback.Option option : hostingOptions) {
         if (hostingPlayback && option.id.equals(hostingSourceId)) checked = names.size();
         names.add(option.name);
@@ -1474,7 +1481,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playerView.setVisibility(View.GONE);
     browser = new WebView(this);
     final int browserGeneration = generation;
-    final String embed = ProviderPlayers.embed(pageUrl);
+    final String zico = officialZico(pageUrl);
+    final String embed = zico == null ? ProviderPlayers.embed(pageUrl) : zico;
     browser.getSettings().setJavaScriptEnabled(true);
     if (embed != null) browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
     browser.getSettings().setDomStorageEnabled(true);
@@ -1486,7 +1494,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
             return !url.startsWith("https://") || AppSources.webOnly(url)
-                || (embed != null && ProviderPlayers.embed(url) == null);
+                || (zico != null ? !zico.equals(url) : embed != null && ProviderPlayers.embed(url) == null);
           }
 
           @Override
@@ -1526,10 +1534,27 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 });
           }
         });
+    if (zico != null) browser.setWebChromeClient(new WebChromeClient() {
+      @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+        if (webFullscreen != null) { callback.onCustomViewHidden(); return; }
+        webWasFullscreen = fullscreen;
+        webFullscreen = view;
+        webFullscreenCallback = callback;
+        setFullscreen(true);
+        browser.setVisibility(View.GONE);
+        stage.addView(view, new FrameLayout.LayoutParams(-1, -1));
+        view.requestFocus();
+      }
+      @Override public void onHideCustomView() { leaveWebFullscreen(); }
+    });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText(embed == null ? "Modo web · Pulsa ▶ para detectar el vídeo." : "Abriendo reproductor…");
     browser.loadUrl(embed == null ? pageUrl : embed);
     browser.requestFocus();
+  }
+
+  private String officialZico(String page) {
+    return getIntent().getBooleanExtra("zico_embed", false) ? ProviderPlayers.zico(page) : null;
   }
 
   /** Keep HLS inside Chromium. Do not detect it and send it back to the failed native engine. */
@@ -1607,12 +1632,29 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void clearWeb() {
+    leaveWebFullscreen();
     if (browser != null) {
       browser.stopLoading();
       stage.removeView(browser);
       browser.destroy();
       browser = null;
     }
+  }
+
+  private void leaveWebFullscreen() {
+    if (webFullscreen == null) return;
+    stage.removeView(webFullscreen);
+    webFullscreen = null;
+    WebChromeClient.CustomViewCallback callback = webFullscreenCallback;
+    webFullscreenCallback = null;
+    if (browser != null) { browser.setVisibility(View.VISIBLE); browser.requestFocus(); }
+    setFullscreen(webWasFullscreen);
+    callback.onCustomViewHidden();
+  }
+
+  @Override public void onBackPressed() {
+    if (webFullscreen != null) leaveWebFullscreen();
+    else super.onBackPressed();
   }
 
   /** Saves where the film or episode is, so it can continue there (also after a retry or a pause). */

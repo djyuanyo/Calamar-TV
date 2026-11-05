@@ -20,7 +20,7 @@ export function multiGrid(n) {
 }
 
 /** True when the browser can play at least one source of the channel or event. */
-export const multiPlayable = c => !!c && !c.vod && c.playable && (c.streams.some(zicoEventApi) || sourceOptions(c.streams).some(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind)));
+export const multiPlayable = c => !!c && !c.vod && c.playable && sourceOptions(c.streams).some(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind));
 
 /** Plays a channel in one tile, trying its sources in order; returns a function that stops it. */
 export function playTile(video, channel, onStatus) {
@@ -77,7 +77,7 @@ export function playTile(video, channel, onStatus) {
     let streams = channel.streams;
     if (streams.some(zicoEventApi)) {
       onStatus('Consultando fuentes del evento…'); lookupTimer = setTimeout(() => lookup.abort(), 15000);
-      const resolved = await expandEventSources(streams, { signal: lookup.signal, preferHosted: usesZicoAgenda(channel) });
+      const resolved = await expandEventSources(streams, { signal: lookup.signal });
       clearTimeout(lookupTimer); if (stopped) return;
       streams = resolved.filter(s => !s.error && !s.unavailable).map(s => s.url);
     }

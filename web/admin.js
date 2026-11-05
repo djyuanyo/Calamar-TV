@@ -579,7 +579,7 @@ function zicoTokenPanel() {
     install.hidden = false;
   });
   return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
-    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y se usa al abrir los canales de ZicoTV.'), el('div', { class: 'actions' }, save, remove, install), status);
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Autoriza djyuanyo.github.io en el panel de ZicoTV. Este token se usa en el reproductor oficial.'), el('div', { class: 'actions' }, save, remove, install), status);
 }
 
 function eventForm(existing, rerender, catalogState) {

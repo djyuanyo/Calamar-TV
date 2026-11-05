@@ -174,6 +174,21 @@ class PlayerRelayTest(unittest.TestCase):
         self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
         self.assertEqual(public, [])
 
+    def test_embed_only_returns_the_official_catalog_player(self):
+        code = '''
+        $token = "token_fixture+special/chars";
+        $player = "https://zicotv.cc/api/player/22";
+        $catalog = [$player => true];
+        echo json_encode([
+            playerZicoEmbedUrl($player, $catalog, "secret", $token),
+            playerZicoEmbedUrl("https://bp.zicotv.cc/api/player/23", $catalog, "secret", $token),
+            playerZicoEmbedUrl("https://zicotv.cc.example/api/player/22", $catalog, "secret", $token)
+        ]);
+        '''
+        self.assertEqual(json.loads(php(code)), [
+            'https://bp.zicotv.cc/api/player/22?token=token_fixture%2Bspecial%2Fchars', '', '',
+        ])
+
     def test_zico_credentials_can_only_be_saved_outside_document_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             public = pathlib.Path(tmp, 'public')

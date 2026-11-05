@@ -35,6 +35,8 @@ final class MultiEventPicker {
   }
   static Dialog show(Activity activity, List<String> selected, Pick picked) {
     List<Catalog.Channel> events = events(activity);
+    if (activity.getIntent().getBooleanExtra("zico_embed", false))
+      events.removeIf(event -> AppSources.forMulti(event.streams).isEmpty());
     LinearLayout panel = new LinearLayout(activity); panel.setOrientation(LinearLayout.VERTICAL);
     panel.setPadding(Ui.dp(activity, 20), Ui.dp(activity, 16), Ui.dp(activity, 20), Ui.dp(activity, 16)); panel.setBackgroundColor(Ui.BG);
     TextView title = new TextView(activity); title.setText("Añadir evento"); title.setTextSize(22); title.setTextColor(Ui.FG); panel.addView(title);

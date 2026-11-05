@@ -56,5 +56,20 @@ final class ProviderPlayers {
         && address.substring(VIDARA_PLAYBACK.length()).matches("[A-Za-z0-9]{8,24}&hls=1");
   }
 
+  static String zico(String address) {
+    URI uri = https(address);
+    if (uri == null || uri.getFragment() != null
+        || !uri.getHost().toLowerCase(Locale.ROOT).matches("(?:bp\\.)?zicotv\\.cc")
+        || !uri.getPath().matches("/api/player/[0-9]{1,16}/?")) return null;
+    String query = uri.getRawQuery();
+    String page = "https://" + uri.getHost().toLowerCase(Locale.ROOT) + uri.getPath()
+        + (query != null && query.matches("ct_event=[0-9]{1,16}&ct_sig=[a-f0-9]{32}") ? "?" + query : "");
+    try {
+      return SportsCatalog.WEB + "zico-player.html?page=" + java.net.URLEncoder.encode(page, "UTF-8");
+    } catch (java.io.UnsupportedEncodingException impossible) {
+      throw new IllegalStateException(impossible);
+    }
+  }
+
   static String embed(String address) { return dailymotion(address); }
 }

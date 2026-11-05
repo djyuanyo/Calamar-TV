@@ -81,6 +81,16 @@ function playerZicoPage($url) {
         || !preg_match('#^/api/player/([0-9]{1,16})/?$#D', $p['path'] ?? '', $id)) return '';
     return 'https://bp.zicotv.cc/api/player/' . $id[1];
 }
+function playerZicoEmbedUrl($page, $catalog, $secret, $token) {
+    $clean = playerZicoPage($page);
+    if ($clean === '') return '';
+    if (!playerZicoSignedSource($page, $catalog, $secret) && !isset($catalog[$page]) && !isset($catalog[$clean])) {
+        $allowed = false;
+        foreach ($catalog as $stream => $_) if (playerZicoPage($stream) === $clean) { $allowed = true; break; }
+        if (!$allowed) return '';
+    }
+    return $clean . ($token === '' ? '' : '?token=' . rawurlencode($token));
+}
 function playerZicoProof($page, $event, $secret) {
     return substr(hash_hmac('sha256', "zico-event\n" . $page . "\n" . $event, $secret), 0, 32);
 }
@@ -456,6 +466,18 @@ function playerMain() {
     if (isset($_GET['zico_config'])) playerZicoConfig($method);
     if ($method !== 'GET') playerAnswer(array('error' => 'Método no permitido.'), 405);
     $secret = playerSecret();
+
+    if (isset($_GET['zico_embed'])) {
+        if ($origin !== 'https://djyuanyo.github.io') playerAnswer(['error' => 'Origen no permitido.'], 403);
+        $page = $_GET['zico_embed'];
+        if (!is_string($page) || strlen($page) > 512 || playerZicoPage($page) === '')
+            playerAnswer(['error' => 'Reproductor de ZicoTV no válido.'], 400);
+        $token = playerZicoToken();
+        if ($token === '') playerAnswer(['error' => 'El administrador debe configurar el token Premium de ZicoTV.'], 503);
+        $url = playerZicoEmbedUrl($page, playerCatalogStreams(), $secret, $token);
+        if ($url === '') playerAnswer(['error' => 'Reproductor de ZicoTV fuera del catálogo.'], 403);
+        playerAnswer(['url' => $url]);
+    }
 
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {

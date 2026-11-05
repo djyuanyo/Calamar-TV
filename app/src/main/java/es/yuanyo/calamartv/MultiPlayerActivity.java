@@ -173,6 +173,7 @@ public class MultiPlayerActivity extends Activity {
     screen.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP)); setContentView(screen);
     ArrayList<String> targets = getIntent().getStringArrayListExtra("audience_targets"), channels = getIntent().getStringArrayListExtra("audience_channels");
     for (int i = 0; i < Math.min(titles.size(), MultiScreen.MAX); i++) append(titles.get(i), Arrays.asList(streams.get(i).split("\n")), targets != null && i < targets.size() ? targets.get(i) : "", channels != null && i < channels.size() ? channels.get(i) : "");
+    if (tiles.isEmpty()) { finish(); return; }
     Tile first = tiles.get(0); first.initialPosition = getIntent().getLongExtra("initial_position", 0);
     String initialPage = getIntent().getStringExtra("initial_page");
     if (initialPage != null && first.urls.remove(initialPage)) first.urls.add(0, initialPage);
@@ -188,7 +189,9 @@ public class MultiPlayerActivity extends Activity {
   private void append(String title, List<String> streams, String target, String channel) {
     if (tiles.size() >= MultiScreen.MAX) return;
     if (target != null && !target.isEmpty()) for (Tile tile : tiles) if (target.equals(tile.target)) return;
-    Tile tile = new Tile(title, AppSources.forAndroid(streams), target, channel); tiles.add(tile); if (audible == null) audible = tile;
+    List<String> sources = getIntent().getBooleanExtra("zico_embed", false) ? AppSources.forMulti(streams) : AppSources.forAndroid(streams);
+    if (sources.isEmpty()) return;
+    Tile tile = new Tile(title, sources, target, channel); tiles.add(tile); if (audible == null) audible = tile;
   }
   private void chooseEvent() {
     if (tiles.size() >= MultiScreen.MAX || picker != null && picker.isShowing()) return;

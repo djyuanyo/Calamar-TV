@@ -56,13 +56,13 @@ test('player pages of channels play through the hosting; elsewhere they still ne
   assert.equal(webPlayback(page).ok, false);
   assert.equal(sourceOptions(['https://cdn.example/live.m3u8'])[0].how.address, undefined);
 });
-test('zicotv player endpoints resolve on the viewer device; other pages remain embedded', () => {
+test('ZicoTV player endpoints open the official embedded player from the Calamar TV site', () => {
   for (const page of ['https://zicotv.cc/api/player/1', 'https://bp.zicotv.cc/channels/42898']) {
     const [source] = sourceOptions([page]);
     assert.equal(source.available, true);
-    assert.equal(source.how.kind, page.includes('/api/player/') ? 'hls' : 'frame');
-    assert.equal(!!source.how.renewable, page.includes('/api/player/'));
-    assert.equal(source.how.address, undefined);
+    assert.equal(source.how.kind, 'frame');
+    assert.equal(!!source.how.zico, page.includes('/api/player/'));
+    if (source.how.zico) assert.equal(new URL(source.how.address, 'https://djyuanyo.github.io/Calamar-TV/').searchParams.get('page'), page);
   }
   assert.notEqual(sourceOptions(['http://zicotv.cc/api/player/1'])[0].how.kind, 'frame');
   assert.equal(sourceOptions(['https://zicotv.cc.evil.example/x'])[0].how.kind, 'hls');
