@@ -222,6 +222,15 @@ public final class Catalog {
     return event.optString("id").matches("zico-event-[0-9]+");
   }
 
+  /** The importer records a lookup URL only when the feed reports a source. */
+  private static boolean hasAgendaSource(JSONObject event, List<String> sources) {
+    if (sources.stream().anyMatch(link -> VideoResolver.eventApi(link) == null)) return true;
+    JSONArray imported = event.optJSONArray("zicoStreams");
+    if (imported != null) for (int i = 0; i < imported.length(); i++)
+      if (sources.contains(imported.optString(i))) return true;
+    return false;
+  }
+
   static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks, boolean includeFinished) {
     List<Channel> out = new ArrayList<>();
     if (custom == null) return out;
@@ -243,8 +252,7 @@ public final class Catalog {
         String link = UserChannels.normalizeEventSource(extra.optString(i).trim());
         if (link != null && !sources.contains(link)) sources.add(link);
       }
-      if (isZicoAgendaEvent(event)
-          && sources.stream().allMatch(link -> VideoResolver.eventApi(link) != null)) continue;
+      if (isZicoAgendaEvent(event) && !hasAgendaSource(event, sources)) continue;
       if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
         JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));

@@ -38,6 +38,10 @@ public class CatalogEventsTest {
     SharedCatalog.validate(data);
     long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
     assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
+    String page = event.getJSONArray("streams").getString(0);
+    event.put("zicoStreams", new JSONArray().put(page));
+    assertEquals(Collections.singletonList(page), Catalog.events(Collections.emptyList(), data, now, true).get(0).streams);
+    event.remove("zicoStreams");
     event.getJSONArray("streams").put("https://bp.zicotv.cc/api/player/22");
     assertEquals(1, Catalog.events(Collections.emptyList(), data, now, true).size());
     event.put("imported", false);

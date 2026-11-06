@@ -548,7 +548,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Vincula las señales a los partidos de tus ligas. Los demás eventos que tengan señal se añaden a la agenda.'), button, status);
+    el('p', { class: 'note' }, 'Guarda el enlace oficial de ZicoTV en cada partido con señal. Al abrir el evento se consultan sus fuentes disponibles.'), button, status);
 }
 
 function zicoTokenPanel() {

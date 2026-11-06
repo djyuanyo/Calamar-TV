@@ -394,7 +394,7 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
     const streams = [...new Set([...(target?.streams || []), ...(event.streams || [])])];
-    if (isZicoAgendaEvent(event) && !streams.some(url => !zicoEventApi(url))) return [];
+    if (isZicoAgendaEvent(event) && !streams.some(url => !zicoEventApi(url) || event.zicoStreams?.includes(url))) return [];
     if (streams.length) return [{ logo: '', group: '', region: '', web: '', own: true, ...target, ...shared, channelId: target?.id || '', channelName: target?.name || 'Fuentes del evento', meta: eventMeta(event, custom),
       streams, playable: true }];
     if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,

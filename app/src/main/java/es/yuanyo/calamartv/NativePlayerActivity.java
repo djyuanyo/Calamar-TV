@@ -694,32 +694,44 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               return;
             }
             if (eventApi != null) {
-              PlayerDocument.Result event;
+              PlayerDocument.Result hosted = null;
+              List<VideoResolver.Source> players = java.util.Collections.emptyList();
               if (throughHosting) {
-                event = HostingPlayback.event(requestedPage, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
-              } else try {
-                event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                    NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
-              } catch (java.io.IOException blocked) {
-                if (blocked instanceof PlayerDocument.HttpFailure) throw blocked;
-                event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
-                chromiumNetwork = true;
+                try {
+                  hosted = HostingPlayback.event(requestedPage, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
+                  players = VideoResolver.eventPlayers(hosted.html);
+                } catch (java.io.IOException | org.json.JSONException unavailable) {
+                  // A public source may still be available without the hosting.
+                }
               }
-              final String eventHosting = throughHosting ? HostingPlayback.endpoint(event.url) : requestedHosting;
-              List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
+              if (players.isEmpty()) {
+                PlayerDocument.Result event;
+                try {
+                  event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
+                      NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
+                } catch (java.io.IOException blocked) {
+                  if (blocked instanceof PlayerDocument.HttpFailure) throw blocked;
+                  event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
+                  chromiumNetwork = true;
+                }
+                players = VideoResolver.eventPlayers(event.html);
+              }
               if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
+              final String eventHosting = hosted == null ? requestedHosting : HostingPlayback.endpoint(hosted.url);
+              final List<VideoResolver.Source> eventPlayers = players;
               handler.post(() -> {
                 if (!active || request != generation) return;
-                if (throughHosting) hostingEndpoint = eventHosting;
-                resolving = false;
+                hostingEndpoint = eventHosting;
                 int at = Math.max(0, channelPages.indexOf(requestedPage));
                 channelPages.remove(requestedPage);
-                for (VideoResolver.Source source : players) {
-                  if (!channelPages.contains(source.url)) channelPages.add(Math.min(Math.max(0, at++), channelPages.size()), source.url);
+                for (VideoResolver.Source source : eventPlayers) {
+                  if (UserChannels.isPage(source.url)) {
+                    if (!channelPages.contains(source.url)) channelPages.add(at++, source.url);
+                  } else if (!directUrls.contains(source.url)) directUrls.add(source.url);
                   eventSourceNames.put(source.url, source.label);
                 }
-                pageUrl = players.get(0).url; pageIndex = channelPages.indexOf(pageUrl); selection = 0; hostingOptions.clear(); hostingSourceId = "";
-                documentUrl = pageUrl; resolveFresh();
+                String first = eventPlayers.get(0).url;
+                selectChannelAddress(first, UserChannels.isPage(first));
               });
               return;
             }
