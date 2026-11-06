@@ -7,17 +7,21 @@ function driveAnswer($data, $status = 200) {
     echo json_encode($data, JSON_UNESCAPED_SLASHES); exit;
 }
 function driveId($id) { return is_string($id) && preg_match('/^[A-Za-z0-9_-]{1,200}$/D', $id); }
+function driveOnVps() { return getenv('CALAMAR_DRIVE_VPS') === '1'; }
+function driveStateDir() { return driveOnVps() ? '/var/lib/calamar-drive' : dirname(__DIR__); }
+
 function driveSecret() {
     $configured = getenv('CALAMAR_DRIVE_SECRET');
     if (is_string($configured) && preg_match('/^[a-f0-9]{64}$/D', $configured)) return hex2bin($configured);
-    $path = dirname(__DIR__) . '/calamar-drive-secret.php';
+    $path = driveStateDir() . '/calamar-drive-secret.php';
     $lock = @fopen($path . '.lock', 'c');
     if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('No se pudo guardar la clave privada de Drive.');
     @chmod($path . '.lock', 0600);
     try {
         clearstatcache(true, $path); $saved = is_file($path) ? @include $path : null;
         if (is_string($saved) && preg_match('/^[a-f0-9]{64}$/D', $saved)) return hex2bin($saved);
-        if (is_file($path)) throw new RuntimeException('La clave privada de Drive no es válida. Conserva la copia del servidor.');
+        if (driveOnVps() || is_file($path))
+            throw new RuntimeException('Falta la clave privada original de Drive o no es válida.');
         $secret = bin2hex(random_bytes(32));
         $file = @fopen($path, 'x');
         if (!$file) throw new RuntimeException('No se pudo guardar la clave privada de los vídeos de Drive.');
@@ -141,7 +145,7 @@ const DRIVE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
 function driveServiceConfig() {
-    $path = dirname(__DIR__) . '/calamar-drive-service.json';
+    $path = driveStateDir() . '/calamar-drive-service.json';
     if (!is_file($path) || (fileperms($path) & 0077) !== 0) return null;
     $config = json_decode((string)@file_get_contents($path, false, null, 0, 16384), true);
     if (!is_array($config) || ($config['type'] ?? '') !== 'service_account'
@@ -166,7 +170,7 @@ function driveServiceJwt($config, $now) {
 }
 
 function driveServiceAccessToken($config) {
-    $dir = dirname(__DIR__) . '/calamar-drive-auth-cache';
+    $dir = driveStateDir() . '/calamar-drive-auth-cache';
     if (!is_dir($dir)) @mkdir($dir, 0700);
     if (!is_dir($dir) || (fileperms($dir) & 0077) !== 0) return '';
     $cache = @fopen($dir . '/token.json', 'c+');
@@ -265,6 +269,8 @@ function driveStream($file, $head = false) {
 }
 const DRIVE_SEGMENT_SECONDS = 8;
 const DRIVE_COMPAT_ORIGIN = 'https://calamarmenciano.com/calamar-drive.php';
+const DRIVE_VPS_ORIGIN = 'https://video.calamarmenciano.com/calamar-drive.php';
+const DRIVE_VPS_INPUT = 'http://127.0.0.1:8091/calamar-drive.php';
 
 function driveCompatBinary() {
     $bundled = __DIR__ . '/calamar-cast-bin/ffmpeg';
@@ -281,7 +287,7 @@ function driveCompatBusy() {
 }
 
 function driveCompatCache() {
-    $dir = dirname(__DIR__) . '/calamar-drive-hls';
+    $dir = driveStateDir() . '/calamar-drive-hls';
     if (!is_dir($dir)) @mkdir($dir, 0700);
     if (!is_dir($dir) || !is_writable($dir)) throw new RuntimeException('El hosting no puede guardar los segmentos de vídeo.');
     return $dir;
@@ -298,12 +304,15 @@ function driveCompatWorker($dir) {
 }
 
 function driveCompatInput($url) {
-    $args = array('-protocol_whitelist', 'https,tls,tcp', '-format_whitelist',
+    $local = driveOnVps();
+    $args = array('-protocol_whitelist', $local ? 'http,tcp' : 'https,tls,tcp', '-format_whitelist',
         'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpegts,mpeg,flv,ogg,asf,rm,wtv,mxf,dv,nut,ivf,yuv4mpegpipe',
-        '-tls_verify', '1', '-verifyhost', 'calamarmenciano.com', '-rw_timeout', '16000000',
-        '-seekable', '1', '-threads', '2');
-    foreach (array('/etc/pki/tls/certs/ca-bundle.crt', '/etc/ssl/certs/ca-certificates.crt') as $ca) {
-        if (is_readable($ca)) { array_push($args, '-ca_file', $ca); break; }
+        '-rw_timeout', '16000000', '-seekable', '1', '-threads', '2');
+    if (!$local) {
+        array_push($args, '-tls_verify', '1', '-verifyhost', 'calamarmenciano.com');
+        foreach (array('/etc/pki/tls/certs/ca-bundle.crt', '/etc/ssl/certs/ca-certificates.crt') as $ca) {
+            if (is_readable($ca)) { array_push($args, '-ca_file', $ca); break; }
+        }
     }
     return array_merge($args, array('-i', $url));
 }
@@ -382,8 +391,9 @@ function driveCompatSegmentArguments($input, $start, $length, $audio, $tmp) {
 function driveCompat($file, $token, $head) {
     if (!driveCompatReady()) driveAnswer(array('error' => 'El hosting no tiene disponible el conversor de vídeo.'), 503);
     $dir = driveCompatCache();
-    $url = DRIVE_COMPAT_ORIGIN . '?' . http_build_query(array('id' => $file['id'], 'v' => $token));
-    $inputUrl = $url;
+    $query = '?' . http_build_query(array('id' => $file['id'], 'v' => $token));
+    $url = (driveOnVps() ? DRIVE_VPS_ORIGIN : DRIVE_COMPAT_ORIGIN) . $query;
+    $inputUrl = driveOnVps() ? DRIVE_VPS_INPUT . $query : $url;
     $key = hash('sha256', 'drive-hls-v1:' . $token);
     $meta = driveCompatCacheFile($dir, $key, 'info', function($tmp) use ($inputUrl) {
         if (file_put_contents($tmp, json_encode(driveCompatInspect($inputUrl))) === false)
@@ -443,6 +453,11 @@ function driveMain() {
         if ($video) {
             $file = driveOpen($_GET['v'] ?? '', $secret);
             if (!$file || $file['id'] !== ($_GET['id'] ?? '')) driveAnswer(array('error' => 'Enlace de vídeo no válido.'), 403);
+            if (!driveOnVps() && is_file(driveStateDir() . '/calamar-drive-use-vps')) {
+                $query = array_intersect_key($_GET, array_flip(array('id', 'v', 'hls', 'seg')));
+                header('Location: ' . DRIVE_VPS_ORIGIN . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986), true, 307);
+                exit;
+            }
             if (($_GET['hls'] ?? '') === '1') driveCompat($file, $_GET['v'], $method === 'HEAD');
             driveStream($file, $method === 'HEAD');
         }

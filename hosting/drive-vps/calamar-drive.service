@@ -1,0 +1,24 @@
+[Unit]
+Description=Calamar TV Google Drive playback
+After=network.target
+
+[Service]
+User=calamar-drive
+Group=www-data
+RuntimeDirectory=calamar-drive
+RuntimeDirectoryMode=0750
+StateDirectory=calamar-drive
+StateDirectoryMode=0700
+Environment=PHP_INI_SCAN_DIR=/etc/php/8.3/fpm/conf.d
+ExecStart=/usr/sbin/php-fpm8.3 --nodaemonize --fpm-config /etc/calamar-drive/drive-fpm.conf -c /etc/php/8.3/fpm/php.ini
+Restart=on-failure
+CPUQuota=150%
+CPUWeight=20
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

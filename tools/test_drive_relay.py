@@ -62,6 +62,18 @@ class DriveRelayTest(unittest.TestCase):
         self.assertEqual(result[0], [True, True, True, False, False, False, False, False])
         self.assertEqual(result[1], [True, True, True, True, False, False, False])
 
+    def test_vps_ffmpeg_input_is_loopback_and_public_playlist_origin_is_https(self):
+        legacy, vps, origin = json.loads(php(
+            'putenv("CALAMAR_DRIVE_VPS"); $legacy=driveCompatInput(DRIVE_COMPAT_ORIGIN);'
+            'putenv("CALAMAR_DRIVE_VPS=1");'
+            'echo json_encode([$legacy,driveCompatInput(DRIVE_VPS_INPUT),DRIVE_VPS_ORIGIN]);'))
+        self.assertEqual(legacy[-2:], ['-i', 'https://calamarmenciano.com/calamar-drive.php'])
+        self.assertIn('-tls_verify', legacy)
+        self.assertEqual(vps[:2], ['-protocol_whitelist', 'http,tcp'])
+        self.assertNotIn('-tls_verify', vps)
+        self.assertEqual(vps[-2:], ['-i', 'http://127.0.0.1:8091/calamar-drive.php'])
+        self.assertEqual(origin, 'https://video.calamarmenciano.com/calamar-drive.php')
+
     def test_service_account_assertion_is_signed_and_read_only(self):
         result = json.loads(php(
             '$key=openssl_pkey_new(["private_key_bits"=>2048]); openssl_pkey_export($key,$pem);'
