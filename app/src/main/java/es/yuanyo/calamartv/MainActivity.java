@@ -29,9 +29,9 @@ public class MainActivity extends Activity {
   final List<LazySection> lazySections = new ArrayList<>();
   final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
   final ExecutorService sharedWorker = Executors.newSingleThreadExecutor();
-  // Several pictures at a time: a row of posters no longer comes in two by two.
-  final ExecutorService imageWorker = Executors.newFixedThreadPool(6);
-  final ExecutorService prefetchWorker = Executors.newSingleThreadExecutor();
+  final ExecutorService imageWorker = Executors.newFixedThreadPool(4);
+  final Map<ImageView, Runnable> visibleImages = new LinkedHashMap<>();
+  final Rect imageBounds = new Rect();
   final Map<String, List<java.lang.ref.WeakReference<ImageView>>> pendingImages = new HashMap<>();
   int imageGeneration;
   long sharedServerAt;
@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
   String lastRenderKey = "";
   final Runnable searchRender = this::render;
   final Runnable lazyUpdate = this::updateLazySections;
+  final Runnable loadHomeLibrary = this::loadLibraryForHome;
 
   TextView message;
   JSONObject tdt = new JSONObject(), custom = new JSONObject();
@@ -76,7 +77,7 @@ public class MainActivity extends Activity {
 
   AppLink pendingAppLink;
   private Runnable stopAccess;
-  private boolean contentAdmitted;
+  private boolean contentAdmitted, catalogRestored;
   private AppAccess.State admission = AppAccess.State.LOADING;
   private boolean requiredLoginOpen;
   private static final int REQUIRED_LOGIN = 218;
@@ -93,12 +94,7 @@ public class MainActivity extends Activity {
     if (isFinishing() || isDestroyed()) return;
     admission = state;
     if (state == AppAccess.State.ALLOWED) {
-      if (!contentAdmitted) {
-        contentAdmitted = true;
-        home();
-        if (Profiles.needsPick()) profileGate();
-        if (resumed) resumeContent();
-      }
+      enterContent();
       return;
     }
     if (contentAdmitted) {
@@ -108,14 +104,17 @@ public class MainActivity extends Activity {
       contentDialogs.clear();
       pauseContent();
     }
-    if (state == AppAccess.State.LOGIN) {
-      // Keep a blank host behind the account activity so Back never opens the catalog.
-      View background = new View(this);
-      background.setBackgroundColor(Ui.BG);
-      setContentView(background);
-      openRequiredLogin();
+    if (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN) {
+      // The profile chooser can open over this blank host while admission is checked.
+      showAccessBackground();
+      if (state == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
+      else {
+        if (gate != null) gate.dismiss();
+        openRequiredLogin();
+      }
       return;
     }
+    if (gate != null) gate.dismiss();
     LinearLayout screen = new LinearLayout(this);
     screen.setOrientation(LinearLayout.VERTICAL);
     screen.setGravity(Gravity.CENTER);
@@ -123,22 +122,41 @@ public class MainActivity extends Activity {
     screen.setBackgroundColor(Ui.BG);
     screen.setFitsSystemWindows(true);
     screen.addView(label("Calamar TV", 30, FG));
-    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido"
-        : state == AppAccess.State.ERROR ? "No se pudo comprobar el acceso." : "Comprobando acceso…";
+    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
     TextView note = label(message, 17, MUTED);
     note.setGravity(Gravity.CENTER);
     screen.addView(note);
-    if (state != AppAccess.State.LOADING) {
-      boolean retry = state == AppAccess.State.ERROR;
-      Button action = Ui.pill(this, retry ? "Reintentar" : "Mi cuenta", Ui.Kind.ACCENT, true);
-      action.setOnClickListener(v -> {
-        if (retry) AppAccess.retry(this);
-        else startActivity(new Intent(this, AccountActivity.class));
-      });
-      screen.addView(action);
-      action.requestFocus();
-    }
+    boolean retry = state == AppAccess.State.ERROR;
+    Button action = Ui.pill(this, retry ? "Reintentar" : "Mi cuenta", Ui.Kind.ACCENT, true);
+    action.setOnClickListener(v -> {
+      if (retry) AppAccess.retry(this);
+      else startActivity(new Intent(this, AccountActivity.class));
+    });
+    screen.addView(action);
+    action.requestFocus();
     setContentView(screen);
+  }
+
+  private void showAccessBackground() {
+    View background = new View(this);
+    background.setBackgroundColor(Ui.BG);
+    setContentView(background);
+  }
+
+  private void enterContent() {
+    if (Profiles.needsPick()) { profileGate(); return; }
+    if (admission != AppAccess.State.ALLOWED || Profiles.awaitingProfiles(this)) return;
+    if (gate != null) gate.dismiss();
+    if (contentAdmitted) return;
+    contentAdmitted = true;
+    if (!catalogRestored) {
+      restore();
+      lastRenderKey = tdt.toString() + custom.toString();
+      catalogRestored = true;
+    }
+    syncFavorites();
+    home();
+    if (resumed) resumeContent();
   }
 
   private void showContentDialog(Dialog dialog) {
@@ -161,8 +179,9 @@ public class MainActivity extends Activity {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     updater = createUpdater();
-    restore();
-    favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet()));
+    showAccessBackground();
+    getWindow().setStatusBarColor(Ui.BG);
+    getWindow().setNavigationBarColor(Ui.BG);
     // Accounts and profiles: «Elige tu perfil» each time the app opens, and each profile's own rows.
     Profiles.start(this);
     Profiles.listen(profilesChanged);
@@ -241,10 +260,15 @@ public class MainActivity extends Activity {
   /** «Elige tu perfil» while it is on screen. */
   Dialog gate;
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
-    if (isFinishing() || !contentAdmitted) return;
+    if (isFinishing() || isDestroyed()) return;
+    if (!contentAdmitted) {
+      if (admission == AppAccess.State.ALLOWED) enterContent();
+      else if (admission == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
+      return;
+    }
     syncFavorites();
     if (Profiles.needsPick()) profileGate();
-    else if (gate != null && gate.isShowing()) gate.dismiss();
+    else if (gate != null) gate.dismiss();
     render();
     openPendingAppLink();
   });
@@ -260,7 +284,7 @@ public class MainActivity extends Activity {
    * the account, «Añadir» and «Modificar». Once each time the app opens.
    */
   void profileGate() {
-    if (!contentAdmitted) return;
+    if (admission != AppAccess.State.LOADING && admission != AppAccess.State.ALLOWED) return;
     if (gate != null && gate.isShowing()) return;
     FrameLayout root = new FrameLayout(this);
     root.setBackgroundColor(Ui.BG);
@@ -268,7 +292,6 @@ public class MainActivity extends Activity {
     final ImageView art = new ImageView(this);
     art.setScaleType(ImageView.ScaleType.CENTER_CROP);
     root.addView(art, new FrameLayout.LayoutParams(-1, -1));
-    if (library == null && libraryShown(custom)) loadLibrary();
     View shade = new View(this);
     shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x220b0d10, 0x880b0d10, 0xff0b0d10}));
     root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
@@ -311,7 +334,7 @@ public class MainActivity extends Activity {
     for (JSONObject profile : Profiles.profiles()) {
       final String id = profile.optString("id");
       View tile = gateTile(AccountActivity.avatar(this, profile, size), profile.optString("name"), size);
-      tile.setOnClickListener(v -> { Profiles.choose(this, id, true); if (gate != null) gate.dismiss(); });
+      tile.setOnClickListener(v -> Profiles.choose(this, id, true));
       profiles.addView(tile);
       if (first == null) first = tile;
     }
@@ -642,9 +665,7 @@ public class MainActivity extends Activity {
     root.addView(message);
     ScrollView scroll = new ScrollView(this);
     catalogScroll = scroll;
-    scroll.getViewTreeObserver().addOnScrollChangedListener(this::updateLazySections);
-    scroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateLazySections);
-    scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> updateLazySections());
+    watchCatalogViewport(scroll);
     scroll.setClipToPadding(false);
     list = new LinearLayout(this);
     list.setOrientation(LinearLayout.VERTICAL);
@@ -653,6 +674,31 @@ public class MainActivity extends Activity {
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     renderFilters();
     render();
+  }
+
+  private void watchCatalogViewport(ScrollView scroll) {
+    ViewTreeObserver.OnScrollChangedListener onScroll = this::updateLazySections;
+    ViewTreeObserver.OnGlobalLayoutListener onLayout = this::updateLazySections;
+    ViewTreeObserver.OnPreDrawListener beforeDraw = () -> {
+      loadVisibleImages();
+      return true;
+    };
+    scroll.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      private ViewTreeObserver observer;
+      @Override public void onViewAttachedToWindow(View attached) {
+        observer = attached.getViewTreeObserver();
+        observer.addOnScrollChangedListener(onScroll);
+        observer.addOnGlobalLayoutListener(onLayout);
+        observer.addOnPreDrawListener(beforeDraw);
+      }
+      @Override public void onViewDetachedFromWindow(View detached) {
+        if (observer == null || !observer.isAlive()) return;
+        observer.removeOnScrollChangedListener(onScroll);
+        observer.removeOnGlobalLayoutListener(onLayout);
+        observer.removeOnPreDrawListener(beforeDraw);
+        observer = null;
+      }
+    });
   }
 
   /** A section tab: bold capitals, with a lime bar under the one that is open. */
@@ -717,7 +763,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(30), dp(30));
     lp.setMargins(dp(4), 0, 0, 0);
     r.addView(logo, 1, lp);
-    logo(logo, url);
+    visibleImage(logo, url, true);
   }
 
   void heading(String title, String sub) {
@@ -738,7 +784,9 @@ public class MainActivity extends Activity {
   }
 
   void render() {
-    if (list == null) return;
+    if (!contentAdmitted || list == null) return;
+    visibleImages.clear();
+    handler.removeCallbacks(loadHomeLibrary);
     handler.removeCallbacks(heroAdvance); heroHost = null;
     handler.removeCallbacks(browseAdvance); browseTrack = null;
     lazySections.clear();
@@ -807,7 +855,7 @@ public class MainActivity extends Activity {
       List<Catalog.Channel> featured = new ArrayList<>(Catalog.highlights(channels, custom));
       // Films and series marked «En portada» in the admin page join the featured events and channels.
       if (libraryShown(custom)) {
-        loadLibrary();
+        handler.postDelayed(loadHomeLibrary, 300);
         if (library != null) for (Library.Item item : library.featured()) featured.add(libraryHero(item));
       }
       List<Catalog.Channel> events = Catalog.events(channels, custom);
@@ -961,7 +1009,7 @@ public class MainActivity extends Activity {
     lp.gravity = wide() ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Gravity.END | Gravity.TOP);
     lp.setMargins(0, wide() ? 0 : dp(18), dp(wide() ? 48 : 18), 0);
     frame.addView(logo, lp);
-    logo(logo, c.logo);
+    visibleImage(logo, c.logo, true);
     if (c.event) logo.setVisibility(View.GONE);
 
     View scrim = new View(this);
@@ -1058,7 +1106,7 @@ public class MainActivity extends Activity {
         Ui.LogoView small = new Ui.LogoView(this, picks.get(i).name, 6);
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER);
         thumb.addView(small, sp);
-        image(small, picks.get(i).logo);
+        visibleImage(small, picks.get(i).logo, false);
         favoriteAction(thumb, picks.get(i));
         thumb.setOnClickListener(
             new View.OnClickListener() {
@@ -1172,9 +1220,9 @@ public class MainActivity extends Activity {
     ImageView cover = new ImageView(this);
     cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
     art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-    if (!c.cover.isEmpty() && c.homeLogo.isEmpty() && c.awayLogo.isEmpty()) { image(cover, c.cover); return art; }
+    if (!c.cover.isEmpty() && c.homeLogo.isEmpty() && c.awayLogo.isEmpty()) { visibleImage(cover, c.cover, false); return art; }
     art.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xff10261a, 0xff1d4029, 0xff0b1410}));
-    image(cover, c.cover.isEmpty() ? c.background : c.cover);
+    visibleImage(cover, c.cover.isEmpty() ? c.background : c.cover, false);
     // Each crest gets 30% of the width and keeps its shape (FIT_CENTER), whatever the card's size.
     LinearLayout crests = new LinearLayout(this);
     crests.setGravity(Gravity.CENTER);
@@ -1197,7 +1245,7 @@ public class MainActivity extends Activity {
         tile.setPadding(dp(4), dp(4), dp(4), dp(4));
         ImageView league = new ImageView(this);
         league.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        logo(league, c.leagueLogo);
+        visibleImage(league, c.leagueLogo, true);
         tile.addView(league, new FrameLayout.LayoutParams(-1, -1));
         slot.addView(tile, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         crests.addView(slot, new LinearLayout.LayoutParams(0, -1, 1.7f));
@@ -1212,7 +1260,7 @@ public class MainActivity extends Activity {
       ImageView crest = new ImageView(this);
       crest.setScaleType(ImageView.ScaleType.FIT_CENTER);
       if (logo.isEmpty()) { GradientDrawable dot = new GradientDrawable(); dot.setShape(GradientDrawable.OVAL); dot.setColor(0x24ffffff); crest.setImageDrawable(dot); }
-      else logo(crest, logo);
+      else visibleImage(crest, logo, true);
       crests.addView(crest, new LinearLayout.LayoutParams(0, -1, 3));
     }
     crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
@@ -1240,12 +1288,13 @@ public class MainActivity extends Activity {
       art.setClipToOutline(true);
     }
     // The logo fills the card as much as it can, with a small margin from the rounded corners.
-    Ui.LogoView logo = new Ui.LogoView(this, c.name, 8);
-    FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
-    logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
-    art.addView(logo, logoSize);
-    logo(logo, c.logo);
-    if (c.event) logo.setVisibility(View.GONE);
+    if (!c.event) {
+      Ui.LogoView logo = new Ui.LogoView(this, c.name, 8);
+      FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
+      logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
+      art.addView(logo, logoSize);
+      visibleImage(logo, c.logo, true);
+    }
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
     if (c.event) {TextView badge=eventBadge(c,9);badge.setMaxWidth(dp(Math.max(60,width-88)));art.addView(badge,bp);}
@@ -1288,7 +1337,7 @@ public class MainActivity extends Activity {
       rememberedHeight = height;
       setMinimumHeight(height);
       setFocusable(true);
-      setContentDescription("Más canales");
+      setContentDescription("Más contenido");
       setOnFocusChangeListener((v, focused) -> {
         if (focused) { populate(); if (getChildCount() > 0) getChildAt(0).requestFocus(View.FOCUS_DOWN); }
       });
@@ -1324,19 +1373,17 @@ public class MainActivity extends Activity {
   }
 
   void updateLazySections() {
-    if (!television || catalogScroll == null || !resumed || isDestroyed()) return;
-    int margin = catalogScroll.getHeight();
-    if (margin <= 0 || list.isLayoutRequested()) return;
-    int top = catalogScroll.getScrollY() - margin;
-    int bottom = top + margin * 3;
+    if (!contentAdmitted || catalogScroll == null || !resumed || isDestroyed()) return;
+    int height = catalogScroll.getHeight();
+    if (height <= 0 || list.isLayoutRequested()) return;
+    int top = catalogScroll.getScrollY() - height / 2;
+    int bottom = top + height * 2;
     for (LazySection section : lazySections) section.update(top, bottom);
   }
 
   void carousel(List<Catalog.Channel> a, int limit) {
-    if (television) {
-      // Groups remain complete. Their cards are created only as the row approaches the screen.
-      lazyRow(220, () -> channelCarousel(a, limit));
-    } else list.addView(channelCarousel(a, limit));
+    // Keep the row complete, but create its cards only when it approaches the screen.
+    lazyRow(wide() ? 220 : 180, () -> channelCarousel(a, limit));
   }
 
   View channelCarousel(List<Catalog.Channel> a, int limit) {
@@ -1493,6 +1540,7 @@ public class MainActivity extends Activity {
     handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
     handler.removeCallbacks(searchRender);
+    handler.removeCallbacks(loadHomeLibrary);
     if (sharedListener != null) {
       sharedListener.remove();
       sharedListener = null;
@@ -1520,6 +1568,10 @@ public class MainActivity extends Activity {
     handler.post(refresh);
     observeSharedCatalog();
     handler.post(this::openPendingAppLink);
+    if ("Inicio".equals(mode) && library == null && query.trim().isEmpty()) {
+      handler.removeCallbacks(loadHomeLibrary);
+      handler.postDelayed(loadHomeLibrary, 300);
+    }
     // «Continuar viendo» of the signed-in account: what its other devices left half watched.
     ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
@@ -1585,10 +1637,10 @@ public class MainActivity extends Activity {
     handler.removeCallbacksAndMessages(null);
     imageGeneration++;
     imageWorker.shutdownNow();
-    prefetchWorker.shutdownNow();
     catalogWorker.shutdownNow();
     sharedWorker.shutdownNow();
     pendingImages.clear();
+    visibleImages.clear();
     lazySections.clear();
     images.evictAll();
     super.onDestroy();
@@ -1636,6 +1688,34 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(44));
     p.setMargins(dp(4), dp(4), dp(4), dp(4));
     r.addView(b, p);
+  }
+
+  /** Cards can exist before they are visible, including farther along a horizontal rail. */
+  void visibleImage(ImageView view, String url, boolean copyFirst) {
+    if (url == null || url.isEmpty()) return;
+    View.OnAttachStateChangeListener visibility = new View.OnAttachStateChangeListener() {
+      @Override public void onViewAttachedToWindow(View attached) {
+        ViewParent parent = attached.getParent();
+        while (parent != null && parent != catalogScroll) parent = parent.getParent();
+        if (parent == null) image(view, url, copyFirst);
+        else visibleImages.put(view, () -> image(view, url, copyFirst));
+      }
+      @Override public void onViewDetachedFromWindow(View detached) { visibleImages.remove(view); }
+    };
+    view.addOnAttachStateChangeListener(visibility);
+    if (view.isAttachedToWindow()) visibility.onViewAttachedToWindow(view);
+  }
+
+  void loadVisibleImages() {
+    if (!resumed || !contentAdmitted || visibleImages.isEmpty()) return;
+    for (Iterator<Map.Entry<ImageView, Runnable>> it = visibleImages.entrySet().iterator(); it.hasNext();) {
+      Map.Entry<ImageView, Runnable> request = it.next();
+      ImageView view = request.getKey();
+      if (!view.isShown() || !view.getGlobalVisibleRect(imageBounds)) continue;
+      Runnable load = request.getValue();
+      it.remove();
+      load.run();
+    }
   }
 
   void image(final ImageView view, final String url) {
@@ -1739,20 +1819,6 @@ public class MainActivity extends Activity {
     for (File f : files) { if (total < 60L * 1024 * 1024) break; total -= f.length(); f.delete(); }
   }
 
-  /** The posters of the library downloaded ahead (one at a time, in the background), for the rows to show at once. */
-  void prefetchPosters(Library.Data data) {
-    final List<String> urls = new ArrayList<>();
-    for (String[] section : Library.SECTIONS) for (Library.Item item : data.items(section[0]))
-      if (item.poster.startsWith("https://") && urls.size() < 400) urls.add(item.poster);
-    prefetchWorker.execute(() -> {
-      for (String url : urls) {
-        if (Thread.currentThread().isInterrupted()) return;
-        File file = cachedImage(url);
-        if (file != null && !file.isFile()) imageBytes(url);
-      }
-    });
-  }
-
   /** An image read from the network, scaled down when large; null when it cannot be read. */
   static Bitmap readBitmap(String address) {
     byte[] data = imageBytes(address);
@@ -1849,6 +1915,10 @@ public class MainActivity extends Activity {
   long libraryAt;
   String libraryError = "";
 
+  void loadLibraryForHome() {
+    if (resumed && contentAdmitted && "Inicio".equals(mode) && libraryShown(custom)) loadLibrary();
+  }
+
   /** Downloads the list at most every 2 minutes; the page redraws when it arrives. */
   void loadLibrary() {
     if (libraryBusy || (library != null && System.currentTimeMillis() - libraryAt < 120000)) return;
@@ -1866,7 +1936,7 @@ public class MainActivity extends Activity {
       final String failure = error;
       runOnUiThread(() -> {
         libraryBusy = false;
-        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); prefetchPosters(result); handler.post(this::openPendingAppLink); }
+        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); handler.post(this::openPendingAppLink); }
         libraryError = failure;
         // The home page also draws again the first time, for the titles «En portada» and the top.
         if (!isFinishing() && (Library.section(mode) != null || (result != null && "Inicio".equals(mode) && (first || !query.trim().isEmpty())))) render();
@@ -1978,7 +2048,7 @@ public class MainActivity extends Activity {
       ImageView cover = new ImageView(this);
       cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-      image(cover, item.poster);
+      visibleImage(cover, item.poster, false);
     }
     if (item.trend > 0) {
       // «TOP 10» in the corner of the titles of the weekly top, as on Netflix (and on the web).
@@ -2723,13 +2793,17 @@ public class MainActivity extends Activity {
   void topRow(List<Library.Item> items, String what, String title) {
     if (items.isEmpty()) return;
     heading(title, "Según TMDB");
+    int width = wide() ? 190 : 140;
+    lazyRow(width * 3 / 2 + 24, () -> topCarousel(items, width));
+  }
+
+  View topCarousel(List<Library.Item> items, int width) {
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);
     LinearLayout r = row();
     r.setGravity(Gravity.BOTTOM);
     // Bigger than the posters of the other rows, and whole (only the picture, at 2:3).
-    int width = wide() ? 190 : 140;
     for (int i = 0; i < items.size(); i++) {
       LinearLayout pair = row();
       pair.setGravity(Gravity.BOTTOM);
@@ -2749,7 +2823,7 @@ public class MainActivity extends Activity {
       r.addView(pair);
     }
     h.addView(r);
-    list.addView(h);
+    return h;
   }
 
   static final String HALLOWEEN = "Especial Halloween";
@@ -2798,11 +2872,7 @@ public class MainActivity extends Activity {
       h.addView(r);
       return h;
     };
-    // On a television the rows far from the screen are built when they come near (as the poster grid).
-    if (television) lazyRow(width * 3 / 2 + 24, rail);
-    else {
-      try { list.addView(rail.call()); } catch (Exception impossible) { throw new IllegalStateException(impossible); }
-    }
+    lazyRow(width * 3 / 2 + 24, rail);
   }
 
   static final String PLATFORM = "Plataforma: ";
@@ -3249,7 +3319,7 @@ public class MainActivity extends Activity {
     for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
       if (section == null || section.equals(entry.optString("section"))) entries.add(entry);
     if (entries.isEmpty()) return;
-    loadLibrary();
+    if (section != null) loadLibrary();
     heading(title, null);
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
@@ -3282,7 +3352,7 @@ public class MainActivity extends Activity {
       ImageView picture = new ImageView(this);
       picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(picture, new FrameLayout.LayoutParams(-1, -1));
-      image(picture, entry.optString("image"));
+      visibleImage(picture, entry.optString("image"), false);
     }
     ImageView play = new ImageView(this);
     play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(22)));

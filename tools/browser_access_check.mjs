@@ -19,6 +19,34 @@ const server=createServer(async(req,res)=>{
 await new Promise(ok=>server.listen(0,'127.0.0.1',ok));const base=`http://127.0.0.1:${server.address().port}`;let browser;
 try{
   browser=await chromium.launch({headless:true,...(process.env.CALAMAR_CHROME_CHANNEL?{channel:process.env.CALAMAR_CHROME_CHANNEL}:{})});
+  // A returning viewer can choose from cached profiles while admission is pending.
+  const returning = await browser.newPage();
+  let releaseAuth;
+  const authPending = new Promise(resolve => { releaseAuth = resolve; });
+  const startupRequests = [];
+  returning.on('request', request => startupRequests.push(request.url()));
+  await returning.route('**/*', async route => {
+    const url = route.request().url();
+    if (url === `${base}/firebase.js`) await authPending;
+    return url.startsWith(base) ? route.continue() : route.abort();
+  });
+  await returning.addInitScript(() => {
+    const profiles = [{id:'main',name:'Perfil guardado',color:'#c81220'}];
+    localStorage.setItem('calamar-account-cache', JSON.stringify({uid:'member-fixture',profiles}));
+    window.__initialAuth = null;
+    window.__initialWebAccess = { requireLogin: true };
+  });
+  await returning.goto(base + '/#/canal/sports-one', {waitUntil:'domcontentloaded'});
+  const cachedProfile = returning.getByRole('button', {name:'Ver como Perfil guardado'});
+  try {
+    await cachedProfile.waitFor();
+    assert.equal(await returning.getByText('Comprobando acceso…').count(), 0);
+    await cachedProfile.click();
+    assert.equal(startupRequests.some(url => url.includes('/data/') || url.includes('example.com/live')), false);
+  } finally { releaseAuth(); }
+  await returning.getByRole('heading',{name:'Entra',exact:true}).waitFor();
+  assert.equal(await returning.locator('#player').isVisible(), false);
+  await returning.close();
   const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[],media=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().startsWith('https://example.com/'))media.push(r.url());});
   await page.route('**/*',r=>r.request().url().startsWith(base)?r.continue():r.abort());

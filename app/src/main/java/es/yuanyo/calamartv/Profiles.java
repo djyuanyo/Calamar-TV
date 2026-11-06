@@ -64,6 +64,12 @@ final class Profiles {
   /** Signed in, with profiles, and none chosen since the app opened. */
   static boolean needsPick() { return uid != null && !profiles().isEmpty() && !pickedThisLaunch; }
 
+  /** A first sign-in can be admitted before its profiles arrive from Firestore. */
+  static boolean awaitingProfiles(Context context) {
+    FirebaseUser signed = user(context);
+    return signed != null && !signed.isAnonymous() && (!signed.getUid().equals(uid) || profiles().isEmpty());
+  }
+
   /** «Continuar viendo» of the profile watching (calamarProgress/<uid> for the main one or without profiles). */
   static DocumentReference progressDocument(Context c, FirebaseUser user) {
     return activeId == null || activeId.equals("main")

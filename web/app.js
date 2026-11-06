@@ -58,7 +58,12 @@ export async function fetchJson(path) {
   return response.json();
 }
 
-export async function loadCatalog() {
+let catalogRequest = null;
+export function loadCatalog() {
+  return (catalogRequest ||= requestCatalog().finally(() => { catalogRequest = null; }));
+}
+
+async function requestCatalog() {
   const [tdt, custom, copies] = await Promise.all([fetchJson('data/tdt.json'), fetchJson('data/custom.json'), fetchJson('data/logos.json').catch(() => ({}))]);
   setLogoCopies(copies);
   state.tdt = tdt;
@@ -81,6 +86,7 @@ export async function loadCatalog() {
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
+  if (tag === 'img') node.decoding = 'async';
   for (const [key, value] of Object.entries(attrs)) {
     if (value === undefined || value === null || value === false) continue;
     if (key === 'class') node.className = value;
@@ -107,7 +113,7 @@ const eventCover = (c, cls) => drawEventCover(el, c, cls);
 function logo(c, cls) {
   const fallback = () => el('span', { class: `initials ${cls || ''}`.trim() }, initials(c.name));
   if (!c.logo) return fallback();
-  const img = el('img', { src: c.logo, alt: '', loading: cls ? 'eager' : 'lazy', referrerpolicy: 'no-referrer', class: cls });
+  const img = el('img', { src: c.logo, alt: '', loading: cls ? 'eager' : 'lazy', fetchpriority: cls === 'hero-art' ? 'high' : null, referrerpolicy: 'no-referrer', class: cls });
   img.addEventListener('error', () => img.replaceWith(fallback()));
   return img;
 }
@@ -384,7 +390,18 @@ function homeLibrary() {
   const library = cachedLibrary();
   if (!library && !homeLibraryAsked) {
     homeLibraryAsked = true;
-    fetchLibrary().then(() => { if (!location.hash.replace(/^#\/?/, '') && !search.value.trim()) route(); }).catch(() => {});
+    // Let the initial hero and event rows paint before requesting the video catalog.
+    requestAnimationFrame(() => setTimeout(() => {
+      const page = location.hash.replace(/^#\/?/, '');
+      if ((page && page !== 'inicio') || search.value.trim() || webAccess.current().decision !== 'allowed' || gate) {
+        homeLibraryAsked = false;
+        return;
+      }
+      fetchLibrary().then((data) => {
+        try { localStorage.setItem(GATE_SLIDES, JSON.stringify(gateSlides(data))); } catch {}
+        if (['', 'inicio'].includes(location.hash.replace(/^#\/?/, '')) && !search.value.trim()) route();
+      }).catch(() => { homeLibraryAsked = false; });
+    }, 0));
   }
   return library;
 }
@@ -429,7 +446,7 @@ function home() {
   // week's events only: a league whose next matches are in two weeks does not appear yet.
   for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
     // The league's name opens its page: every match of the league that has a channel.
-    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null, row.name];
     nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
       : el('span', { class: 'league-head' }, ...head),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
@@ -485,7 +502,7 @@ function livePage() {
   const nodes = [sportsHero({ name: LIVE_ROW, logo: './assets/calamar-menciano-tv.png', live: true,
     count: live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`, url: liveShareLink() })];
   for (const row of eventRows(live, state.custom)) {
-    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null, row.name];
     nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
       : el('span', { class: 'league-head' }, ...head), el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)),
       el('div', { class: 'grid league-grid' }, row.events.map((c) => card(c))));
@@ -1426,20 +1443,19 @@ function slidesForGate() {
     try { localStorage.setItem(GATE_SLIDES, JSON.stringify(slides)); } catch {}
     return slides;
   }
-  fetchLibrary().then(() => { if (gate && !gate.dataset.fromLibrary) showGate(); }).catch(() => {});
   try { return JSON.parse(localStorage.getItem(GATE_SLIDES) || '[]').filter((s) => s && typeof s.image === 'string' && s.image.startsWith('https://')); } catch { return []; }
 }
 function showGate() {
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
-  if (webAccess.current().decision !== 'allowed' || !signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
-  const fromLibrary = !!cachedLibrary();
-  // Already open with the library's titles: only the profiles can have changed.
-  if (gate && gate.dataset.fromLibrary && fromLibrary && gate.dataset.profiles === JSON.stringify(accountProfiles())) return;
+  const access = webAccess.current(), user = signedUser();
+  if (!['loading', 'allowed'].includes(access.decision) || !user || (access.authReady && access.user?.uid !== user.uid)
+      || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
+  const profiles = JSON.stringify(accountProfiles());
+  if (gate?.dataset.profiles === profiles) return;
   const next = profileGate(el, { slides: slidesForGate(),
     chosen: () => { closeGate(); route(); },
     manage: (what) => { closeGate(); accountEditing = what; location.hash = '#/cuenta'; } });
-  if (fromLibrary) next.dataset.fromLibrary = '1';
-  next.dataset.profiles = JSON.stringify(accountProfiles());
+  next.dataset.profiles = profiles;
   if (gate) gate.replaceWith(next); else document.body.append(next);
   gate = next;
   document.body.classList.add('gate-open');
@@ -1464,7 +1480,7 @@ async function route() {
   document.body.classList.toggle('access-signin', admission.decision === 'login' && accessPage !== 'tv');
   if (locked) {
     if (casting) { casting = false; cast.stop(); }
-    closeGate();
+    showGate();
     if (!player.hidden) hidePlayer();
     closeMultiPicker(); closeMulti(); inlineMulti = null;
     stopHighlight();
@@ -1478,12 +1494,16 @@ async function route() {
         catch { view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el inicio de sesión. Recarga para volver a intentarlo.')); }
       } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
       else if (admission.decision === 'error') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'No se pudo comprobar el acceso'), el('p', {}, 'Comprueba la conexión y vuelve a intentarlo.'), el('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, 'Reintentar'), el('a', { class: 'ghost', href: '#/cuenta' }, 'Iniciar sesión')));
-      else view.replaceChildren(el('p', { class: 'status', role: 'status' }, 'Comprobando acceso…'));
+      else view.replaceChildren();
       return;
     }
   }
 
-  if (!locked) { showGate(); if (accessPage !== 'cuenta') accessReturnHash = null; }
+  if (!locked) {
+    showGate();
+    if (accessPage !== 'cuenta') accessReturnHash = null;
+    if (gate) { ++routeVersion; view.replaceChildren(); return; }
+  }
   if (inlineMulti) {
     if (location.hash === inlineMulti.hash) return;
     closeMultiPicker(); closeMulti(); inlineMulti = null;

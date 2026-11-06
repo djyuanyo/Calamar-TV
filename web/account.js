@@ -236,12 +236,13 @@ export function profileGate(el, { slides = [], chosen, manage }) {
   const tool = (symbol, label, action) => el('button', { class: 'gate-profile gate-tool', type: 'button', onclick: action },
     el('span', { class: 'profile-avatar big tool', 'aria-hidden': 'true' }, symbol), el('span', {}, label));
   const tools = [accountProfiles().length < MAX_PROFILES ? tool('+', 'Añadir', () => manage('new')) : null, tool('✎', 'Modificar', () => manage('all'))];
-  const backdrops = slides.map((slide, i) => el('div', { class: `gate-slide${i === 0 ? ' on' : ''}`, style: `background-image:url("${slide.image.replace(/"/g, '%22')}")` }));
+  const backdrops = slides.map(() => el('div', { class: 'gate-slide' }));
   const title = el('p', { class: 'gate-title' }), rank = el('span', { class: 'gate-rank-text' });
   const feature = el('div', { class: 'gate-feature', 'aria-live': 'polite' }, title,
     el('p', { class: 'gate-rank' }, el('span', { class: 'gate-top', 'aria-hidden': 'true' }, 'TOP', el('b', {}, '10')), rank));
   let at = 0;
   const show = (i) => {
+    if (backdrops[i]) backdrops[i].style.backgroundImage = `url("${slides[i].image.replace(/"/g, '%22')}")`;
     backdrops.forEach((b, n) => b.classList.toggle('on', n === i));
     title.textContent = slides[i]?.title || '';
     rank.textContent = slides[i]?.label || '';

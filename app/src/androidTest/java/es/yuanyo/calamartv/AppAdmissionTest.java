@@ -14,10 +14,26 @@ import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(AndroidJUnit4.class)
 public class AppAdmissionTest {
+  @Test public void startupWaitsForAdmissionWithoutBuildingTheCatalog() {
+    policy(AppAccess.State.LOADING);
+    try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(CatalogFixtureActivity.class)) {
+      scenario.onActivity(activity -> {
+        View content = activity.findViewById(android.R.id.content);
+        assertNull(activity.catalogScroll);
+        assertTrue(activity.channels.isEmpty());
+        assertFalse(hasText(content, "Comprobando acceso…"));
+        AppAccess.useTestState(AppAccess.State.ALLOWED);
+        assertTrue(hasText(content, "Multipantalla"));
+        assertFalse(activity.channels.isEmpty());
+      });
+    } finally { policy(AppAccess.State.ALLOWED); }
+  }
+
   @Test public void guestWallOpensAndClosesTheCatalogWhenTheSharedPolicyChanges() {
     policy(AppAccess.State.LOGIN);
     try (ActivityScenario<CatalogFixtureActivity> scenario = ActivityScenario.launch(CatalogFixtureActivity.class)) {
