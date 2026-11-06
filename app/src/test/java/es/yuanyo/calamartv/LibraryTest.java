@@ -5,6 +5,16 @@ import org.json.*;
 import org.junit.Test;
 
 public class LibraryTest {
+  @Test public void readsTheTitleLogoSeparatelyFromPlatformLogos() throws Exception {
+    JSONObject title = new JSONObject();
+    assertEquals("", new Library.Item(title).titleLogo);
+    title.put("tmdb", new JSONObject().put("titleLogo", "https://image.tmdb.org/t/p/w500/title.png")
+        .put("logos", new JSONObject().put("Plataforma", "https://image.tmdb.org/t/p/w92/platform.png")));
+    Library.Item item = new Library.Item(title);
+    assertEquals("https://image.tmdb.org/t/p/w500/title.png", item.titleLogo);
+    assertEquals("https://image.tmdb.org/t/p/w92/platform.png", item.logos.get("Plataforma"));
+  }
+
   @Test public void manualTrailerOverridesAndEmptyUsesImage() throws Exception {
     JSONObject title = new JSONObject().put("tmdb", new JSONObject().put("trailer", "abcdefghijk"));
     assertEquals("abcdefghijk", new Library.Item(title).trailer);

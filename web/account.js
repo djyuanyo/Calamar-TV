@@ -38,6 +38,7 @@ export function signIn(el, f, done) {
     const field = (label, input, extra = null) => el('label', { class: 'auth-field' }, el('span', { class: 'auth-label' }, el('span', {}, label), extra), input);
     const email = el('input', { type: 'email', autocomplete: 'email', required: true, placeholder: 'Tu email', value: emailValue });
     const password = el('input', { type: 'password', autocomplete: creating ? 'new-password' : 'current-password', minlength: '6', required: true, placeholder: 'Contraseña' });
+    const confirmation = creating ? el('input', { type: 'password', autocomplete: 'new-password', required: true, placeholder: 'Repite la contraseña' }) : null;
     const name = el('input', { type: 'text', autocomplete: 'given-name', placeholder: 'Cómo te llamas', maxlength: '24' });
     const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': 'Mostrar la contraseña', onclick: () => {
       const shown = password.type === 'text';
@@ -54,6 +55,14 @@ export function signIn(el, f, done) {
     const submit = el('button', { class: 'auth-submit', type: 'submit' }, creating ? 'Crear cuenta' : 'Iniciar sesión');
     const google = el('button', { class: 'auth-provider', type: 'button', onclick: () => busy(google, () => f.loginGoogle()) });
     const resend = creating ? null : el('button', { class: 'auth-link', type: 'submit' }, 'Reenviar correo de verificación');
+    const notice = (title, message) => {
+      const dialog = el('dialog', { class: 'auth-verification auth-card', 'aria-label': title },
+        el('h2', {}, title), el('p', {}, message),
+        el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Entendido'));
+      dialog.addEventListener('close', () => dialog.remove(), { once: true });
+      document.body.append(dialog);
+      dialog.showModal();
+    };
     const emailAction = async (resending) => {
       for (const action of [submit, google, resend]) if (action) action.disabled = true;
       say(resending ? 'Enviando correo…' : '');
@@ -69,13 +78,11 @@ export function signIn(el, f, done) {
           : creating
             ? 'Tu cuenta está creada, pero no se pudo enviar el correo. Escribe tu correo y contraseña y pulsa «Reenviar correo de verificación». Revisa también la carpeta de spam.'
             : 'Abre el enlace de verificación para poder iniciar sesión. Revisa la carpeta de spam o pulsa «Reenviar correo de verificación».';
-        const dialog = el('dialog', { class: 'auth-verification auth-card', 'aria-label': 'Verifica tu correo' },
-          el('h2', {}, 'Verifica tu correo'), el('p', {}, message),
-          el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Entendido'));
-        dialog.addEventListener('close', () => dialog.remove(), { once: true });
-        document.body.append(dialog);
-        dialog.showModal();
-      } catch (error) { say(f.explain(error), true); }
+        notice('Verifica tu correo', message);
+      } catch (error) {
+        if (creating && error.code === 'auth/email-already-in-use') notice('Correo ya en uso', f.explain(error));
+        else say(f.explain(error), true);
+      }
       finally { for (const action of [submit, google, resend]) if (action) action.disabled = false; }
     };
     google.innerHTML = GOOGLE_G;
@@ -94,11 +101,17 @@ export function signIn(el, f, done) {
       el('form', { class: 'auth-form', onsubmit: (event) => {
         event.preventDefault();
         if (!email.value.trim() || password.value.length < 6) { say('Escribe tu email y una contraseña de al menos 6 caracteres.', true); return; }
+        if (confirmation && confirmation.value !== password.value) {
+          say('Las contraseñas no coinciden.', true);
+          confirmation.focus();
+          return;
+        }
         void emailAction(resend !== null && event.submitter === resend);
       } },
         creating ? field('Nombre', name) : null,
         field('Email', email),
         field('Contraseña', el('span', { class: 'auth-password' }, password, eye), forgot),
+        confirmation ? field('Repite la contraseña', confirmation) : null,
         submit, resend),
       note);
   };

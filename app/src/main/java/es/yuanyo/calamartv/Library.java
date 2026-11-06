@@ -153,7 +153,7 @@ final class Library {
   }
 
   static final class Item {
-    final String id, title, url, overview, poster, backdrop;
+    final String id, title, url, overview, poster, backdrop, titleLogo;
     final int year, runtime, votes;
     final double rating;
     final boolean series;
@@ -198,6 +198,7 @@ final class Library {
       overview = t.optString("overview");
       poster = t.optString("poster");
       backdrop = t.optString("backdrop");
+      titleLogo = t.optString("titleLogo", "");
       runtime = t.optInt("runtime", 0);
       votes = t.optInt("votes", 0);
       rating = t.optDouble("rating", 0);

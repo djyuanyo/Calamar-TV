@@ -565,16 +565,26 @@ public class MainActivity extends Activity {
     updates.setContentDescription("Actualizaciones");
     updates.setOnClickListener(v -> { if (updater != null) updater.check(true); });
     addButton(mast, updates);
-    ImageButton profile = new ImageButton(this);
-    profile.setImageDrawable(Ui.icon(Ui.Icon.PROFILE, Ui.MUTED, dp(22)));
-    profile.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
-    String profileLabel = Profiles.user(this) == null ? "Mi cuenta" : "Cambiar de perfil";
-    profile.setContentDescription(profileLabel);
-    if (android.os.Build.VERSION.SDK_INT >= 26) profile.setTooltipText(profileLabel);
-    profile.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
-    LinearLayout.LayoutParams profileSize = new LinearLayout.LayoutParams(dp(44), dp(44));
-    profileSize.setMargins(dp(4), dp(4), dp(4), dp(4));
-    mast.addView(profile, profileSize);
+    if (Profiles.user(this) == null) {
+      Button signIn = Ui.pill(this, "Entrar", Ui.Kind.SURFACE, true);
+      signIn.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+      addButton(mast, signIn);
+    } else {
+      JSONObject active = Profiles.active();
+      FrameLayout profile = new FrameLayout(this);
+      TextView avatar = AccountActivity.avatar(this, active == null ? new JSONObject() : active, 34);
+      avatar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      profile.addView(avatar, new FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER));
+      profile.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 10, 0));
+      profile.setFocusable(true);
+      String profileLabel = active == null ? "¿Quién está viendo?" : active.optString("name") + " · Cambiar de perfil";
+      profile.setContentDescription(profileLabel);
+      if (android.os.Build.VERSION.SDK_INT >= 26) profile.setTooltipText(profileLabel);
+      profile.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+      LinearLayout.LayoutParams profileSize = new LinearLayout.LayoutParams(dp(44), dp(44));
+      profileSize.setMargins(dp(4), dp(4), dp(4), dp(4));
+      mast.addView(profile, profileSize);
+    }
     root.addView(mast);
     EditText search = new EditText(this);
     search.setSingleLine(true);
@@ -2114,6 +2124,20 @@ public class MainActivity extends Activity {
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setPadding(0, 0, 0, dp(4));
     body.addView(title);
+    if (!item.titleLogo.isEmpty()) {
+      ImageView titleArt = new ImageView(this) {
+        @Override public void setImageBitmap(Bitmap bitmap) {
+          super.setImageBitmap(bitmap);
+          setVisibility(bitmap == null ? View.GONE : View.VISIBLE);
+          title.setVisibility(bitmap == null ? View.VISIBLE : View.GONE);
+        }
+      };
+      titleArt.setContentDescription(item.title);
+      titleArt.setScaleType(ImageView.ScaleType.FIT_START);
+      titleArt.setVisibility(View.GONE);
+      body.addView(titleArt, new LinearLayout.LayoutParams(-1, dp(wide() ? 104 : 80)));
+      image(titleArt, item.titleLogo);
+    }
     String facts = item.facts();
     if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
     final JSONObject progress = Library.Progress.load(this);

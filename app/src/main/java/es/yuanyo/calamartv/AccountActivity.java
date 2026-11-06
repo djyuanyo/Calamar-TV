@@ -131,7 +131,7 @@ public class AccountActivity extends Activity {
     v.setGravity(Gravity.CENTER);
     int color;
     try { color = Color.parseColor(profile.optString("color", ProfileData.COLORS[0])); } catch (IllegalArgumentException bad) { color = 0xffe50914; }
-    v.setBackground(Ui.shape(a, color, 12, 0, 0));
+    v.setBackground(Ui.shape(a, color, sizeDp <= 34 ? 8 : 12, 0, 0));
     return v;
   }
 
@@ -620,6 +620,11 @@ public class AccountActivity extends Activity {
     });
     passBox.addView(eye, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END | Gravity.CENTER_VERTICAL));
     card.addView(passBox, new LinearLayout.LayoutParams(-1, -2));
+    final EditText confirmation;
+    if (creating) {
+      fieldLabel(card, "REPITE LA CONTRASEÑA");
+      confirmation = field(card, "Repite la contraseña", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    } else confirmation = null;
     if (!creating) {
       TextView forgot = label("¿Olvidaste tu contraseña?", 13, 0xff8ab4ff);
       forgot.setPadding(dp(6), dp(14), dp(2), dp(4));
@@ -640,19 +645,24 @@ public class AccountActivity extends Activity {
     sp.setMargins(0, dp(22), 0, 0);
     card.addView(submit, sp);
     final EditText nameField = name;
-    submit.setOnClickListener(v -> emailAction(email, password, nameField, false));
+    submit.setOnClickListener(v -> emailAction(email, password, confirmation, nameField, false));
     if (!creating) {
       Button resend = Ui.pill(this, "Reenviar correo de verificación", Ui.Kind.GHOST, false);
-      resend.setOnClickListener(v -> emailAction(email, password, null, true));
+      resend.setOnClickListener(v -> emailAction(email, password, null, null, true));
       card.addView(resend, new LinearLayout.LayoutParams(-1, dp(48)));
     }
   }
 
-  private void emailAction(EditText email, EditText password, EditText name, boolean resend) {
+  private void emailAction(EditText email, EditText password, EditText confirmation, EditText name, boolean resend) {
     if (emailWorking) return;
     final String address = email.getText().toString().trim(), pass = password.getText().toString();
     if (address.isEmpty() || pass.length() < 6) { say("Escribe tu email y una contraseña de al menos 6 caracteres."); return; }
     final boolean register = name != null;
+    if (register && !pass.contentEquals(confirmation.getText())) {
+      say("Las contraseñas no coinciden.");
+      confirmation.requestFocus();
+      return;
+    }
     final String displayName = register ? name.getText().toString().trim() : "";
     emailWorking = true;
     emailValue = address;
@@ -677,7 +687,16 @@ public class AccountActivity extends Activity {
               .addOnCompleteListener(ignored -> send.run());
           else send.run();
         })
-        .addOnFailureListener(error -> { emailWorking = false; say(explain(error)); });
+        .addOnFailureListener(error -> {
+          emailWorking = false;
+          if (isFinishing() || isDestroyed()) return;
+          if (register && error instanceof com.google.firebase.auth.FirebaseAuthException
+              && "ERROR_EMAIL_ALREADY_IN_USE".equals(((com.google.firebase.auth.FirebaseAuthException) error).getErrorCode())) {
+            say("");
+            new AlertDialog.Builder(this).setTitle("Correo ya en uso").setMessage(explain(error))
+                .setPositiveButton("Entendido", null).show();
+          } else say(explain(error));
+        });
   }
 
   private void finishVerification(FirebaseAuth auth, FirebaseUser user, String address, boolean register, boolean sent, Exception failure) {
