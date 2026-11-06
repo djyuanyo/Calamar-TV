@@ -37,5 +37,5 @@ systemctl daemon-reload
 systemctl restart calamar-drive
 systemctl reload nginx
 systemctl is-active calamar-drive nginx
-curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:8092/calamar-drive.php?status=1'
+curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 1 --max-time 5 'http://127.0.0.1:8092/calamar-drive.php?status=1'
 printf '\n'
