@@ -594,7 +594,10 @@ public class MainActivity extends Activity {
     String hint = Library.section(mode) != null ? "Buscar títulos" : "Buscar canales y eventos";
     search.setHint(hint);
     search.setContentDescription(hint);
-    search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+    search.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_FILTER);
+    search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      search.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
     search.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 24, 0));
     search.setPadding(dp(18), dp(10), dp(18), dp(10));
     search.setText(query);
@@ -771,8 +774,15 @@ public class MainActivity extends Activity {
     }
     if (!query.trim().isEmpty()) {
       heading("Resultados", null);
+      List<Catalog.Channel> league = "Inicio".equals(mode)
+          ? Catalog.todayLeagueEvents(channels, custom, query, System.currentTimeMillis()) : null;
       List<Catalog.Channel> found = new ArrayList<>();
-      for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
+      if (league != null) {
+        found.addAll(league);
+        if (league.isEmpty()) list.addView(label("No hay eventos de esa liga para hoy.", 15, Ui.MUTED));
+      } else {
+        for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
+      }
       for (Catalog.Channel c : channels) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
       channelGrid(found);
       // Films, series and documentaries too, as on the web.
@@ -783,7 +793,7 @@ public class MainActivity extends Activity {
           if (titles.size() < 30 && matches(item.title + " " + android.text.TextUtils.join(" ", item.genres))) titles.add(item);
       }
       if (!titles.isEmpty()) posterRail("Películas, series y documentales", titles, wide() ? 140 : 108);
-      if (found.isEmpty() && titles.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
+      if (league == null && found.isEmpty() && titles.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
       return;
     }
     if (channels.isEmpty()) {

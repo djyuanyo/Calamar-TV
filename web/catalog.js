@@ -1,3 +1,4 @@
+import { madridDay } from './audience.js';
 import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
@@ -440,6 +441,20 @@ export function liveEvents(list, now = Date.now()) {
     return day(at) === today || (at < now && now - at < 4 * 3600000);
   }).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
 }
+/** A league search in Inicio uses today's Madrid date, including matches awaiting a channel. */
+export function todayLeagueEvents(channels, custom, query, now = Date.now()) {
+  const key = text => text.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
+  const wanted = key(query);
+  if (!wanted) return null;
+  const leagues = new Set((custom?.leagues || []).filter(league => key(league.name).includes(wanted)).map(league => league.id));
+  if (!leagues.size) return null;
+  const today = madridDay(now);
+  return events(channels, custom, now, { allWeeks: true }).filter(event => {
+    const at = Date.parse(event.startAt);
+    return leagues.has(event.leagueId) && Number.isFinite(at) && madridDay(at) === today;
+  });
+}
+
 /**
  * The league rows of the home page show only this week's events (Monday to Sunday, Madrid): a league with
  * matches in two weeks does not appear yet. Events without a league or a date stay; a match from last week

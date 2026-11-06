@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { merge, events } from '../web/catalog.js';
+import { merge, events, todayLeagueEvents } from '../web/catalog.js';
 import { validateCatalog, validCover } from '../web/shared-catalog.js';
 const channel = { id: 'sports', name: 'Deportes', streams: ['https://example.com/live.m3u8'] };
 const match = { id: 'match', name: 'Local vs visitante', cover: 'https://example.com/cover.jpg', channelId: 'sports' };
@@ -140,4 +140,19 @@ test('the app updates go to everyone or only to the administrator, nothing else'
   assert.equal(validateCatalog({ ...base, appUpdates: 'admin' }).appUpdates, 'admin');
   assert.equal(validateCatalog({ ...base, appUpdates: 'all' }).appUpdates, 'all');
   assert.throws(() => validateCatalog({ ...base, appUpdates: 'yes' }), /actualizaciones/);
+});
+
+test('home league search selects the Madrid day, tolerates accents and skips other competitions', () => {
+  const data = { ...catalog(), leagues: [{ id: 'l1', name: 'LaLiga Hypermótion' }, { id: 'l2', name: 'Liga F' }],
+    events: [
+      { ...match, id: 'today', leagueId: 'l1', startAt: '2026-11-06T00:00:00Z' },
+      { ...match, id: 'previous-utc-day', leagueId: 'l1', startAt: '2026-11-05T23:05:00Z' },
+      { ...match, id: 'tomorrow-madrid', leagueId: 'l1', startAt: '2026-11-06T23:00:00Z' },
+      { ...match, id: 'other', leagueId: 'l2', startAt: '2026-11-06T00:00:00Z' },
+    ],
+  };
+  const channels = merge(null, data), now = Date.parse('2026-11-06T12:00:00Z');
+  assert.deepEqual(todayLeagueEvents(channels, data, 'LA LIGA HYPERMOTION', now).map(e => e.id), ['previous-utc-day', 'today']);
+  assert.deepEqual(todayLeagueEvents(channels, data, 'hypermotion', now + 2 * 86400000), []);
+  assert.equal(todayLeagueEvents(channels, data, 'Local vs visitante', now), null);
 });

@@ -9,7 +9,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -605,10 +605,12 @@ function showMulti(arg) {
   return true;
 }
 
-function results(query) {
-  const q = query.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
+function results(query, homeSearch) {
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
-  const found = [...events(state.channels, state.custom), ...state.channels].filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
+  const q = norm(query);
+  const matches = (c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q);
+  const league = homeSearch ? todayLeagueEvents(state.channels, state.custom, query) : null;
+  const found = [...(league ?? events(state.channels, state.custom).filter(matches)), ...state.channels.filter(matches)];
   // Films, series and documentaries too, under the channels, once the library has loaded.
   const titles = el('div', { class: 'search-titles' });
   if (libraryShown()) {
@@ -620,7 +622,9 @@ function results(query) {
         el('div', { class: 'rail browse-rail search-posters' }, hits.map(({ section, item }) => browseCard(el, section, item))));
     }).catch(() => {});
   }
-  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : el('p', { class: 'status' }, 'No hay canales con ese nombre.'), titles];
+  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} resultados`)),
+    league?.length === 0 ? el('p', { class: 'status' }, 'No hay eventos de esa liga para hoy.') : null,
+    found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : league === null ? el('p', { class: 'status' }, 'No hay canales con ese nombre.') : null, titles].filter(Boolean);
 }
 
 // ---- Player ----------------------------------------------------------------------------------
@@ -1493,7 +1497,7 @@ async function route() {
   if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
   if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
-  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE || page === 'musica';
+  search.form.hidden = !!sectionByPage(page) || [HALLOWEEN_PAGE, PLATFORM_PAGE, 'musica', 'admin', 'cuenta', 'tv'].includes(page);
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
@@ -1586,10 +1590,15 @@ async function route() {
     return;
   }
   const query = search.value.trim();
-  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
+  view.replaceChildren(...(query ? results(query, !page || page === 'inicio') : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
 }
 
 let typing;
+search.form.addEventListener('submit', event => {
+  event.preventDefault();
+  clearTimeout(typing);
+  route();
+});
 search.addEventListener('input', () => {
   clearTimeout(typing);
   typing = setTimeout(route, 180);

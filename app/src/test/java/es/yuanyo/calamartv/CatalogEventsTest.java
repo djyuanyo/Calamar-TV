@@ -121,4 +121,24 @@ public class CatalogEventsTest {
     assertEquals("A", rows.get(1).name);
     assertEquals("B", rows.get(2).name);
   }
+  @Test public void homeSearchFindsLeagueEventsForTheMadridDay() throws Exception {
+    JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
+    data.put("leagues", new JSONArray()
+        .put(new JSONObject().put("id", "l1").put("name", "LaLiga Hypermótion"))
+        .put(new JSONObject().put("id", "l2").put("name", "Liga F")));
+    JSONArray entries = new JSONArray();
+    String[] dates = {"2026-11-05T23:05:00Z", "2026-11-06T00:00:00Z", "2026-11-06T23:00:00Z", "2026-11-06T00:00:00Z"};
+    for (int i = 0; i < dates.length; i++)
+      entries.put(new JSONObject(base.toString()).put("id", "event-" + i).put("leagueId", i == 3 ? "l2" : "l1").put("startAt", dates[i]));
+    data.put("events", entries);
+    List<Catalog.Channel> channels = Catalog.merge(null, data);
+    long now = SportsCatalog.instant("2026-11-06T12:00:00Z");
+    List<Catalog.Channel> found = Catalog.todayLeagueEvents(channels, data, "LA LIGA HYPERMOTION", now);
+    assertEquals(2, found.size());
+    assertEquals("event-0", found.get(0).id);
+    assertEquals("event-1", found.get(1).id);
+    assertTrue(Catalog.todayLeagueEvents(channels, data, "hypermotion", now + 2 * 86400000L).isEmpty());
+    assertNull(Catalog.todayLeagueEvents(channels, data, "Local vs visitante", now));
+  }
+
 }

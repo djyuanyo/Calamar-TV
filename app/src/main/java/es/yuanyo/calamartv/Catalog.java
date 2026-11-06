@@ -294,6 +294,32 @@ public final class Catalog {
     return out;
   }
 
+  /** Null if the query does not name a league, otherwise its events for the current Madrid day. */
+  static List<Channel> todayLeagueEvents(List<Channel> channels, JSONObject custom, String query, long now) {
+    String wanted = leagueSearchKey(query);
+    JSONArray leagues = custom == null ? null : custom.optJSONArray("leagues");
+    if (wanted.isEmpty() || leagues == null) return null;
+    Set<String> ids = new HashSet<>();
+    for (int i = 0; i < leagues.length(); i++) {
+      JSONObject league = leagues.optJSONObject(i);
+      if (league != null && leagueSearchKey(league.optString("name")).contains(wanted)) ids.add(league.optString("id"));
+    }
+    if (ids.isEmpty()) return null;
+    java.text.SimpleDateFormat format = SportsCatalog.dateFormat("yyyy-MM-dd");
+    String today = format.format(new Date(now));
+    List<Channel> found = new ArrayList<>();
+    for (Channel event : events(channels, custom, now, true)) {
+      long at = SportsCatalog.instant(event.startAt);
+      if (ids.contains(event.leagueId) && at != Long.MAX_VALUE && today.equals(format.format(new Date(at)))) found.add(event);
+    }
+    return found;
+  }
+
+  private static String leagueSearchKey(String text) {
+    return java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD).toLowerCase(Locale.ROOT)
+        .replaceAll("[^\\p{L}\\p{N}]", "");
+  }
+
   /**
    * The league rows of the home page show only this week's events (Monday to Sunday, Madrid), as on the web:
    * a league with matches in two weeks does not appear yet. Events without a league or a date stay, and a

@@ -1075,10 +1075,20 @@ try {
     ...fixture, leagues: [{ id: 'l1', name: 'Liga Uno' }, { id: 'l2', name: 'Liga Dos' }],
     teams: [{ id: 'home', name: 'Local', logo: crestImage }, { id: 'away', name: 'Visitante', logo: crestImage }],
     events: [{ id: 'e1', name: 'Partido Uno', leagueId: 'l1', homeTeamId: 'home', awayTeamId: 'away', cover: crestImage, channelId: 'sport-one', startAt: '2026-11-30T11:00:00Z' },
-      { id: 'e2', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' }],
+      { id: 'e2', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' },
+      { id: 'e3', name: 'Partido de mañana', leagueId: 'l1', channelId: 'sport-one', startAt: '2026-12-01T13:00:00Z' }],
   });
   livePage.on('pageerror', error => errors.push(error.message));
   await livePage.goto(base + '/');
+  const homeSearch = livePage.getByRole('searchbox', { name: 'Buscar canales y eventos' });
+  assert.equal(await homeSearch.getAttribute('autocomplete'), 'off');
+  assert.equal(await homeSearch.getAttribute('data-1p-ignore'), '');
+  await homeSearch.fill('LÍGA UNO');
+  await homeSearch.press('Enter');
+  await livePage.getByRole('heading', { name: /Resultados para/ }).waitFor();
+  assert.equal(await livePage.locator('main .event-card').count(), 1);
+  assert.match(await livePage.locator('main .event-card').innerText(), /Partido Uno/);
+  await homeSearch.fill('');
   await livePage.locator('a[href="#/directo"]').click();
   await livePage.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
   assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
