@@ -412,7 +412,14 @@ try {
   await page.route('https://image.tmdb.org/t/p/w500/TestAvatar.png', route => route.fulfill({ path: 'web/assets/calamar-menciano-tv.png' }));
   await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', async route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
-    const published = await page.evaluate(() => window.__libraryParts || null);
+    let published;
+    try { published = await page.evaluate(() => window.__libraryParts || null); }
+    catch (error) {
+      // A background catalog request can be overtaken by a full navigation in this test.
+      if (!/Execution context was destroyed|Cannot find context with specified id/.test(error.message)) throw error;
+      await route.abort().catch(() => {});
+      return;
+    }
     const doc = published ? (name === 'index' ? published.index : published.parts[name]) : libraryDocs[name];
     return doc ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(doc) } } } }) : route.fulfill({ status: 404, json: {} });
   });
