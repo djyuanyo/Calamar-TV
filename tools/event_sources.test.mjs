@@ -202,3 +202,39 @@ test('keeps foreign, generic and women’s divisions separate from similarly nam
     'ita-1', 'fra-1', 'zico-liga-algerian-ligue-1', 'esp-2']);
   validateCatalog(data);
 });
+
+test('attaches both Spanish divisions to existing fixtures and removes unused Zico leagues', () => {
+  const first = { id: 'first', name: 'LaLiga EA Sports', espn: 'esp.1' };
+  const second = { id: 'second', name: 'LaLiga Hypermotion', espn: 'esp.2' };
+  const duplicateFirst = { id: 'zico-liga-spanish-la-liga', name: 'Spanish La Liga' };
+  const duplicateSecond = { id: 'zico-liga-spanish-la-liga-2', name: 'Spanish La Liga 2' };
+  const teams = [{ id: 'osasuna', name: 'Osasuna' }, { id: 'athletic', name: 'Athletic Club' },
+    { id: 'burgos', name: 'Burgos' }, { id: 'celta', name: 'RC Celta Fortuna' }];
+  const official = id => 'https://bp.zicotv.cc/events/' + id;
+  const manual = 'https://example.com/manual.m3u8';
+  const fixtures = [
+    { id: 'partido-1', matchId: '1', leagueId: first.id, homeTeamId: 'osasuna', awayTeamId: 'athletic',
+      startAt: new Date(kickoff).toISOString(), streams: [manual, official(10)], zicoEventId: '10', zicoStreams: [official(10)] },
+    { id: 'partido-2', matchId: '2', leagueId: second.id, homeTeamId: 'burgos', awayTeamId: 'celta',
+      startAt: new Date(kickoff).toISOString() },
+  ];
+  const eventsBefore = [{ id: 'zico-event-11', name: 'Osasuna vs Athletic Bilbao', leagueId: duplicateFirst.id,
+    streams: [official(11)], zicoStreams: [official(11)], cover: '', imported: true }];
+  const sources = [{ type: 'direct', url: direct }];
+  const leagueRow = (id, league, home, away) => row(id, { league, title: home + ' vs ' + away,
+    home_team: home, away_team: away, sources });
+  const feed = payload(leagueRow(10, 'DAZN', 'Osasuna', 'Athletic Club'),
+    leagueRow(11, 'Spanish La Liga', 'Osasuna', 'Athletic Bilbao'),
+    leagueRow(12, 'Spanish La Liga 2', 'Burgos', 'Celta Fortuna'));
+  const { data, linked } = applyZicoAgenda({ ...catalog, teams, fixtures, events: eventsBefore,
+    leagues: [first, second, duplicateFirst, duplicateSecond],
+    leagueOrder: [second.id, duplicateFirst.id, first.id, duplicateSecond.id] }, feed);
+  assert.equal(linked, 2);
+  assert.deepEqual(data.events, []);
+  assert.deepEqual(data.leagues, [first, second]);
+  assert.deepEqual(data.leagueOrder, [second.id, first.id]);
+  assert.deepEqual(data.fixtures.map(fixture => [fixture.leagueId, fixture.streams]),
+    [[first.id, [manual, official(11)]], [second.id, [official(12)]]]);
+  validateCatalog(data);
+  assert.deepEqual(applyZicoAgenda(data, feed).data, data);
+});

@@ -60,6 +60,7 @@ const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis
 const MATCH_TOLERANCE = 15 * 60000;
 const competitionNames = new Map(COMPETITIONS.flatMap(c => [c.name, ...c.aliases].map(name => [key(name), c.slug])));
 const competitionCodes = new Set(COMPETITIONS.map(c => c.slug));
+const spanishDivisions = new Set(['esp.1', 'esp.2']);
 const ambiguousLeagueNames = new Set(['primera division', 'segunda division', 'primera division femenina',
   'supercopa', 'league cup', 'calcio', 'serie a', 'premier', 'bundesliga', 'champions', 'euro', 'mundial']);
 const feedCompetitionNames = new Map(Object.entries({
@@ -88,10 +89,14 @@ function sourceLeague(name) {
   return { league, region, formerAlias: league === (direct || tail) ? undefined : (direct || tail) };
 }
 const leagueKey = name => sourceLeague(name).league;
-const teamKey = name => key(name)
+const normalizedTeam = name => key(name)
   .replace(/\b(?:f c|a f c|fc|cf|afc|cd|ud|sk|fk|sc|sv|aif|and|de|del)\b/g, ' ')
   .replace(/\brb\b/g, 'red bull').replace(/\bst\b/g, 'saint')
   .replace(/\bkobenhavn\b/g, 'copenhagen').replace(/\s+/g, ' ').trim();
+const teamKey = (name, league) => {
+  const normalized = normalizedTeam(name);
+  return spanishDivisions.has(league) && /^athletic (?:bilbao|club bilbao)$/.test(normalized) ? 'athletic club' : normalized;
+};
 const teamLevel = name => name.match(/\b(?:youth|primavera|reserves?|juniors?|women|femenin[oa]|u ?[0-9]{2}|b|ii)\b/g)?.join(' ') || '';
 
 function teamScore(a, b, sameLeague) {
@@ -131,12 +136,15 @@ export function applyZicoAgenda(catalog, payload) {
   const fixtures = catalog.fixtures || [];
   const leagues = [...(catalog.leagues || [])], teams = [...(catalog.teams || [])];
   const leaguesById = new Map(leagues.map(league => [league.id, league.espn || leagueKey(league.name)]));
-  const teamsById = new Map(teams.map(team => [team.id, teamKey(team.name)]));
-  const manual = [...existing, ...fixtures.map(fixture => fixtureEvent(fixture, catalog))].map(event => ({
-    id: event.id, name: key(event.name), start: Date.parse(event.startAt),
-    league: leaguesById.get(event.leagueId), home: teamsById.get(event.homeTeamId), away: teamsById.get(event.awayTeamId),
-    explicit: new Set([event.zicoEventId, ...(event.streams || []).map(link => zicoEventApi(link)?.split('/').at(-1))]),
-  }));
+  const teamsById = new Map(teams.map(team => [team.id, team.name]));
+  const manual = [...existing, ...fixtures.map(fixture => fixtureEvent(fixture, catalog))].map(event => {
+    const league = leaguesById.get(event.leagueId);
+    const manualLinks = (event.streams || []).filter(link => !event.zicoStreams?.includes(link));
+    const manualEventIds = new Set(manualLinks.map(link => zicoEventApi(link)?.split('/').at(-1)));
+    return { id: event.id, name: key(event.name), start: Date.parse(event.startAt), league,
+      home: teamKey(teamsById.get(event.homeTeamId), league), away: teamKey(teamsById.get(event.awayTeamId), league),
+      manualEventIds, automaticEventId: event.zicoEventId };
+  });
   const occupied = new Set(), assigned = new Map(), events = [];
   let count = 0, skipped = 0, linked = 0;
   const channels = new Map((catalog.channels || []).map(channel => [channel.id, channel]));
@@ -152,8 +160,9 @@ export function applyZicoAgenda(catalog, payload) {
 
     const zicoId = String(row.id);
     const { league, region, formerAlias } = sourceLeague(row.league);
-    const explicit = manual.filter(candidate => candidate.explicit.has(zicoId));
-    const details = { start, league, region, name: key(name), home: teamKey(row.home_team), away: teamKey(row.away_team) };
+    const details = { start, league, region, name: key(name), home: teamKey(row.home_team, league), away: teamKey(row.away_team, league) };
+    const explicit = manual.filter(candidate => candidate.manualEventIds.has(zicoId)
+      || (candidate.automaticEventId === zicoId && (!spanishDivisions.has(league) || candidate.league === league)));
     const ranked = explicit.length ? [] : manual.map(candidate => matchCandidate(candidate, details))
       .filter(Boolean).sort((a, b) => b.score - a.score || a.distance - b.distance);
     const [best, second] = ranked;
@@ -164,9 +173,15 @@ export function applyZicoAgenda(catalog, payload) {
     const page = `${ORIGIN}/events/${row.id}`;
     const zicoStreams = available ? [page] : [];
     if (target || explicit.length || ranked.length) {
-      if (target && available && !assigned.has(target.id)) {
-        assigned.set(target.id, { zicoEventId: zicoId, zicoStreams });
-        linked++;
+      if (target && available) {
+        const previousLink = assigned.get(target.id);
+        // League rows take precedence over duplicate broadcaster listings for these fixtures.
+        const priority = spanishDivisions.has(target.league)
+          ? (target.manualEventIds.has(zicoId) ? 2 : target.league === league ? 1 : 0) : 0;
+        if (!previousLink || priority > previousLink.priority) {
+          assigned.set(target.id, { zicoEventId: zicoId, zicoStreams, priority });
+          if (!previousLink) linked++;
+        }
       }
       if (!available) skipped++;
       continue;
@@ -205,5 +220,11 @@ export function applyZicoAgenda(catalog, payload) {
   };
   const data = { ...catalog, events: [...existing.map(applySignals), ...events], leagues, teams };
   if (catalog.fixtures) data.fixtures = fixtures.map(applySignals);
+  const usedLeagues = new Set([...data.events, ...(data.fixtures || []), ...teams].map(item => item.leagueId));
+  const configuredDivisions = new Set(leagues.filter(l => !l.id.startsWith('zico-liga-')).map(l => leaguesById.get(l.id)));
+  const duplicates = new Set(leagues.filter(l => l.id.startsWith('zico-liga-') && !usedLeagues.has(l.id)
+    && spanishDivisions.has(leagueKey(l.name)) && configuredDivisions.has(leagueKey(l.name))).map(l => l.id));
+  data.leagues = leagues.filter(l => !duplicates.has(l.id));
+  if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !duplicates.has(id));
   return { data, count, skipped, linked };
 }
