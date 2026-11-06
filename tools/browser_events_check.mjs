@@ -829,7 +829,9 @@ try {
   assert.equal(await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).count(), 0, 'next week stays hidden');
   assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).innerText(), /Canal por confirmar/);
   assert.equal(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic img.crest').count(), 2);
-  assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic').getAttribute('style'), /fondo\.jpg/);
+  const leagueBackground = weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-background');
+  assert.match(await leagueBackground.getAttribute('src'), /fondo\.jpg/);
+  assert.equal(await leagueBackground.getAttribute('loading'), 'lazy');
   if (process.env.CALAMAR_SHOTS) await page.screenshot({ path: `${process.env.CALAMAR_SHOTS}/competition-home.png`, fullPage: true });
   await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).click();
   await page.getByText('Canal por confirmar. El partido se verá aquí en cuanto tenga canal.').waitFor();
@@ -1093,7 +1095,7 @@ try {
   await livePage.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
   assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
   assert.equal(await livePage.locator('.league-grid .event-generic img.crest').count(), 2);
-  assert.equal(await livePage.locator('.league-grid .event-generic').first().evaluate(n => getComputedStyle(n).backgroundImage.startsWith('url("data:image/png;base64,')), true);
+  assert.match(await livePage.locator('.league-grid .event-background').first().getAttribute('src'), /^data:image\/png;base64,/);
   assert.equal(await livePage.locator('.live-hero img').getAttribute('src'), './assets/calamar-menciano-tv.png');
   assert.deepEqual(await livePage.locator('main .section-head h2').allTextContents(), ['Liga Uno', 'Liga Dos']);
   assert.equal(await livePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
