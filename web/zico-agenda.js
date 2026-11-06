@@ -26,10 +26,10 @@ function httpsUrl(value) {
   return null;
 }
 
-function addEntity(list, name, badge, prefix) {
+function addEntity(list, name, badge, prefix, generatedOnly = false) {
   const label = key(name);
   if (!label) return '';
-  const existing = list.find(item => key(item.name) === label);
+  const existing = list.find(item => key(item.name) === label && (!generatedOnly || item.id.startsWith(prefix)));
   if (existing) return existing.id;
   const base = prefix + label.replaceAll(' ', '-').slice(0, 85);
   let id = base;
@@ -60,12 +60,36 @@ const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis
 const MATCH_TOLERANCE = 15 * 60000;
 const competitionNames = new Map(COMPETITIONS.flatMap(c => [c.name, ...c.aliases].map(name => [key(name), c.slug])));
 const competitionCodes = new Set(COMPETITIONS.map(c => c.slug));
-const leagueKey = name => {
-  const label = key(name), tail = key(clean(name).split(':').at(-1));
-  return competitionNames.get(label) || competitionNames.get(tail) || label;
+const ambiguousLeagueNames = new Set(['primera division', 'segunda division', 'primera division femenina',
+  'supercopa', 'league cup', 'calcio', 'serie a', 'premier', 'bundesliga', 'champions', 'euro', 'mundial']);
+const feedCompetitionNames = new Map(Object.entries({
+  'spanish la liga': 'esp.1', 'spanish la liga 2': 'esp.2', 'spanish liga f': 'esp.w.1',
+  'english premier league': 'eng.1', 'italian serie a': 'ita.1', 'german bundesliga': 'ger.1',
+  'french ligue 1': 'fra.1', 'portuguese primeira liga': 'por.1', 'dutch eredivisie': 'ned.1',
+  'american major league soccer': 'usa.1', 'argentinian primera division': 'arg.1',
+  'brazilian serie a': 'bra.1', 'saudi arabian pro league': 'sau.1',
+}));
+const competitionRegions = {
+  esp: ['espana', 'spain'], eng: ['inglaterra', 'england'], ita: ['italia', 'italy'],
+  ger: ['alemania', 'germany'], fra: ['francia', 'france'], por: ['portugal'],
+  ned: ['paises bajos', 'holanda', 'netherlands'], usa: ['ee uu', 'estados unidos', 'united states', 'usa'],
+  mex: ['mexico'], arg: ['argentina'], bra: ['brasil', 'brazil'], sau: ['arabia saudi', 'saudi arabia'],
+  uefa: ['europa', 'europe', 'uefa'], fifa: ['mundo', 'world', 'fifa'],
+  conmebol: ['sudamerica', 'south america', 'conmebol'],
 };
+function sourceLeague(name) {
+  const label = key(name);
+  const parts = clean(name).split(':');
+  const region = parts.length > 1 ? key(parts[0]) : '';
+  const direct = feedCompetitionNames.get(label) || competitionNames.get(label);
+  const tail = region ? competitionNames.get(key(parts.at(-1))) : undefined;
+  const validRegion = parts.length === 2 && competitionRegions[tail?.split('.')[0]]?.includes(region);
+  const league = (!ambiguousLeagueNames.has(label) && direct) || (validRegion ? tail : label);
+  return { league, region, formerAlias: league === (direct || tail) ? undefined : (direct || tail) };
+}
+const leagueKey = name => sourceLeague(name).league;
 const teamKey = name => key(name)
-  .replace(/\b(?:f c|a f c|fc|cf|afc|cd|ud|sk|fk|sc|sv|aif|and)\b/g, ' ')
+  .replace(/\b(?:f c|a f c|fc|cf|afc|cd|ud|sk|fk|sc|sv|aif|and|de|del)\b/g, ' ')
   .replace(/\brb\b/g, 'red bull').replace(/\bst\b/g, 'saint')
   .replace(/\bkobenhavn\b/g, 'copenhagen').replace(/\s+/g, ' ').trim();
 const teamLevel = name => name.match(/\b(?:youth|primavera|reserves?|juniors?|women|femenin[oa]|u ?[0-9]{2}|b|ii)\b/g)?.join(' ') || '';
@@ -82,7 +106,8 @@ function matchCandidate(candidate, match) {
   const distance = Math.abs(candidate.start - match.start);
   if (!Number.isFinite(distance) || distance > MATCH_TOLERANCE) return null;
   const sameLeague = !!match.league && match.league === candidate.league;
-  if (!sameLeague && competitionCodes.has(candidate.league) && competitionCodes.has(match.league)) return null;
+  if (!sameLeague && competitionCodes.has(candidate.league)
+      && (competitionCodes.has(match.league) || (match.region && !competitionRegions[candidate.league.split('.')[0]]?.includes(match.region)))) return null;
   const home = teamScore(candidate.home, match.home, sameLeague);
   const away = teamScore(candidate.away, match.away, sameLeague);
   const score = home && away ? home + away : (candidate.name === match.name ? 4 : 0);
@@ -125,9 +150,10 @@ export function applyZicoAgenda(catalog, payload) {
     if (seen.has(id) || occupied.has(match)) continue;
     seen.add(id);
 
-    const zicoId = String(row.id), league = leagueKey(row.league);
+    const zicoId = String(row.id);
+    const { league, region, formerAlias } = sourceLeague(row.league);
     const explicit = manual.filter(candidate => candidate.explicit.has(zicoId));
-    const details = { start, league, name: key(name), home: teamKey(row.home_team), away: teamKey(row.away_team) };
+    const details = { start, league, region, name: key(name), home: teamKey(row.home_team), away: teamKey(row.away_team) };
     const ranked = explicit.length ? [] : manual.map(candidate => matchCandidate(candidate, details))
       .filter(Boolean).sort((a, b) => b.score - a.score || a.distance - b.distance);
     const [best, second] = ranked;
@@ -156,7 +182,10 @@ export function applyZicoAgenda(catalog, payload) {
     const competition = clean(row.league) || sportNames[row.sport_category] || clean(row.sport_category);
     const existingLeague = row.sport_category === 'Soccer' && league
       ? leagues.find(item => !item.id.startsWith('zico-liga-') && leaguesById.get(item.id) === league) : null;
-    const leagueId = existingLeague?.id || old?.leagueId || addEntity(leagues, competition, null, 'zico-liga-');
+    // Undo previous automatic matches that used the division name and ignored a foreign country.
+    const oldLeague = row.sport_category === 'Soccer' && formerAlias && leaguesById.get(old?.leagueId) === formerAlias
+      ? '' : old?.leagueId;
+    const leagueId = existingLeague?.id || oldLeague || addEntity(leagues, competition, null, 'zico-liga-', true);
     const homeTeamId = old?.homeTeamId || addEntity(teams, clean(row.home_team), httpsUrl(row.home_team_badge), 'zico-equipo-');
     const awayTeamId = old?.awayTeamId || addEntity(teams, clean(row.away_team), httpsUrl(row.away_team_badge), 'zico-equipo-');
     events.push({

@@ -167,3 +167,38 @@ test('leaves a manually created event intact and does not attach a signal from a
   assert.equal(other.linked, 0);
   assert.deepEqual(other.data.events[0], original);
 });
+
+test('repairs an imported Czech second division match while Spanish aliases still match Hypermotion', () => {
+  const hypermotion = { id: 'espn-esp.2', name: 'LaLiga Hypermotion', espn: 'esp.2' };
+  const czech = row(114025, { title: 'Dukla Prague - Pribram', league: 'Chequia: Segunda División', sources: [{ type: 'direct', url: direct }] });
+  const spanish = row(4, { league: 'España: Segunda División', sources: [{ type: 'direct', url: direct }] });
+  const official = 'https://bp.zicotv.cc/events/114025';
+  const old = { id: 'zico-event-114025', name: czech.title, leagueId: hypermotion.id, cover,
+    streams: [official, agendaPlayer], zicoStreams: [official, agendaPlayer], imported: true };
+  const feed = payload(czech, spanish);
+  const fresh = applyZicoAgenda({ ...catalog, leagues: [hypermotion], events: [old] }, feed).data;
+  validateCatalog(fresh);
+  assert.equal(fresh.events[0].leagueId, 'zico-liga-chequia-segunda-division');
+  assert.equal(fresh.leagues.find(league => league.id === fresh.events[0].leagueId).name, czech.league);
+  assert.deepEqual(fresh.events[0].streams, [official]);
+  assert.equal(fresh.events[0].cover, cover);
+  assert.equal(fresh.events[1].leagueId, hypermotion.id);
+  assert.deepEqual(applyZicoAgenda(fresh, feed).data, fresh);
+});
+
+test('keeps foreign, generic and women’s divisions separate from similarly named domestic leagues', () => {
+  const leagues = [
+    { id: 'esp-2', name: 'LaLiga Hypermotion', espn: 'esp.2' },
+    { id: 'esp-w', name: 'Liga F', espn: 'esp.w.1' },
+    { id: 'ita-1', name: 'Serie A', espn: 'ita.1' },
+    { id: 'fra-1', name: 'Ligue 1', espn: 'fra.1' },
+  ];
+  const names = ['Segunda División', 'Chequia: Primera División Femenina', 'Serie A', 'Ecuador: Serie A',
+    'Italia: Serie A', 'French Ligue 1', 'Algerian Ligue 1', 'Spanish La Liga 2'];
+  const feed = payload(...names.map((league, i) => row(i + 1, { league, sources: [{ type: 'direct', url: direct }] })));
+  const { data } = applyZicoAgenda({ ...catalog, leagues }, feed);
+  assert.deepEqual(data.events.map(event => event.leagueId), ['zico-liga-segunda-division',
+    'zico-liga-chequia-primera-division-femenina', 'zico-liga-serie-a', 'zico-liga-ecuador-serie-a',
+    'ita-1', 'fra-1', 'zico-liga-algerian-ligue-1', 'esp-2']);
+  validateCatalog(data);
+});
