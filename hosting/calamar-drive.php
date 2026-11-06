@@ -147,11 +147,15 @@ const DRIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 function driveServiceConfig() {
     $path = driveStateDir() . '/calamar-drive-service.json';
     if (!is_file($path) || (fileperms($path) & 0077) !== 0) return null;
-    $config = json_decode((string)@file_get_contents($path, false, null, 0, 16384), true);
-    if (!is_array($config) || ($config['type'] ?? '') !== 'service_account'
+    $config = json_decode((string)@file_get_contents($path, false, null, 0, 262144), true);
+    if (!is_array($config) || !in_array($config['type'] ?? '', array('service_account', 'calamar_oidc'), true)
         || !is_string($config['client_email'] ?? null)
         || !preg_match('/^[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+\.gserviceaccount\.com$/D', $config['client_email'])
         || !is_string($config['private_key'] ?? null)) return null;
+    if ($config['type'] === 'calamar_oidc'
+        && (!is_string($config['audience'] ?? null)
+            || !preg_match('#^//iam\.googleapis\.com/projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+$#D', $config['audience'])
+            || !driveId($config['key_id'] ?? null))) return null;
     $files = $config['calamar_files'] ?? array();
     $folders = $config['calamar_folders'] ?? array();
     if (!is_array($files) || !is_array($folders) || (!$files && !$folders)
@@ -160,13 +164,54 @@ function driveServiceConfig() {
 }
 
 function driveServiceJwt($config, $now) {
-    $encode = static function($value) { return rtrim(strtr(base64_encode($value), '+/', '-_'), '='); };
-    $message = $encode('{"alg":"RS256","typ":"JWT"}') . '.' . $encode(json_encode(array(
+    return driveSignJwt($config['private_key'], array('alg' => 'RS256', 'typ' => 'JWT'), array(
         'iss' => $config['client_email'], 'scope' => DRIVE_OAUTH_SCOPE, 'aud' => DRIVE_OAUTH_TOKEN_URL,
-        'iat' => $now - 30, 'exp' => $now + 3300), JSON_UNESCAPED_SLASHES));
-    if (!@openssl_sign($message, $signature, $config['private_key'], OPENSSL_ALGO_SHA256))
+        'iat' => $now - 30, 'exp' => $now + 3300));
+}
+
+function driveSignJwt($key, $header, $claims) {
+    $encode = static function($value) { return rtrim(strtr(base64_encode($value), '+/', '-_'), '='); };
+    $message = $encode(json_encode($header)) . '.' . $encode(json_encode($claims, JSON_UNESCAPED_SLASHES));
+    if (!@openssl_sign($message, $signature, $key, OPENSSL_ALGO_SHA256))
         throw new RuntimeException('La clave de la cuenta de servicio de Drive no es válida.');
     return $message . '.' . $encode($signature);
+}
+
+function driveAuthPost($url, $body, $contentType, $bearer = '') {
+    $headers = array('Content-Type: ' . $contentType);
+    if ($bearer !== '') $headers[] = 'Authorization: Bearer ' . $bearer;
+    $ch = curl_init($url);
+    $response = '';
+    curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_HTTPHEADER => $headers, CURLOPT_POSTFIELDS => $body,
+        CURLOPT_WRITEFUNCTION => static function($ch, $bytes) use (&$response) {
+            if (strlen($response) + strlen($bytes) > 16384) return 0;
+            $response .= $bytes;
+            return strlen($bytes);
+        }));
+    $received = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return $received && $status === 200 ? json_decode($response, true) : null;
+}
+
+function driveFederatedToken($config, $now) {
+    $jwt = driveSignJwt($config['private_key'], array('alg' => 'RS256', 'typ' => 'JWT', 'kid' => $config['key_id']), array(
+        'iss' => 'https://calamarmenciano.com/calamar-drive-identity', 'sub' => 'calamar-drive-hosting',
+        'aud' => 'https:' . $config['audience'], 'iat' => $now - 10, 'exp' => $now + 300));
+    $federated = driveAuthPost('https://sts.googleapis.com/v1/token', json_encode(array(
+        'audience' => $config['audience'], 'grantType' => 'urn:ietf:params:oauth:grant-type:token-exchange',
+        'requestedTokenType' => 'urn:ietf:params:oauth:token-type:access_token',
+        'subjectTokenType' => 'urn:ietf:params:oauth:token-type:jwt', 'subjectToken' => $jwt,
+        'scope' => 'https://www.googleapis.com/auth/cloud-platform')), 'application/json');
+    $token = $federated['access_token'] ?? null;
+    if (!driveServiceTokenValid($token)) return null;
+    $credentials = driveAuthPost('https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/'
+        . rawurlencode($config['client_email']) . ':generateAccessToken',
+        json_encode(array('scope' => array(DRIVE_OAUTH_SCOPE), 'lifetime' => '900s')), 'application/json', $token);
+    return array('access_token' => $credentials['accessToken'] ?? null,
+        'expires_in' => strtotime($credentials['expireTime'] ?? '') - time());
 }
 
 function driveServiceAccessToken($config) {
@@ -178,33 +223,23 @@ function driveServiceAccessToken($config) {
     try {
         if (!flock($cache, LOCK_EX)) return '';
         $now = time();
-        $identity = hash('sha256', $config['client_email'] . "\n" . $config['private_key']);
+        $identity = hash('sha256', json_encode(array($config['type'], $config['client_email'], $config['private_key'],
+            $config['audience'] ?? null, $config['key_id'] ?? null)));
         $stored = json_decode(stream_get_contents($cache, 16384), true);
         if (($stored['identity'] ?? '') === $identity && ($stored['expires'] ?? 0) > $now + 60
             && driveServiceTokenValid($stored['token'] ?? null)) return $stored['token'];
 
-        $ch = curl_init(DRIVE_OAUTH_TOKEN_URL);
-        $response = '';
-        curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_POSTFIELDS => http_build_query(array(
+        $data = $config['type'] === 'calamar_oidc'
+            ? driveFederatedToken($config, $now)
+            : driveAuthPost(DRIVE_OAUTH_TOKEN_URL, http_build_query(array(
                 'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion' => driveServiceJwt($config, $now))),
-            CURLOPT_WRITEFUNCTION => static function($ch, $bytes) use (&$response) {
-                if (strlen($response) + strlen($bytes) > 16384) return 0;
-                $response .= $bytes;
-                return strlen($bytes);
-            }));
-        $received = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-        $data = json_decode($response, true);
+                'assertion' => driveServiceJwt($config, $now))), 'application/x-www-form-urlencoded');
         $token = $data['access_token'] ?? null;
         $lifetime = (int)($data['expires_in'] ?? 0);
-        if (!$received || $status !== 200 || !driveServiceTokenValid($token) || $lifetime < 60) return '';
+        if (!driveServiceTokenValid($token) || $lifetime < 60) return '';
         rewind($cache);
         if (ftruncate($cache, 0)) fwrite($cache, json_encode(array(
-            'identity' => $identity, 'token' => $token, 'expires' => $now + min($lifetime, 3600))));
+            'identity' => $identity, 'token' => $token, 'expires' => time() + min($lifetime, 3600))));
         return $token;
     } finally { fclose($cache); }
 }
