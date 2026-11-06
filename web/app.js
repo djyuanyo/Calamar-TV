@@ -1448,7 +1448,7 @@ function slidesForGate() {
 function showGate() {
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
   const access = webAccess.current(), user = signedUser();
-  if (!['loading', 'allowed'].includes(access.decision) || !user || (access.authReady && access.user?.uid !== user.uid)
+  if (!['loading', 'allowed'].includes(access.decision) || !user?.uid || (access.authReady && access.user?.uid !== user.uid)
       || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
   const profiles = JSON.stringify(accountProfiles());
   if (gate?.dataset.profiles === profiles) return;
