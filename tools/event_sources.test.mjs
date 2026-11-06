@@ -238,3 +238,31 @@ test('attaches both Spanish divisions to existing fixtures and removes unused Zi
   validateCatalog(data);
   assert.deepEqual(applyZicoAgenda(data, feed).data, data);
 });
+
+test('links Liga F and the four cups to the existing competition fixtures', () => {
+  const examples = [
+    ['esp.w.1', 'Liga F', 'Spanish Liga F', 'Granada', 'Espanyol', 'Granada Femenino', 'Espanyol Femení'],
+    ['uefa.champions', 'Champions League', 'Europa: Champions League', 'Liverpool', 'Real Madrid'],
+    ['uefa.europa', 'Europa League', 'UEFA Europa League', 'Betis', 'Porto'],
+    ['uefa.europa.conf', 'Conference League', 'Europa/Conference League', 'Rayo Vallecano', 'Fiorentina'],
+    ['esp.copa_del_rey', 'Copa del Rey', 'Spanish Copa del Rey', 'Osasuna', 'Athletic Club', 'Osasuna', 'Athletic Bilbao'],
+  ];
+  const leagues = [], teams = [], fixtures = [], rows = [];
+  for (const [index, [code, name, label, home, away, feedHome = home, feedAway = away]] of examples.entries()) {
+    const id = index + 1;
+    leagues.push({ id: code, espn: code, name }, { id: 'zico-liga-' + code, name: label });
+    teams.push({ id: 'home-' + id, name: home }, { id: 'away-' + id, name: away });
+    fixtures.push({ id: 'partido-' + id, matchId: String(id), leagueId: code, homeTeamId: 'home-' + id,
+      awayTeamId: 'away-' + id, startAt: new Date(kickoff).toISOString() });
+    rows.push(row(id, { league: label, title: feedHome + ' vs ' + feedAway, home_team: feedHome,
+      away_team: feedAway, sources: [{ type: 'direct', url: direct }] }));
+  }
+  const distinct = row(6, { league: 'Europa: Champions League - Femenino', sources: [{ type: 'direct', url: direct }] });
+  const { data, linked } = applyZicoAgenda({ ...catalog, leagues, teams, fixtures }, payload(...rows, distinct));
+  validateCatalog(data);
+  assert.equal(linked, 5);
+  assert.deepEqual(data.fixtures.map(fixture => [fixture.leagueId, ...fixture.streams]),
+    examples.map(([code], i) => [code, 'https://bp.zicotv.cc/events/' + (i + 1)]));
+  assert.equal(data.leagues.length, 6);
+  assert.deepEqual(data.events.map(event => event.leagueId), ['zico-liga-europa-champions-league-femenino']);
+});

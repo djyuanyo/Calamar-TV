@@ -1060,11 +1060,9 @@ function open(c, fromRoute = false) {
   for (const n of behind()) n.inert = true;
   controls.wake();
   document.getElementById('player-close').focus();
-  // Pressing «Ver» opens the video in full screen, as in the app. Browsers only allow it right after a
-  // tap, so a link opened directly (fromRoute) starts in the normal player. Events with a Google match
-  // link stay in the page instead, with the match's information, statistics and line-ups under the video.
+  // On a direct link the player already fills the window; browsers need a tap to hide their own bars.
   const withMatch = showMatchCenter(c);
-  if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
+  if (!fromRoute && !withMatch && !c.pending && !controls.isFullscreen()) controls.enterFullscreen();
   // What the profile watches feeds «Recomendado para ti».
   if (c.vod && c.progress?.page) rememberWatched(c.progress.page, c.progress.item);
   // Viewers and visits are counted per channel and event; films and episodes are not.
@@ -1252,9 +1250,9 @@ function showEventAdmin(c) {
 }
 /** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  // Only events with a match link show the match under the video; the rest open in full screen
-  // (for the administrator too, so the event page has its «Seleccionar canal» at the end).
-  const key = c?.event && (c.matchUrl || libraryAdmin) ? String(c.eventId || c.id) : '';
+  // A catalog event can have a video without an ESPN match. That is a player-only view for every account.
+  const id = c?.event && c.matchUrl && c.matchId ? String(c.matchId) : '';
+  const key = id ? String(c.eventId || c.id) : '';
   if (key && key === matchShown) return true;
   clearInterval(matchTimer);
   matchShown = key; matchModel = null; matchTab = 'general';
@@ -1264,10 +1262,8 @@ function showMatchCenter(c) {
   showEventAdmin(key ? c : null);
   if (!key) { matchPanel.replaceChildren(); return false; }
   const base = eventMatchModel(c, state.custom, eventLabel(c, Date.now(), EVENT_STATES).text);
-  const id = c.matchUrl && c.matchId ? String(c.matchId) : '';
-  matchModel = id ? { ...base, note: 'Cargando los datos del partido…' } : base;
+  matchModel = { ...base, note: 'Cargando los datos del partido…' };
   paintMatch();
-  if (!id) return true;
   const load = async () => {
     try {
       const espn = parseMatchCenter(await fetchSummary(id));

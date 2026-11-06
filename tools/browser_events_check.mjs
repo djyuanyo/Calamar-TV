@@ -204,8 +204,17 @@ try {
   await page.goto(base + '/#/evento/' + eventId);
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
-  // A link opened directly (no tap) cannot start in full screen: browsers do not allow it.
+  // A direct link fills the window without match widgets, even for the administrator.
   assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+  assert.equal(await page.locator('#match-center').isVisible(), false);
+  assert.equal(await page.locator('#player').evaluate(n => n.classList.contains('with-match')), false);
+  assert.equal(await page.locator('.player-screen').evaluate(n => Math.round(n.getBoundingClientRect().height)), await page.evaluate(() => innerHeight));
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.locator('.event-card:not(.live-rail *)').filter({ hasText: 'Final' }).click();
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'player');
+  assert.equal(await page.getByRole('tab', { name: 'Estadísticas' }).count(), 0);
+  assert.equal(await page.getByRole('tab', { name: 'Alineaciones' }).count(), 0);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // Old links with the id keep working; a preview page not yet published falls back to the event.
   await page.goto(base + '/evento/final/');
   await page.waitForURL(/#\/evento\/final$/);

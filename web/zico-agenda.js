@@ -60,11 +60,14 @@ const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis
 const MATCH_TOLERANCE = 15 * 60000;
 const competitionNames = new Map(COMPETITIONS.flatMap(c => [c.name, ...c.aliases].map(name => [key(name), c.slug])));
 const competitionCodes = new Set(COMPETITIONS.map(c => c.slug));
-const spanishDivisions = new Set(['esp.1', 'esp.2']);
+const linkedCompetitions = new Set(['esp.1', 'esp.2', 'esp.w.1', 'uefa.champions',
+  'uefa.europa', 'uefa.europa.conf', 'esp.copa_del_rey']);
 const ambiguousLeagueNames = new Set(['primera division', 'segunda division', 'primera division femenina',
   'supercopa', 'league cup', 'calcio', 'serie a', 'premier', 'bundesliga', 'champions', 'euro', 'mundial']);
 const feedCompetitionNames = new Map(Object.entries({
   'spanish la liga': 'esp.1', 'spanish la liga 2': 'esp.2', 'spanish liga f': 'esp.w.1',
+  'spanish copa del rey': 'esp.copa_del_rey', 'europa conference league': 'uefa.europa.conf',
+  'uefa europa conference league': 'uefa.europa.conf',
   'english premier league': 'eng.1', 'italian serie a': 'ita.1', 'german bundesliga': 'ger.1',
   'french ligue 1': 'fra.1', 'portuguese primeira liga': 'por.1', 'dutch eredivisie': 'ned.1',
   'american major league soccer': 'usa.1', 'argentinian primera division': 'arg.1',
@@ -95,7 +98,8 @@ const normalizedTeam = name => key(name)
   .replace(/\bkobenhavn\b/g, 'copenhagen').replace(/\s+/g, ' ').trim();
 const teamKey = (name, league) => {
   const normalized = normalizedTeam(name);
-  return spanishDivisions.has(league) && /^athletic (?:bilbao|club bilbao)$/.test(normalized) ? 'athletic club' : normalized;
+  const club = league === 'esp.w.1' ? normalized.replace(/ (?:women|femenin[oa]|femeni|fem|w)$/, '') : normalized;
+  return league?.startsWith('esp.') && /^athletic (?:bilbao|club bilbao)$/.test(club) ? 'athletic club' : club;
 };
 const teamLevel = name => name.match(/\b(?:youth|primavera|reserves?|juniors?|women|femenin[oa]|u ?[0-9]{2}|b|ii)\b/g)?.join(' ') || '';
 
@@ -162,7 +166,7 @@ export function applyZicoAgenda(catalog, payload) {
     const { league, region, formerAlias } = sourceLeague(row.league);
     const details = { start, league, region, name: key(name), home: teamKey(row.home_team, league), away: teamKey(row.away_team, league) };
     const explicit = manual.filter(candidate => candidate.manualEventIds.has(zicoId)
-      || (candidate.automaticEventId === zicoId && (!spanishDivisions.has(league) || candidate.league === league)));
+      || (candidate.automaticEventId === zicoId && (!linkedCompetitions.has(league) || candidate.league === league)));
     const ranked = explicit.length ? [] : manual.map(candidate => matchCandidate(candidate, details))
       .filter(Boolean).sort((a, b) => b.score - a.score || a.distance - b.distance);
     const [best, second] = ranked;
@@ -176,7 +180,7 @@ export function applyZicoAgenda(catalog, payload) {
       if (target && available) {
         const previousLink = assigned.get(target.id);
         // League rows take precedence over duplicate broadcaster listings for these fixtures.
-        const priority = spanishDivisions.has(target.league)
+        const priority = linkedCompetitions.has(target.league)
           ? (target.manualEventIds.has(zicoId) ? 2 : target.league === league ? 1 : 0) : 0;
         if (!previousLink || priority > previousLink.priority) {
           assigned.set(target.id, { zicoEventId: zicoId, zicoStreams, priority });
@@ -221,9 +225,9 @@ export function applyZicoAgenda(catalog, payload) {
   const data = { ...catalog, events: [...existing.map(applySignals), ...events], leagues, teams };
   if (catalog.fixtures) data.fixtures = fixtures.map(applySignals);
   const usedLeagues = new Set([...data.events, ...(data.fixtures || []), ...teams].map(item => item.leagueId));
-  const configuredDivisions = new Set(leagues.filter(l => !l.id.startsWith('zico-liga-')).map(l => leaguesById.get(l.id)));
+  const configuredCompetitions = new Set(leagues.filter(l => !l.id.startsWith('zico-liga-')).map(l => leaguesById.get(l.id)));
   const duplicates = new Set(leagues.filter(l => l.id.startsWith('zico-liga-') && !usedLeagues.has(l.id)
-    && spanishDivisions.has(leagueKey(l.name)) && configuredDivisions.has(leagueKey(l.name))).map(l => l.id));
+    && linkedCompetitions.has(leagueKey(l.name)) && configuredCompetitions.has(leagueKey(l.name))).map(l => l.id));
   data.leagues = leagues.filter(l => !duplicates.has(l.id));
   if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !duplicates.has(id));
   return { data, count, skipped, linked };
