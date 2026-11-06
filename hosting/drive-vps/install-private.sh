@@ -20,7 +20,7 @@ install -d -m 0755 /opt/calamar-drive /etc/calamar-drive
 install -d -o calamar-drive -g www-data -m 0700 /var/lib/calamar-drive
 install -m 0644 "$source_dir"/../calamar-{drive,http-source}.php /opt/calamar-drive/
 install -m 0644 "$source_dir/drive-fpm.conf" "$source_dir/nginx-drive-location.conf" /etc/calamar-drive/
-install -m 0644 "$source_dir/../calamar-drive.service" /etc/systemd/system/
+install -m 0644 "$source_dir/calamar-drive.service" /etc/systemd/system/
 install -m 0644 "$source_dir/nginx-drive-local.conf" /etc/nginx/sites-available/calamar-drive-local
 local_config=/etc/nginx/sites-enabled/calamar-drive-local
 if [[ ! -e "$local_config" && ! -L "$local_config" ]]; then
