@@ -33,7 +33,13 @@ try{
   await page.getByRole('tab',{name:'Crear cuenta',exact:true}).click();
   assert.equal(await oldAccountNotes.count(),0);
   await page.getByPlaceholder('Tu email').fill('pending@example.com');
-  await page.locator('input[autocomplete="new-password"]').fill('temporary-password');
+  await page.getByPlaceholder('Contraseña',{exact:true}).fill('temporary-password');
+  const confirmation = page.getByPlaceholder('Repite la contraseña',{exact:true});
+  await confirmation.fill('other-password');
+  await page.getByRole('button',{name:'Crear cuenta',exact:true}).click();
+  await page.getByText('Las contraseñas no coinciden.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__verificationMail),undefined);
+  await confirmation.fill('temporary-password');
   await page.getByRole('button',{name:'Crear cuenta',exact:true}).click();
   const verification = page.getByRole('dialog',{name:'Verifica tu correo'});
   await verification.getByText(/pending@example.com.*spam/).waitFor();

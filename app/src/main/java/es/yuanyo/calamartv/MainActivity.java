@@ -2125,7 +2125,8 @@ public class MainActivity extends Activity {
     title.setPadding(0, 0, 0, dp(4));
     body.addView(title);
     if (!item.titleLogo.isEmpty()) {
-      ImageView titleArt = new ImageView(this) {
+      ImageView titleArt = new androidx.appcompat.widget.AppCompatImageView(
+          new android.view.ContextThemeWrapper(this, androidx.appcompat.R.style.Theme_AppCompat)) {
         @Override public void setImageBitmap(Bitmap bitmap) {
           super.setImageBitmap(bitmap);
           setVisibility(bitmap == null ? View.GONE : View.VISIBLE);
