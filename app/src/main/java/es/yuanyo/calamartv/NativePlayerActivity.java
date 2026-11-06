@@ -290,7 +290,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           status.setText("Reproduciendo en Chromecast. Pulsa Compartir pantalla para ver los controles de la TV.");
         },
         // A film or episode goes on on the TV at the minute it is playing here.
-        () -> progressEntry == null ? -1 : player == null ? 0 : player.getCurrentPosition());
+        () -> progressEntry == null ? -1 : player == null ? 0 : player.getCurrentPosition(),
+        () -> player == null ? null : player.getAudioFormat());
     HorizontalScrollView scroll = new HorizontalScrollView(this);
     scroll.setHorizontalScrollBarEnabled(false);
     scroll.addView(controls);
@@ -1482,7 +1483,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     browser.getSettings().setAllowContentAccess(false);
     android.webkit.CookieManager.getInstance().setAcceptCookie(true);
     browser.setWebViewClient(
-        new WebViewClient() {
+        new PlaybackWebClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
             return !url.startsWith("https://") || AppSources.webOnly(url)
@@ -1558,7 +1559,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     browser.getSettings().setAllowContentAccess(false);
     final int request = generation;
     browser.setWebViewClient(
-        new WebViewClient() {
+        new PlaybackWebClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
             // This player has no navigation; media requests use the browser's normal network stack.
@@ -1603,6 +1604,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)));
     } catch (android.content.ActivityNotFoundException missing) {
       Toast.makeText(this, "No hay navegador instalado", Toast.LENGTH_LONG).show();
+    }
+  }
+
+  private class PlaybackWebClient extends WebViewClient {
+    @Override
+    public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+      stage.removeView(view);
+      view.destroy();
+      if (browser == view) {
+        browser = null;
+        if (active) problem("El reproductor web se ha cerrado. Pulsa Refrescar para volver a abrirlo.");
+      }
+      return true;
     }
   }
 

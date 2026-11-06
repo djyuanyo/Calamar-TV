@@ -36,6 +36,11 @@ try{
   await page.getByPlaceholder('Contraseña',{exact:true}).fill('temporary-password');
   const confirmation = page.getByPlaceholder('Repite la contraseña',{exact:true});
   await confirmation.fill('other-password');
+  await page.getByRole('button',{name:'Mostrar la confirmación de contraseña',exact:true}).click();
+  assert.equal(await confirmation.getAttribute('type'),'text');
+  assert.equal(await page.getByPlaceholder('Contraseña',{exact:true}).getAttribute('type'),'password');
+  await page.getByRole('button',{name:'Ocultar la confirmación de contraseña',exact:true}).click();
+  assert.equal(await confirmation.getAttribute('type'),'password');
   await page.getByRole('button',{name:'Crear cuenta',exact:true}).click();
   await page.getByText('Las contraseñas no coinciden.',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.__verificationMail),undefined);

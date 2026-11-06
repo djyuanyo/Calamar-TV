@@ -19,6 +19,18 @@ export function castSource(address) {
   } catch { return null; }
 }
 
+/** Only our provider bridges understand the audio preference on a Cast request. */
+export function castAudioUrl(address, track) {
+  const url = new URL(address);
+  if (url.origin !== 'https://calamarmenciano.com' || !['/calamar-lulu.php', '/calamar-vidara.php'].includes(url.pathname)
+      || url.searchParams.get('hls') !== '1') return address;
+  const lang = track?.lang || track?.language || '';
+  const label = track?.name || track?.label || '';
+  url.searchParams.set('cast_audio', /^(?!und$)[a-z]{2,3}(?:[-_][a-z0-9]{2,8}){0,2}$/i.test(lang) ? lang : 'es-ES');
+  if (label && label.length <= 80) url.searchParams.set('cast_audio_name', label);
+  return url.href;
+}
+
 const isList = (address) => { try { return new URL(address).pathname.toLowerCase().endsWith('.m3u8'); } catch { return false; } };
 
 export function initCast({ button, toggle, disconnect, getSource, onSent, onStatus, onDisconnect,
@@ -34,7 +46,7 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
   };
   const load = async (source, selected, at) => {
     const api = win.chrome.cast.media;
-    const media = new api.MediaInfo(source.url, source.type);
+    const media = new api.MediaInfo(selected.vod ? castAudioUrl(source.url, selected.audio) : source.url, source.type);
     media.streamType = source.live ? api.StreamType.LIVE : api.StreamType.BUFFERED;
     media.metadata = new api.GenericMediaMetadata();
     media.metadata.title = selected.title || 'Calamar TV';
@@ -63,15 +75,17 @@ export function initCast({ button, toggle, disconnect, getSource, onSent, onStat
       if (getSource()?.url !== selected.url) return;
       // A film is not live, and it goes on on the TV at the minute it was playing here.
       if (selected.vod) source = { ...source, live: false };
-      const at = selected.vod ? Number(getSource()?.position) || 0 : 0;
-      try { await load(source, selected, at); }
+      const playing = getSource();
+      const at = selected.vod ? Number(playing?.position) || 0 : 0;
+      const media = { ...selected, audio: playing?.audio };
+      try { await load(source, media, at); }
       catch (error) {
         // A list whose server does not let the TV read it (no CORS): once more, through the hosting.
         if (!list || source.url !== selected.url || (typeof error === 'string' ? error : error?.code) === 'cancel') throw error;
         status('Chromecast no puede leer el canal directamente. Probando a través del hosting…');
         const relayed = await relayList(selected.url, { onStatus: status });
         if (getSource()?.url !== selected.url) return;
-        await load(selected.vod ? { ...relayed, live: false } : relayed, selected, at);
+        await load(selected.vod ? { ...relayed, live: false } : relayed, media, at);
       }
       onSent?.();
       status('Reproduciendo en Chromecast. Usa los controles TV para pausar o desconectar.');

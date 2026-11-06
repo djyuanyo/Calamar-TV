@@ -485,6 +485,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
       root.classList.remove('is-buffering', 'idle');
       refreshTime();
     },
+    selectedAudio: () => audioList()[audioNow()],
     enterFullscreen,
     leaveFullscreen,
     isFullscreen: () => !!fullscreenElement(),

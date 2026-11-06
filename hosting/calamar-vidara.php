@@ -23,6 +23,51 @@ function vidaraHlsUrl($data, $code) {
     return $url;
 }
 
+/** Only the playlist is fetched here. Chromecast reads variants and segments from Vidara. */
+function vidaraCastPlaylist($url, $language, $label) {
+    require_once __DIR__ . '/calamar-http-source.php';
+    require_once __DIR__ . '/calamar-cast-audio.php';
+    $target = publicTarget($url, null, true);
+    if (!$target) return;
+    $body = '';
+    $ip = $target['ip'];
+    $pinned = strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip;
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_RESOLVE => [$target['host'] . ':443:' . $pinned],
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 8,
+        CURLOPT_REFERER => VIDARA_PLAYER . '/', CURLOPT_ENCODING => '',
+        CURLOPT_WRITEFUNCTION => function ($handle, $chunk) use (&$body) {
+            if (strlen($body) + strlen($chunk) > 524288) return 0;
+            $body .= $chunk;
+            return strlen($chunk);
+        },
+    ]);
+    $received = curl_exec($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    if (!$received || $status !== 200 || strpos($body, '#EXTM3U') !== 0 || strpos($body, '#EXT-X-STREAM-INF:') === false) return;
+    $selected = castAudioManifest($body, $language, $label);
+    if ($selected === str_replace("\r\n", "\n", $body)) return;
+    $lines = explode("\n", $selected);
+    foreach ($lines as &$line) {
+        if ($line !== '' && $line[0] !== '#') {
+            $line = redirectTarget($url, trim($line));
+            if ($line === null) return;
+        } else {
+            $line = preg_replace_callback('/URI="([^"]+)"/', function ($match) use ($url) {
+                $absolute = redirectTarget($url, $match[1]);
+                return $absolute === null ? $match[0] : 'URI="' . $absolute . '"';
+            }, $line);
+        }
+    }
+    unset($line);
+    header('Content-Type: application/vnd.apple.mpegurl');
+    echo implode("\n", $lines);
+    exit;
+}
+
 function vidaraPlayback($code) {
     if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,24}$/D', $code)) vidaraReply(['error' => 'video_code'], 400);
     if (!function_exists('curl_init')) vidaraReply(['error' => 'curl'], 503);
@@ -45,6 +90,7 @@ function vidaraPlayback($code) {
     curl_close($curl);
     $url = $received && $status === 200 ? vidaraHlsUrl(json_decode($body, true), $code) : null;
     if (!$url) vidaraReply(['error' => 'vidara_playback', 'upstream_http' => $status], 502);
+    if (isset($_GET['cast_audio'])) vidaraCastPlaylist($url, $_GET['cast_audio'], $_GET['cast_audio_name'] ?? '');
     header('Location: ' . $url, true, 302);
     exit;
 }

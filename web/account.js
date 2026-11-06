@@ -40,13 +40,16 @@ export function signIn(el, f, done) {
     const password = el('input', { type: 'password', autocomplete: creating ? 'new-password' : 'current-password', minlength: '6', required: true, placeholder: 'Contraseña' });
     const confirmation = creating ? el('input', { type: 'password', autocomplete: 'new-password', required: true, placeholder: 'Repite la contraseña' }) : null;
     const name = el('input', { type: 'text', autocomplete: 'given-name', placeholder: 'Cómo te llamas', maxlength: '24' });
-    const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': 'Mostrar la contraseña', onclick: () => {
-      const shown = password.type === 'text';
-      password.type = shown ? 'password' : 'text';
-      eye.setAttribute('aria-label', shown ? 'Mostrar la contraseña' : 'Ocultar la contraseña');
-      eye.classList.toggle('on', !shown);
-    } });
-    eye.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    const passwordInput = (input, label) => {
+      const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': `Mostrar ${label}`, onclick: () => {
+        const shown = input.type === 'text';
+        input.type = shown ? 'password' : 'text';
+        eye.setAttribute('aria-label', shown ? `Mostrar ${label}` : `Ocultar ${label}`);
+        eye.classList.toggle('on', !shown);
+      } });
+      eye.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+      return el('span', { class: 'auth-password' }, input, eye);
+    };
     const forgot = creating ? null : el('button', { class: 'auth-link', type: 'button', onclick: async () => {
       if (!email.value.trim()) { say('Escribe tu email y vuelve a pulsar «¿Olvidaste tu contraseña?».', true); email.focus(); return; }
       try { await f.resetPassword(email.value.trim()); say(`Te hemos enviado un correo a ${email.value.trim()} para cambiar la contraseña.`); }
@@ -110,8 +113,8 @@ export function signIn(el, f, done) {
       } },
         creating ? field('Nombre', name) : null,
         field('Email', email),
-        field('Contraseña', el('span', { class: 'auth-password' }, password, eye), forgot),
-        confirmation ? field('Repite la contraseña', confirmation) : null,
+        field('Contraseña', passwordInput(password, 'la contraseña'), forgot),
+        confirmation ? field('Repite la contraseña', passwordInput(confirmation, 'la confirmación de contraseña')) : null,
         submit, resend),
       note);
   };

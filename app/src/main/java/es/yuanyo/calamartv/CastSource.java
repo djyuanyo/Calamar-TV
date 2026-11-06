@@ -44,10 +44,25 @@ public final class CastSource {
     return address != null && address.equals(driveCompatibility(address));
   }
 
+  /** The provider bridge can prefer the sender's audio in an HLS master playlist. */
+  static String withAudio(String address, String language, String label) {
+    if (!ProviderPlayers.isVidaraStream(address) && !luluHls(address)) return address;
+    if (language == null || "und".equalsIgnoreCase(language) || !language.matches("(?i)[a-z]{2,3}([-_][a-z0-9]{2,8}){0,2}"))
+      language = "es-ES";
+    String preferred = address + "&cast_audio=" + language;
+    if (label == null || label.isEmpty() || label.length() > 80) return preferred;
+    try { return preferred + "&cast_audio_name=" + java.net.URLEncoder.encode(label, "UTF-8"); }
+    catch (java.io.UnsupportedEncodingException impossible) { return preferred; }
+  }
+
+  private static boolean luluHls(String address) {
+    return address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1");
+  }
+
   /** A provider film through the hosting: an HLS list the TV can read, not live. */
   public static boolean onDemand(String address) {
     return isDriveCompatibility(address) || ProviderPlayers.isVidaraStream(address)
-        || (address != null && address.startsWith(Library.LULU_ENDPOINT + "?code=") && address.contains("&hls=1"));
+        || luluHls(address);
   }
 
   public static boolean live(String type) {

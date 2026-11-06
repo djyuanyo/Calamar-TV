@@ -15,7 +15,7 @@ export function updateAppDownload() {
     const copy = document.createElement('span');
     copy.className = 'download-app-copy';
     const label = document.createElement('strong');
-    label.textContent = 'Descargar app Android';
+    label.textContent = 'Descargar APP Android';
     const platform = document.createElement('small');
     platform.textContent = 'Android y Android TV';
     platform.setAttribute('aria-hidden', 'true');

@@ -667,7 +667,7 @@ const cast = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo, vod: current.vod, position: video.currentTime } : null,
+  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo, vod: current.vod, position: video.currentTime, audio: controls.selectedAudio() } : null,
   onSent: () => { casting = true; stop(); watching?.privateViewing.watching(true); },
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { casting = false; if (current && webAccess.current().decision === 'allowed') playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },

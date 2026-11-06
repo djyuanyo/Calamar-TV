@@ -2072,7 +2072,17 @@ public class MainActivity extends Activity {
       preview.getSettings().setMediaPlaybackRequiresUserGesture(false);
       preview.getSettings().setAllowFileAccess(false);
       preview.getSettings().setAllowContentAccess(false);
+      Runnable disposePreview = () -> {
+        if (trailerPreview == preview) trailerPreview = null;
+        if (preview.getParent() != hero) return;
+        hero.removeView(preview);
+        preview.destroy();
+      };
       preview.setWebViewClient(new android.webkit.WebViewClient() {
+        @Override public boolean onRenderProcessGone(android.webkit.WebView view, android.webkit.RenderProcessGoneDetail detail) {
+          disposePreview.run();
+          return true;
+        }
         @Override public void onReceivedError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
           if (request.isForMainFrame()) view.setVisibility(View.GONE);
         }
@@ -2082,11 +2092,7 @@ public class MainActivity extends Activity {
       });
       hero.addView(preview, new FrameLayout.LayoutParams(-1, -1));
       preview.loadUrl("https://djyuanyo.github.io/Calamar-TV/trailer.html?v=" + item.trailer);
-      dialog.setOnDismissListener(d -> {
-        if (trailerPreview == preview) trailerPreview = null;
-        preview.stopLoading(); preview.loadUrl("about:blank");
-        hero.removeView(preview); preview.destroy();
-      });
+      dialog.setOnDismissListener(d -> disposePreview.run());
     } else preview = null;
     View scrim = new View(this);
     scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
@@ -2611,6 +2617,14 @@ public class MainActivity extends Activity {
     web.setBackgroundColor(0xff000000);
     final String host = Uri.parse(address).getHost();
     web.setWebViewClient(new android.webkit.WebViewClient() {
+      @Override public boolean onRenderProcessGone(android.webkit.WebView view, android.webkit.RenderProcessGoneDetail detail) {
+        box.removeView(view);
+        view.destroy();
+        dialog.dismiss();
+        Toast.makeText(MainActivity.this, "El reproductor web se ha cerrado. Vuelve a abrir el vídeo.", Toast.LENGTH_LONG).show();
+        return true;
+      }
+
       @Override
       public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
         // Only AnonMP4's own pages: pop-ups and adverts that try to open other sites stay closed.
@@ -2635,7 +2649,7 @@ public class MainActivity extends Activity {
     AudienceSession audience = new AudienceSession(this, target, null, title, null);
     Runnable measure = new Runnable() {
       @Override public void run() {
-        if (!dialog.isShowing()) return;
+        if (!dialog.isShowing() || web.getParent() != box) return;
         if (resumed && contentAdmitted) {
           web.evaluateJavascript("(function(){var v=document.querySelector('video');return !!v&&!v.paused&&v.readyState>=2})()",
               playing -> audience.watching(resumed && contentAdmitted && "true".equals(playing)));
@@ -2646,8 +2660,10 @@ public class MainActivity extends Activity {
     dialog.setOnDismissListener(d -> {
       handler.removeCallbacks(measure);
       audience.close();
-      web.loadUrl("about:blank");
-      web.destroy();
+      if (web.getParent() == box) {
+        box.removeView(web);
+        web.destroy();
+      }
     });
     audience.open();
     handler.post(measure);

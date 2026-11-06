@@ -27,6 +27,7 @@ public final class CastControls {
   private final String title;
   private final Runnable sent;
   private final Position position;
+  private final java.util.function.Supplier<androidx.media3.common.Format> audio;
   private SessionManager sessions;
   private LinearLayout control;
   private String lastSent;
@@ -37,13 +38,10 @@ public final class CastControls {
   private final java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
 
   public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
-      String title, Runnable sent) {
-    this(activity, row, source, title, sent, () -> -1);
-  }
-
-  public CastControls(FragmentActivity activity, LinearLayout row, SourceProvider source,
-      String title, Runnable sent, Position position) {
-    this.activity = activity; this.source = source; this.title = title; this.sent = sent; this.position = position;
+      String title, Runnable sent, Position position,
+      java.util.function.Supplier<androidx.media3.common.Format> audio) {
+    this.activity = activity; this.source = source; this.title = title; this.sent = sent;
+    this.position = position; this.audio = audio;
     try {
       sessions = CastContext.getSharedInstance(activity).getSessionManager();
       route = new MediaRouteButton(activity) {
@@ -116,7 +114,12 @@ public final class CastControls {
     String type = CastSource.contentType(address);
     // An HTTP list cannot load on the receiver's HTTPS page: the hosting hands it out over HTTPS.
     if (type != null && !(CastSource.list(address) && address.regionMatches(true, 0, "http://", 0, 7))) {
-      load(address, type, address, at, CastSource.list(address));
+      String media = address;
+      if (at >= 0) {
+        androidx.media3.common.Format track = audio.get();
+        media = CastSource.withAudio(address, track == null ? null : track.language, track == null ? null : track.label);
+      }
+      load(media, type, address, at, CastSource.list(address));
       return;
     }
     prepare(address, at);

@@ -594,36 +594,11 @@ public class AccountActivity extends Activity {
     passLabel.setPadding(0, dp(14), 0, dp(4));
     passRow.addView(passLabel, new LinearLayout.LayoutParams(0, -2, 1));
     card.addView(passRow, new LinearLayout.LayoutParams(-1, -2));
-    FrameLayout passBox = new FrameLayout(this);
-    final EditText password = new EditText(this);
-    password.setHint("Contraseña");
-    password.setSingleLine(true);
-    password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-    password.setTextColor(Ui.FG);
-    password.setHintTextColor(0x77ffffff);
-    password.setBackground(Ui.focusFill(this, 0xff0f141b, 0xff0f141b, Ui.ACC, 12, 0x1fffffff));
-    password.setPadding(dp(16), dp(14), dp(56), dp(14));
-    passBox.addView(password, new FrameLayout.LayoutParams(-1, -2));
-    ImageView eye = new ImageView(this);
-    eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, 0x99ffffff, dp(22)));
-    eye.setScaleType(ImageView.ScaleType.CENTER);
-    eye.setFocusable(true);
-    eye.setClickable(true);
-    eye.setContentDescription("Mostrar la contraseña");
-    eye.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
-    eye.setOnClickListener(v -> {
-      boolean shown = (password.getInputType() & InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
-      password.setInputType(InputType.TYPE_CLASS_TEXT | (shown ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD));
-      password.setSelection(password.getText().length());
-      eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, shown ? 0x99ffffff : Ui.ACC, dp(22)));
-      eye.setContentDescription(shown ? "Mostrar la contraseña" : "Ocultar la contraseña");
-    });
-    passBox.addView(eye, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END | Gravity.CENTER_VERTICAL));
-    card.addView(passBox, new LinearLayout.LayoutParams(-1, -2));
+    final EditText password = passwordField(card, "Contraseña", "la contraseña");
     final EditText confirmation;
     if (creating) {
       fieldLabel(card, "REPITE LA CONTRASEÑA");
-      confirmation = field(card, "Repite la contraseña", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+      confirmation = passwordField(card, "Repite la contraseña", "la confirmación de contraseña");
     } else confirmation = null;
     if (!creating) {
       TextView forgot = label("¿Olvidaste tu contraseña?", 13, 0xff8ab4ff);
@@ -651,6 +626,36 @@ public class AccountActivity extends Activity {
       resend.setOnClickListener(v -> emailAction(email, password, null, null, true));
       card.addView(resend, new LinearLayout.LayoutParams(-1, dp(48)));
     }
+  }
+
+  private EditText passwordField(LinearLayout card, String hint, String description) {
+    FrameLayout passBox = new FrameLayout(this);
+    final EditText password = new EditText(this);
+    password.setHint(hint);
+    password.setSingleLine(true);
+    password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    password.setTextColor(Ui.FG);
+    password.setHintTextColor(0x77ffffff);
+    password.setBackground(Ui.focusFill(this, 0xff0f141b, 0xff0f141b, Ui.ACC, 12, 0x1fffffff));
+    password.setPadding(dp(16), dp(14), dp(56), dp(14));
+    passBox.addView(password, new FrameLayout.LayoutParams(-1, -2));
+    ImageView eye = new ImageView(this);
+    eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, 0x99ffffff, dp(22)));
+    eye.setScaleType(ImageView.ScaleType.CENTER);
+    eye.setFocusable(true);
+    eye.setClickable(true);
+    eye.setContentDescription("Mostrar " + description);
+    eye.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
+    eye.setOnClickListener(v -> {
+      boolean shown = (password.getInputType() & InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+      password.setInputType(InputType.TYPE_CLASS_TEXT | (shown ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD));
+      password.setSelection(password.getText().length());
+      eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, shown ? 0x99ffffff : Ui.ACC, dp(22)));
+      eye.setContentDescription(shown ? "Mostrar " + description : "Ocultar " + description);
+    });
+    passBox.addView(eye, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END | Gravity.CENTER_VERTICAL));
+    card.addView(passBox, new LinearLayout.LayoutParams(-1, -2));
+    return password;
   }
 
   private void emailAction(EditText email, EditText password, EditText confirmation, EditText name, boolean resend) {
