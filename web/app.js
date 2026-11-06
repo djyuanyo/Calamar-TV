@@ -1497,7 +1497,7 @@ async function route() {
   if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
   if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
-  search.form.hidden = !!sectionByPage(page) || [HALLOWEEN_PAGE, PLATFORM_PAGE, 'musica', 'admin', 'cuenta', 'tv'].includes(page);
+  search.closest('.search').hidden = !!sectionByPage(page) || [HALLOWEEN_PAGE, PLATFORM_PAGE, 'musica', 'admin', 'cuenta', 'tv'].includes(page);
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
@@ -1594,7 +1594,7 @@ async function route() {
 }
 
 let typing;
-search.form.addEventListener('submit', event => {
+search.form?.addEventListener('submit', event => {
   event.preventDefault();
   clearTimeout(typing);
   route();
