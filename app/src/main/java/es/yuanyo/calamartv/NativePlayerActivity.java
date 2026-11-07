@@ -537,8 +537,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (hasFocus && fullscreen && (sourceDialog == null || !sourceDialog.isShowing()) && (multiPicker == null || !multiPicker.isShowing())) applySystemBars(true);
   }
 
+  private boolean administrator() {
+    return SharedCatalog.administrator(Profiles.user(this));
+  }
+
   private void chooseDns() {
-    if (!active || isFinishing()) return;
+    if (!active || isFinishing() || !administrator()) return;
     final boolean restoreFullscreen = fullscreen;
     if (restoreFullscreen) applySystemBars(false);
     DnsProvider[] providers = DnsProvider.values();
@@ -826,7 +830,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                             + reason
                             + ". Motor: "
                             + transport.name()
-                            + ". Pulsa Diagnóstico.");
+                            + (administrator() ? ". Pulsa Diagnóstico." : ". Vuelve a intentarlo o selecciona otra fuente."));
                   }
                 });
           }
@@ -1235,7 +1239,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void diagnoseAddress(String address) {
-    if (diagnosing) return;
+    if (diagnosing || !administrator()) return;
     diagnosing = true;
     final String target = address;
     final String previous =
@@ -1336,6 +1340,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void chooseDiagnostic() {
+    if (!administrator()) return;
     List<String> addresses = new ArrayList<>();
     if (zicoPage()) addresses.add(VideoResolver.eventApi(pageUrl) != null
         ? Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(pageUrl) : HostingPlayback.request(pageUrl));
@@ -1432,14 +1437,15 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
     AlertDialog.Builder picker = new AlertDialog.Builder(this)
         .setTitle("Fuentes de vídeo")
-        // Open after this modal has dismissed and restored its fullscreen state.
-        .setPositiveButton("DNS", (dialog, which) -> handler.post(this::chooseDns))
         .setSingleChoiceItems(names.toArray(new String[0]), checked, (dialog, index) -> {
           actions.get(index).run(); dialog.dismiss();
         })
         .setNegativeButton("Cerrar", null);
-    if (SharedCatalog.administrator(com.google.firebase.auth.FirebaseAuth.getInstance(SharedCatalog.app(this)).getCurrentUser()))
+    if (administrator()) {
+      // Open after the source dialog has restored its fullscreen state.
+      picker.setPositiveButton("DNS", (dialog, which) -> handler.post(this::chooseDns));
       picker.setNeutralButton("Diagnóstico", (dialog, which) -> chooseDiagnostic());
+    }
     sourceDialog = picker.create();
     sourceDialog.setOnDismissListener(dialog -> {
       sourceDialog = null;

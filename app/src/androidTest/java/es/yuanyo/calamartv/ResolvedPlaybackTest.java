@@ -166,27 +166,10 @@ public class ResolvedPlaybackTest {
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
         onView(withText(manualDirect ? "Prueba de canal resuelto · Señal 1" : eventPage ? "Canal del evento · Automática" : "CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
-        if (!rejectFirst && !manualDirect && !eventPage) {
-          int beforeDns = pages.get();
-          onView(withText("DNS")).inRoot(isDialog()).perform(click());
-          onView(withText("Google · DNS seguro")).inRoot(isDialog())
-              .check(matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
-          onView(withText("DNS del sistema")).inRoot(isDialog()).perform(click());
-          assertEquals(DnsProvider.SYSTEM, NetworkTransport.selected(ApplicationProvider.getApplicationContext()));
-          AtomicBoolean reconnected = new AtomicBoolean();
-          long dnsDeadline = SystemClock.elapsedRealtime() + 15000;
-          while (!reconnected.get() && SystemClock.elapsedRealtime() < dnsDeadline) {
-            scenario.onActivity(activity -> {
-              try {
-                Field playerField = NativePlayerActivity.class.getDeclaredField("player"); playerField.setAccessible(true);
-                ExoPlayer current = (ExoPlayer) playerField.get(activity);
-                reconnected.set(pages.get() > beforeDns && current != null && current.isPlaying());
-              } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
-            });
-            SystemClock.sleep(100);
-          }
-          assertTrue("Choosing DNS must re-read the page and resume native playback", reconnected.get());
-        } else onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
+        // This fixture is a viewer without an administrator account.
+        onView(withText("DNS")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+        onView(withText("Diagnóstico")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+        onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
       } finally {
         releasePage.countDown();
         clientField.set(network, original);

@@ -848,7 +848,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
         ' ',
         direct,
         c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
-        diagnosis,
+        webAccess.current().administrator === true ? diagnosis : null,
       );
     }
   };
@@ -1302,6 +1302,7 @@ function showMatchCenter(c) {
 }
 
 function hidePlayer() {
+  document.querySelector('.mc-player-dialog')?.close();
   closeMultiPicker();
   showMatchCenter(null);
   rememberPosition(true);

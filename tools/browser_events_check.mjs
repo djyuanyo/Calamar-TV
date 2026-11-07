@@ -2,7 +2,7 @@ import { fakeFirebase } from './browser_fixture.mjs';
 // Exercise the real UI against an isolated catalog; never signs in or writes to Firebase.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -272,7 +272,7 @@ try {
   const matchFixture = () => ({ id: '401882870', date: '2026-11-30T12:00Z', competitions: [{ id: '401882870', status: { displayClock: "74'", type: { state: scoreFinished ? 'post' : 'in', name: scoreFinished ? 'STATUS_FULL_TIME' : 'STATUS_SECOND_HALF', completed: scoreFinished } }, competitors: [{ homeAway: 'home', score: '2', team: { displayName: 'Levante' } }, { homeAway: 'away', score: '1', team: { displayName: 'Athletic Club' } }] }] });
   await page.route('https://calamarmenciano.com/calamar-match.php?**', route => route.fulfill({ json: { url: 'https://www.google.com/search?q=levante+ud+contra+athletic+club' } }));
   // ESPN's summary as the match page reads it: key events, team statistics, line-ups and game information.
-  const matchSummary = () => ({ header: { ...matchFixture(), league: { name: 'LaLiga' } },
+  const matchSummary = () => ({ header: { ...matchFixture(), league: { name: 'LaLiga', slug: 'esp.1' }, season: { year: 2026, type: 1, name: '2026-27' } },
     keyEvents: [{ type: { type: 'goal', text: 'Goal' }, scoringPlay: true, clock: { displayValue: "12'" }, team: { displayName: 'Levante' }, participants: [{ athlete: { displayName: 'Carlos Álvarez' } }] },
       { type: { type: 'yellow-card', text: 'Yellow Card' }, clock: { displayValue: "30'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Oihan Sancet' } }] },
       { type: { type: 'substitution', text: 'Substitution' }, clock: { displayValue: "60'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Nico Williams' } }, { athlete: { displayName: 'Iñaki Williams' } }] }],
@@ -280,7 +280,7 @@ try {
       { team: { displayName: 'Athletic Club' }, statistics: [{ name: 'possessionPct', displayValue: '42' }, { name: 'totalShots', displayValue: '9' }, { name: 'shotsOnTarget', displayValue: '3' }, { name: 'wonCorners', displayValue: '1' }, { name: 'yellowCards', displayValue: '1' }] }],
       form: [{ team: { displayName: 'Levante' }, events: [{ gameResult: 'W', score: '2-0' }, { gameResult: 'D', score: '1-1' }, { gameResult: 'L', score: '0-1' }] }] },
     headToHeadGames: [{ team: { id: '1', displayName: 'Levante' }, events: [{ id: 'g1', gameDate: '2025-03-01T20:00Z', homeTeamId: '1', score: '1-2', leagueName: 'LaLiga', opponent: { displayName: 'Athletic Club' } }] }],
-    rosters: [{ homeAway: 'home', formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
+    rosters: [{ homeAway: 'home', team: { id: '185' }, formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { id: '1001', displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { id: '1002', displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
       { homeAway: 'away', formation: '4-2-3-1', roster: [{ starter: true, jersey: '13', athlete: { displayName: 'Julen Agirrezabala' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: true, jersey: '11', athlete: { displayName: 'Iñaki Williams' }, position: { abbreviation: 'F' }, subbedOut: true, formationPlace: '9' }] }],
     gameInfo: { venue: { fullName: 'Estadio Ciutat de València', address: { city: 'Valencia', country: 'España' } }, attendance: 21000, officials: [{ displayName: 'Mateu Lahoz', position: { displayName: 'Referee' } }] } });
   await page.route('https://site.api.espn.com/**', route => scoreOffline ? route.abort() : route.fulfill({ json: route.request().url().includes('scoreboard') ? { events: [matchFixture()] } : matchSummary() }));
@@ -338,6 +338,29 @@ try {
   assert.equal(await page.locator('.mc-half').count(), 2);
   assert.equal(await page.locator('.mc-man', { hasText: 'Iñaki Williams' }).locator('.mc-badge.out').count(), 1);
   assert.match(await page.locator('.mc-lineups').textContent(), /Suplentes · Levante.*20Roger Brugué/);
+  let playerStatRequests = 0;
+  await page.route('https://sports.core.api.espn.com/v2/sports/soccer/leagues/**', route => {
+    playerStatRequests++;
+    const season = route.request().url().includes('/seasons/2026/');
+    return route.fulfill({ json: { splits: { categories: [{ stats: [
+      { name: 'minutes', value: season ? 800 : 74, displayValue: season ? '800' : '74' },
+      { name: 'totalGoals', value: season ? 7 : 1, displayValue: season ? '7' : '1' },
+    ] }] } } });
+  });
+  assert.equal(playerStatRequests, 0, 'Player statistics are only requested on selection');
+  await page.getByRole('button', { name: 'Ver estadísticas de Andrés Fernández', exact: true }).click();
+  const playerCard = page.getByRole('dialog', { name: 'Estadísticas de Andrés Fernández', exact: true });
+  await playerCard.getByRole('heading', { name: 'Este partido', exact: true }).waitFor();
+  await playerCard.locator('.mc-player-section').filter({hasText:'En la competición'}).getByText('800', {exact:true}).waitFor();
+  await playerCard.locator('.mc-player-section').filter({hasText:'Este partido'}).getByText('74', {exact:true}).waitFor();
+  assert.equal(playerStatRequests, 2);
+  await mkdir('tools/ui-artifacts', {recursive:true});
+  await page.screenshot({path:'tools/ui-artifacts/player-statistics.png'});
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Ver estadísticas de Roger Brugué', exact: true }).click();
+  const subCard = page.getByRole('dialog', { name: 'Estadísticas de Roger Brugué', exact: true });
+  await subCard.locator('.mc-player-section').filter({hasText:'En la competición'}).getByText('800', {exact:true}).waitFor();
+  await subCard.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByRole('tab', { name: 'H2H' }).click();
   assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
   await page.getByRole('tab', { name: 'General' }).click();

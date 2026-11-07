@@ -1473,3 +1473,21 @@ body.gate-open { overflow: hidden; }
 /* Required sign-in uses the same form, on its own screen. */
 .access-signin .top, .access-signin .foot { display: none; }
 .access-signin #view { padding-top: clamp(20px, 5vh, 54px); }
+
+.mc-player-link { font: inherit; color: inherit; cursor: pointer; border: 0; }
+.mc-name.mc-player-link { background: transparent; text-align: left; padding: 4px 0; }
+.mc-shirt.mc-player-link { padding: 0; position: relative; }
+.mc-player-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.mc-player-dialog { width: min(560px, calc(100vw - 28px)); max-height: 85dvh; overflow-y: auto; padding: 20px; color: var(--fg); background: var(--bg); border: 1px solid #454a52; border-radius: 16px; }
+.mc-player-dialog::backdrop { background: rgba(0,0,0,.72); }
+.mc-player-heading { display: flex; align-items: center; gap: 12px; }
+.mc-player-heading img { width: 56px; height: 56px; object-fit: contain; border-radius: 50%; }
+.mc-player-heading > div { flex: 1; min-width: 0; }
+.mc-player-heading h2 { font-size: 21px; margin: 0; }
+.mc-player-heading .note { margin: 5px 0 0; }
+.mc-player-section { margin-top: 18px; }
+.mc-player-section h3 { font-size: 17px; color: var(--accent); }
+.mc-player-stats { display: grid; grid-template-columns: 1fr auto; margin: 0; }
+.mc-player-stats dt, .mc-player-stats dd { margin: 0; padding: 8px 0; border-bottom: 1px solid #303640; }
+.mc-player-stats dd { font-weight: 700; text-align: right; }
+.mc-player-source { margin-bottom: 0; }
