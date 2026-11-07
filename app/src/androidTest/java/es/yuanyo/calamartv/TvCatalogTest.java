@@ -30,7 +30,13 @@ public class TvCatalogTest {
         } catch (org.json.JSONException failure) { throw new AssertionError(failure); }
       });
       androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withContentDescription("Baloncesto, 1 evento"))
-          .perform(androidx.test.espresso.action.ViewActions.scrollTo(), androidx.test.espresso.action.ViewActions.click());
+          .perform(androidx.test.espresso.action.ViewActions.scrollTo());
+      scenario.onActivity(activity -> {
+        View button = activity.root.findViewById(activity.sportTabIds.get("basketball"));
+        assertTrue(button.requestFocusFromTouch());
+      });
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+          .sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
       androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
       scenario.onActivity(activity -> {
         assertEquals("basketball",activity.liveSport);
