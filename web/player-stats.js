@@ -66,6 +66,8 @@ export function showPlayerStats(el, match, player) {
   document.querySelector('.mc-player-dialog')?.close();
   const trigger = document.activeElement;
   const dialog = el('dialog', { class: 'mc-player-dialog', 'aria-label': `Estadísticas de ${player.name}` });
+  // Dialog navigation must not trigger the video's volume, seek or close shortcuts.
+  dialog.addEventListener('keydown', event => event.stopPropagation());
   const close = el('button', { class: 'ghost', type: 'button', onclick: () => dialog.close() }, 'Cerrar');
   const urls = playerStatsUrls(match, player);
   const table = rows => el('dl', { class: 'mc-player-stats' }, rows.flatMap(row => [
