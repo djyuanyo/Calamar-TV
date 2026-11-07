@@ -266,3 +266,36 @@ test('links Liga F and the four cups to the existing competition fixtures', () =
   assert.equal(data.leagues.length, 6);
   assert.deepEqual(data.events.map(event => event.leagueId), ['zico-liga-europa-champions-league-femenino']);
 });
+
+
+test('agenda refresh removes unused generated entities before the catalog exceeds its storage limit', () => {
+  const manualTeam = { id: 'my-team', name: 'Mi equipo', leagueId: 'zico-liga-kept-for-team' };
+  const linkedTeam = { id: 'zico-equipo-linked', name: 'Equipo enlazado' };
+  const espnTeam = { id: 'zico-equipo-espn', name: 'Equipo de ESPN', espnId: '42' };
+  const manualLeague = { id: 'my-league', name: 'Mi liga' };
+  const fixture = { id: 'fixture', matchId: '1', leagueId: manualLeague.id,
+    homeTeamId: linkedTeam.id, awayTeamId: manualTeam.id, startAt: new Date(kickoff).toISOString() };
+  const leagues = [manualLeague, { id: 'zico-liga-old', name: 'Liga antigua' },
+    { id: 'zico-liga-kept-for-team', name: 'Liga de mi equipo' },
+    { id: 'zico-liga-espn', name: 'Liga conectada a ESPN', espn: 'esp.1' }];
+  const base = { ...catalog, leagues, leagueOrder: leagues.map(league => league.id), fixtures: [fixture],
+    teams: [manualTeam, linkedTeam, espnTeam, ...Array.from({ length: 4000 }, (_, i) => ({
+      id: 'zico-equipo-old-' + i, name: 'Equipo de una agenda anterior ' + i,
+      logo: 'https://example.com/old-team-' + i + '.png', leagueId: 'zico-liga-old',
+    }))] };
+  assert.throws(() => validateCatalog(base), /tamaño/);
+  const original = structuredClone(base);
+  const feed = payload(row(1, { sources: [{ type: 'direct', url: direct }] }));
+  const refreshed = applyZicoAgenda(base, feed).data;
+  validateCatalog(refreshed);
+  assert.deepEqual(base, original);
+  assert.deepEqual(refreshed.fixtures, base.fixtures);
+  for (const kept of [manualTeam, linkedTeam, espnTeam]) assert.deepEqual(refreshed.teams.find(t => t.id === kept.id), kept);
+  assert.ok(!refreshed.teams.some(team => team.id.startsWith('zico-equipo-old-')));
+  assert.ok(!refreshed.leagues.some(league => league.id === 'zico-liga-old'));
+  assert.deepEqual(refreshed.leagueOrder, [manualLeague.id, 'zico-liga-kept-for-team', 'zico-liga-espn']);
+  assert.equal(refreshed.events.length, 1);
+  const event = refreshed.events[0];
+  assert.ok(refreshed.teams.some(team => team.id === event.homeTeamId));
+  assert.deepEqual(applyZicoAgenda(refreshed, feed).data, refreshed);
+});

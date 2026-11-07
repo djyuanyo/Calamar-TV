@@ -224,11 +224,15 @@ export function applyZicoAgenda(catalog, payload) {
   };
   const data = { ...catalog, events: [...existing.map(applySignals), ...events], leagues, teams };
   if (catalog.fixtures) data.fixtures = fixtures.map(applySignals);
-  const usedLeagues = new Set([...data.events, ...(data.fixtures || []), ...teams].map(item => item.leagueId));
-  const configuredCompetitions = new Set(leagues.filter(l => !l.id.startsWith('zico-liga-')).map(l => leaguesById.get(l.id)));
-  const duplicates = new Set(leagues.filter(l => l.id.startsWith('zico-liga-') && !usedLeagues.has(l.id)
-    && linkedCompetitions.has(leagueKey(l.name)) && configuredCompetitions.has(leagueKey(l.name))).map(l => l.id));
-  data.leagues = leagues.filter(l => !duplicates.has(l.id));
-  if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !duplicates.has(id));
+  // Expired agenda entries are replaced above. Their generated teams and leagues must also
+  // leave the catalog, while manual entities and those adopted by ESPN stay available.
+  const matches = [...data.events, ...(data.fixtures || [])];
+  const usedTeams = new Set(matches.flatMap(item => [item.homeTeamId, item.awayTeamId]));
+  data.teams = teams.filter(team => !team.id.startsWith('zico-equipo-') || team.espnId || usedTeams.has(team.id));
+  const usedLeagues = new Set([...matches, ...data.teams].map(item => item.leagueId));
+  const removedLeagues = new Set(leagues.filter(league => league.id.startsWith('zico-liga-')
+    && !league.espn && !usedLeagues.has(league.id)).map(league => league.id));
+  data.leagues = leagues.filter(league => !removedLeagues.has(league.id));
+  if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !removedLeagues.has(id));
   return { data, count, skipped, linked };
 }
