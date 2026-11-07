@@ -183,7 +183,7 @@ export function applyZicoAgenda(catalog, payload) {
         const priority = linkedCompetitions.has(target.league)
           ? (target.manualEventIds.has(zicoId) ? 2 : target.league === league ? 1 : 0) : 0;
         if (!previousLink || priority > previousLink.priority) {
-          assigned.set(target.id, { zicoEventId: zicoId, zicoStreams, priority });
+          assigned.set(target.id, { zicoEventId: zicoId, zicoStreams, priority, sport: clean(row.sport_category).slice(0, 80) });
           if (!previousLink) linked++;
         }
       }
@@ -208,7 +208,7 @@ export function applyZicoAgenda(catalog, payload) {
     const homeTeamId = old?.homeTeamId || addEntity(teams, clean(row.home_team), httpsUrl(row.home_team_badge), 'zico-equipo-');
     const awayTeamId = old?.awayTeamId || addEntity(teams, clean(row.away_team), httpsUrl(row.away_team_badge), 'zico-equipo-');
     events.push({
-      ...old, id, name: old?.name || name, startAt, leagueId, homeTeamId,
+      ...old, id, name: old?.name || name, startAt, leagueId, homeTeamId, sport: clean(row.sport_category).slice(0, 80),
       awayTeamId: awayTeamId === homeTeamId ? '' : awayTeamId,
       venue: old?.venue || clean(row.venue), status: row.status, imported: true,
       cover: old?.cover || '', streams, zicoStreams,
@@ -220,7 +220,7 @@ export function applyZicoAgenda(catalog, payload) {
     if (!linkedSignals) return base;
     const manualStreams = base.streams || [];
     const zicoStreams = linkedSignals.zicoStreams.filter(url => !manualStreams.includes(url)).slice(0, Math.max(0, 50 - manualStreams.length));
-    return { ...base, streams: [...manualStreams, ...zicoStreams], zicoEventId: linkedSignals.zicoEventId, zicoStreams };
+    return { ...base, sport: base.sport || linkedSignals.sport, streams: [...manualStreams, ...zicoStreams], zicoEventId: linkedSignals.zicoEventId, zicoStreams };
   };
   const data = { ...catalog, events: [...existing.map(applySignals), ...events], leagues, teams };
   if (catalog.fixtures) data.fixtures = fixtures.map(applySignals);

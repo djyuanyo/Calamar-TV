@@ -67,7 +67,7 @@ public final class Catalog {
   public static final class Channel {
     public final int color;
     public final String category;
-    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId;
+    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId, sport;
     /** Events without a cover: the league's background and both crests. */
     public final String background, homeLogo, awayLogo, leagueLogo;
     public final boolean highlighted;
@@ -89,6 +89,7 @@ public final class Catalog {
       pending = o.optBoolean("pending");
       channelId = o.optString("channelId", o.optString("id"));
       leagueId = o.optString("leagueId");
+      sport = o.optString("sport");
       matchUrl = o.optString("matchUrl"); matchId = o.optString("matchId");
       meta = o.optString("meta"); startAt = o.optString("startAt"); status = o.optString("status", "scheduled");
       highlighted = o.optBoolean("featured");

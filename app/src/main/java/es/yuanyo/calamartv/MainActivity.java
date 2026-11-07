@@ -39,6 +39,9 @@ public class MainActivity extends Activity {
   boolean sharedRefreshBusy;
   int sharedSession;
   String lastRenderKey = "";
+  String liveSport = "all";
+  EventSports eventSports;
+  final Map<String, Integer> sportTabIds = new HashMap<>();
   final Runnable searchRender = this::render;
   final Runnable lazyUpdate = this::updateLazySections;
   final Runnable loadHomeLibrary = this::loadLibraryForHome;
@@ -554,6 +557,7 @@ public class MainActivity extends Activity {
 
   void home() {
     if (!contentAdmitted) return;
+    if (!LIVE.equals(mode)) liveSport = "all";
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(dp(gutter()), 0, dp(gutter()), 0);
@@ -2887,8 +2891,49 @@ public class MainActivity extends Activity {
     bp.setMargins(0, dp(10), 0, dp(6));
     list.addView(back, bp);
     List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(channels, custom), System.currentTimeMillis());
-    sportsHero(Catalog.LIVE_ROW, "", "", live.size() == 1 ? "1 evento hoy, ordenado por competición" : live.size() + " eventos hoy, ordenados por competición", SportsCatalog.liveLink(), true);
-    for (Catalog.EventRow row : Catalog.eventRows(live, custom)) {
+    if (eventSports == null) {
+      JSONObject definitions;
+      try (InputStream input = getAssets().open("sports.json")) { definitions = readJson(input); }
+      catch (Exception unavailable) { definitions = new JSONObject(); }
+      eventSports = new EventSports(definitions);
+    }
+    List<EventSports.Tab> tabs = eventSports.tabs(live, custom);
+    boolean available = false;
+    for (EventSports.Tab tab : tabs) if (tab.id.equals(liveSport)) available = true;
+    if (!available) liveSport = "all";
+    List<Catalog.Channel> filtered = new ArrayList<>();
+    for (Catalog.Channel event : live)
+      if ("all".equals(liveSport) || liveSport.equals(eventSports.sport(event, custom))) filtered.add(event);
+    sportsHero(Catalog.LIVE_ROW, "", "", filtered.size() == 1 ? "1 evento hoy, ordenado por competición" : filtered.size() + " eventos hoy, ordenados por competición", SportsCatalog.liveLink(), true);
+    HorizontalScrollView tabScroll = new HorizontalScrollView(this);
+    tabScroll.setHorizontalScrollBarEnabled(false);
+    LinearLayout buttons = row();
+    for (EventSports.Tab option : tabs) {
+      String label = (option.icon.isEmpty() ? "" : option.icon + " ") + option.name + "  " + option.count;
+      Button button = Ui.pill(this, label, option.id.equals(liveSport) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+      if (!sportTabIds.containsKey(option.id)) sportTabIds.put(option.id, View.generateViewId());
+      final int id = sportTabIds.get(option.id);
+      button.setId(id);
+      button.setSelected(option.id.equals(liveSport));
+      button.setContentDescription(option.name + ", " + option.count + (option.count == 1 ? " evento" : " eventos"));
+      button.setOnClickListener(v -> {
+        liveSport = option.id;
+        render();
+        handler.post(() -> {
+          View selected = root.findViewById(id);
+          if (selected != null) {
+            selected.requestFocus();
+            selected.requestRectangleOnScreen(new Rect(0, 0, selected.getWidth(), selected.getHeight()), true);
+          }
+        });
+      });
+      addButton(buttons, button);
+    }
+    tabScroll.addView(buttons);
+    LinearLayout.LayoutParams tabSize = new LinearLayout.LayoutParams(-1, -2);
+    tabSize.setMargins(0, dp(10), 0, dp(16));
+    list.addView(tabScroll, tabSize);
+    for (Catalog.EventRow row : Catalog.eventRows(filtered, custom)) {
       heading(row.id.isEmpty() ? row.name : row.name + "  ›", row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
       if (!row.logo.isEmpty()) leagueLogo(row.logo);
       if (!row.id.isEmpty()) leagueHeadingOpens(row.id, row.name);

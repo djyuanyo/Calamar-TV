@@ -75,6 +75,7 @@ test('publishes active events across sports, with fresh lookup links and no priv
     ] }),
   ));
   assert.equal(result.count, 2);
+  assert.deepEqual(result.data.events.map(event => event.sport), ['Soccer', 'Basketball']);
   assert.equal(result.skipped, 1);
   validateCatalog(result.data);
   const [live, basketball] = events([], result.data, now);
@@ -147,10 +148,10 @@ test('reuses an existing league and links the matching ESPN fixture, preserving 
   assert.equal(result.data.events[0].leagueId, espnLeague.id);
   assert.deepEqual(result.data.leagues, [espnLeague]);
   assert.deepEqual(result.data.fixtures[0], {...fixture, streams:[manual,'https://bp.zicotv.cc/events/7'],
-    zicoEventId:'7',zicoStreams:['https://bp.zicotv.cc/events/7']});
+    sport:'Soccer',zicoEventId:'7',zicoStreams:['https://bp.zicotv.cc/events/7']});
   validateCatalog(result.data);
   assert.deepEqual(applyZicoAgenda(result.data, feed).data, result.data);
-  assert.deepEqual(applyZicoAgenda(result.data, payload({...match,sources:[]})).data.fixtures, [fixture]);
+  assert.deepEqual(applyZicoAgenda(result.data, payload({...match,sources:[]})).data.fixtures, [{...fixture,sport:'Soccer'}]);
 });
 
 test('leaves a manually created event intact and does not attach a signal from another competition', () => {
@@ -161,7 +162,7 @@ test('leaves a manually created event intact and does not attach a signal from a
   const data = {...catalog, events:[original], leagues:[{id:'cup',name:'Champions League',espn:'uefa.champions'}]};
   const result = applyZicoAgenda(data,payload(match));
   assert.equal(result.linked, 1);
-  assert.deepEqual(result.data.events[0], {...original, zicoEventId:'9', zicoStreams:['https://bp.zicotv.cc/events/9'],
+  assert.deepEqual(result.data.events[0], {...original, sport:'Soccer', zicoEventId:'9', zicoStreams:['https://bp.zicotv.cc/events/9'],
     streams:[...original.streams,'https://bp.zicotv.cc/events/9']});
   const other = applyZicoAgenda(data,payload({...match,league:'UEFA Europa League'}));
   assert.equal(other.linked, 0);

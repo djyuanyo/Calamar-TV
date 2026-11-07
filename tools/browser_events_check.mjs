@@ -17,6 +17,7 @@ const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   if (path === '/firebase.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(firebase); return; }
+  if (path === '/data/sports.json') { res.setHeader('Content-Type', 'application/json'); res.end(await readFile('data/sports.json')); return; }
   if (path === '/data/custom.json' || path === '/data/tdt.json') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(path.includes('custom') ? fixture : { channels: [] })); return; }
   try {
     const file = resolve(root, '.' + (path === '/' ? '/index.html' : path));
@@ -1106,8 +1107,8 @@ try {
   await livePage.addInitScript(seed => sessionStorage.setItem('catalog', JSON.stringify(seed)), {
     ...fixture, leagues: [{ id: 'l1', name: 'Liga Uno' }, { id: 'l2', name: 'Liga Dos' }],
     teams: [{ id: 'home', name: 'Local', logo: crestImage }, { id: 'away', name: 'Visitante', logo: crestImage }],
-    events: [{ id: 'e1', name: 'Partido Uno', leagueId: 'l1', homeTeamId: 'home', awayTeamId: 'away', cover: crestImage, channelId: 'sport-one', startAt: '2026-11-30T11:00:00Z' },
-      { id: 'e2', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' },
+    events: [{ id: 'e1', sport: 'Soccer', name: 'Partido Uno', leagueId: 'l1', homeTeamId: 'home', awayTeamId: 'away', cover: crestImage, channelId: 'sport-one', startAt: '2026-11-30T11:00:00Z' },
+      { id: 'e2', sport: 'Basketball', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' },
       { id: 'e3', name: 'Partido de mañana', leagueId: 'l1', channelId: 'sport-one', startAt: '2026-12-01T13:00:00Z' }],
   });
   livePage.on('pageerror', error => errors.push(error.message));
@@ -1128,6 +1129,19 @@ try {
   assert.match(await livePage.locator('.league-grid .event-background').first().getAttribute('src'), /^data:image\/png;base64,/);
   assert.equal(await livePage.locator('.live-hero img').getAttribute('src'), './assets/calamar-menciano-tv.png');
   assert.deepEqual(await livePage.locator('main .section-head h2').allTextContents(), ['Liga Uno', 'Liga Dos']);
+  await livePage.getByRole('tab', {name:/Baloncesto/}).click();
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 1);
+  assert.match(await livePage.locator('.league-grid .event-card').innerText(), /Partido Dos/);
+  assert.equal(await livePage.getByRole('tab', {name:/Baloncesto/}).getAttribute('aria-selected'), 'true');
+  assert.match(await livePage.locator('.live-hero').innerText(), /1 evento hoy/);
+  await mkdir('tools/ui-artifacts', {recursive:true});
+  await livePage.screenshot({path:'tools/ui-artifacts/live-sport-tabs.png',fullPage:true});
+  await livePage.getByRole('tab', {name:/Baloncesto/}).press('ArrowLeft');
+  await livePage.waitForFunction(() => document.querySelector('#sport-tab-soccer')?.getAttribute('aria-selected') === 'true');
+  assert.match(await livePage.locator('.league-grid .event-card').innerText(), /Partido Uno/);
+  await livePage.getByRole('tab', {name:/Fútbol/}).press('Home');
+  await livePage.waitForFunction(() => document.querySelectorAll('.league-grid .event-card').length === 2);
+
   assert.equal(await livePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await livePage.setViewportSize({ width: 1440, height: 900 });
   assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);

@@ -1491,3 +1491,10 @@ body.gate-open { overflow: hidden; }
 .mc-player-stats dt, .mc-player-stats dd { margin: 0; padding: 8px 0; border-bottom: 1px solid #303640; }
 .mc-player-stats dd { font-weight: 700; text-align: right; }
 .mc-player-source { margin-bottom: 0; }
+
+.sport-tabs { display: flex; gap: 10px; overflow-x: auto; padding: 6px 2px 14px; margin: 14px 0 18px; scrollbar-width: none; }
+.sport-tabs::-webkit-scrollbar { display: none; }
+.sport-tab { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.sport-tab.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.sport-tab:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+.sport-count { opacity: .72; font-size: 12px; font-variant-numeric: tabular-nums; }

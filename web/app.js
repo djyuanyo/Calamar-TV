@@ -1,3 +1,4 @@
+import { eventSport, eventSportTabs } from './event-sports.js';
 import { viewingSession } from './user-playback.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
@@ -50,6 +51,14 @@ let sharedValue = null;
 // missing from the bundled copy is still loading, not missing.
 let sharedSettled = false;
 const settleShared = () => { if (sharedSettled) return; sharedSettled = true; if (!location.hash.startsWith('#/admin')) route(); };
+let sportDefinitions = { sports: [{ id: 'other', name: 'Otros deportes', icon: '🏅', aliases: [] }], leagues: {} };
+let liveSport = 'all';
+let sportsRequest = null;
+function loadSports() {
+  return (sportsRequest ||= fetchJson('data/sports.json').then(definitions => {
+    if (definitions?.sports?.length) sportDefinitions = definitions;
+  }).catch(() => { sportsRequest = null; }));
+}
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
 export async function fetchJson(path) {
@@ -496,18 +505,42 @@ function titleExtras(section, item) {
   return [list, up, down];
 }
 
+function chooseLiveSport(id) {
+  liveSport = id;
+  route().then(() => {
+    const selected = document.getElementById(`sport-tab-${liveSport}`);
+    selected?.focus({ preventScroll: true });
+    selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
+}
+
 /** #/directo: every event of «Eventos En Directo» in a grid per competition, in the order of the leagues. */
 function livePage() {
   const live = liveEvents(events(state.channels, state.custom));
+  const tabs = eventSportTabs(live, state.custom, sportDefinitions);
+  if (!tabs.some(tab => tab.id === liveSport)) liveSport = 'all';
+  const filtered = liveSport === 'all' ? live : live.filter(event => eventSport(event, state.custom, sportDefinitions) === liveSport);
   const nodes = [sportsHero({ name: LIVE_ROW, logo: './assets/calamar-menciano-tv.png', live: true,
-    count: live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`, url: liveShareLink() })];
-  for (const row of eventRows(live, state.custom)) {
+    count: filtered.length === 1 ? '1 evento hoy, ordenado por competición' : `${filtered.length} eventos hoy, ordenados por competición`, url: liveShareLink() }),
+    el('div', { class: 'sport-tabs', role: 'tablist', 'aria-label': 'Filtrar eventos por deporte' },
+      tabs.map(tab => el('button', { class: `sport-tab${tab.id === liveSport ? ' on' : ''}`, role: 'tab', type: 'button',
+        id: `sport-tab-${tab.id}`, 'aria-selected': String(tab.id === liveSport), 'aria-controls': 'live-sport-events', tabindex: tab.id === liveSport ? '0' : '-1',
+        onclick: () => chooseLiveSport(tab.id),
+        onkeydown: event => {
+          const index = tabs.findIndex(option => option.id === tab.id);
+          const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+          const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : step ? (index + step + tabs.length) % tabs.length : -1;
+          if (target >= 0) { event.preventDefault(); chooseLiveSport(tabs[target].id); }
+        } }, tab.icon ? el('span', { 'aria-hidden': 'true' }, tab.icon) : null, el('span', {}, tab.name), el('span', { class: 'sport-count' }, String(tab.count)))))];
+  const groups = [];
+  for (const row of eventRows(filtered, state.custom)) {
     const head = [row.logo ? el('img', { src: row.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null, row.name];
-    nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
+    groups.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
       : el('span', { class: 'league-head' }, ...head), el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)),
       el('div', { class: 'grid league-grid' }, row.events.map((c) => card(c))));
   }
-  if (!live.length) nodes.push(el('p', { class: 'status' }, 'Ahora mismo no hay eventos en directo. ', el('a', { href: '#/canales' }, 'Ver los canales')));
+  if (!live.length) groups.push(el('p', { class: 'status' }, 'Ahora mismo no hay eventos en directo. ', el('a', { href: '#/canales' }, 'Ver los canales')));
+  nodes.push(el('div', { id: 'live-sport-events', role: 'tabpanel', 'aria-labelledby': `sport-tab-${liveSport}` }, groups));
   return nodes;
 }
 
@@ -1514,6 +1547,7 @@ async function route() {
   stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
+  if (page !== 'directo') liveSport = 'all';
   // Account and administration routes must release the player's overlay/inert lock too.
   if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
@@ -1609,6 +1643,10 @@ async function route() {
         (chosen) => playSource(c, chosen));
     }
     return;
+  }
+  if (page === 'directo') {
+    await loadSports();
+    if (version !== routeVersion) return;
   }
   const query = search.value.trim();
   view.replaceChildren(...(query ? results(query, !page || page === 'inicio') : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
