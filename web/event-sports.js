@@ -10,7 +10,9 @@ export function eventSport(event, custom, definitions) {
       .some(alias => sportKey(alias) === value))?.id || 'other';
   }
   if (league?.espn || event.matchUrl) return 'soccer';
-  return definitions.leagues?.[sportKey(league?.name)] || 'other';
+  // Imported league IDs keep their source name even after the administrator renames the league.
+  const sourceName = league?.id?.startsWith('zico-liga-') ? league.id.slice('zico-liga-'.length) : '';
+  return definitions.leagues?.[sportKey(sourceName)] || definitions.leagues?.[sportKey(league?.name)] || 'other';
 }
 export function eventSportTabs(events, custom, definitions) {
   const counts = new Map();

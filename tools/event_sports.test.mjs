@@ -21,3 +21,16 @@ test('tabs count the supplied events and include only represented sports, with a
   assert.equal(tabs.slice(1).reduce((sum,tab)=>sum+tab.count,0),events.length);
   assert.deepEqual(eventSportTabs([],custom,definitions).map(tab=>[tab.id,tab.count]),[['all',0]]);
 });
+
+test('renamed Primera Federación and ACB leagues keep their original sport', () => {
+  const leagues = [
+    {id:'zico-liga-spanish-primera-federacion-group-1',name:'Mi grupo uno'},
+    {id:'zico-liga-spanish-primera-federacion-group-2',name:'Mi grupo dos'},
+    {id:'zico-liga-spanish-liga-acb',name:'Mis partidos ACB'},
+    {id:'manual-1',name:'Primera Federación Grupo 1'},
+    {id:'manual-2',name:'Primera Federación (Grupo 2)'},
+    {id:'manual-acb',name:'Baloncesto Liga ACB'},
+  ];
+  assert.deepEqual(leagues.map(league=>eventSport({leagueId:league.id},{leagues},definitions)),
+    ['soccer','soccer','basketball','soccer','soccer','basketball']);
+});

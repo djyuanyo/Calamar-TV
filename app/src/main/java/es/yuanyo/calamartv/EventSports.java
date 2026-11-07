@@ -51,6 +51,11 @@ final class EventSports {
       return id == null ? "other" : id;
     }
     if ((league != null && !league.optString("espn").isEmpty()) || !event.matchUrl.isEmpty()) return "soccer";
+    String sourceId = league == null ? "" : league.optString("id");
+    if (sourceId.startsWith("zico-liga-")) {
+      String known = leagues.optString(key(sourceId.substring("zico-liga-".length())));
+      if (!known.isEmpty()) return known;
+    }
     return leagues.optString(key(league == null ? "" : league.optString("name")), "other");
   }
 
