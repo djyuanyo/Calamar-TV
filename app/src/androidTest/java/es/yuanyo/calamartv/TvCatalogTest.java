@@ -46,7 +46,10 @@ public class TvCatalogTest {
         assertEquals(2,activity.eventSports.tabs(matches,activity.custom).get(0).count);
       });
       androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withContentDescription("Todos, 2 eventos"))
-          .perform(androidx.test.espresso.action.ViewActions.scrollTo(), androidx.test.espresso.action.ViewActions.click());
+          .perform(androidx.test.espresso.action.ViewActions.scrollTo());
+      scenario.onActivity(activity -> assertTrue(activity.root.findViewById(activity.sportTabIds.get("all")).requestFocusFromTouch()));
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER);
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
       scenario.onActivity(activity -> assertEquals("all",activity.liveSport));
     }
   }

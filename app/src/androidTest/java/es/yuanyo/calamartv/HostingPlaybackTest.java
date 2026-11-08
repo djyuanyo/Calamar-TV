@@ -159,8 +159,13 @@ public class HostingPlaybackTest {
       OkHttpClient local = new OkHttpClient.Builder().readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
           .sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
           .dns(host -> { if (rootUnavailable && "calamarmenciano.com".equals(host)) throw new java.net.UnknownHostException("Root unavailable"); return Collections.singletonList(InetAddress.getByName("127.0.0.1")); })
-          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
-              .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
+          .addInterceptor(chain -> {
+            okhttp3.Request requested = chain.request();
+            // Redirect only the socket to the local test server. Keep the canonical URL reported
+            // to HLS, as in production; a fake port would change every playlist's origin.
+            return chain.proceed(requested.newBuilder().url(requested.url().newBuilder().port(server.getPort()).build()).build())
+                .newBuilder().request(requested).build();
+          }).build();
       f.set(network, local);
       // Reproduce the real distinction that 2.20.57 missed: menu/system DNS works while selected DNS fails.
       f.set(secureNetwork, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("DNS seguro no disponible"); }).build());
