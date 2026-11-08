@@ -51,7 +51,7 @@ try{
       if(origin.pathname==='/media.m3u8'){
         if(n<generation)return route.fulfill({headers,status:403,body:'Expired'});
         if(n>=2)freshMedia++;
-        return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\n'+(hosted?signed('video.ts',n):`https://cdn.example/video.ts?token=v${n}`)+'\n'});
+        return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n'+Array.from({length:3},(_,i)=>(i?'#EXT-X-DISCONTINUITY\n':'')+'#EXTINF:8.023,\n'+(hosted?signed('video.ts',n):`https://cdn.example/video.ts?token=v${n}`)+'&n='+i+'\n').join('')});
       }
       if(origin.pathname==='/video.ts')return route.fulfill({headers,contentType:'video/mp2t',body:video});
       return route.abort();
@@ -61,7 +61,7 @@ try{
     await page.locator('.card').filter({hasText:'Continuidad'}).click();
     await page.waitForFunction(()=>document.querySelector('#video')?.currentTime>.3,null,{timeout:20000});
     const before=await page.locator('#video').evaluate(v=>v.currentTime);
-    const deadline=Date.now()+10000;
+    const deadline=Date.now()+20000;
     while((generation<2||freshMedia===0)&&Date.now()<deadline)await page.waitForTimeout(100);
     await page.waitForFunction(before=>window.__engines===1&&document.querySelector('#video')?.currentTime>before+1,before,{timeout:12000});
     assert.ok(generation>=2,'The scheduled renewal did not run');

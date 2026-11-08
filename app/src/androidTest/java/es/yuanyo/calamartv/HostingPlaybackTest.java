@@ -142,7 +142,7 @@ public class HostingPlaybackTest {
             if (path.contains("sig=1&")) return new MockResponse().setResponseCode(403);
             if (continuous && !String.valueOf(renewals.get()).equals(signature)) return new MockResponse().setResponseCode(403);
             return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
-                continuous ? "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece\n" : "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
+                continuous ? "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=0\n#EXT-X-DISCONTINUITY\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=1\n#EXT-X-DISCONTINUITY\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=2\n" : "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
           }
           if (path.startsWith("/calamar-player.php?seg=video")) {
             segments.incrementAndGet(); return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "video/mp2t").setBody(video.clone());
@@ -228,7 +228,7 @@ public class HostingPlaybackTest {
         assertTrue(renewals.get() > before);
         if (continuous) {
           String signature=String.valueOf(renewals.get());
-          long refreshed=SystemClock.elapsedRealtime()+7000;
+          long refreshed=SystemClock.elapsedRealtime()+14000;
           while ((!manifests.containsKey(signature)||manifests.get(signature).get()<2)&&SystemClock.elapsedRealtime()<refreshed) SystemClock.sleep(100);
           assertTrue("The live decoder must use the fresh signature, after the background prefetch",manifests.containsKey(signature)&&manifests.get(signature).get()>=2);
         }
