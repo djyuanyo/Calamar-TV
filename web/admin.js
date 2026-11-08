@@ -540,7 +540,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin canal propio de Zico.`;
+      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin señal.`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -550,7 +550,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Importa solo los enlaces de canales propios de ZicoTV (/channels/…). Los vincula al partido correspondiente y omite los eventos que solo tienen fuentes de otras webs.'), button, status);
+    el('p', { class: 'note' }, 'Usa /channels/… cuando ZicoTV ofrece un canal propio y /events/… como alternativa cuando hay fuentes sin canal propio. Actualizar sustituye los enlaces importados anteriores y mantiene tus enlaces manuales.'), button, status);
 }
 
 function zicoTokenPanel() {
@@ -689,7 +689,7 @@ function eventForm(existing, rerender, catalogState) {
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
-      const streams = [...new Set(links.value.split(/\r?\n/).map((s) => zicoChannelPlayer(s.trim()) || s.trim()).filter(Boolean))];
+      const streams = [...new Set(links.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
       if (!streams.length && !(imported && !selected) && !choices.some((c) => c.id === selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal de la lista.');
       const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, streams, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const link = matchLink.value.trim();

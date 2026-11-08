@@ -34,8 +34,12 @@ try {
     requests.push(u.href);
     const headers={'access-control-allow-origin':'*'};
     if (u.hostname==='cdn.jsdelivr.net' && u.pathname.includes('/hls.js@')) return route.fulfill({contentType:'text/javascript',body:hls});
-    if (u.hostname==='bp.zicotv.cc') return route.abort(); // Simulate the operator blocking direct requests.
+    if (u.href==='https://bp.zicotv.cc/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[{type:'direct',url:'https://cdn.example/fallback.m3u8'}]}}});
+    if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
+    if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
+    if (u.hostname==='bp.zicotv.cc') return route.abort(); // Simulate the operator blocking direct player requests.
     if (u.hostname!=='calamarmenciano.com') return route.abort();
+    if (u.searchParams.has('event')) return route.fulfill({headers,json:{data:{sources:[]}}});
     if (u.searchParams.has('page')) {
       assert.ok(['https://bp.zicotv.cc/api/player/1','https://bp.zicotv.cc/channels/1'].includes(u.searchParams.get('page')));
       return route.fulfill({headers,json:u.searchParams.has('list')?{items:[{id:'0123456789abcdef',name:'Prueba · Señal 1'}]}:{url:'calamar-player.php?seg=master&sig=ok'}});
@@ -60,24 +64,46 @@ try {
   console.log('PASS: admin channel page -> saved player id -> channel card -> native HLS video in own web player');
   await page.locator('#player-close').click();
   const start_time = new Date(Date.now()+3600000).toISOString();
-  await page.route('https://bp.zicotv.cc/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:2,data:[
+  let ownChannel = true;
+  await page.route('https://bp.zicotv.cc/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
     {id:700,title:'Partido con canal propio',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
-      {source:'own',channel_id:1,url:'https://bp.zicotv.cc/api/player/1'},
+      ...(ownChannel ? [{source:'own',channel_id:1,url:'https://bp.zicotv.cc/api/player/1'}] : []),
       {source:'manual',type:'iframe',url:'https://example.com/other-player'},
     ]},
     {id:701,title:'Partido solo externo',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
       {source:'manual',type:'iframe',url:'https://example.com/external'},
     ]},
+    {id:702,title:'Partido sin fuentes',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[]},
   ]}}));
   await page.goto(base+'/#/admin/evento');
   await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
   await page.waitForFunction(()=>window.__published?.events.some(e=>e.id==='zico-event-700'));
   assert.deepEqual(await page.evaluate(()=>window.__published.events.map(e=>[e.id,e.streams])),
-    [['zico-event-700',['https://bp.zicotv.cc/channels/1']]]);
+    [['zico-event-700',['https://bp.zicotv.cc/channels/1']],['zico-event-701',['https://bp.zicotv.cc/events/701']]]);
+  // Saving the event form must preserve /channels/, rather than silently converting it back to /api/player/.
+  await page.goto(base+'/#/admin/editar-evento/zico-event-700');
+  assert.equal(await page.getByLabel('Enlaces adicionales del evento',{exact:true}).inputValue(),'https://bp.zicotv.cc/channels/1');
+  await page.getByLabel('Nombre del evento',{exact:true}).fill('Partido editado con canal');
+  await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
+  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.name==='Partido editado con canal');
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://bp.zicotv.cc/channels/1']);
+  await page.goto(base+'/#/admin/evento');
+  ownChannel = false;
+  await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
+  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/events/700');
+  ownChannel = true;
+  await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
+  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/channels/1');
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://bp.zicotv.cc/channels/1']);
   await page.goto(base+'/#/directo');
-  await page.locator('.event-card').filter({hasText:'Partido con canal propio'}).click();
+  await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
   await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
   assert.equal(await page.locator('#player iframe').count(),0);
   assert.deepEqual(errors,[]);
-  console.log('PASS: agenda import button -> only own /channels/ links -> live event -> signed hosted HLS in our player');
+  await page.locator('#player-close').click();
+  await page.locator('.event-card').filter({hasText:'Partido solo externo'}).click();
+  await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
+  assert.equal(await page.locator('#player iframe').count(),0);
+  assert.ok(requests.includes('https://cdn.example/fallback.m3u8'));
+  console.log('PASS: import -> edit keeps /channels/ -> refresh switches channel/event without duplicates -> both play in our player');
 } finally {await browser?.close();await new Promise(ok=>server.close(ok));}

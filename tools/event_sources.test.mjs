@@ -67,15 +67,40 @@ test('imports only declared own channels, preserving all alternatives and stripp
   ]}), [agendaChannel,'https://bp.zicotv.cc/channels/15','https://bp.zicotv.cc/channels/20','https://bp.zicotv.cc/channels/21']);
 });
 
-test('events with only external sources are omitted and their previous imported sources are removed', () => {
+test('events without own channels use the event page without storing external sources', () => {
   const old = {id:'zico-event-1',name:'Evento anterior',cover:'',imported:true,
     streams:['https://bp.zicotv.cc/events/1'],zicoStreams:['https://bp.zicotv.cc/events/1']};
   const result = applyZicoAgenda({...catalog,events:[old]},payload(row(1,{sources:[
     {source:'manual',type:'direct',url:direct},
     {source:'sportsonline',type:'iframe',url:'https://example.com/other-player'},
   ]})));
-  assert.equal(result.skipped,1);
-  assert.deepEqual(result.data.events,[]);
+  assert.equal(result.skipped,0);
+  assert.deepEqual(result.data.events[0].streams,['https://bp.zicotv.cc/events/1']);
+  assert.deepEqual(result.data.events[0].zicoStreams,['https://bp.zicotv.cc/events/1']);
+  assert.deepEqual(applyZicoAgenda(result.data,payload(row(1))).data.events,[]);
+});
+
+test('refresh switches channel to event fallback and back, replacing imported player aliases', () => {
+  const manual = 'https://example.com/my-signal.m3u8';
+  const old = {id:'zico-event-52065',name:'Mi partido',cover:'',imported:true,
+    streams:[agendaPlayer,manual],zicoStreams:[agendaChannel]};
+  const base = {...catalog,events:[old]};
+  const fallback = payload(row(52065,{sources:[{source:'manual',type:'direct',url:direct}]}));
+  const updated = applyZicoAgenda(base,fallback).data;
+  assert.deepEqual(updated.events[0].streams,['https://bp.zicotv.cc/events/52065',manual]);
+  assert.deepEqual(updated.events[0].zicoStreams,['https://bp.zicotv.cc/events/52065']);
+  assert.deepEqual(applyZicoAgenda(updated,fallback).data,updated);
+  const restored = applyZicoAgenda(updated,payload(row(52065,{sources:[ownSource]}))).data;
+  assert.deepEqual(restored.events[0].streams,[agendaChannel,manual]);
+});
+
+test('a pinned legacy event link on an existing match is replaced by its own channel', () => {
+  const existing = {id:'my-match',name:'Mi partido',cover,startAt: new Date(kickoff).toISOString(),
+    streams:['https://bp.zicotv.cc/events/52065',direct]};
+  const updated = applyZicoAgenda({...catalog,events:[existing]},payload(row(52065,{sources:[ownSource]}))).data.events[0];
+  assert.deepEqual(updated.streams,[direct,agendaChannel]);
+  const fallback = applyZicoAgenda({...catalog,events:[updated]},payload(row(52065,{sources:[{type:'direct',url:direct}]}))).data.events[0];
+  assert.deepEqual(fallback.streams,[direct,'https://bp.zicotv.cc/events/52065']);
 });
 
 test('fetches the documented all-sports endpoint without credentials', async () => {
