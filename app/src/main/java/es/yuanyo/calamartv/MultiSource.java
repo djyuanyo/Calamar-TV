@@ -20,7 +20,7 @@ final class MultiSource {
     }
     boolean hosted() { return HostingPlayback.isRelay(url); }
     boolean renewable() { return page != null && UserChannels.isPage(page); }
-    long renewalDelay() { return page == null ? -1 : VideoResolver.pageRenewalDelay(page, url, System.currentTimeMillis()); }
+    long renewalDelay() { String origin=HlsContinuity.upstream(url); return page == null ? -1 : VideoResolver.pageRenewalDelay(page, origin==null?url:origin, System.currentTimeMillis()); }
   }
   static Result resolve(String page, String endpoint, String signal, int attempt,
       PlayerDocument.ConnectionFactory hosting, PlayerDocument.ConnectionFactory device) throws Exception {

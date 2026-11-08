@@ -35,6 +35,13 @@ jobs:
           CALAMAR_CHROME_CHANNEL: chrome
         run: node tools/browser_hosting_check.mjs
 
+      - name: Renovar tokens sin reiniciar el vídeo
+        env:
+          CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
+          CALAMAR_HLS: /tmp/calamar-ui/node_modules/hls.js/dist/hls.min.js
+          CALAMAR_CHROME_CHANNEL: chrome
+        run: node tools/browser_continuity_check.mjs
+
       - name: Reproducir cuatro ventanas simultáneas con vídeo real
         env:
           CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright

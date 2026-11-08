@@ -3,6 +3,7 @@ import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.
 import { autoplay } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
 import { zicoChannelPlayer } from './zico-channel.js';
+import { hlsContinuity } from './hls-continuity.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
 export function pageSources(html, page) {
@@ -55,7 +56,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   fetcher = globalThis.fetch, timers = globalThis, now = Date.now, preferDirect = true }) {
   const original = hostedPage(page);
   let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, engine = null;
-  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false;
+  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false, continuity = null;
   const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
   selected.searchParams.set('cast', '1');
   const automatic = !selected.searchParams.has('src') && !selected.searchParams.has('source_id');
@@ -76,8 +77,11 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const install = url => {
     const shouldPlay = !loaded || !video.paused;
     loaded = true; destroyEngine(); address = url;
+    continuity = hlsContinuity(url);
     if (Hls?.isSupported()) {
+      const session = continuity;
       const instance = engine = new Hls({ lowLatencyMode: false, maxBufferLength: 30,
+        xhrSetup(xhr, uri) { const next = session.resolve(uri); if (next !== uri) xhr.open('GET', next, true); },
         manifestLoadingTimeOut: 30000, levelLoadingTimeOut: 30000, fragLoadingTimeOut: 45000 });
       instance.on(Hls.Events.ERROR, (_event, data) => {
         const networkFailure = data.response?.code === 0 || (!data.response?.code && data.type === 'networkError');
@@ -127,7 +131,18 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
         url = hostedUrl(data.url, target.href);
       }
       if (stopped || controller.signal.aborted) return;
-      if (url !== address || recovering) install(url);
+      if (!loaded || recovering) install(url);
+      else if (url !== address) {
+        // Metadata refreshes must never replace a healthy decoder or discard its buffer.
+        if (engine) {
+          const playlist = await fetcher(url, {cache:'no-store',credentials:'omit',signal:controller.signal});
+          if (!playlist.ok) throw Error('No se pudo renovar la lista HLS.');
+          const text = await playlist.text();
+          if (stopped || controller.signal.aborted) return;
+          if (continuity.update(url, text)) address = url;
+          else { schedule(30000); return; } // A different CDN is a standby, not an automatic channel switch.
+        } else { schedule(30000); return; } // Native browser HLS keeps playing until actual recovery is needed.
+      }
       if (stopped) return;
       recovering = false;
       // Both routes receive fresh provider tokens; renew on expiry and on playback errors.
@@ -139,6 +154,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       schedule(renewalDelay(upstream, now()));
     } catch (error) {
       if (stopped) return;
+      if (loaded && !recovering) { schedule(15000); return; }
       if (usingDevice) deviceRoute = false;
       failures++;
       const delay = failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4));

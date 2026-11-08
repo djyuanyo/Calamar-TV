@@ -34,6 +34,7 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
@@ -52,8 +53,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final ExecutorService sourceMenuWorker = Executors.newSingleThreadExecutor();
+  private final ExecutorService renewalWorker = Executors.newSingleThreadExecutor();
   private final List<VideoResolver.Source> sources = new ArrayList<>();
   private ExoPlayer player;
+  private HlsContinuity continuity;
+  private boolean renewingInBackground;
   private PlayerView playerView;
   private WebView browser;
   private LinearLayout root, panel;
@@ -152,9 +156,39 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   // it is not a failure, so it neither moves to another video nor counts as an attempt.
   private final Runnable renewal = () -> {
     if (!active || resolving || webMode) return;
+    if (hostingPlayback && continuity != null && player != null) { renewHostedInBackground(); return; }
     status.setText("Renovando la fuente…");
     resolveFresh();
   };
+
+  private void renewHostedInBackground() {
+    if (renewingInBackground) return;
+    renewingInBackground = true;
+    final ExoPlayer instance = player;
+    final HlsContinuity session = continuity;
+    final int request = generation;
+    final String page = pageUrl, endpoint = hostingEndpoint, signal = hostingSourceId;
+    renewalWorker.execute(() -> {
+      String fresh = null; boolean updated = false;
+      try {
+        NetworkTransport network = NetworkTransport.get(DnsProvider.SYSTEM);
+        fresh = HostingPlayback.resolve(page, signal, 0, endpoint, network);
+        String list = PlayerDocument.fetch(fresh, network.pageFactory(true)).html;
+        updated = session.update(fresh, list);
+      } catch (Exception unavailable) { /* A failed background check must leave healthy playback intact. */ }
+      final String address = fresh; final boolean accepted = updated;
+      handler.post(() -> {
+        if (!active || player != instance || continuity != session || generation != request) return;
+        renewingInBackground = false;
+        if (accepted) {
+          currentUrl = address;
+          if (sources.size() == 1) sources.set(0, new VideoResolver.Source(sources.get(0).label, address));
+          scheduleRenewal(address);
+        }
+        else { handler.removeCallbacks(renewal); handler.postDelayed(renewal, 30000L); }
+      });
+    });
+  }
 
   @Override
   public void onCreate(Bundle state) {
@@ -914,6 +948,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       problem("No se pudo iniciar la conexión Chromium. " + ConnectionReport.describe(failure));
       return;
     }
+    if (hostedSource) {
+      final HlsContinuity session = continuity = new HlsContinuity(source.url);
+      http = new ResolvingDataSource.Factory(http, data -> data.withUri(Uri.parse(session.resolve(data.uri.toString()))));
+    }
     mediaProgress =
         "Esperando la lista y los fragmentos · HTTP " + (requestHttp1 ? "1.1" : "automático");
     lastReport += "\nIntento de reproducción: HTTP " + (requestHttp1 ? "1.1" : "automático");
@@ -1141,7 +1179,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     handler.removeCallbacks(renewal);
     // There is no page to re-resolve for a raw URL.
     if (directUrl != null || VideoResolver.isMedia(pageUrl)) return;
-    long delay = VideoResolver.pageRenewalDelay(pageUrl, address, System.currentTimeMillis());
+    String origin = HlsContinuity.upstream(address);
+    long delay = VideoResolver.pageRenewalDelay(pageUrl, origin == null ? address : origin, System.currentTimeMillis());
     if (delay >= 0) handler.postDelayed(renewal, delay);
   }
 
@@ -1658,6 +1697,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void releasePlayer() {
+    continuity = null; renewingInBackground = false;
     rememberPosition();
     cancelBufferingTimeout();
     if (player != null) {
@@ -1709,6 +1749,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (castControls != null) castControls.destroy();
     worker.shutdownNow();
     sourceMenuWorker.shutdownNow();
+    renewalWorker.shutdownNow();
     super.onDestroy();
   }
 

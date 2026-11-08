@@ -10,6 +10,8 @@ import android.os.Bundle;
 import android.view.*;
 import android.widget.*;
 import androidx.media3.common.*;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.exoplayer.*;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
@@ -39,6 +41,7 @@ public class MultiPlayerActivity extends Activity {
     final TextView name, status, viewersBadge;
     final Button sound, remove;
     ExoPlayer player;
+    HlsContinuity continuity;
     AudienceSession audience;
     MultiSource.Result resolved;
     String endpoint = Library.PLAYER_ENDPOINT, signal = "";
@@ -81,14 +84,23 @@ public class MultiPlayerActivity extends Activity {
       loading = true; final int request = ++generation;
       final String page = renewal && resolved != null && resolved.page != null ? resolved.page : urls.get(sourceIndex);
       final String base = endpoint, selected = signal; final int round = attempt;
-      if (player == null || !player.isPlaying()) status.setText("Conectando…");
+      final ExoPlayer decoder = player; final HlsContinuity session = continuity;
+      final boolean background = renewal && decoder != null && session != null;
+      if (!background && (player == null || !player.isPlaying())) status.setText("Conectando…");
       worker.execute(() -> {
         try {
           MultiSource.Result result = MultiSource.resolve(page, base, selected, round,
               NetworkTransport.get(DnsProvider.SYSTEM), NetworkTransport.get(MultiPlayerActivity.this));
+          final boolean renewed = background && result.hosted() && session.update(result.url,
+              PlayerDocument.fetch(result.url, NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true)).html);
           handler.post(() -> {
             if (!active || generation != request || !tiles.contains(this)) return;
             loading = false;
+            if (background && player == decoder && continuity == session) {
+              if (renewed) { resolved = result; scheduleRenewal(result); }
+              else handler.postDelayed(refresh, 30000);
+              return;
+            }
             if (result.hosted()) try { endpoint = HostingPlayback.endpoint(result.url); } catch (java.io.IOException invalid) { fail(invalid); return; }
             if (player != null && player.isPlaying() && resolved != null && resolved.url.equals(result.url)) scheduleRenewal(result);
             else play(result);
@@ -97,7 +109,7 @@ public class MultiPlayerActivity extends Activity {
           handler.post(() -> {
             if (!active || generation != request || !tiles.contains(this)) return;
             loading = false;
-            if (player != null && player.isPlaying()) { handler.postDelayed(refresh, 15000); return; }
+            if (background && player == decoder || player != null && player.isPlaying()) { handler.postDelayed(refresh, 15000); return; }
             fail(error);
           });
         }
@@ -108,10 +120,15 @@ public class MultiPlayerActivity extends Activity {
       stopPlayer(); resolved = result;
       boolean hosted = result.hosted();
       NetworkTransport network = hosted ? NetworkTransport.get(DnsProvider.SYSTEM) : NetworkTransport.get(MultiPlayerActivity.this);
+      DataSource.Factory media = network.mediaFactory(result.referer, hosted, result.url, !hosted && result.page != null && !result.url.startsWith(Library.LULU_ENDPOINT));
+      if (hosted) {
+        final HlsContinuity session = continuity = new HlsContinuity(result.url);
+        media = new ResolvingDataSource.Factory(media, data -> data.withUri(Uri.parse(session.resolve(data.uri.toString()))));
+      }
       player = new ExoPlayer.Builder(MultiPlayerActivity.this).setRenderersFactory(new DefaultRenderersFactory(MultiPlayerActivity.this).setEnableDecoderFallback(true))
           .setLoadControl(new DefaultLoadControl.Builder().setBufferDurationsMs(3000, 15000, 750, 1500).build())
           .setMediaSourceFactory(new DefaultMediaSourceFactory(MultiPlayerActivity.this).setDataSourceFactory(
-              network.mediaFactory(result.referer, hosted, result.url, !hosted && result.page != null && !result.url.startsWith(Library.LULU_ENDPOINT))))
+              media))
           .build();
       final ExoPlayer instance = player; view.setPlayer(instance);
       if (audience != null) audience.open();
@@ -148,6 +165,7 @@ public class MultiPlayerActivity extends Activity {
       else { sourceIndex++; attempt = 0; resolved = null; handler.postDelayed(refresh, 500); }
     }
     void stopPlayer() {
+      continuity = null;
       handler.removeCallbacks(stalled); handler.removeCallbacks(refresh);
       if (player != null) { view.setPlayer(null); player.release(); player = null; }
     }

@@ -25,7 +25,7 @@ function fixture(fetcher, NativeHls = true, options = {}) {
   class Hls {
     static Events = { ERROR: 'error', MANIFEST_LOADED: 'manifest', LEVEL_LOADED: 'level', FRAG_LOADED: 'fragment' };
     static isSupported = () => true;
-    constructor() { engines.push(this); }
+    constructor(config) { this.config = config; engines.push(this); }
     on(name, fn) { this[name] = fn; }
     loadSource(url) { this.url = url; }
     attachMedia() {}
@@ -33,7 +33,9 @@ function fixture(fetcher, NativeHls = true, options = {}) {
     emitError(code = 403) { this[Hls.Events.ERROR]('', { fatal: true, response: { code } }); }
   }
   const timers = { setTimeout(fn, delay) { jobs.set(++id, { fn, at: clock + delay }); return id; }, clearTimeout(key) { jobs.delete(key); } };
-  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher, timers, now: () => clock, preferDirect: false,
+  const network = (url, opts) => new URL(url).searchParams.has('seg') || new URL(url).pathname.endsWith('.m3u8')
+    ? Promise.resolve({ok:true,text:async()=> '#EXTM3U\n#EXT-X-TARGETDURATION:8\n#EXTINF:8,\nvideo.ts\n'}) : fetcher(url, opts);
+  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher:network, timers, now: () => clock, preferDirect: false,
     onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true), ...options });
   return { stop, engines, video, listeners, statuses, fallbacks, jobs,
     emit(name) { for (const listener of listeners.get(name) || []) listener(); },
@@ -70,8 +72,11 @@ test('starts immediately through hosting and renews the signed video before its 
   });
   await flush();
   assert.equal(f.engines[0].url, signed(media(1793040120)), 'no 30-second startup timer');
-  await f.tick(90000); assert.equal(calls, 2); assert.equal(f.engines[0].destroyed, true);
-  assert.equal(f.engines[1].url, signed(media(1793041320)));
+  await f.tick(90000); assert.equal(calls, 2); assert.equal(f.engines[0].destroyed, undefined);
+  assert.equal(f.engines.length,1);
+  const xhr = {open(method,url){this.url=url;}};
+  f.engines[0].config.xhrSetup(xhr,signed(media(1793040120)));
+  assert.equal(xhr.url,signed(media(1793041320)));
   f.stop(); assert.equal(f.jobs.size, 0); assert.equal(f.listeners.size, 0);
 });
 
@@ -117,7 +122,7 @@ test('a temporary lookup failure preserves existing playback and keeps retries b
   let calls = 0;
   const f = fixture(async () => { if (++calls === 2) throw Error('offline'); return response(media(calls === 1 ? 1793040120 : 1793041320)); });
   await flush(); await f.tick(90000); assert.equal(f.engines.length, 1);
-  await f.tick(250); assert.equal(f.engines.length, 2);
+  await f.tick(15000); assert.equal(f.engines.length, 1);
   for (let i = 0; i < 8; i++) { f.engines.at(-1).emitError(); await f.tick(10000); }
   assert.equal(f.fallbacks.length, 0); assert.equal(f.jobs.size, 1); f.stop();
 });
@@ -127,7 +132,7 @@ test('renewal preserves pause and does not restart an unchanged video', async ()
   const f = fixture(async () => response(media(++calls <= 2 ? 1793040120 : 1793041320)));
   await flush(); f.video.paused = true; await f.tick(90000);
   assert.equal(f.engines.length, 1); assert.equal(f.video.paused, true);
-  await f.tick(15000); assert.equal(f.engines.length, 2); assert.equal(f.video.paused, true); f.stop();
+  await f.tick(15000); assert.equal(f.engines.length, 1); assert.equal(f.video.paused, true); f.stop();
 });
 
 test('the source menu is loaded after the first picture and never blocks the automatic video', async () => {
@@ -161,7 +166,9 @@ test('2.20.67 direct lookup starts without contacting the hosting and renews its
     return {ok:true, url:page, text:async()=>document(media(calls.length === 1 ? 1793040120 : 1793041320))};
   }, true, {preferDirect:true});
   await flush(); assert.equal(f.engines[0].url, media(1793040120));
-  await f.tick(90000); assert.equal(f.engines[1].url, media(1793041320));
+  await f.tick(90000); assert.equal(f.engines.length,1);
+  const xhr={open(method,url){this.url=url;}};f.engines[0].config.xhrSetup(xhr,media(1793040120));
+  assert.equal(xhr.url,media(1793041320));
   assert.equal(calls.length, 2); f.stop();
 });
 
@@ -185,7 +192,7 @@ test('an unreachable hosting falls back to the public provider with fresh renewa
   });
   await flush(); await f.tick(250); assert.equal(f.engines.length, 0);
   await f.tick(250); assert.equal(f.engines[0].url, media(1793040120));
-  await f.tick(90000); assert.equal(f.engines[1].url, media(1793041320)); f.stop();
+  await f.tick(90000); assert.equal(f.engines.length,1); f.stop();
 });
 
 test('direct lookup never plays locked sources or expired tokens', async () => {

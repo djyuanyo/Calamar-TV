@@ -95,6 +95,7 @@ public class HostingPlaybackTest {
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
   @Test public void channelDetailLinkUsesNativeHostedVideoAndRenews() throws Exception { playback(false, true, false, false, false, "https://bp.zicotv.cc/channels/4"); }
+  @Test public void livePlaylistRenewalPreservesDecoderAndUsesTheNewSignature() throws Exception { playback(false,true,false,false,false,"https://bp.zicotv.cc/api/player/4",true); }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
   @Test public void rootConnectionFailureKeepsNativeVideoAndRenewalsOnWww() throws Exception { playback(false, true, false, true, false); }
   @Test public void slowHostedListsAndFragmentsRenderBeforeTheHostedDeadline() throws Exception { playback(false, false, false, false, true); }
@@ -103,6 +104,9 @@ public class HostingPlaybackTest {
     playback(remote, menuAvailable, legacyMenu, rootUnavailable, slow, "https://bp.zicotv.cc/api/player/4");
   }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry) throws Exception {
+    playback(remote,menuAvailable,legacyMenu,rootUnavailable,slow,entry,false);
+  }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry, boolean continuous) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -112,6 +116,7 @@ public class HostingPlaybackTest {
       byte[] block = new byte[8192]; for (int n; (n = in.read(block)) != -1;) video.write(block, 0, n);
     }
     AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger(), rotations = new AtomicInteger(), resolutionFailures = new AtomicInteger();
+    java.util.concurrent.ConcurrentHashMap<String,AtomicInteger> manifests = new java.util.concurrent.ConcurrentHashMap<>();
     java.util.concurrent.atomic.AtomicReference<String> selectedId = new java.util.concurrent.atomic.AtomicReference<>("");
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false); server.start();
@@ -132,9 +137,12 @@ public class HostingPlaybackTest {
                 "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
           }
           if (path.startsWith("/calamar-player.php?seg=manifest")) {
+            String signature=r.getRequestUrl().queryParameter("sig");
+            manifests.computeIfAbsent(signature,key->new AtomicInteger()).incrementAndGet();
             if (path.contains("sig=1&")) return new MockResponse().setResponseCode(403);
+            if (continuous && !String.valueOf(renewals.get()).equals(signature)) return new MockResponse().setResponseCode(403);
             return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
-                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
+                continuous ? "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece\n" : "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
           }
           if (path.startsWith("/calamar-player.php?seg=video")) {
             segments.incrementAndGet(); return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "video/mp2t").setBody(video.clone());
@@ -202,8 +210,10 @@ public class HostingPlaybackTest {
         assertPlays(scenario);
         assertEquals(legacyMenu ? "1" : "fedcba9876543210", selectedId.get());
         int before = renewals.get();
+        java.util.concurrent.atomic.AtomicReference<ExoPlayer> decoder = new java.util.concurrent.atomic.AtomicReference<>();
         scenario.onActivity(activity -> {
           try {
+            Field current = NativePlayerActivity.class.getDeclaredField("player"); current.setAccessible(true); decoder.set((ExoPlayer)current.get(activity));
             Field renewal = NativePlayerActivity.class.getDeclaredField("renewal"); renewal.setAccessible(true);
             ((Runnable) renewal.get(activity)).run();
           } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
@@ -211,7 +221,17 @@ public class HostingPlaybackTest {
         long deadline = SystemClock.elapsedRealtime() + 15000;
         while (renewals.get() <= before && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(100);
         assertTrue(renewals.get() > before);
+        if (continuous) {
+          String signature=String.valueOf(renewals.get());
+          long refreshed=SystemClock.elapsedRealtime()+7000;
+          while ((!manifests.containsKey(signature)||manifests.get(signature).get()<2)&&SystemClock.elapsedRealtime()<refreshed) SystemClock.sleep(100);
+          assertTrue("The live decoder must use the fresh signature, after the background prefetch",manifests.containsKey(signature)&&manifests.get(signature).get()>=2);
+        }
         assertPlays(scenario);
+        scenario.onActivity(activity -> {
+          try { Field current=NativePlayerActivity.class.getDeclaredField("player");current.setAccessible(true);assertSame("A scheduled renewal must retain the decoder and buffer",decoder.get(),current.get(activity)); }
+          catch(ReflectiveOperationException error){throw new AssertionError(error);}
+        });
         assertEquals("Renewals must stay on the selected signal", legacyMenu ? "1" : "fedcba9876543210", selectedId.get());
         assertEquals("Playback must not contact the provider", 0, pages.get());
       } finally { f.set(network, original); f.set(secureNetwork, originalSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
