@@ -29,8 +29,20 @@ public final class VideoResolver {
       String host = u.getHost();
       return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && host != null
           && (host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))
-          && u.getPath() != null && u.getPath().matches("/api/player/[0-9]+/?");
+          && u.getPath() != null && (u.getPath().matches("/api/player/[0-9]+/?") || channelPlayer(address) != null);
     } catch (Exception invalid) { return false; }
+  }
+
+  /** Resolve the channel's detail URL through the documented player, never its premium landing page. */
+  public static String channelPlayer(String address) {
+    try {
+      URI u = URI.create(address);
+      String host = u.getHost();
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null || u.getPort() != -1 || host == null
+          || !(host.equalsIgnoreCase("zicotv.cc") || host.equalsIgnoreCase("bp.zicotv.cc"))) return null;
+      Matcher match = Pattern.compile("/channels/([0-9]{1,16})/?").matcher(u.getPath());
+      return match.matches() ? "https://bp.zicotv.cc/api/player/" + match.group(1) : null;
+    } catch (Exception invalid) { return null; }
   }
 
   public static String eventApi(String address) {

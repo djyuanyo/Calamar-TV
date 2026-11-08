@@ -24,7 +24,8 @@ public final class UserChannels {
       scheme = scheme.toLowerCase(Locale.ROOT);
       if (!scheme.equals("http") && !scheme.equals("https")) return null;
       if (uri.getHost() == null || uri.getHost().isEmpty()) return null;
-      return trimmed;
+      String player = VideoResolver.channelPlayer(trimmed);
+      return player == null ? trimmed : player;
     } catch (Exception invalid) {
       return null;
     }
@@ -39,7 +40,9 @@ public final class UserChannels {
         + (suffix == null ? "" : suffix);
     try {
       URI uri = URI.create(encoded);
-      return uri.getHost() != null && uri.getUserInfo() == null ? encoded : null;
+      if (uri.getHost() == null || uri.getUserInfo() != null) return null;
+      String player = VideoResolver.channelPlayer(encoded);
+      return player == null ? encoded : player;
     } catch (IllegalArgumentException invalid) {
       return null;
     }

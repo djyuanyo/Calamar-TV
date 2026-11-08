@@ -2,6 +2,7 @@ import { streamExpiry, renewablePage, PLAYER_ENDPOINT, PLAYER_ALTERNATE_ENDPOINT
 import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.js';
 import { autoplay } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
+import { zicoChannelPlayer } from './zico-channel.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
 export function pageSources(html, page) {
@@ -102,9 +103,10 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       if (automatic && failures) target.searchParams.set('intento', String(Math.min(9, failures)));
       let url;
       if (deviceRoute && automatic) {
-        const response = await fetcher(original, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+        const player = zicoChannelPlayer(original) || original;
+        const response = await fetcher(player, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
         if (!response.ok) throw Error(`Proveedor HTTP ${response.status}`);
-        const sources = pageSources(await response.text(), response.url || original).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
+        const sources = pageSources(await response.text(), response.url || player).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
         if (!sources.length) throw Error('No hay señales públicas disponibles.');
         let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);
         if (recovering && index >= 0) index = (index + 1) % sources.length;

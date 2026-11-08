@@ -94,11 +94,15 @@ public class HostingPlaybackTest {
   }
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
+  @Test public void channelDetailLinkUsesNativeHostedVideoAndRenews() throws Exception { playback(false, true, false, false, false, "https://bp.zicotv.cc/channels/4"); }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
   @Test public void rootConnectionFailureKeepsNativeVideoAndRenewalsOnWww() throws Exception { playback(false, true, false, true, false); }
   @Test public void slowHostedListsAndFragmentsRenderBeforeTheHostedDeadline() throws Exception { playback(false, false, false, false, true); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception { playback(remote, menuAvailable, legacyMenu, false, false); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow) throws Exception {
+    playback(remote, menuAvailable, legacyMenu, rootUnavailable, slow, "https://bp.zicotv.cc/api/player/4");
+  }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
         .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
@@ -154,7 +158,7 @@ public class HostingPlaybackTest {
       f.set(secureNetwork, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("DNS seguro no disponible"); }).build());
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
+          .putExtra("page_url", entry).putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
         assertPlays(scenario, slow ? 55000 : 30000);
         if (slow) assertEquals("Slow valid media must not restart lookup", 2, renewals.get());

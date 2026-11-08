@@ -42,6 +42,13 @@ jobs:
           CALAMAR_CHROME_CHANNEL: chrome
         run: node tools/browser_multi_check.mjs
 
+      - name: Añadir un canal Zico y reproducirlo con el reproductor propio
+        env:
+          CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright
+          CALAMAR_HLS: /tmp/calamar-ui/node_modules/hls.js/dist/hls.min.js
+          CALAMAR_CHROME_CHANNEL: chrome
+        run: node tools/browser_zico_channel_check.mjs
+
       - name: Probar acceso opcional y panel de usuarios con cuentas aisladas
         env:
           CALAMAR_PLAYWRIGHT: /tmp/calamar-ui/node_modules/playwright

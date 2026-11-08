@@ -1,4 +1,5 @@
 import { usersAdmin } from './users-admin.js';
+import { zicoChannelPlayer } from './zico-channel.js';
 import { viewerDevice } from './user-playback.js';
 import * as userService from './firebase.js';
 import { coverFromFile } from './image-file.js';
@@ -89,7 +90,8 @@ function validStreams(text) {
       throw new Error(`Enlace no válido: ${line}`);
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Solo se admiten enlaces http(s): ${line}`);
-    if (!out.includes(url.href)) out.push(url.href);
+    const source = zicoChannelPlayer(url.href) || url.href;
+    if (!out.includes(source)) out.push(source);
   }
   if (!out.length) throw new Error('Añade al menos un enlace');
   return out;
@@ -687,7 +689,7 @@ function eventForm(existing, rerender, catalogState) {
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
-      const streams = [...new Set(links.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
+      const streams = [...new Set(links.value.split(/\r?\n/).map((s) => zicoChannelPlayer(s.trim()) || s.trim()).filter(Boolean))];
       if (!streams.length && !(imported && !selected) && !choices.some((c) => c.id === selected) && !data.channels.some((c) => c.id === selected)) throw new Error('Selecciona un canal de la lista.');
       const entry = { ...(existing || {}), id: existing?.id || `evento-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: name.value.trim(), cover: selectedCover, channelId: selected, streams, startAt: madridInstant(start.value), featured: star.checked, leagueId: league.value, homeTeamId: home.value, awayTeamId: away.value, status: state.value, season: season.value.trim(), round: round.value.trim(), venue: venue.value.trim(), description: description.value.trim() };
       const link = matchLink.value.trim();

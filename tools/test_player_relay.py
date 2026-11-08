@@ -24,6 +24,30 @@ def php(code, disabled=()):
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_channel_page_uses_its_player_and_server_token_without_redirecting_to_premium(self):
+        code = '''
+        $page = "https://bp.zicotv.cc/channels/1?from=calendar";
+        $requests = [];
+        $get = function($url,$referer,$limit=0,$hops=0) use (&$requests) {
+            $requests[] = [$url,$referer]; return [200,"video",$url];
+        };
+        $premium = playerOpenPage($page,"private-test-token",$get);
+        $public = playerOpenPage($page,"",$get);
+        $catalog = [$page => true];
+        echo json_encode([$requests,$premium,$public,
+            playerAllowedPage("https://bp.zicotv.cc/api/player/1",$catalog),
+            playerAllowedPage("https://bp.zicotv.cc/channels/1",["https://bp.zicotv.cc/api/player/1"=>true]),
+            playerAllowedPage("https://bp.zicotv.cc/api/player/2",$catalog,function(){return [404,""];}),
+            playerZicoPage("https://evil.test/channels/1"),
+            playerZicoPage("https://u:p@bp.zicotv.cc/channels/1")]);
+        '''
+        requests, premium, public, allowed, reverse, wrong_id, bad_host, credentials = json.loads(php(code))
+        self.assertEqual(requests, [["https://bp.zicotv.cc/api/player/1?token=private-test-token", "https://calamarmenciano.com/"],
+                                    ["https://bp.zicotv.cc/api/player/1", ""]])
+        self.assertEqual(premium[2], "https://bp.zicotv.cc/api/player/1")
+        self.assertNotIn("private-test-token", json.dumps(premium))
+        self.assertEqual([allowed, reverse, wrong_id, bad_host, credentials], [True, True, False, '', ''])
+
     def test_shared_host_without_curl_multi_exec_uses_bounded_safe_fallback(self):
         requests = []
         class Origin(http.server.BaseHTTPRequestHandler):

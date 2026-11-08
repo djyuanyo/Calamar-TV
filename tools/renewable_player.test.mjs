@@ -43,8 +43,8 @@ const signed = upstream => 'https://calamarmenciano.com/calamar-player.php?seg='
 const response = upstream => ({ ok: true, json: async () => ({ url: signed(upstream) }) });
 
 test('only HTTPS public player endpoints resolve; direct video and other hosts do not', () => {
-  for (const url of [page, 'https://bp.zicotv.cc/api/player/1?token=a']) assert.equal(renewablePage(url), true);
-  for (const url of ['http://zicotv.cc/api/player/1', 'https://zicotv.cc.evil.example/api/player/1', 'https://zicotv.cc/channels/1', 'https://user:pass@zicotv.cc/api/player/1']) assert.equal(renewablePage(url), false);
+  for (const url of [page, 'https://bp.zicotv.cc/api/player/1?token=a', 'https://bp.zicotv.cc/channels/1']) assert.equal(renewablePage(url), true);
+  for (const url of ['http://zicotv.cc/api/player/1', 'https://zicotv.cc.evil.example/api/player/1', 'https://user:pass@zicotv.cc/api/player/1']) assert.equal(renewablePage(url), false);
   assert.equal(webPlayback(page, { pages: true }).renewable, true);
 });
 test('JSON parsing handles escaped slashes, quotes and brackets; excludes locked, non-media and credentials', () => {

@@ -6,6 +6,17 @@ import java.util.List;
 import org.junit.Test;
 
 public class VideoResolverTest {
+  @Test public void channelDetailsUseTheSameRenewablePlayerId() {
+    String page = "https://bp.zicotv.cc/channels/1";
+    assertTrue(VideoResolver.renewablePage(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", VideoResolver.channelPlayer(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", UserChannels.normalize(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", UserChannels.normalizeEventSource(page));
+    assertEquals(300000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/live.m3u8", 1000));
+    for (String invalid : new String[]{"http://bp.zicotv.cc/channels/1", "https://bp.zicotv.cc.evil.test/channels/1",
+        "https://u:p@bp.zicotv.cc/channels/1", "https://bp.zicotv.cc:444/channels/1", "https://bp.zicotv.cc/channels/1/more"})
+      assertNull(VideoResolver.channelPlayer(invalid));
+  }
   @Test public void eventIncludesNestedChannelsWithNamesAndLanguages() throws Exception {
     String json = "{\"data\":{\"sources\":["
         + "{\"name\":\"Canales del partido\",\"streams\":["

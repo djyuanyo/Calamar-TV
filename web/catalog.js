@@ -1,6 +1,7 @@
 import { madridDay } from './audience.js';
 import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
+import { zicoChannelPlayer } from './zico-channel.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
@@ -40,7 +41,7 @@ export function resolveCategory(group, list) {
 function validUrl(value) {
   try {
     const url = new URL(String(value).trim());
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname ? url.href : null;
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname ? zicoChannelPlayer(url.href) || url.href : null;
   } catch {
     return null;
   }
@@ -244,13 +245,13 @@ export function playerEndpoint(address) {
 }
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
-/** Only the public player endpoint. Other provider pages keep their own player. */
+/** Fixed channel and API player pages can be re-read when their video token expires. */
 export function renewablePage(address) {
   try {
     const u = new URL(address);
     return u.protocol === 'https:' && !u.username && !u.password
       && (u.hostname === 'zicotv.cc' || u.hostname.endsWith('.zicotv.cc'))
-      && /^\/api\/player\/\d+\/?$/.test(u.pathname);
+      && (/^\/api\/player\/\d+\/?$/.test(u.pathname) || !!zicoChannelPlayer(address));
   } catch { return false; }
 }
 

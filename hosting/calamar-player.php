@@ -78,7 +78,7 @@ function playerZicoPage($url) {
     $p = parse_url($url);
     if (($p['scheme'] ?? '') !== 'https' || !in_array(strtolower($p['host'] ?? ''), ['bp.zicotv.cc', 'zicotv.cc'], true)
         || isset($p['user']) || isset($p['port']) || isset($p['fragment'])
-        || !preg_match('#^/api/player/([0-9]{1,16})/?$#D', $p['path'] ?? '', $id)) return '';
+        || !preg_match('#^/(?:api/player|channels)/([0-9]{1,16})/?$#D', $p['path'] ?? '', $id)) return '';
     return 'https://bp.zicotv.cc/api/player/' . $id[1];
 }
 function playerZicoProof($page, $event, $secret) {
@@ -104,8 +104,9 @@ function playerContainsZicoToken($value, $token) {
 function playerOpenPage($page, $token, $get = 'playerGet') {
     $clean = playerZicoPage($page);
     $query = parse_url($page, PHP_URL_QUERY);
+    if ($clean !== '' && preg_match('#^/channels/[0-9]+/?$#D', parse_url($page, PHP_URL_PATH) ?: '')) $query = null;
     if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
-    if ($token === '') return $get($query === null ? $page : $clean, '');
+    if ($token === '') return $get($clean, '');
     // The documented credential only goes to this exact player host. Its URL is never returned or used as a Referer.
     [$status, $body] = $get($clean . '?token=' . rawurlencode($token), 'https://calamarmenciano.com/', 3145728, 1);
     return [$status, $body, $clean];
@@ -260,6 +261,10 @@ function playerCatalogStreams($fetch = null) {
 /** A player mentioned by the public Zico API for a catalog event is an authorized source too. */
 function playerAllowedPage($page, $catalogStreams, $get = null) {
     if (isset($catalogStreams[$page])) return true;
+    // A saved channel page authorizes only the player with the same channel id (and vice versa).
+    $channel = playerZicoPage($page);
+    if ($channel !== '') foreach ($catalogStreams as $saved => $_)
+        if (playerZicoPage($saved) === $channel) return true;
     $parts = parse_url($page);
     $host = strtolower($parts['host'] ?? '');
     if (($parts['scheme'] ?? '') !== 'https' || ($host !== 'zicotv.cc' && substr($host, -strlen('.zicotv.cc')) !== '.zicotv.cc')
