@@ -38,19 +38,26 @@ function addEntity(list, name, badge, prefix, generatedOnly = false) {
   return id;
 }
 
-// The feed is used to check availability. Playback resolves the current sources from the event URL.
-function hasZicoSource(row) {
-  const sources = Array.isArray(row.sources) ? row.sources : [];
-  const playable = (source, provider) => {
-    const url = httpsUrl(source?.player_url || source?.url);
-    if (!url || url.href.length > 2048 || url.searchParams.has('token') || zicoEventApi(url.href)) return false;
-    if (provider === 'own' && ['bp.zicotv.cc', 'zicotv.cc'].includes(url.hostname)
-      && /^\/api\/player\/\d+\/?$/.test(url.pathname)) return true;
-    return !source.is_premium && !source.locked && ['direct', 'iframe'].includes(source.type);
+// Only channels actually identified as Zico's own CDN. Never save third-party sites or video tokens.
+export function zicoChannelSources(row) {
+  const links = new Set();
+  const add = (source, provider) => {
+    if (!source || provider !== 'own') return;
+    const url = httpsUrl(source.player_url || source.url);
+    const match = url && ['bp.zicotv.cc', 'zicotv.cc'].includes(url.hostname)
+      && /^\/(?:api\/player|channels)\/([1-9][0-9]{0,15})\/?$/.exec(url.pathname);
+    const declared = source.channel_id;
+    const validId = Number.isSafeInteger(declared) && declared > 0;
+    // A mismatched id/URL must not attach another channel to this match.
+    if (url && (!match || (declared != null && (!validId || String(declared) !== match[1])))) return;
+    const id = match?.[1] || (validId && !source.player_url && !source.url ? String(declared) : '');
+    if (id) links.add(`${ORIGIN}/channels/${id}`);
   };
-  return sources.some(source => playable(source, source?.source)
-    || (!source?.is_premium && !source?.locked && Array.isArray(source?.streams)
-      && source.streams.some(stream => playable(stream, stream?.source || source.source))));
+  for (const source of Array.isArray(row?.sources) ? row.sources : []) {
+    add(source, source?.source);
+    for (const stream of Array.isArray(source?.streams) ? source.streams : []) add(stream, stream?.source || source.source);
+  }
+  return [...links].slice(0, 50);
 }
 
 const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis',
@@ -173,9 +180,9 @@ export function applyZicoAgenda(catalog, payload) {
     const tied = second && best.score === second.score && best.distance === second.distance;
     const target = explicit.length === 1 ? explicit[0] : !explicit.length && !tied ? best?.candidate : null;
     const old = previous.get(id);
-    const available = hasZicoSource(row);
+    const zicoStreams = zicoChannelSources(row);
+    const available = zicoStreams.length > 0;
     const page = `${ORIGIN}/events/${row.id}`;
-    const zicoStreams = available ? [page] : [];
     if (target || explicit.length || ranked.length) {
       if (target && available) {
         const previousLink = assigned.get(target.id);

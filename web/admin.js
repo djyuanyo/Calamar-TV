@@ -540,7 +540,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin señal.`;
+      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin canal propio de Zico.`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -550,7 +550,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Guarda el enlace oficial de ZicoTV en cada partido con señal. Al abrir el evento se consultan sus fuentes disponibles.'), button, status);
+    el('p', { class: 'note' }, 'Importa solo los enlaces de canales propios de ZicoTV (/channels/…). Los vincula al partido correspondiente y omite los eventos que solo tienen fuentes de otras webs.'), button, status);
 }
 
 function zicoTokenPanel() {
