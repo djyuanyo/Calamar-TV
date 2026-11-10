@@ -4,8 +4,8 @@
 //    itself; browsers cannot, because those video servers do not allow other webs (CORS). The hosting reads
 //    the page as the app does (ZT_SOURCES lists, <video> tags, JW Player setups, packed or not) and relays
 //    the list and its pieces with signed addresses (seg=…). Only pages of channels in the catalog are read.
-//    Nothing is written to disk except a one-minute copy of the public catalog, but every minute watched
-//    on the web passes through here.
+//    Only configuration, the catalog and temporary grants are cached privately; video is streamed.
+//    Every minute watched through the relay passes through this hosting.
 //  - GET page=…&cast=1: the signed address of that list, which Chromecast loads from its own origin.
 
 const PLAYER_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -167,6 +167,8 @@ function playerZicoRenewSources($html, $page, $post = 'playerPost') {
 }
 function playerSourceId($url) {
     $p = parse_url($url);
+    $madplay = playerMadplayMedia($url);
+    if ($madplay !== null) return substr(hash('sha256', 'madplay\n'.$madplay['host'].'/'.$madplay['stream'].'/'.$madplay['file']),0,16);
     return substr(hash('sha256', ($p['scheme'] ?? '') . '://' . ($p['host'] ?? '') . ':' . ($p['port'] ?? 443) . ($p['path'] ?? '')), 0, 16);
 }
 /** Credential-scoped private cache; concurrent viewers reuse a token only for non-session-gated players. */
@@ -436,6 +438,7 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     $target = publicTarget($url, null, $zico);
     if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
     $headers = array('Accept: */*');
+    if (playerMadplayPage($page) !== null) $page = playerMadplayReferrer($page);
     if ($page !== '') {
         $p = parse_url($page);
         $headers[] = 'Referer: ' . $page;
@@ -566,6 +569,7 @@ function playerFirstList($sources, $page, $factory = null) {
 
 /** Streams one piece of the video to the browser as it arrives, without storing it. */
 function playerStream($url, $page) {
+    if (playerMadplayPage($page)!==null) playerMadplayStream($url,$page);
     @set_time_limit(300);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
@@ -597,6 +601,297 @@ function playerStream($url, $page) {
     exit;
 }
 
+function playerMadplayStream($url, $page, $factory = null) {
+    @set_time_limit(300);
+    @ini_set('zlib.output_compression', '0');
+    while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
+    $provider=playerMadplayPage($page)!==null; $original=$url; $renewed=false;
+    $range=$_SERVER['HTTP_RANGE']??'';
+    for ($hop=0;$hop<6;$hop++) {
+        $headers=[]; $status=0; $sent=false; $html=false;
+        $extra=preg_match('/^bytes=\d*-\d*$/',$range)?['Range: '.$range]:[];
+        $ch=$factory?$factory($url,$page,300,$extra):playerCurl($url,$page,300,$extra);
+        if ($ch===null) playerAnswer(['error'=>'Dirección no válida.'],403);
+        if ($provider) curl_setopt($ch,CURLOPT_ENCODING,'');
+        curl_setopt($ch,CURLOPT_HEADERFUNCTION,function($ch,$line)use(&$headers,&$status){
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#',$line,$m)) { $status=(int)$m[1]; $headers=[]; }
+            elseif (preg_match('/^(content-type|content-length|content-range|content-encoding|accept-ranges):\s*(.+?)\s*$/i',$line,$m)) $headers[strtolower($m[1])]=$m[2];
+            return strlen($line);
+        });
+        curl_setopt($ch,CURLOPT_WRITEFUNCTION,function($ch,$data)use(&$headers,&$status,&$sent,&$html,$provider){
+            if ($status>=300) return strlen($data); // No redirect or error body is emitted as video.
+            if (!$sent) {
+                if ($provider&&preg_match('#^text/(?:html|plain)(?:;|$)#i',$headers['content-type']??'')) { $html=true; return 0; }
+                $sent=true; http_response_code($status?:200);
+                header('Content-Type: '.($headers['content-type']??'video/mp2t'));
+                if ($provider&&!empty($headers['content-encoding'])) unset($headers['content-length'],$headers['content-range']);
+                foreach (['content-length'=>'Content-Length','content-range'=>'Content-Range','accept-ranges'=>'Accept-Ranges'] as $key=>$name)
+                    if (isset($headers[$key])) header($name.': '.$headers[$key]);
+            }
+            echo $data; flush();
+            return connection_aborted()?-1:strlen($data);
+        });
+        curl_exec($ch); $location=curl_getinfo($ch,CURLINFO_REDIRECT_URL); curl_close($ch);
+        if ($sent) exit;
+        if ($provider&&$status>=300&&$status<400&&is_string($location)&&$location!=='') {
+            $next=redirectTarget($url,$location);
+            if (!$next||strtolower(parse_url($next,PHP_URL_SCHEME)?:'')!=='https') playerAnswer(['error'=>'Redirección de vídeo no permitida.'],502);
+            $url=$next; continue; // playerCurl revalidates and pins each new public destination.
+        }
+        if ($provider&&!$renewed&&in_array($status,[401,403],true)) {
+            $renewed=true; $fresh=playerMadplayFreshMedia($original,$page,true);
+            if ($fresh!==$original) { $url=$fresh; continue; }
+        }
+        playerAnswer(['error'=>$html?'El origen ha devuelto una página de error en lugar del fragmento de vídeo.':'El servidor del vídeo no lo ha entregado ('.(int)$status.').'],502);
+    }
+    playerAnswer(['error'=>'El servidor del vídeo ha enviado demasiadas redirecciones.'],502);
+}
+
+/** Public MadPlay event pages; all network reads still require catalog authorization. */
+function playerMadplayPage($url) {
+    if (!is_string($url) || strlen($url) > 2048 || preg_match('/[\x00-\x20\x7f]/', $url)) return null;
+    $p = parse_url($url); $host = strtolower($p['host'] ?? '');
+    $sports = ['football'=>1,'basketball'=>2,'tennis'=>3,'baseball'=>4,'cricket'=>6,'motorsport'=>7,'rugby'=>8,
+        'american-football'=>9,'aussie-rules'=>10,'hockey'=>11,'badminton'=>12,'volleyball'=>13,
+        'fighting'=>14,'cycling'=>15,'handball'=>16,'golf'=>17,'darts'=>18,'athletics'=>19,'others'=>90];
+    if (($p['scheme'] ?? '') !== 'https' || isset($p['user']) || isset($p['port']) || isset($p['fragment'])
+        || !preg_match('/^(?:[a-z0-9-]+\.)*mpaver6fuiwild\.my$/D', $host)
+        || !preg_match('#^/(?:[a-z]{2}/)?([a-z-]+)/[a-z0-9-]+-([1-9][0-9]{0,12})/[a-z0-9-]+\.html$#D', $p['path'] ?? '', $m)
+        || !isset($sports[$m[1]])) return null;
+    return ['match'=>(int)$m[2], 'sport'=>$sports[$m[1]], 'origin'=>'https://'.$host];
+}
+
+/** Strict, bounded protobuf wire reader. Provider JavaScript is never executed on the hosting. */
+function playerMadplayVarint($bytes, &$at) {
+    $value=0;
+    for ($shift=0; $shift<63 && $at<strlen($bytes); $shift+=7) {
+        $byte=ord($bytes[$at++]); $value|=($byte&127)<<$shift;
+        if (($byte&128)===0) return $value;
+    }
+    throw new RuntimeException('Respuesta binaria del proveedor no compatible.');
+}
+function playerMadplayPb($bytes) {
+    if (!is_string($bytes) || strlen($bytes)>1048576) throw new RuntimeException('Respuesta del proveedor demasiado grande.');
+    $fields=[]; $at=0; $count=0;
+    while ($at<strlen($bytes)) {
+        $key=playerMadplayVarint($bytes,$at); $field=$key>>3; $wire=$key&7;
+        if ($field<1 || ++$count>8192) throw new RuntimeException('Respuesta binaria no válida.');
+        if ($wire===0) $value=playerMadplayVarint($bytes,$at);
+        elseif ($wire===2 || $wire===1 || $wire===5) {
+            $size=$wire===2?playerMadplayVarint($bytes,$at):($wire===1?8:4);
+            if ($size<0 || $size>strlen($bytes)-$at) throw new RuntimeException('Respuesta binaria incompleta.');
+            $value=substr($bytes,$at,$size); $at+=$size;
+        } else throw new RuntimeException('Formato binario del proveedor no compatible.');
+        $fields[$field][]=$value;
+    }
+    return $fields;
+}
+function playerMadplayPayload($body) {
+    if (preg_match('/Just a moment|challenge-platform|cf-chl-/i', substr((string)$body,0,4096)))
+        throw new RuntimeException('El proveedor requiere verificar el acceso en su web oficial.');
+    $fields=playerMadplayPb($body);
+    if (($fields[2][0]??0)!==0 || !is_string($fields[10][0]??null))
+        throw new RuntimeException('El proveedor no ha autorizado esta consulta.');
+    return playerMadplayPb($fields[10][0]);
+}
+function playerMadplayRot47($value) {
+    $out='';
+    for ($i=0;$i<strlen($value);$i++) { $c=ord($value[$i]); $out.=chr($c>=33&&$c<=126?33+(($c-33+47)%94):$c); }
+    return $out;
+}
+
+/** Devalue/Nuxt's primitive invocation arguments, read as data rather than evaluated. */
+function playerMadplayConfig($html) {
+    if (!preg_match('/window\.__NUXT__=\(function\(([^)]+)\)/', $html,$m,PREG_OFFSET_CAPTURE))
+        throw new RuntimeException('La página del proveedor no contiene su configuración.');
+    $start=$m[0][1]; $end=strpos($html,'</script>',$start);
+    if ($end===false || $end-$start>1048576) throw new RuntimeException('Configuración del proveedor no compatible.');
+    $script=substr($html,$start,$end-$start); $call=strrpos($script,'}(');
+    if ($call===false) throw new RuntimeException('Configuración del proveedor no compatible.');
+    $args=substr($script,$call+2); $parts=[]; $from=0; $depth=0; $quote=''; $escaped=false;
+    for ($i=0;$i<strlen($args);$i++) {
+        $c=$args[$i];
+        if ($quote!=='') { if ($escaped) $escaped=false; elseif ($c==='\\') $escaped=true; elseif ($c===$quote) $quote=''; continue; }
+        if ($c==='"'||$c==="'") { $quote=$c; continue; }
+        if ($c==='['||$c==='{'||$c==='(') $depth++;
+        elseif ($c===']'||$c==='}'||$c===')') { if ($depth===0) { $parts[]=substr($args,$from,$i-$from); break; } $depth--; }
+        elseif ($c===','&&$depth===0) { $parts[]=substr($args,$from,$i-$from); $from=$i+1; }
+        if (count($parts)>1024) throw new RuntimeException('Configuración del proveedor demasiado grande.');
+    }
+    $variables=array_map('trim',explode(',',$m[1][0])); $values=[];
+    foreach ($variables as $i=>$name) $values[$name]=isset($parts[$i])?json_decode(trim($parts[$i]),true):null;
+    $answer=[];
+    foreach (['CF_DA_API','CF_DA_API_EU','cDigit'] as $name) {
+        if (!preg_match('/\b'.preg_quote($name,'/').':([a-zA-Z_$][a-zA-Z0-9_$]*)\b/',$script,$value)
+            || !is_string($values[$value[1]]??null)) throw new RuntimeException('Falta una opción de conexión del proveedor.');
+        $answer[$name]=$values[$value[1]];
+    }
+    foreach (['CF_DA_API','CF_DA_API_EU'] as $name)
+        if (!preg_match('#^https://apis-data(?:-defra)?[0-9]+\.tcpwe138stya\.ru$#D',$answer[$name]))
+            throw new RuntimeException('La API del proveedor ha cambiado de dominio.');
+    if (!preg_match('/^[a-z0-9]{2,16}$/D',$answer['cDigit'])) throw new RuntimeException('Configuración del reproductor no válida.');
+    return $answer;
+}
+
+/** One bounded HTTPS request. Session grants are read from headers, never logged or sent to clients. */
+function playerMadplayRequest($url,$page,$limit=1048576) {
+    $ch=playerCurl($url,$page,12,['Accept: application/json, text/plain, */*']);
+    if ($ch===null) throw new RuntimeException('Dirección de API no permitida.');
+    $body=''; $headers=[];
+    curl_setopt_array($ch,[CURLOPT_ENCODING=>'',CURLOPT_HEADERFUNCTION=>function($ch,$line)use(&$headers){
+        if (preg_match('#^HTTP/#',$line)) $headers=[];
+        elseif (preg_match('/^([a-z0-9-]+):\s*(.*?)\s*$/i',$line,$m)) $headers[strtolower($m[1])]=$m[2];
+        return strlen($line);
+    },CURLOPT_WRITEFUNCTION=>function($ch,$chunk)use(&$body,$limit){
+        if (strlen($body)+strlen($chunk)>$limit) return 0;
+        $body.=$chunk; return strlen($chunk);
+    }]);
+    $ok=curl_exec($ch); $status=curl_getinfo($ch,CURLINFO_RESPONSE_CODE); curl_close($ch);
+    if ($ok===false) throw new RuntimeException('La API del proveedor no ha respondido.');
+    if (preg_match('/Just a moment|challenge-platform|cf-chl-/i',substr($body,0,4096)))
+        throw new RuntimeException('El proveedor requiere verificar el acceso en su web oficial.');
+    return [$status,$body,$url,$headers];
+}
+function playerMadplayQuery($params) {
+    $parts=[];
+    foreach ($params as $key=>$values) foreach (is_array($values)?$values:[$values] as $value)
+        $parts[]=rawurlencode($key).'='.rawurlencode(is_bool($value)?($value?'true':'false'):(string)$value);
+    return implode('&',$parts);
+}
+function playerMadplayFetchPb($base,$path,$params,$page,$request) {
+    [$status,$body,$final,$headers]=$request($base.$path.'?'.playerMadplayQuery($params),$page);
+    if ($status!==200) throw new RuntimeException('La API del proveedor ha rechazado la consulta (HTTP '.(int)$status.').');
+    return [playerMadplayPayload($body),$headers];
+}
+
+/** The provider's public transport codec: AES-CTR signs its own issued rb-session grant. */
+function playerMadplaySigned($raw,$session) {
+    $p=parse_url($raw);
+    if (!is_string($session)||$session===''||strlen($session)>4096||!is_array($p)||($p['scheme']??'')!=='https'
+        ||empty($p['host'])||isset($p['user'])||isset($p['port'])||isset($p['fragment'])
+        ||!preg_match('#^/cfall/[A-Za-z0-9_/%=+.-]+/sx_[0-9]+/index\.m3u8$#D',$p['path']??'')) return '';
+    if (!function_exists('openssl_encrypt')) throw new RuntimeException('El hosting necesita la extensión OpenSSL.');
+    $key=base64_decode('YTc5ODFjYzllYjJmNGQxOWRjZmVhNTdiMTAxZWNkODk=',true); $iv=base64_decode('ODAxN2QzYThmMTQwMGQyZg==',true);
+    $encrypted=openssl_encrypt($session,'aes-256-ctr',$key,OPENSSL_RAW_DATA,$iv);
+    if (!is_string($encrypted)) throw new RuntimeException('No se pudo preparar la sesión de vídeo.');
+    return 'https://'.$p['host'].'/token-'.rawurlencode(base64_encode($encrypted)).'a'.$p['path'].(isset($p['query'])?'?'.$p['query']:'');
+}
+function playerMadplayMedia($url) {
+    $p=parse_url($url);
+    if (!is_array($p)||($p['scheme']??'')!=='https'||isset($p['user'])||isset($p['port'])||isset($p['fragment'])
+        ||strpos(rawurldecode($p['path']??''),'..')!==false
+        ||!preg_match('#^/token-[^/]+/cfall/[^?]+/sx_([0-9]+)/([a-zA-Z0-9_.-]+)$#D',$p['path']??'',$m)) return null;
+    return ['host'=>strtolower($p['host']),'stream'=>$m[1],'file'=>$m[2],'path'=>$p['path']];
+}
+function playerMadplayCacheFile($page) {
+    $event=playerMadplayPage($page); if ($event===null) return '';
+    $dir=getenv('CALAMAR_MADPLAY_CACHE')?:dirname(__DIR__).'/calamar-madplay-cache';
+    if (!is_dir($dir)&&!@mkdir($dir,0700,true)) return '';
+    $dir=realpath($dir); $public=realpath($_SERVER['DOCUMENT_ROOT']??'/nonexistent');
+    if (!$dir||($public&&($dir===$public||strpos($dir,$public.DIRECTORY_SEPARATOR)===0))) return '';
+    return $dir.'/'.hash('sha256',$event['origin'].'/'.$event['sport'].'/'.$event['match']).'.json';
+}
+function playerMadplayReferrer($page) {
+    $file=playerMadplayCacheFile($page); $cache=$file!==''?json_decode((string)@file_get_contents($file),true):null;
+    return is_array($cache)&&is_string($cache['referrer']??null)&&preg_match('#^https://[a-z0-9.-]+/$#D',$cache['referrer'])?$cache['referrer']:$page;
+}
+function playerMadplayWriteCache($file,$data) {
+    $temporary=@tempnam(dirname($file),'.grant-');
+    if (!$temporary) throw new RuntimeException('El hosting no puede guardar la sesión privada.');
+    @chmod($temporary,0600);
+    if (@file_put_contents($temporary,json_encode($data),LOCK_EX)===false||!@rename($temporary,$file)) {
+        @unlink($temporary); throw new RuntimeException('El hosting no puede guardar la sesión privada.');
+    }
+}
+function playerMadplayCurrent($page,$force=false,$request='playerMadplayRequest') {
+    $file=playerMadplayCacheFile($page);
+    if ($file==='') throw new RuntimeException('El hosting necesita una carpeta privada escribible para las sesiones de vídeo.');
+    $lock=@fopen($file.'.lock','c');
+    if (!$lock||!flock($lock,LOCK_EX)) { if (is_resource($lock)) fclose($lock); throw new RuntimeException('No se pudo preparar la sesión de vídeo.'); }
+    @chmod($file.'.lock',0600);
+    try { return playerMadplayLoadCurrent($page,$force,$request); }
+    finally { flock($lock,LOCK_UN); fclose($lock); }
+}
+function playerMadplayLoadCurrent($page,$force=false,$request='playerMadplayRequest') {
+    $event=playerMadplayPage($page); if ($event===null) throw new RuntimeException('Evento del proveedor no válido.');
+    $file=playerMadplayCacheFile($page); $cache=$file!==''?json_decode((string)@file_get_contents($file),true):null;
+    if (!$force&&is_array($cache)&&($cache['expires']??0)>time()&&is_array($cache['sources']??null)) return $cache;
+    [$status,$html]=$request($page,'',1048576);
+    if ($status!==200) throw new RuntimeException('La página del evento no responde.');
+    $config=playerMadplayConfig($html); $base=$config['CF_DA_API'];
+    [$status,$body,$final,$headers]=$request($base.'/api-cf/user/info',$page);
+    $geo=explode('|',$headers['ruserinfo']??'');
+    if ($status!==204||!preg_match('/^[A-Z]{2}$/D',$geo[0]??'')||!preg_match('/^[A-Z]{2}$/D',$geo[1]??''))
+        throw new RuntimeException('El proveedor no ha indicado su servidor regional.');
+    if (in_array($geo[0],['AF','EU','NA','SA'],true)) $base=$config['CF_DA_API_EU'];
+    [$status,$encoded]=$request($base.'/api/common/params',$page);
+    $quoted=json_decode($encoded,true); if (is_string($quoted)) $encoded=$quoted;
+    $common=$status===200?json_decode(playerMadplayRot47($encoded),true):null;
+    $clients=is_array($common)?json_decode($common['common:web:client']??'',true):null;
+    $domains=$clients[$config['cDigit']]['iframePlayerDomains']??[]; $referrer='';
+    foreach (array_slice(is_array($domains)?$domains:[],0,8) as $domain) {
+        if (is_string($domain)&&preg_match('/^(?:[a-z0-9-]+\.)+[a-z]{2,16}$/D',$domain)) { $referrer='https://'.$domain.'/'; break; }
+    }
+    if ($referrer==='') throw new RuntimeException('El proveedor no ha publicado su reproductor.');
+    [$grants]=playerMadplayFetchPb($base,'/api/common/bs',['code'=>[102],'matchId'=>$event['match'],'sportType'=>$event['sport'],'stream'=>true],$page,$request);
+    $grant='';
+    foreach ($grants[1]??[] as $entry) { $row=playerMadplayPb($entry); if (($row[1][0]??null)===102) $grant=$row[2][0]??''; }
+    if (!is_string($grant)||!preg_match('/^[a-f0-9]{32}$/D',$grant)) throw new RuntimeException('El proveedor no ha autorizado los datos del evento.');
+    $params=['matchId'=>$event['match'],'sportType'=>$event['sport'],'language'=>4,'stream'=>true];
+    $prefix='/sfver'.substr(md5(json_encode($params)),0,6).$grant;
+    [$match]=playerMadplayFetchPb($base,$prefix.'/api/match/detail',$params,$page,$request); $sources=[];
+    foreach (array_slice($match[2]??[],0,8) as $entry) {
+        $row=playerMadplayPb($entry); $id=$row[1][0]??0; $site=$row[9][0]??0;
+        if ($id<1||$site<1||($row[5][0]??0)!==1) continue;
+        [$data,$responseHeaders]=playerMadplayFetchPb($base,'/api/stream/detail',['streamId'=>$id,'siteType'=>$site,
+            'continent'=>$geo[0],'country'=>$geo[1],'digit'=>$config['cDigit'],'matchId'=>$event['match'],'sportType'=>$event['sport']],$referrer,$request);
+        $detail=playerMadplayPb($data[2][0]??'');
+        if (($detail[1][0]??0)!==$id) continue;
+        $raw=substr(playerMadplayRot47($detail[4][0]??''),8); $p=parse_url($raw); $urls=[$raw];
+        if (!is_array($p)||($p['scheme']??'')!=='https') continue;
+        foreach (array_slice($detail[12]??[],0,4) as $backup) {
+            $other=parse_url(substr(playerMadplayRot47($backup),8));
+            if (is_array($other)&&($other['scheme']??'')==='https'&&!empty($other['host'])&&!isset($other['user'])&&!isset($other['port']))
+                $urls[]='https://'.$other['host'].($p['path']??'').(isset($p['query'])?'?'.$p['query']:'');
+        }
+        foreach (array_unique($urls) as $url) {
+            $signed=playerMadplaySigned($url,$responseHeaders['rb-session']??'');
+            $name=(string)($detail[3][0]??$row[3][0]??'Señal');
+            if (!preg_match('/^.{1,80}/us',$name,$label)) $label=[0=>'Señal'];
+            if ($signed!=='') $sources[]=['url'=>$signed,'label'=>preg_replace('/[\x00-\x1f\x7f]/u','',$label[0])];
+        }
+    }
+    if (!$sources) throw new RuntimeException('El evento no ha entregado una fuente HTTPS disponible.');
+    $current=['sources'=>$sources,'page'=>$page,'referrer'=>$referrer,'ttl'=>45,'expires'=>time()+45,'renewal'=>true];
+    if (is_string($cache['preferred']??null)) $current['preferred']=$cache['preferred'];
+    if ($file!=='') playerMadplayWriteCache($file,$current);
+    return $current;
+}
+/** Replace an old grant on the same source without resetting the player's live decoder. */
+function playerMadplayFreshMedia($url,$page,$force=false,$lookup='playerMadplayCurrent',$authorize=null) {
+    if (playerMadplayPage($page)===null||($old=playerMadplayMedia($url))===null) return $url;
+    if ($authorize===null) $authorize=function($page){ return playerAllowedPage($page,playerCatalogStreams()); };
+    if (!$authorize($page)) return $url;
+    foreach ($force?[false,true]:[false] as $refresh) {
+        try { $current=$lookup($page,$refresh); } catch (RuntimeException $error) { return $url; }
+        foreach ($current['sources']??[] as $entry) {
+            $fresh=playerMadplayMedia($entry['url']);
+            if ($fresh===null||$fresh['host']!==$old['host']||$fresh['stream']!==$old['stream']) continue;
+            $p=parse_url($entry['url']);
+            $mapped='https://'.$p['host'].rtrim(dirname($p['path']),'/').'/'.$old['file'].(isset($p['query'])?'?'.$p['query']:'');
+            if (!$force||$refresh||$mapped!==$url) return $mapped;
+        }
+    }
+    return $url;
+}
+function playerMadplayRememberSource($page,$url) {
+    $file=playerMadplayCacheFile($page); $cache=$file!==''?json_decode((string)@file_get_contents($file),true):null;
+    if (!is_array($cache)||!is_array($cache['sources']??null)) return;
+    foreach ($cache['sources'] as $entry) if (playerSourceId($entry['url'])===playerSourceId($url)) {
+        $cache['preferred']=playerSourceId($url); playerMadplayWriteCache($file,$cache); return;
+    }
+}
+
 function playerMain() {
     ini_set('display_errors', '0');
     @set_time_limit(25);
@@ -622,12 +917,13 @@ function playerMain() {
         $url = playerUnB64($_GET['seg']); $page = playerUnB64($_GET['p'] ?? '');
         if (!is_string($url) || !is_string($page) || !preg_match('#^https://#', $url) || !hash_equals(playerSign($url, $page, $secret), (string)($_GET['sig'] ?? '')))
             playerAnswer(array('error' => 'Dirección no válida.'), 403);
+        $url = playerMadplayFreshMedia($url, $page);
         // l=1: a list without .m3u8 in its address (a page that is already the list).
         if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '') || ($_GET['l'] ?? '') === '1') {
             $url = playerZicoFreshPlaylist($url, $page);
             list($status, $body, $final) = playerGet($url, $page, 2097152);
             if (in_array($status, [401, 403], true)) {
-                $fresh = playerZicoFreshPlaylist($url, $page, true);
+                $fresh = playerMadplayPage($page) !== null ? playerMadplayFreshMedia($url,$page,true) : playerZicoFreshPlaylist($url, $page, true);
                 if ($fresh !== $url) list($status, $body, $final) = playerGet($fresh, $page, 2097152);
             }
             if ($status !== 200 || !playerIsList($body)) playerAnswer(array('error' => 'El servidor no entrega la lista (' . $status . ').'), 502);
@@ -668,6 +964,11 @@ function playerMain() {
         catch (RuntimeException $error) { playerAnswer(['error' => $error->getMessage()], 502); }
         $status = 200; $final = $current['page'];
         $html = '<script>var ZT_SOURCES = ' . json_encode($current['sources'], JSON_HEX_TAG) . ';</script>';
+    } elseif (playerMadplayPage($page) !== null) {
+        try { $current = playerMadplayCurrent($page); }
+        catch (RuntimeException $error) { playerAnswer(['error'=>$error->getMessage()],502); }
+        $status=200; $final=$page;
+        $html='<script>var ZT_SOURCES = '.json_encode($current['sources'],JSON_HEX_TAG).';</script>';
     } else list($status, $html, $final) = playerOpenPage($page, $token);
     if (isset($_GET['diagnose'])) playerAnswer(['catalog' => 'authorized', 'configured' => $token !== '',
         'configured_http' => $status, 'configured_public_sources' => $current === null ? count(playerSources($html ?? '', $final)) : count($current['sources']),
@@ -713,7 +1014,10 @@ function playerMain() {
     if ($status !== 200) list($status, $body, $at) = playerFirstList($sources, $final);
     if ($status === 200) {
         if (playerContainsZicoToken($body, $token)) playerAnswer(['error' => 'No se pudo preparar una lista segura del vídeo.'], 502);
-        if ($automatic && $current !== null) playerZicoRememberSource($page, $token, $at);
+        if ($automatic && $current !== null) {
+            if (playerMadplayPage($page) !== null) playerMadplayRememberSource($page,$at);
+            else playerZicoRememberSource($page, $token, $at);
+        }
         $relayPage = playerZicoSignedSource($page, $catalog, $secret) ? $page : $final;
         if ($cast) playerAnswer(array('url' => playerRelayed($at, $relayPage, $secret) . '&l=1'));
         playerList(playerRewrite($body, $at, $relayPage, $secret));

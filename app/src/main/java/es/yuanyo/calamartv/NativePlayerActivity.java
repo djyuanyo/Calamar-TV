@@ -1133,7 +1133,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private boolean zicoPage() {
-    return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null);
+    return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null
+        || VideoResolver.hostedProviderPage(pageUrl));
   }
 
   private boolean tryNextZicoSource() {

@@ -6,6 +6,16 @@ import java.util.List;
 import org.junit.Test;
 
 public class VideoResolverTest {
+  @Test public void madplayEventsUseHostingWithoutRestartingForSessionRenewals() {
+    String event = "https://jack09eo.mpaver6fuiwild.my/es/baseball/world-cup-u23-2267587/puerto-rico-u23-vs-chinese-taipei-u23.html?icg=RVM&ilang=es";
+    assertTrue(VideoResolver.hostedProviderPage(event));
+    assertFalse(VideoResolver.renewablePage(event));
+    assertEquals(-1L, VideoResolver.pageRenewalDelay(event, "https://cdn.example/live.m3u8?expires=1792066111", 1792066050000L));
+    for (String invalid : new String[] {event.replace("https:", "http:"), event.replace(".my/", ".my.evil.test/"),
+        event.replace("jack09eo.", "user:secret@jack09eo."), event.replace(".my/", ".my:8443/"), event+"#extra",
+        event.replace("/baseball/", "/unknown/"), event.replace("/baseball/", "/%62aseball/")})
+      assertFalse(invalid, VideoResolver.hostedProviderPage(invalid));
+  }
   @Test public void channelDetailsUseTheSameRenewablePlayerId() {
     String page = "https://bp.zicotv.cc/channels/1";
     assertTrue(VideoResolver.renewablePage(page));

@@ -33,6 +33,20 @@ public final class VideoResolver {
     } catch (Exception invalid) { return false; }
   }
 
+  /** MadPlay's protobuf session is resolved and renewed by our hosting, not page JavaScript. */
+  public static boolean hostedProviderPage(String address) {
+    try {
+      if (address == null || address.length() > 2048 || Pattern.compile("[\\p{Cntrl}\\s]").matcher(address).find()) return false;
+      URI uri = URI.create(address);
+      String host = uri.getHost();
+      return "https".equals(uri.getScheme()) && uri.getUserInfo() == null && uri.getPort() == -1
+          && uri.getFragment() == null && host != null
+          && host.toLowerCase(java.util.Locale.ROOT).matches("(?:[a-z0-9-]+\\.)*mpaver6fuiwild\\.my")
+          && uri.getPath() != null && uri.getRawPath().equals(uri.getPath())
+          && uri.getPath().matches("/(?:[a-z]{2}/)?(?:football|basketball|tennis|baseball|cricket|motorsport|rugby|american-football|aussie-rules|hockey|badminton|volleyball|fighting|cycling|handball|golf|darts|athletics|others)/[a-z0-9-]+-[1-9][0-9]{0,12}/[a-z0-9-]+\\.html");
+    } catch (RuntimeException invalid) { return false; }
+  }
+
   /** Resolve the channel's detail URL through the documented player, never its premium landing page. */
   public static String channelPlayer(String address) {
     try {
@@ -226,6 +240,8 @@ public final class VideoResolver {
 
   /** Opaque Zico tokens still need periodic page lookup; raw media URLs cannot be renewed. */
   public static long pageRenewalDelay(String page, String address, long now) {
+    // The signed relay URL stays fixed; its server refreshes the upstream grant on HLS reloads.
+    if (hostedProviderPage(page)) return -1;
     long delay = renewalDelay(address, now);
     if (delay >= 0) return Math.max(15000L, delay);
     if (!renewablePage(page)) return -1;

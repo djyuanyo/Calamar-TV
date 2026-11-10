@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readSource, mount } from '../web/direct-player.js';
+import { webPlayback, playerPageRelay } from '../web/catalog.js';
+
+test('MadPlay baseball events use the custom HLS player and hosting, preserving the event URL', () => {
+  const event='https://jack09eo.mpaver6fuiwild.my/es/baseball/world-cup-u23-2267587/puerto-rico-u23-vs-chinese-taipei-u23.html?icg=RVM&ilang=es';
+  assert.deepEqual(webPlayback(event,{pages:true}),{ok:true,kind:'hls',address:playerPageRelay(event),page:true});
+  assert.equal(new URL(webPlayback(event,{pages:true}).address).searchParams.get('page'),event);
+});
 
 test('preserves signed URL including percent escapes, plus and ampersand', () => {
   const url = 'https://cdn.example/live/INDEX.M3U8?token=a%2Bb%2Fc-1799999999-&x=1+2';
