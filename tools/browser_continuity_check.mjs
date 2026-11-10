@@ -28,7 +28,8 @@ try{
     window.setTimeout=(callback,delay,...args)=>later(callback,delay===300000&&new Error().stack.includes('renewable-player.js')&&renewals++===0?1500:delay,...args);
     window.__engines=0;window.__destroyed=0;
   });
-  for(const hosted of [false,true]){
+  // The Zico route now prefers the hosting; direct playback is exercised by browser_hosting_check.
+  for(const hosted of [true]){
     let generation=0,freshMedia=0;const errors=[];
     await page.unroute('**/*');
     await page.route('**/*',async route=>{
