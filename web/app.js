@@ -906,7 +906,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     return;
   }
   if (source.how.renewable) {
-    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: !usesZicoAgenda(c),
+    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
       onSources: options => {
         if (generation !== playbackGeneration || c.vod) return;
         const page = hostedPage(source.url), first = c.streams.findIndex(url => hostedPage(url) === page);

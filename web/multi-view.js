@@ -52,7 +52,7 @@ export function playTile(video, channel, onStatus) {
     video.onerror = () => { if (current()) tryNext(); };
     if (source.how.renewable) {
       video.onplaying = video.onerror = null;
-      stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: !usesZicoAgenda(channel),
+      stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
         onAttach: (instance) => { hls = instance; },
         onStatus: (message) => { if (current()) onStatus(message); },
         onFallback: () => { if (current()) tryNext(); },
