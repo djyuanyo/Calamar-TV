@@ -111,6 +111,141 @@ function playerOpenPage($page, $token, $get = 'playerGet') {
     [$status, $body] = $get($clean . '?token=' . rawurlencode($token), 'https://calamarmenciano.com/', 3145728, 1);
     return [$status, $body, $clean];
 }
+
+/** Read JSON configuration, never execute JavaScript returned by a provider. */
+function playerJsonConfig($html, $name) {
+    if (!is_string($html) || !preg_match('/\b(?:var|let|const)\s+' . preg_quote($name, '/') . '\s*=\s*/', $html, $m, PREG_OFFSET_CAPTURE)) return null;
+    $start = $m[0][1] + strlen($m[0][0]);
+    if (substr($html, $start, 4) === 'true') return true;
+    if (substr($html, $start, 5) === 'false') return false;
+    if (!isset($html[$start]) || !in_array($html[$start], ['{', '['], true)) return null;
+    $depth = 0; $quoted = false; $escaped = false;
+    for ($i = $start, $end = min(strlen($html), $start + 262144); $i < $end; $i++) {
+        $c = $html[$i];
+        if ($quoted) { if ($escaped) $escaped = false; elseif ($c === '\\') $escaped = true; elseif ($c === '"') $quoted = false; }
+        elseif ($c === '"') $quoted = true;
+        elseif ($c === '{' || $c === '[') $depth++;
+        elseif (($c === '}' || $c === ']') && --$depth === 0) return json_decode(substr($html, $start, $i - $start + 1), true);
+    }
+    return null;
+}
+
+/** Zico now publishes null URLs in cacheable HTML and supplies them through a signed POST. */
+function playerZicoRenewSources($html, $page, $post = 'playerPost') {
+    $clean = playerZicoPage($page);
+    $renew = playerJsonConfig($html, 'ZT_RENEW');
+    if ($clean === '' || !is_array($renew)) return null; // Older players still expose ZT_SOURCES directly.
+    if (!empty($renew['conn']) || playerJsonConfig($html, 'ZT_SRC_GATE') !== null
+        || playerJsonConfig($html, 'ZT_CONN_LIMIT') === true || playerJsonConfig($html, 'ZT_PREMIUM_GATE') === true
+        || playerJsonConfig($html, 'ZT_APP_GATE') === true)
+        throw new RuntimeException('ZicoTV requiere verificar el acceso o gestionar la sesión en su reproductor oficial.');
+    $url = playerResolve($page, is_string($renew['url'] ?? null) ? $renew['url'] : '');
+    $p = parse_url($url); $base = parse_url($page);
+    $id = basename(parse_url($clean, PHP_URL_PATH));
+    if (!is_array($p) || ($p['scheme'] ?? '') !== 'https' || ($p['host'] ?? '') !== ($base['host'] ?? '')
+        || isset($p['user']) || isset($p['port']) || isset($p['fragment']) || ($p['path'] ?? '') !== '/api/player/' . $id . '/renew'
+        || !preg_match('/^expires=[0-9]{10}&signature=[a-f0-9]{64}$/D', $p['query'] ?? ''))
+        throw new RuntimeException('ZicoTV ha devuelto una ruta de renovación no compatible.');
+    [$status, $body] = $post($url, $page, ['native' => false]);
+    $data = is_string($body) ? json_decode($body, true) : null;
+    if ($status !== 200 || !is_array($data) || !is_array($data['sources'] ?? null))
+        throw new RuntimeException('ZicoTV no ha entregado las señales al renovar (HTTP ' . (int)$status . ').');
+    if (!empty($data['over']) || !empty($data['blocked'])) throw new RuntimeException('ZicoTV ha rechazado esta sesión de reproducción.');
+    $entries = [];
+    foreach (array_slice($data['sources'], 0, 100) as $source) {
+        if (!is_array($source) || !empty($source['locked']) || !empty($source['off']) || !empty($source['hidden'])) continue;
+        $address = $source['url'] ?? null; $parts = is_string($address) ? parse_url($address) : false;
+        if (!is_array($parts) || strlen($address) > 8192 || preg_match('/[\r\n]/', $address)
+            || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['fragment'])
+            || !preg_match('/\.m3u8$/i', $parts['path'] ?? '')) continue;
+        $entries[$address] = ['url' => $address, 'label' => (string)($source['label'] ?? 'Señal')];
+    }
+    // The provider shuffles CDNs at every renewal. Keep source menu identities and ordering stable.
+    $entries = array_values($entries);
+    usort($entries, function ($a, $b) { return strcmp(playerSourceId($a['url']), playerSourceId($b['url'])); });
+    return ['sources' => $entries, 'ttl' => max(1, min(10800, (int)($data['ttl'] ?? 300)))];
+}
+function playerSourceId($url) {
+    $p = parse_url($url);
+    return substr(hash('sha256', ($p['scheme'] ?? '') . '://' . ($p['host'] ?? '') . ':' . ($p['port'] ?? 443) . ($p['path'] ?? '')), 0, 16);
+}
+/** Credential-scoped private cache; concurrent viewers reuse a token only for non-session-gated players. */
+function playerZicoCacheFile($page, $token) {
+    $dir = getenv('CALAMAR_ZICO_CACHE') ?: dirname(__DIR__) . '/calamar-zico-cache';
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true)) return '';
+    $dir = realpath($dir); $public = realpath($_SERVER['DOCUMENT_ROOT'] ?? '/nonexistent');
+    if (!$dir || ($public && ($dir === $public || strpos($dir, $public . DIRECTORY_SEPARATOR) === 0))) return '';
+    return $dir . '/' . hash('sha256', playerZicoPage($page) . "\n" . $token) . '.json';
+}
+function playerZicoCurrent($page, $token, $force = false, $get = 'playerGet', $post = 'playerPost') {
+    $cache = playerZicoCacheFile($page, $token);
+    $saved = $cache !== '' && is_file($cache) ? json_decode((string)@file_get_contents($cache), true) : null;
+    if (!$force && is_array($saved) && ($saved['until'] ?? 0) > time() && is_array($saved['sources'] ?? null)) return $saved;
+    [$status, $html, $final] = playerOpenPage($page, $token, $get);
+    if ($status !== 200 || !is_string($html)) throw new RuntimeException('La página de ZicoTV no responde (HTTP ' . (int)$status . ').');
+    $current = playerZicoRenewSources($html, $final, $post);
+    $renewal = $current !== null;
+    if ($current === null) {
+        $current = ['ttl' => 300, 'sources' => array_map(function ($url) { return ['url' => $url, 'label' => 'Señal']; }, playerIsList($html) ? [$final] : playerSources($html, $final))];
+    }
+    $current['sources'] = array_values(array_filter($current['sources'], function ($entry) use ($token) { return !playerContainsZicoToken($entry['url'], $token); }));
+    $current['page'] = $final;
+    $current['renewal'] = $renewal;
+    $current['preferred'] = $saved['preferred'] ?? '';
+    $current['until'] = time() + min(300, max(1, $current['ttl'] - 90));
+    if ($current['sources'] && $cache !== '') {
+        $temp = @tempnam(dirname($cache), '.sources-');
+        if ($temp !== false) { @chmod($temp, 0600); if (@file_put_contents($temp, json_encode($current), LOCK_EX) !== false) @rename($temp, $cache); if (is_file($temp)) @unlink($temp); }
+    }
+    return $current;
+}
+function playerZicoRememberSource($page, $token, $url) {
+    $cache = playerZicoCacheFile($page, $token);
+    $data = $cache !== '' && is_file($cache) ? json_decode((string)@file_get_contents($cache), true) : null;
+    if (!is_array($data) || !is_array($data['sources'] ?? null)) return;
+    $id = playerSourceId($url);
+    foreach ($data['sources'] as $entry) if (playerSourceId($entry['url']) === $id) {
+        $data['preferred'] = $id;
+        $temp = @tempnam(dirname($cache), '.sources-');
+        if ($temp !== false) { @chmod($temp, 0600); if (@file_put_contents($temp, json_encode($data), LOCK_EX) !== false) @rename($temp, $cache); if (is_file($temp)) @unlink($temp); }
+        return;
+    }
+}
+/** Repair an expiring signed playlist on the same CDN; do not switch the user's signal or decoder. */
+function playerZicoCatalogPage($page, $catalog = null) {
+    $catalog = $catalog === null ? playerCatalogStreams() : $catalog;
+    if (playerZicoSignedSource($page, $catalog, playerSecret())) return true;
+    $clean = playerZicoPage($page);
+    if ($clean === '') return false;
+    foreach ($catalog as $saved => $_) if (playerZicoPage($saved) === $clean) return true;
+    return false;
+}
+function playerZicoFreshPlaylist($url, $page, $force = false, $lookup = 'playerZicoCurrent', $authorize = 'playerZicoCatalogPage') {
+    if (playerZicoPage($page) === '') return $url;
+    $old = parse_url($url); parse_str($old['query'] ?? '', $query);
+    $expiry = null;
+    foreach (['e', 'expires'] as $key) if (isset($query[$key]) && is_string($query[$key]) && preg_match('/^[0-9]{10}$/D', $query[$key])) $expiry = (int)$query[$key];
+    if (is_string($query['token'] ?? null) && preg_match('/(?:^|-)([0-9]{10})(?:-|$)/', $query['token'], $m)) $expiry = (int)$m[1];
+    if (!$force && ($expiry === null || $expiry > time() + 90)) return $url;
+    // An old relay signature must not keep renewing a channel removed from the catalog.
+    if (!$authorize($page)) return $url;
+    try { $current = $lookup($page, playerZicoToken(), $force); } catch (RuntimeException $error) { return $url; }
+    foreach ($current['sources'] as $entry) {
+        $fresh = parse_url($entry['url']);
+        if (($old['scheme'] ?? '') !== ($fresh['scheme'] ?? '') || ($old['host'] ?? '') !== ($fresh['host'] ?? '')
+            || ($old['port'] ?? 443) !== ($fresh['port'] ?? 443)) continue;
+        if (($old['path'] ?? '') === ($fresh['path'] ?? '')) return $entry['url'];
+        $directory = rtrim(dirname($fresh['path'] ?? ''), '/') . '/';
+        if ($directory === '/' || strpos($old['path'] ?? '', $directory) !== 0 || strpos($old['path'], '..') !== false
+            || !preg_match('/\.m3u8$/i', $old['path'])) continue;
+        parse_str($fresh['query'] ?? '', $credentials);
+        if (!is_string($credentials['token'] ?? null)) continue;
+        $query['token'] = $credentials['token'];
+        foreach (['e', 'expires'] as $key) if (isset($credentials[$key])) $query[$key] = $credentials[$key];
+        return $old['scheme'] . '://' . $old['host'] . (isset($old['port']) ? ':' . $old['port'] : '') . $old['path'] . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+    return $url;
+}
 function playerZicoEventSources($data, $event, $catalog, $secret, $token) {
     $sources = [];
     foreach (($data['data']['sources'] ?? []) as $source) {
@@ -209,7 +344,12 @@ function playerSources($html, $page) {
     $found = array();
     $add = function ($value) use (&$found, $page) {
         if (!is_string($value) || $value === '') return;
+        $value = html_entity_decode(str_replace('\\/', '/', $value), ENT_QUOTES | ENT_HTML5);
+        $value = str_replace('\\u0026', '&', $value);
+        if (strlen($value) > 8192 || preg_match('/[\r\n]/', $value)) return;
         $url = playerResolve($page, $value);
+        $parts = parse_url($url);
+        if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])) return;
         $path = strtolower(parse_url($url, PHP_URL_PATH) ?: '');
         if (preg_match('#^https://#i', $url) && preg_match('/\.(m3u8|mp4|webm)$/', $path) && !in_array($url, $found, true)) $found[] = $url;
     };
@@ -226,7 +366,9 @@ function playerSources($html, $page) {
     if (preg_match_all("/\}\('((?:[^'\\\\]++|\\\\.)*+)',\s*(\d+),\s*(\d+),\s*'((?:[^'\\\\]++|\\\\.)*+)'\.split\('\|'\)/", $html, $packed, PREG_SET_ORDER))
         foreach ($packed as $m) $scripts .= "\n" . playerUnpack($m);
     $scripts = str_replace('\\/', '/', $scripts);
-    if (preg_match_all('/\b(?:file|src|source)\s*:\s*(["\'])(https:\/\/[^"\']+)\1/', $scripts, $files, PREG_SET_ORDER))
+    if (preg_match_all('/\b(?:file|src|source|url)\s*[:=]\s*(["\'])(https:\/\/[^"\']+)\1/i', $scripts, $files, PREG_SET_ORDER))
+        foreach ($files as $f) $add($f[2]);
+    if (preg_match_all('/\b(?:loadSource|setSource)\s*\(\s*(["\'])(https:\/\/[^"\']+)\1\s*\)/i', $scripts, $files, PREG_SET_ORDER))
         foreach ($files as $f) $add($f[2]);
     return $found;
 }
@@ -322,6 +464,19 @@ function playerGet($url, $page, $limit = 3145728, $maxHops = 5) {
         return array($status, is_string($body) && strlen($body) <= $limit ? $body : null, $url);
     }
     return array(0, null, $url);
+}
+/** A provider-issued same-player renewal URL; redirects and JavaScript are never executed. */
+function playerPost($url, $page, $data) {
+    $ch = playerCurl($url, $page, 15, ['Content-Type: application/json', 'Accept: application/json']);
+    if ($ch === null) return [0, null];
+    $body = '';
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($data), CURLOPT_ENCODING => '',
+        CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$body) {
+            if (strlen($body) + strlen($chunk) > 262144) return 0;
+            $body .= $chunk; return strlen($chunk);
+        }]);
+    $ok = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
+    return [$status, $ok === false ? null : $body];
 }
 function playerIsList($body) { return is_string($body) && strncmp(ltrim($body, "\xEF\xBB\xBF \r\n\t"), '#EXTM3U', 7) === 0; }
 function playerList($body) { header('Content-Type: application/vnd.apple.mpegurl'); echo $body; exit; }
@@ -469,7 +624,12 @@ function playerMain() {
             playerAnswer(array('error' => 'Dirección no válida.'), 403);
         // l=1: a list without .m3u8 in its address (a page that is already the list).
         if (preg_match('/\.m3u8$/i', parse_url($url, PHP_URL_PATH) ?: '') || ($_GET['l'] ?? '') === '1') {
+            $url = playerZicoFreshPlaylist($url, $page);
             list($status, $body, $final) = playerGet($url, $page, 2097152);
+            if (in_array($status, [401, 403], true)) {
+                $fresh = playerZicoFreshPlaylist($url, $page, true);
+                if ($fresh !== $url) list($status, $body, $final) = playerGet($fresh, $page, 2097152);
+            }
             if ($status !== 200 || !playerIsList($body)) playerAnswer(array('error' => 'El servidor no entrega la lista (' . $status . ').'), 502);
             playerList(playerRewrite($body, $final, $page, $secret));
         }
@@ -502,7 +662,17 @@ function playerMain() {
     // cast=1: the signed address of the list instead of the list, for Chromecast (it cannot send the page).
     $cast = isset($_GET['cast']);
     $token = playerZicoToken();
-    list($status, $html, $final) = playerOpenPage($page, $token);
+    $current = null;
+    if (playerZicoPage($page) !== '') {
+        try { $current = playerZicoCurrent($page, $token); }
+        catch (RuntimeException $error) { playerAnswer(['error' => $error->getMessage()], 502); }
+        $status = 200; $final = $current['page'];
+        $html = '<script>var ZT_SOURCES = ' . json_encode($current['sources'], JSON_HEX_TAG) . ';</script>';
+    } else list($status, $html, $final) = playerOpenPage($page, $token);
+    if (isset($_GET['diagnose'])) playerAnswer(['catalog' => 'authorized', 'configured' => $token !== '',
+        'configured_http' => $status, 'configured_public_sources' => $current === null ? count(playerSources($html ?? '', $final)) : count($current['sources']),
+        'renewal' => $current['renewal'] ?? false, 'ttl' => $current['ttl'] ?? null,
+        'message' => 'No se incluyen credenciales ni direcciones de vídeo.']);
     if ($status !== 200 || $html === null) playerAnswer(array('error' => 'La página del reproductor no responde (' . $status . ').'), 502);
     // The «page» is already an HLS list without .m3u8 in its address.
     if (playerIsList($html)) {
@@ -511,6 +681,12 @@ function playerMain() {
     }
     $sources = array_values(array_filter(playerSources($html, $final), function ($url) use ($token) { return !playerContainsZicoToken($url, $token); }));
     if (!$sources) playerAnswer(array('error' => 'No se encontró ningún vídeo en la página del reproductor.'), 404);
+    if (isset($_GET['source_id'])) {
+        $id = (string)$_GET['source_id'];
+        if (!preg_match('/^[a-f0-9]{16}$/D', $id)) playerAnswer(['error' => 'Señal no válida.'], 400);
+        $sources = array_values(array_filter($sources, function ($url) use ($id) { return playerSourceId($url) === $id; }));
+        if (!$sources) playerAnswer(['error' => 'La señal seleccionada ya no está disponible.'], 404);
+    }
     $pick = $_GET['src'] ?? '';
     if (is_string($pick) && preg_match('/^\d{1,2}$/', $pick) && isset($sources[(int)$pick])) $sources = array($sources[(int)$pick]);
     // A new attempt after the video was cut (intento=1, 2…) starts from another source of the page.
@@ -519,12 +695,28 @@ function playerMain() {
         $shift = (int)$round % count($sources);
         $sources = array_merge(array_slice($sources, $shift), array_slice($sources, 0, $shift));
     }
-    if (isset($_GET['list'])) playerAnswer(array('sources' => count($sources)));
-    list($status, $body, $at) = playerFirstList($sources, $final);
+    if (isset($_GET['list'])) {
+        $items = [];
+        foreach ($sources as $url) {
+            $label = 'Señal';
+            foreach (($current['sources'] ?? []) as $entry) if ($entry['url'] === $url) { $label = $entry['label']; break; }
+            $items[] = ['id' => playerSourceId($url), 'name' => $label];
+        }
+        playerAnswer(['sources' => count($sources), 'items' => $items]);
+    }
+    $status = 0; $body = null; $at = '';
+    $automatic = !isset($_GET['source_id']) && !isset($_GET['src']) && empty($_GET['intento']);
+    if ($automatic && !empty($current['preferred'])) {
+        $preferred = array_values(array_filter($sources, function ($url) use ($current) { return playerSourceId($url) === $current['preferred']; }));
+        if ($preferred) list($status, $body, $at) = playerFirstList($preferred, $final);
+    }
+    if ($status !== 200) list($status, $body, $at) = playerFirstList($sources, $final);
     if ($status === 200) {
         if (playerContainsZicoToken($body, $token)) playerAnswer(['error' => 'No se pudo preparar una lista segura del vídeo.'], 502);
-        if ($cast) playerAnswer(array('url' => playerRelayed($at, $final, $secret) . '&l=1'));
-        playerList(playerRewrite($body, $at, $final, $secret));
+        if ($automatic && $current !== null) playerZicoRememberSource($page, $token, $at);
+        $relayPage = playerZicoSignedSource($page, $catalog, $secret) ? $page : $final;
+        if ($cast) playerAnswer(array('url' => playerRelayed($at, $relayPage, $secret) . '&l=1'));
+        playerList(playerRewrite($body, $at, $relayPage, $secret));
     }
     playerAnswer(array('error' => 'Ninguna fuente HLS de la página del reproductor responde.'), 502);
 }
