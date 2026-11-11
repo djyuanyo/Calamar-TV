@@ -1,0 +1,15 @@
+# Entorno de prueba aislado. No publica el motor en Internet.
+# Solo usar contenidos cuya recepción y redistribución estén autorizadas.
+services:
+  acestream:
+    image: ghcr.io/martinbjeldbak/acestream-http-proxy:latest
+    container_name: calamar-acestream-test
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6878:6878"
+    environment:
+      ALLOW_REMOTE_ACCESS: "no"
+    volumes:
+      - acestream-test-data:/home/appuser/.ACEStream
+volumes:
+  acestream-test-data:
