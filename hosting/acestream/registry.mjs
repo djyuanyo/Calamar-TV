@@ -1,8 +1,9 @@
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { chownSync, mkdirSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { startVpsMetrics } from './vps-metrics.mjs';
 
 const project = 'menciamedia';
 const adminEmail = 'juanjocarrillo7@gmail.com';
@@ -36,9 +37,12 @@ export function addChannel(file, id) {
   }
 }
 
+function tokenClaims(token) {
+  try { return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')); } catch { return null; }
+}
+
 export async function verifyAdmin(token, request = fetch) {
-  let claims;
-  try { claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')); } catch { return false; }
+  const claims = tokenClaims(token);
   if (!claims || claims.aud !== project || claims.iss !== `https://securetoken.google.com/${project}`
     || !Number.isFinite(claims.exp) || claims.exp <= Date.now() / 1000 || !claims.sub
     || claims.email !== adminEmail || claims.email_verified !== true
@@ -58,7 +62,16 @@ export async function verifyAdmin(token, request = fetch) {
     && !user.disabled && user.providerUserInfo?.some(provider => provider.providerId === 'google.com');
 }
 
-export function registryServer(file, authorize = verifyAdmin) {
+export function registryServer(file, authorize = verifyAdmin, metrics = startVpsMetrics()) {
+  let verifiedDigest, validUntil = 0;
+  async function metricsAdministrator(token) {
+    const digest = createHash('sha256').update(token).digest('hex');
+    if (digest === verifiedDigest && Date.now() < validUntil) return true;
+    if (!await authorize(token)) return false;
+    verifiedDigest = digest;
+    validUntil = Math.min(Date.now() + 30000, tokenClaims(token)?.exp * 1000);
+    return true;
+  }
   const reply = (res, status, body) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(body ? JSON.stringify(body) : undefined);
@@ -69,17 +82,24 @@ export function registryServer(file, authorize = verifyAdmin) {
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return reply(res, 403);
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
-    if (req.url !== '/ace-register') return reply(res, 404);
+    const readsMetrics = req.url === '/ace-metrics';
+    if (!readsMetrics && req.url !== '/ace-register') return reply(res, 404);
+    const method = readsMetrics ? 'GET' : 'POST';
     if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', method + ', OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      if (readsMetrics) res.setHeader('Access-Control-Max-Age', '300');
       return reply(res, 204);
     }
-    if (req.method !== 'POST') return reply(res, 405);
+    if (req.method !== method) return reply(res, 405);
     const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(req.headers.authorization || '')?.[1];
     if (!token || token.length > 8192) return reply(res, 401);
     let body = '';
     try {
+      if (readsMetrics) {
+        if (!await metricsAdministrator(token)) return reply(res, 401);
+        return reply(res, 200, metrics());
+      }
       for await (const chunk of req) {
         body += chunk;
         if (body.length > 1024) { reply(res, 413); return; }
@@ -92,7 +112,7 @@ export function registryServer(file, authorize = verifyAdmin) {
       return reply(res, 200, { url: `https://video.calamarmenciano.com/ace-hls/${key}/index.m3u8` });
     } catch (error) {
       if (res.destroyed) return;
-      console.error('Registro Ace Stream:', error.code || error.name);
+      console.error(readsMetrics ? 'Métricas VPS:' : 'Registro Ace Stream:', error.code || error.name);
       if (!res.headersSent) return reply(res, 503);
       res.destroy();
     }

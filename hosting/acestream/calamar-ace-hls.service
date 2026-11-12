@@ -1,0 +1,26 @@
+[Unit]
+Description=Calamar TV Ace Stream HLS
+After=calamar-acestream.service
+Wants=calamar-acestream.service
+
+[Service]
+User=calamar-ace
+Group=calamar-ace
+CacheDirectory=calamar-ace-hls
+CacheDirectoryMode=0750
+ExecStart=/usr/bin/node /opt/calamar-acestream/hls.mjs
+EnvironmentFile=-/etc/calamar-acestream/limits.conf
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=60%
+OOMPolicy=continue
+
+[Install]
+WantedBy=multi-user.target

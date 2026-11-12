@@ -11,10 +11,11 @@ test -f "$config/nginx-location.conf"
 test -f "$app/add-channel.mjs"
 nginx -t
 /usr/bin/node --check registry.mjs
+/usr/bin/node --check vps-metrics.mjs
 /usr/bin/node --check add-channel.mjs
 
 install -d -o calamar-ace -g calamar-ace -m 0750 "$state"
-install -m 0644 registry.mjs "$app/registry.mjs"
+install -m 0644 registry.mjs vps-metrics.mjs "$app/"
 if [[ ! -e "$app/add-channel.pre-registry.mjs" ]]; then
     cp -p "$app/add-channel.mjs" "$app/add-channel.pre-registry.mjs"
 fi
@@ -56,6 +57,11 @@ cat > "$config/nginx-register.conf" <<'NGINX'
 location = /ace-register {
     access_log off;
     client_max_body_size 1k;
+    proxy_read_timeout 9s;
+    proxy_pass http://127.0.0.1:6881;
+}
+location = /ace-metrics {
+    access_log off;
     proxy_read_timeout 9s;
     proxy_pass http://127.0.0.1:6881;
 }

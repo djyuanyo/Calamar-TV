@@ -1,0 +1,13 @@
+.vps-panel { margin: 24px 0 0; }
+.vps-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.vps-metrics > div { display: grid; gap: 5px; padding: 12px; border: 1px solid #303744; border-radius: 10px; background: #181c24; }
+.vps-metrics span { color: var(--muted); font-size: 13px; }
+.vps-metrics strong { font-size: clamp(16px, 2.5vw, 24px); font-variant-numeric: tabular-nums; }
+.vps-metrics > div:first-child strong { color: #ffc363; }
+.vps-plot { position: relative; overflow: hidden; border: 1px solid #303744; border-radius: 10px; background: #12161d; }
+.vps-plot canvas { display: block; width: 100%; height: clamp(190px, 29vw, 310px); touch-action: pan-y; }
+.vps-inspected { position: absolute; top: 9px; right: 12px; padding: 5px 8px; border-radius: 6px; color: #fff; background: #222936; pointer-events: none; font-size: 12px; }
+.vps-inspected:empty { display: none; }
+@media (max-width: 620px) {
+  .vps-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

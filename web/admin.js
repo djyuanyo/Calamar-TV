@@ -15,6 +15,7 @@ import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
 import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 import { aceContentId, resolveAceStreams } from './acestream.js';
+import { vpsPanel } from './vps-panel.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
 // reads their calendars from ESPN again and publishes the weeks that come in, in a single save.
@@ -479,7 +480,7 @@ export async function render(state) {
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
   const userRoute = location.hash.match(/^#\/admin\/usuarios(?:\/([a-zA-Z0-9_-]{1,128}))?\/?$/);
   if (userRoute) return usersAdmin(el, userService, state, userRoute[1]);
-  const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const section = location.hash === '#/admin/servidor' ? 'vps' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -492,8 +493,8 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'library' ? libraryAdmin(el, {
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
+      ...(section === 'vps' ? [vpsPanel(el, () => auth.currentUser.getIdToken())] : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
