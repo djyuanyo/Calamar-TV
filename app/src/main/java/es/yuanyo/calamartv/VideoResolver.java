@@ -27,7 +27,7 @@ public final class VideoResolver {
     try {
       URI u = URI.create(address);
       String host = u.getHost();
-      return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && u.getPort() == -1 && host != null
+      return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && host != null
           && (host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))
           && u.getPath() != null && (u.getPath().matches("/api/player/[0-9]+/?") || channelPlayer(address) != null);
     } catch (Exception invalid) { return false; }

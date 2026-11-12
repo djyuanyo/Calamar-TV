@@ -6,7 +6,7 @@ export function zicoHost(host) {
 export function renewablePage(address) {
   try {
     const u = new URL(address);
-    return u.protocol === 'https:' && !u.username && !u.password && !u.port && zicoHost(u.hostname)
+    return u.protocol === 'https:' && !u.username && !u.password && zicoHost(u.hostname)
       && (/^\/api\/player\/\d+\/?$/.test(u.pathname) || !!zicoChannelPlayer(address));
   } catch { return false; }
 }
