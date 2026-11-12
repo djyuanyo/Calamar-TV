@@ -6,6 +6,11 @@ on:
     paths:
       - 'tools/wiseplay-extractor-android/**'
       - '.github/workflows/wiseplay-extractor-apk.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/wiseplay-extractor-android/**'
+      - '.github/workflows/wiseplay-extractor-apk.yml'
   workflow_dispatch:
 jobs:
   build:
