@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calamar-zico",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-28",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "MEDIA_HOSTS": "zicotv.cc,bp.zicotv.cc" }
+}
