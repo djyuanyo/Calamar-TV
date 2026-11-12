@@ -34,7 +34,11 @@ try {
     requests.push(u.href);
     const headers={'access-control-allow-origin':'*'};
     if (u.hostname==='cdn.jsdelivr.net' && u.pathname.includes('/hls.js@')) return route.fulfill({contentType:'text/javascript',body:hls});
-    if (u.href==='https://bp.zicotv.cc/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[{type:'direct',url:'https://cdn.example/fallback.m3u8'}]}}});
+    if (u.href==='https://bp.zicotv.cc/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[
+      {type:'direct',url:'https://ads.example/preroll.mp4'},
+      {type:'iframe',url:'https://ads.example/player'},
+      {type:'direct',url:'https://cdn.example/fallback.m3u8'},
+    ]}}});
     if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
     if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
     if (u.hostname==='bp.zicotv.cc') return route.abort(); // Simulate the operator blocking direct player requests.
@@ -105,5 +109,6 @@ try {
   await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
   assert.equal(await page.locator('#player iframe').count(),0);
   assert.ok(requests.includes('https://cdn.example/fallback.m3u8'));
+  assert.equal(requests.some(url=>new URL(url).hostname==='ads.example'),false);
   console.log('PASS: import -> edit keeps /channels/ -> refresh switches channel/event without duplicates -> both play in our player');
 } finally {await browser?.close();await new Promise(ok=>server.close(ok));}

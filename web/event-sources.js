@@ -11,7 +11,7 @@ export function zicoEventApi(address) {
 }
 
 /** Event feeds can include external players and short video clips alongside live signals. */
-export function zicoEventSignal(address) {
+function zicoEventSignal(address) {
   try {
     const u = new URL(address);
     if (u.protocol !== 'https:' || u.username || u.password || u.searchParams.has('token')) return null;

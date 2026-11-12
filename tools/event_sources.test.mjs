@@ -89,10 +89,6 @@ test('events without own channels use the event page without storing external so
   assert.deepEqual(result.data.events[0].streams,['https://bp.zicotv.cc/events/1']);
   assert.deepEqual(result.data.events[0].zicoStreams,['https://bp.zicotv.cc/events/1']);
   assert.deepEqual(applyZicoAgenda(result.data,payload(row(1))).data.events,[]);
-  assert.equal(applyZicoAgenda(catalog,payload(row(2,{sources:[
-    {type:'iframe',url:'https://example.com/player'},
-    {type:'direct',url:'https://example.com/ad.mp4'},
-  ]}))).skipped,1);
 });
 
 test('refresh switches channel to event fallback and back, replacing imported player aliases', () => {
