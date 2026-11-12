@@ -1,7 +1,8 @@
 import { madridDay } from './audience.js';
 import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
-import { zicoChannelPlayer } from './zico-channel.js';
+import { renewablePage, zicoChannelPlayer, zicoHost } from './zico-channel.js';
+export { renewablePage } from './zico-channel.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
@@ -245,16 +246,6 @@ export function playerEndpoint(address) {
 }
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
-/** Fixed channel and API player pages can be re-read when their video token expires. */
-export function renewablePage(address) {
-  try {
-    const u = new URL(address);
-    return u.protocol === 'https:' && !u.username && !u.password
-      && (u.hostname === 'zicotv.cc' || u.hostname.endsWith('.zicotv.cc'))
-      && (/^\/api\/player\/\d+\/?$/.test(u.pathname) || !!zicoChannelPlayer(address));
-  } catch { return false; }
-}
-
 // AnonMP4 (anonmp4.art, anonmp4.to…): its API gives each video an embed page (embed_url) for other sites.
 // The video plays in that page, with AnonMP4's own player, inside ours.
 const ANON_HOST = /^(?:www\.)?anonmp4\.[a-z]{2,10}$/;
@@ -264,14 +255,6 @@ export function anonmp4Embed(url) {
     const code = (u.pathname.match(/^\/(?:v|e|embed)\/([A-Za-z0-9]{8,24})\/?$/) || [])[1];
     return u.protocol === 'https:' && ANON_HOST.test(u.hostname) && !u.username && !u.password && code ? `https://${u.hostname}/embed/${code}` : null;
   } catch { return null; }
-}
-
-const FRAME_HOSTS = ['zicotv.cc'];
-export function framedPage(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' && FRAME_HOSTS.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
-  } catch { return false; }
 }
 
 /** `pages`: player pages play through the hosting (channels) or in a frame; otherwise they need the app. */
@@ -314,7 +297,7 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
   if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
   if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
-  if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
+  if (pages && zicoHost(u.hostname)) return { ok: false, reason: 'Usa el enlace de canal o evento de Zico TV' };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }

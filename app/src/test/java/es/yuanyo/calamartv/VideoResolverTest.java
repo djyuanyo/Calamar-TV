@@ -47,6 +47,35 @@ public class VideoResolverTest {
     assertEquals("https://bp.zicotv.cc/api/player/4", sources.get(0).url);
   }
   @Test
+  public void eventDropsExternalPlayersAndClipsButKeepsLiveLinks() throws Exception {
+    String page = "https://bp.zicotv.cc/api/player/28";
+    String hls = "https://example.com/partido.m3u8", ts = "https://example.com/partido.ts";
+    org.json.JSONArray entries = new org.json.JSONArray();
+    for (String url : new String[] {"https://example.com/embed", "https://example.com/preroll.mp4",
+        "https://bp.zicotv.cc/watch", page, hls, ts}) entries.put(new org.json.JSONObject().put("url", url));
+    String json = new org.json.JSONObject().put("data", new org.json.JSONObject().put("sources", entries)).toString();
+    List<VideoResolver.Source> sources = VideoResolver.eventPlayers(json);
+    assertEquals(3, sources.size());
+    assertEquals(page, sources.get(0).url);
+    assertEquals(hls, sources.get(1).url);
+    assertEquals(ts, sources.get(2).url);
+  }
+
+  @Test
+  public void zicoNeverUsesGenericVideoDetection() throws Exception {
+    String page = "https://bp.zicotv.cc/api/player/28";
+    String ad = "<video src='https://example.com/preroll.mp4'>";
+    assertTrue(VideoResolver.parse(ad, page).isEmpty());
+    assertEquals(1, VideoResolver.parse(ad, "https://example.com/player").size());
+    String config = "var ZT_SOURCES = [{\"url\":\"https://example.com/preroll.mp4\"},"
+        + "{\"url\":\"https://example.com/live.m3u8\"},"
+        + "{\"url\":\"https://example.com/hidden.m3u8\",\"hidden\":true}];";
+    List<VideoResolver.Source> sources = VideoResolver.parse(ad + config, page);
+    assertEquals(1, sources.size());
+    assertEquals("https://example.com/live.m3u8", sources.get(0).url);
+  }
+
+  @Test
   public void readsEscapedSourceAndSkipsLockedPremium() throws Exception {
     String html =
         "var ZT_SOURCES = [{\"label\":\"CDN ]"

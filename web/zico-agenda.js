@@ -1,4 +1,4 @@
-import { zicoEventApi } from './event-sources.js';
+import { zicoEventApi, zicoEventSignal } from './event-sources.js';
 import { zicoChannelPlayer } from './zico-channel.js';
 import { COMPETITIONS, fixtureEvent } from './competitions.js';
 
@@ -64,9 +64,8 @@ export function zicoChannelSources(row) {
 function hasEventSource(row) {
   const playable = (source, inheritedType) => {
     if (!source || source.locked || source.is_premium) return false;
-    const url = httpsUrl(source.player_url || source.url);
-    return !!url && url.href.length <= 2048 && !url.searchParams.has('token')
-      && !zicoEventApi(url.href) && ['direct', 'iframe'].includes(source.type || inheritedType);
+    const url = zicoEventSignal(source.player_url || source.url);
+    return !!url && url.href.length <= 2048 && ['direct', 'iframe'].includes(source.type || inheritedType);
   };
   return (Array.isArray(row.sources) ? row.sources : []).some(source => playable(source)
     || (!source?.locked && !source?.is_premium && Array.isArray(source?.streams)

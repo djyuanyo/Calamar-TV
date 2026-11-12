@@ -1,3 +1,16 @@
+export function zicoHost(host) {
+  return host === 'zicotv.cc' || host.endsWith('.zicotv.cc');
+}
+
+/** Fixed channel and API player pages can be re-read when their video token expires. */
+export function renewablePage(address) {
+  try {
+    const u = new URL(address);
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port && zicoHost(u.hostname)
+      && (/^\/api\/player\/\d+\/?$/.test(u.pathname) || !!zicoChannelPlayer(address));
+  } catch { return false; }
+}
+
 /** Channel detail pages and API players share the provider's channel id. */
 export function zicoChannelPlayer(address) {
   try {

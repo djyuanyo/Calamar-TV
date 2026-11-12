@@ -1,10 +1,21 @@
+import { renewablePage, zicoHost } from './zico-channel.js';
+
 /** Zico event pages are not embeddable; the public CORS API exposes their player URLs. */
 export function zicoEventApi(address) {
   try {
     const u = new URL(address);
     const match = /^\/(?:api\/v1\/)?events\/(\d+)\/?$/.exec(u.pathname);
-    if (u.protocol !== 'https:' || u.username || u.password || !match || !(u.hostname === 'zicotv.cc' || u.hostname.endsWith('.zicotv.cc'))) return null;
+    if (u.protocol !== 'https:' || u.username || u.password || !match || !zicoHost(u.hostname)) return null;
     return `${u.origin}/api/v1/events/${match[1]}`;
+  } catch { return null; }
+}
+
+/** Event feeds can include external players and short video clips alongside live signals. */
+export function zicoEventSignal(address) {
+  try {
+    const u = new URL(address);
+    if (u.protocol !== 'https:' || u.username || u.password || u.searchParams.has('token')) return null;
+    return renewablePage(u.href) || /\.(m3u8|ts)$/i.test(u.pathname) ? u : null;
   } catch { return null; }
 }
 
@@ -15,11 +26,8 @@ export function eventPlayerSources(data) {
     const entries = [source, ...(Array.isArray(source.streams) ? source.streams : [])];
     for (const entry of entries) {
       if (!entry || entry.locked || entry.is_premium) continue;
-      try {
-        const u = new URL(entry.player_url || entry.url);
-        if (u.protocol !== 'https:' || u.username || u.password || u.searchParams.has('token') || zicoEventApi(u.href)) continue;
-        if (!found.has(u.href)) found.set(u.href, { url: u.href, name: String(entry.name || source.name || 'Fuente del evento') + (entry !== source && entry.language ? ` · ${entry.language}` : '') });
-      } catch { /* Ignore incomplete sources. */ }
+      const u = zicoEventSignal(entry.player_url || entry.url);
+      if (u && !found.has(u.href)) found.set(u.href, { url: u.href, name: String(entry.name || source.name || 'Fuente del evento') + (entry !== source && entry.language ? ` · ${entry.language}` : '') });
     }
   }
   return [...found.values()];

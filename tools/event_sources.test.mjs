@@ -16,6 +16,17 @@ test('event URLs resolve through public API, never an iframe of the event page',
 test('only public valid players, deduplicated and named', () => {
   assert.deepEqual(eventPlayerSources(data), [{url:player, name:'LaLiga 2'}]);
 });
+test('an event keeps the Zico player and live links while dropping embedded players and video clips', () => {
+  const hls = 'https://example.com/partido.m3u8';
+  const ts = 'https://example.com/partido.ts';
+  const embedded = 'https://example.com/embed';
+  const clip = 'https://example.com/preroll.mp4';
+  const zicoLanding = 'https://bp.zicotv.cc/watch';
+  const payload = { data: { sources: [player, embedded, clip, zicoLanding, hls, ts].map(url => ({ url })) } };
+  assert.deepEqual(eventPlayerSources(payload).map(row => row.url), [player, hls, ts]);
+  assert.equal(webPlayback(zicoLanding, { pages: true }).ok, false);
+  assert.equal(webPlayback(clip).kind, 'video');
+});
 test('manual event expands while existing sources and selection origin are preserved', async () => {
   const result = await expandEventSources(['https://example.com/live.m3u8', page], {fetcher:async (url, options) => {
     assert.equal(url, zicoEventApi(page)); assert.equal(options.credentials, 'omit');
@@ -78,6 +89,10 @@ test('events without own channels use the event page without storing external so
   assert.deepEqual(result.data.events[0].streams,['https://bp.zicotv.cc/events/1']);
   assert.deepEqual(result.data.events[0].zicoStreams,['https://bp.zicotv.cc/events/1']);
   assert.deepEqual(applyZicoAgenda(result.data,payload(row(1))).data.events,[]);
+  assert.equal(applyZicoAgenda(catalog,payload(row(2,{sources:[
+    {type:'iframe',url:'https://example.com/player'},
+    {type:'direct',url:'https://example.com/ad.mp4'},
+  ]}))).skipped,1);
 });
 
 test('refresh switches channel to event fallback and back, replacing imported player aliases', () => {

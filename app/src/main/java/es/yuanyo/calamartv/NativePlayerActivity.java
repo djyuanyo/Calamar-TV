@@ -676,6 +676,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playDirect();
       return;
     }
+    if (AppSources.zico(pageUrl) && !zicoPage() && !VideoResolver.isMedia(pageUrl)) {
+      problem("Usa el enlace de canal o evento de Zico TV.");
+      return;
+    }
     if (ProviderPlayers.embed(pageUrl) != null) {
       openWeb();
       return;
@@ -819,7 +823,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                     problem("Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.");
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
-                  } else if (sources.isEmpty() && VideoResolver.renewablePage(pageUrl)) {
+                  } else if (sources.isEmpty() && (zicoPage() || AppSources.zico(documentUrl))) {
                     if (!tryNextZicoSource()) problem("No hay señales disponibles para este canal.");
                   } else if (sources.isEmpty()) {
                     openWeb();
@@ -1526,6 +1530,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void openWeb() {
     if (!active) return;
+    if (AppSources.zico(pageUrl) || AppSources.zico(documentUrl)) {
+      problem("No hay una señal de Zico TV disponible. Prueba otra fuente.");
+      return;
+    }
     setFullscreen(false); // The web page has no controller, so the panel must be there.
     ++generation;
     resolving = false;
@@ -1549,7 +1557,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new PlaybackWebClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return !url.startsWith("https://") || AppSources.webOnly(url)
+            return !url.startsWith("https://") || AppSources.zico(url) || AppSources.webOnly(url)
                 || (embed != null && ProviderPlayers.embed(url) == null);
           }
 
@@ -1564,7 +1572,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             String url = request.getUrl().toString();
             if (AppSources.webOnly(url)) return new WebResourceResponse("text/plain", "UTF-8",
                 new java.io.ByteArrayInputStream(new byte[0]));
-            if (embed == null && !zicoPage() && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
+            if (embed == null && "GET".equals(request.getMethod()) && VideoResolver.isMedia(url)) {
               handler.post(
                   () -> {
                     if (generation == browserGeneration) detected(url);
@@ -1584,7 +1592,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 value -> {
                   try {
                     String candidate = new org.json.JSONArray("[" + value + "]").optString(0);
-                    if (generation == browserGeneration && !zicoPage()) detected(candidate);
+                    if (generation == browserGeneration) detected(candidate);
                   } catch (Exception ignored) {
                   }
                 });
@@ -1655,6 +1663,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void detected(String address) {
     if (!active || !webMode || !VideoResolver.isMedia(address) || AppSources.webOnly(address)) return;
+    if (AppSources.zico(pageUrl) || AppSources.zico(documentUrl)) return;
     VideoResolver.Source source = new VideoResolver.Source("Vídeo detectado", address);
     sources.clear();
     sources.add(source);

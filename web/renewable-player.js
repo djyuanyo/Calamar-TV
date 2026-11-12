@@ -23,7 +23,7 @@ export function pageSources(html, page) {
       const sources = JSON.parse(html.slice(start, i + 1));
       const urls = [];
       for (const s of sources) {
-        if (!s || s.locked || typeof s.url !== 'string') continue;
+        if (!s || s.locked || s.off || s.hidden || typeof s.url !== 'string') continue;
         try {
           const u = new URL(s.url, page);
           if (u.protocol === 'https:' && !u.username && !u.password && /\.m3u8$/i.test(u.pathname) && !urls.includes(u.href)) urls.push(u.href);
