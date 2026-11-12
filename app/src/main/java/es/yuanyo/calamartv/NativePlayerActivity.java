@@ -128,6 +128,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** Films and episodes: their «Continuar viendo» entry, where to start, and whether it reached the end. */
   private org.json.JSONObject progressEntry;
+  private EpisodeHistory episodeHistory;
+  private boolean episodeStarted, episodeCompleted;
   private long resumeMs;
   private boolean ended;
   // «Saltar intro» during the intro set for the series; «Siguiente capítulo» with a 10-second count during
@@ -201,7 +203,11 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     footballFallback = getIntent().getBooleanExtra("football_fallback", false);
     try {
       String entry = getIntent().getStringExtra("progress_entry");
-      if (entry != null) progressEntry = new org.json.JSONObject(entry);
+      if (entry != null) {
+        progressEntry = new org.json.JSONObject(entry);
+        if (!progressEntry.optString("episode").isEmpty())
+          episodeHistory = new EpisodeHistory(this, progressEntry.optString("section"), progressEntry.optString("item"));
+      }
     } catch (org.json.JSONException ignored) {
     }
     resumeMs = getIntent().getLongExtra("resume_ms", 0);
@@ -1692,8 +1698,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     long position = player.getCurrentPosition(), duration = player.getDuration();
     if (position <= 0) return;
     resumeMs = position;
+    if (position >= 10000) rememberEpisode(Library.Progress.finished(position, duration));
     Library.Progress.save(this, Library.Progress.record(Library.Progress.load(this), progressEntry, position,
         duration == androidx.media3.common.C.TIME_UNSET ? 0 : duration, System.currentTimeMillis()));
+  }
+
+  private void rememberEpisode(boolean completed) {
+    if (episodeHistory == null || episodeCompleted || (!completed && episodeStarted)) return;
+    episodeStarted = true;
+    episodeCompleted = completed;
+    episodeHistory.record(progressEntry.optString("episode"), completed, System.currentTimeMillis());
   }
 
   private void releasePlayer() {
@@ -1756,6 +1770,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   /** Watched to the end (or «Siguiente capítulo»): out of «Continuar viendo», and the series plays the next one. */
   private void endEpisode() {
     if (ended || progressEntry == null) return;
+    rememberEpisode(true);
     ended = true;
     handler.removeCallbacks(skipTick);
     Library.Progress.save(this, Library.Progress.remove(Library.Progress.load(this), progressEntry.optString("key")));

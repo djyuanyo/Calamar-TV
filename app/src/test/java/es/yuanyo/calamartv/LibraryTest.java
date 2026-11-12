@@ -364,4 +364,34 @@ public class LibraryTest {
     for (String[] slide : Library.gateSlides(data, 12)) labels.add(slide[0] + " · " + slide[2]);
     assertEquals(Arrays.asList("Peli 1 · N.º 1 en películas hoy", "Serie 1 · N.º 1 en series hoy", "Peli 2 · N.º 2 en películas hoy", "Serie 2 · N.º 2 en series hoy"), labels);
   }
+
+  @Test public void syncsEpisodeHistoryWithTheWebAndOpensTheMostRecentSeason() throws Exception {
+    assertEquals("eh02fb12f26b07e1a2c6", EpisodeHistory.documentId("p123", "documentales", "s42"));
+    Library.Item item = new Library.Data(new JSONObject(JSON)).items("series").get(0);
+    JSONObject first = new JSONObject().put("recent", new JSONObject().put("episode", "e1").put("at", 90))
+        .put("watched", new JSONObject().put("e1", 90));
+    JSONObject second = new JSONObject().put("recent", new JSONObject().put("episode", "e3").put("at", 30))
+        .put("watched", new JSONObject().put("e3", 30));
+    JSONObject history = EpisodeHistory.merge(first, second);
+    assertEquals(90L, EpisodeHistory.watchedAt(history, "e1"));
+    assertEquals(30L, EpisodeHistory.watchedAt(history, "e3"));
+    assertEquals(10, Library.defaultSeason(item, new JSONObject(), history));
+    assertEquals("e2", Library.resumeEpisode(item, new JSONObject(), history).id);
+    JSONObject newer = new JSONObject().put("e3", new JSONObject().put("at", 100));
+    assertEquals(1, Library.defaultSeason(item, newer, history));
+  }
+
+  @Test public void listsDatedPremieresWithoutStartingThem() throws Exception {
+    JSONObject metadata = new JSONObject().put("season", 2).put("episode", 1)
+        .put("name", "Estreno").put("aired", "2099-11-12");
+    JSONObject uploaded = new JSONObject().put("season", 1).put("episode", 1).put("id", "e1")
+        .put("url", "https://calamarmenciano.com/S/0.mkv");
+    Library.Item item = new Library.Item(new JSONObject().put("id", "spaco").put("kind", "tv")
+        .put("episodes", new JSONArray().put(uploaded)).put("tmdb", new JSONObject().put("nextEpisode", metadata)));
+    Library.Episode premiere = item.seasons().get(2).get(0);
+    assertTrue(premiere.upcoming());
+    assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel());
+    assertNull(item.next(item.episode("e1")));
+    assertEquals("e1", Library.resumeEpisode(item, new JSONObject()).id);
+  }
 }

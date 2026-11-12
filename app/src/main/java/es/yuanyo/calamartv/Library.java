@@ -57,9 +57,11 @@ final class Library {
     final int runtime;
     final String aired;
 
-    Episode(JSONObject e) {
+    Episode(JSONObject e) { this(e, e.optString("aired")); }
+
+    Episode(JSONObject e, String airDate) {
       id = e.optString("id");
-      aired = e.optString("aired");
+      aired = airDate;
       runtime = e.optInt("runtime", 0);
       addedAt = e.optString("addedAt");
       url = e.optString("url");
@@ -83,6 +85,18 @@ final class Library {
     String seasonLabel() {
       return "Temporada " + season;
     }
+
+    boolean upcoming() { return Library.upcoming(aired); }
+
+    String premiereLabel() {
+      java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
+      format.setTimeZone(TimeZone.getTimeZone("UTC"));
+      return "Estreno el " + format.format(new java.util.Date(day(aired)));
+    }
+  }
+
+  static boolean upcoming(String aired) {
+    return aired != null && aired.matches("\\d{4}-\\d{2}-\\d{2}") && aired.compareTo(madridDay(System.currentTimeMillis())) > 0;
   }
 
   static final long DAY = 86400000L;
@@ -160,6 +174,7 @@ final class Library {
     final List<String> genres = new ArrayList<>();
     final List<String[]> cast = new ArrayList<>();
     final List<Episode> episodes = new ArrayList<>();
+    final Map<String, Episode> scheduled = new LinkedHashMap<>();
     /** «Saltar intro» and «Siguiente capítulo» times set in the admin page (or empty). */
     final JSONObject skip;
     /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
@@ -230,12 +245,24 @@ final class Library {
           JSONObject p = c.optJSONObject(i);
           if (p != null) cast.add(new String[] {p.optString("name"), p.optString("character")});
         }
+      JSONArray upcoming = t.optJSONArray("upcoming");
+      if (upcoming != null) for (int i = 0; i < upcoming.length(); i++) addScheduled(upcoming.optJSONObject(i));
+      addScheduled(t.optJSONObject("nextEpisode"));
       JSONArray e = o.optJSONArray("episodes");
       if (e != null)
         for (int i = 0; i < e.length(); i++) {
           JSONObject ep = e.optJSONObject(i);
-          if (ep != null && Media.allowed(ep.optString("url"))) episodes.add(new Episode(ep));
+          if (ep != null && Media.allowed(ep.optString("url"))) {
+            Episode scheduledEpisode = scheduled.remove(ep.optInt("season", 1) + "/" + ep.optInt("episode"));
+            episodes.add(scheduledEpisode == null ? new Episode(ep) : new Episode(ep, scheduledEpisode.aired));
+          }
         }
+    }
+
+    private void addScheduled(JSONObject metadata) {
+      if (metadata == null) return;
+      Episode episode = new Episode(metadata);
+      if (episode.episode > 0 && episode.upcoming()) scheduled.put(episode.season + "/" + episode.episode, episode);
     }
 
     boolean playable() {
@@ -262,6 +289,7 @@ final class Library {
     Map<Integer, List<Episode>> seasons() {
       Map<Integer, List<Episode>> out = new LinkedHashMap<>();
       List<Episode> sorted = new ArrayList<>(episodes);
+      for (Episode e : scheduled.values()) if (e.upcoming()) sorted.add(e);
       Collections.sort(
           sorted,
           (a, b) -> a.season != b.season ? Integer.compare(a.season, b.season) : Integer.compare(a.episode, b.episode));
@@ -282,7 +310,10 @@ final class Library {
     Episode next(Episode current) {
       List<Episode> all = new ArrayList<>();
       for (List<Episode> season : seasons().values()) all.addAll(season);
-      for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) return all.get(i + 1);
+      for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) {
+        Episode following = all.get(i + 1);
+        return following.id.isEmpty() || following.upcoming() ? null : following;
+      }
       return null;
     }
 
@@ -300,6 +331,7 @@ final class Library {
             .put("sub", e == null ? (year > 0 ? String.valueOf(year) : "") : e.seasonLabel() + " · " + e.title())
             .put("image", e != null && !e.still.isEmpty() ? e.still : !backdrop.isEmpty() ? backdrop : poster);
         if (e != null) {
+          o.put("aired", e.aired);
           int[] marks = skipMarks(skip, e.season);
           o.put("intro_start", marks[0]).put("intro_end", marks[1]).put("credits", marks[2]).put("has_next", next(e) != null)
               .put("manual_intro", marks[0] >= 0).put("manual_credits", marks[4] > 0)
@@ -634,17 +666,49 @@ final class Library {
     return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
   }
 
-  /** The episode to play from a series' page: the one left half watched most recently, else the first. */
-  static Episode resumeEpisode(Item item, JSONObject progress) {
-    Episode first = null, latest = null;
+  private static Episode latestProgress(Item item, JSONObject progress) {
+    Episode latest = null;
     long at = -1;
+    for (Episode e : item.episodes) {
+      JSONObject saved = progress == null ? null : progress.optJSONObject(e.id);
+      if (!e.upcoming() && saved != null && saved.optLong("at") > at) {
+        at = saved.optLong("at");
+        latest = e;
+      }
+    }
+    return latest;
+  }
+
+  /** Open the last watched season, even when its last episode is already finished. */
+  static int defaultSeason(Item item, JSONObject progress, JSONObject history) {
+    Episode started = latestProgress(item, progress);
+    JSONObject recent = history == null ? null : history.optJSONObject("recent");
+    Episode last = recent == null ? null : item.episode(recent.optString("episode"));
+    if (last != null && (started == null || recent.optLong("at") > progress.optJSONObject(started.id).optLong("at"))) return last.season;
+    if (started != null) return started.season;
+    Map<Integer, List<Episode>> seasons = item.seasons();
+    return seasons.isEmpty() ? -1 : seasons.keySet().iterator().next();
+  }
+
+  static Episode resumeEpisode(Item item, JSONObject progress) {
+    return resumeEpisode(item, progress, null);
+  }
+
+  /** Continue the latest in-progress episode, or offer the first one the profile has not finished. */
+  static Episode resumeEpisode(Item item, JSONObject progress, JSONObject history) {
+    Episode started = latestProgress(item, progress);
+    if (started != null) {
+      long completed = EpisodeHistory.watchedAt(history, started.id);
+      if (completed == 0 || progress.optJSONObject(started.id).optLong("at") > completed) return started;
+    }
+    Episode first = null;
     for (List<Episode> season : item.seasons().values())
       for (Episode e : season) {
+        if (e.upcoming() || e.id.isEmpty()) continue;
         if (first == null) first = e;
-        JSONObject saved = progress == null ? null : progress.optJSONObject(e.id);
-        if (saved != null && saved.optLong("at", 0) > at) { at = saved.optLong("at", 0); latest = e; }
+        if (EpisodeHistory.watchedAt(history, e.id) == 0) return e;
       }
-    return latest != null ? latest : first;
+    return first;
   }
 
   // ---- Especial Halloween: 1 October to 2 November (Madrid), every horror title, as on the web ----

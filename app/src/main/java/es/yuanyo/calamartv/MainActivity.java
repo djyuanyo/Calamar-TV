@@ -92,6 +92,7 @@ public class MainActivity extends Activity {
         .putExtra(AccountActivity.REQUIRED, true), REQUIRED_LOGIN);
   }
   private final List<Dialog> contentDialogs = new ArrayList<>();
+  private final Map<Dialog, Runnable> episodeViews = new java.util.LinkedHashMap<>();
 
   private void showAccess(AppAccess.State state) {
     if (isFinishing() || isDestroyed()) return;
@@ -1538,7 +1539,6 @@ public class MainActivity extends Activity {
   }
 
   private void pauseContent() {
-    if (trailerPreview != null) { trailerPreview.evaluateJavascript("window.pauseTrailer && window.pauseTrailer()", null); trailerPreview.onPause(); }
     if (updater != null) updater.pause();
     sharedSession++;
     handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
@@ -1559,7 +1559,6 @@ public class MainActivity extends Activity {
   }
 
   private void resumeContent() {
-    if (trailerPreview != null) trailerPreview.onResume();
     if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
     if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
@@ -2117,7 +2116,6 @@ public class MainActivity extends Activity {
    * «Reproducir», the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», «Compartir», and the
    * tabs «Episodios» (series), «Tráileres y más» (the trailer in Spanish) and «Similares».
    */
-  private android.webkit.WebView trailerPreview;
 
   void libraryDetail(final String section, final Library.Item item) {
     if (!contentAdmitted) return;
@@ -2138,49 +2136,9 @@ public class MainActivity extends Activity {
       hero.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
       image(backdrop, picture);
     }
-    final android.webkit.WebView preview;
-    if (!item.trailer.isEmpty()) {
-      preview = new android.webkit.WebView(this);
-      trailerPreview = preview;
-      preview.setAlpha(0f);
-      preview.addJavascriptInterface(new Object() {
-        @android.webkit.JavascriptInterface public void state(String state) {
-          runOnUiThread(() -> {
-            if (trailerPreview == preview) preview.setAlpha("playing".equals(state) || "blocked".equals(state) ? 1f : 0f);
-          });
-        }
-      }, "CalamarTrailer");
-      preview.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-      preview.getSettings().setJavaScriptEnabled(true);
-      preview.getSettings().setDomStorageEnabled(true);
-      preview.getSettings().setMediaPlaybackRequiresUserGesture(false);
-      preview.getSettings().setAllowFileAccess(false);
-      preview.getSettings().setAllowContentAccess(false);
-      Runnable disposePreview = () -> {
-        if (trailerPreview == preview) trailerPreview = null;
-        if (preview.getParent() != hero) return;
-        hero.removeView(preview);
-        preview.destroy();
-      };
-      preview.setWebViewClient(new android.webkit.WebViewClient() {
-        @Override public boolean onRenderProcessGone(android.webkit.WebView view, android.webkit.RenderProcessGoneDetail detail) {
-          disposePreview.run();
-          return true;
-        }
-        @Override public void onReceivedError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
-          if (request.isForMainFrame()) view.setVisibility(View.GONE);
-        }
-        @Override public void onReceivedHttpError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceResponse response) {
-          if (request.isForMainFrame()) view.setVisibility(View.GONE);
-        }
-      });
-      hero.addView(preview, new FrameLayout.LayoutParams(-1, -1));
-      preview.loadUrl("https://djyuanyo.github.io/Calamar-TV/trailer.html?v=" + item.trailer);
-      dialog.setOnDismissListener(d -> disposePreview.run());
-    } else preview = null;
     View scrim = new View(this);
     scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
-    if (preview == null) hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+    hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
     Button back = Ui.pill(this, "‹", Ui.Kind.SURFACE, true);
     back.setContentDescription("Volver");
     back.setOnClickListener(v -> dialog.dismiss());
@@ -2188,7 +2146,7 @@ public class MainActivity extends Activity {
     bp.setMargins(dp(gutter()), dp(12), 0, 0);
     hero.addView(back, bp);
     int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
-    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.max(preview == null ? 0 : 240, Math.min(wide() ? 420 : 300, screen * 9 / 16)))));
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.min(wide() ? 420 : 300, screen * 9 / 16))));
 
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(LinearLayout.VERTICAL);
@@ -2232,15 +2190,33 @@ public class MainActivity extends Activity {
     String facts = item.facts();
     if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
     final JSONObject progress = Library.Progress.load(this);
+    final EpisodeHistory episodeHistory = item.series ? new EpisodeHistory(this, section, item.id) : null;
+    final Runnable refreshPlay;
     if (item.series) {
-      final Library.Episode next = Library.resumeEpisode(item, progress);
-      if (next != null) {
-        JSONObject saved = progress.optJSONObject(next.id);
-        String text = (saved != null ? "Continuar T" : "Reproducir T") + next.season + ":E" + next.episode + (saved != null ? " · " + Library.clock(saved.optLong("position")) : "");
-        bigPlay(body, text, () -> playEntry(item.entry(section, next), false)).requestFocus();
-        if (saved != null) body.addView(progressBar(saved), progressBarParams(dp(4)));
-      }
+      if (Library.resumeEpisode(item, progress, episodeHistory.local()) != null) {
+        final Button play = bigPlay(body, "Reproducir", () -> {
+          Library.Episode next = Library.resumeEpisode(item, Library.Progress.load(this), episodeHistory.local());
+          if (next != null) playEntry(item.entry(section, next), false);
+        });
+        final LinearLayout progressHost = new LinearLayout(this);
+        progressHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(progressHost, new LinearLayout.LayoutParams(-1, -2));
+        refreshPlay = () -> {
+          JSONObject latest = Library.Progress.load(this), seen = episodeHistory.local();
+          Library.Episode next = Library.resumeEpisode(item, latest, seen);
+          if (next == null) { play.setVisibility(View.GONE); return; }
+          JSONObject saved = latest.optJSONObject(next.id);
+          if (saved != null && saved.optLong("at") <= EpisodeHistory.watchedAt(seen, next.id)) saved = null;
+          play.setText((saved == null ? "Reproducir T" : "Continuar T") + next.season + ":E" + next.episode
+              + (saved == null ? "" : " · " + Library.clock(saved.optLong("position"))));
+          progressHost.removeAllViews();
+          if (saved != null) progressHost.addView(progressBar(saved), progressBarParams(dp(4)));
+        };
+        refreshPlay.run();
+        play.requestFocus();
+      } else refreshPlay = () -> {};
     } else {
+      refreshPlay = () -> {};
       final JSONObject entry = item.entry(section, null);
       JSONObject saved = progress.optJSONObject(entry.optString("key"));
       bigPlay(body, saved == null ? "Reproducir" : "Continuar · " + Library.clock(saved.optLong("position")), () -> playEntry(entry, false)).requestFocus();
@@ -2320,7 +2296,9 @@ public class MainActivity extends Activity {
     tabNames.add("Tráileres y más");
     tabNames.add("Similares");
     final Runnable[] open = new Runnable[1];
-    final String[] chosen = {item.series ? "Episodios" : !item.trailer.isEmpty() ? "Tráileres y más" : "Similares"};
+    final String[] chosen = {item.series ? "Episodios" : "Similares"};
+    final int[] selectedSeason = {-1};
+    final Runnable[] refreshEpisodes = {() -> {}};
     open[0] = () -> {
       tabs.removeAllViews();
       for (final String name : tabNames) {
@@ -2344,7 +2322,8 @@ public class MainActivity extends Activity {
         tabs.addView(tab, tp);
       }
       panel.removeAllViews();
-      if (chosen[0].equals("Episodios")) episodesTab(panel, section, item, progress);
+      refreshEpisodes[0] = () -> {};
+      if (chosen[0].equals("Episodios")) refreshEpisodes[0] = episodesTab(panel, section, item, episodeHistory, selectedSeason);
       else if (chosen[0].equals("Tráileres y más")) trailerTab(panel, item);
       else similarTab(panel, section, item, dialog);
     };
@@ -2363,6 +2342,7 @@ public class MainActivity extends Activity {
 
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
     showContentDialog(dialog);
+    if (episodeHistory != null) observeEpisodeHistory(dialog, episodeHistory, () -> { refreshPlay.run(); refreshEpisodes[0].run(); });
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
     dialog.getWindow().setLayout(-1, -1);
   }
@@ -2393,30 +2373,38 @@ public class MainActivity extends Activity {
   }
 
   /** «Episodios»: «Temporada N ▾» and the episodes of that season. */
-  void episodesTab(final LinearLayout panel, final String section, final Library.Item item, JSONObject progress) {
+  private void observeEpisodeHistory(Dialog dialog, EpisodeHistory history, Runnable draw) {
+    episodeViews.put(dialog, draw);
+    dialog.setOnDismissListener(d -> episodeViews.remove(dialog));
+    history.sync(() -> { if (dialog.isShowing()) draw.run(); });
+  }
+
+  Runnable episodesTab(final LinearLayout panel, final String section, final Library.Item item, EpisodeHistory history, int[] selectedSeason) {
     final Map<Integer, List<Library.Episode>> seasons = item.seasons();
-    if (seasons.isEmpty()) return;
-    Library.Episode next = Library.resumeEpisode(item, progress);
-    final int[] current = {next != null && seasons.containsKey(next.season) ? next.season : seasons.keySet().iterator().next()};
+    if (seasons.isEmpty()) return () -> {};
     final Button picker = Ui.pill(this, "", Ui.Kind.SURFACE, false);
     final LinearLayout episodes = new LinearLayout(this);
     episodes.setOrientation(LinearLayout.VERTICAL);
     final Runnable draw = () -> {
-      picker.setText("Temporada " + current[0] + "  ▾");
+      JSONObject progress = Library.Progress.load(this), seen = history.local();
+      int selected = seasons.containsKey(selectedSeason[0]) ? selectedSeason[0] : Library.defaultSeason(item, progress, seen);
+      if (!seasons.containsKey(selected)) selected = seasons.keySet().iterator().next();
+      picker.setText("Temporada " + selected + "  ▾");
       episodes.removeAllViews();
-      for (Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(section, item, e));
+      for (Library.Episode e : seasons.get(selected)) episodes.addView(episodeRow(section, item, e, progress, seen));
     };
     picker.setOnClickListener(v -> {
       final List<Integer> numbers = new ArrayList<>(seasons.keySet());
       String[] labels = new String[numbers.size()];
       for (int i = 0; i < labels.length; i++) labels[i] = "Temporada " + numbers.get(i);
-      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { current[0] = numbers.get(which); draw.run(); }).create());
+      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { selectedSeason[0] = numbers.get(which); draw.run(); }).create());
     });
     draw.run();
     LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
     pp.setMargins(0, dp(10), 0, dp(10));
     panel.addView(picker, pp);
     panel.addView(episodes);
+    return draw;
   }
 
   /** «Tráileres y más»: the trailer in Spanish (its YouTube picture opens it in YouTube). */
@@ -2465,11 +2453,13 @@ public class MainActivity extends Activity {
     }
   }
 
-  View episodeRow(final String section, final Library.Item item, final Library.Episode e) {
+  View episodeRow(final String section, final Library.Item item, final Library.Episode e, JSONObject progress, JSONObject seen) {
+    boolean upcoming = e.upcoming();
+    boolean watched = EpisodeHistory.watchedAt(seen, e.id) > 0;
     LinearLayout box = new LinearLayout(this);
     box.setOrientation(LinearLayout.VERTICAL);
     box.setFocusable(true);
-    box.setClickable(true);
+    box.setClickable(!upcoming);
     box.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 10, 0));
     box.setPadding(dp(2), dp(6), dp(2), dp(8));
     LinearLayout r = row();
@@ -2486,16 +2476,18 @@ public class MainActivity extends Activity {
       still.addView(image, new FrameLayout.LayoutParams(-1, -1));
       image(image, e.still);
     }
-    ImageView play = new ImageView(this);
-    play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(16)));
-    play.setScaleType(ImageView.ScaleType.CENTER);
-    play.setBackground(Ui.shape(this, 0x77000000, 999, 2, 0xffffffff));
-    still.addView(play, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
-    JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
-    if (saved != null) {
-      FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM);
-      barSize.setMargins(dp(6), 0, dp(6), dp(5));
-      still.addView(progressBar(saved), barSize);
+    if (!upcoming) {
+      ImageView play = new ImageView(this);
+      play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(16)));
+      play.setScaleType(ImageView.ScaleType.CENTER);
+      play.setBackground(Ui.shape(this, 0x77000000, 999, 2, 0xffffffff));
+      still.addView(play, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
+      JSONObject saved = progress.optJSONObject(e.id);
+      if (saved != null && !watched) {
+        FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM);
+        barSize.setMargins(dp(6), 0, dp(6), dp(5));
+        still.addView(progressBar(saved), barSize);
+      }
     }
     r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 140), dp(wide() ? 112 : 79)));
     LinearLayout texts = new LinearLayout(this);
@@ -2505,6 +2497,13 @@ public class MainActivity extends Activity {
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(14), 0, dp(4), 0);
     texts.addView(name);
+    String state = upcoming ? e.premiereLabel() : watched ? "✓ Visto" : "";
+    if (!state.isEmpty()) {
+      TextView badge = label(state, 13, upcoming ? 0xffffd284 : Ui.ACC);
+      badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      badge.setPadding(dp(14), dp(3), dp(4), 0);
+      texts.addView(badge);
+    }
     if (e.runtime > 0) {
       TextView minutes = label(e.runtime + " min", 14, 0xffb3b8c0);
       minutes.setPadding(dp(14), dp(2), dp(4), 0);
@@ -2518,8 +2517,8 @@ public class MainActivity extends Activity {
       about.setLineSpacing(0, 1.1f);
       box.addView(about);
     }
-    box.setContentDescription(e.seasonLabel() + ", " + e.title());
-    box.setOnClickListener(v -> episodePage(section, item, e));
+    box.setContentDescription(e.seasonLabel() + ", " + e.title() + (state.isEmpty() ? "" : ", " + state));
+    if (!upcoming) box.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.setMargins(0, dp(6), 0, dp(6));
     box.setLayoutParams(p);
@@ -2624,7 +2623,16 @@ public class MainActivity extends Activity {
     TextView overview = label(about, 15, 0xffd6dbe2);
     overview.setPadding(0, dp(10), 0, dp(10));
     body.addView(overview);
-    playButtons(body, item.entry(section, e));
+    EpisodeHistory episodeHistory = new EpisodeHistory(this, section, item.id);
+    TextView badge = label("", 14, e.upcoming() ? 0xffffd284 : Ui.ACC);
+    Runnable refreshBadge = () -> {
+      String state = e.upcoming() ? e.premiereLabel() : EpisodeHistory.watchedAt(episodeHistory.local(), e.id) > 0 ? "✓ Visto" : "";
+      badge.setText(state);
+      badge.setVisibility(state.isEmpty() ? View.GONE : View.VISIBLE);
+    };
+    refreshBadge.run();
+    body.addView(badge);
+    if (!e.upcoming()) playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
       Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
@@ -2636,6 +2644,7 @@ public class MainActivity extends Activity {
     if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
     showContentDialog(dialog);
+    observeEpisodeHistory(dialog, episodeHistory, refreshBadge);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
     dialog.getWindow().setLayout(-1, -1);
   }
@@ -2658,11 +2667,17 @@ public class MainActivity extends Activity {
       }
       entry = full;
     }
+    if (!entry.optString("episode").isEmpty() && Library.upcoming(entry.optString("aired"))) return;
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
     String anon = Library.Media.anonmp4(url);
     if (anon != null) { embedPlayer(entry.optString("title"), anon, AudienceModel.libraryTarget(entry.optString("item"))); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
+    String episode = entry.optString("episode");
+    if (saved != null && !episode.isEmpty()) {
+      JSONObject seen = new EpisodeHistory(this, entry.optString("section"), entry.optString("item")).local();
+      if (EpisodeHistory.watchedAt(seen, episode) >= saved.optLong("at")) saved = null;
+    }
     // What the profile watches feeds «Recomendado para ti».
     if (Profiles.signedIn() && Profiles.active() != null && !entry.optString("section").isEmpty())
       Profiles.markWatched(this, Library.page(entry.optString("section")), entry.optString("item"));
@@ -3314,6 +3329,7 @@ public class MainActivity extends Activity {
       return;
     }
     if (request != PLAY_LIBRARY) return;
+    for (Runnable refresh : new ArrayList<>(episodeViews.values())) refresh.run();
     render();
     String key = result == RESULT_OK && data != null ? data.getStringExtra("ended") : null;
     if (key == null || library == null) return;
