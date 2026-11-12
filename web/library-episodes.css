@@ -1,0 +1,6 @@
+.episode-state { display: inline-block; width: fit-content; padding: 3px 8px; border-radius: 5px; font-size: 13px; font-weight: 700; }
+.episode-state.seen, .episode-text .episode-state.seen { display: inline-block; color: var(--accent); background: #d6ff001a; }
+.episode-state.upcoming { color: #ffd284; background: #ffd2841a; }
+.episode-upcoming .episode-still { opacity: .7; }
+.episode-upcoming:hover { cursor: default; }
+.episode-hero .episode-state { margin: 0 0 10px; }

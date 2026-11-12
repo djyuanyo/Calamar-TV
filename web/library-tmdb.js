@@ -1,3 +1,4 @@
+import { madridDay } from './audience.js';
 // Films, series and documentaries added by hand in the admin page: the title is chosen in TMDB (synopsis,
 // cast, rating, images, seasons and episodes) and the administrator pastes the video link of each film or
 // episode (LuluStream or any direct video). The library is published to Firestore (calamarLibrary).
@@ -95,7 +96,8 @@ export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
   const path = `/${kind}/${Number(id)}`;
   const d = await tmdb(path, { append_to_response: 'credits,watch/providers,videos,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
   const logo = await titleLogo(d, path, key, fetcher);
-  const info = { id: Number(id), kind, trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
+  const nextEpisode = kind === 'tv' ? nextEpisodeOf(d) : null;
+  const info = { id: Number(id), kind, ...(nextEpisode ? { nextEpisode } : {}), trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
     released: d.release_date || d.first_air_date || '', providers: providersOf(d), logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
@@ -127,7 +129,11 @@ export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
   const path = `/${kind}/${Number(id)}`;
   const d = await tmdb(path, { append_to_response: 'watch/providers,videos,credits,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
   const logo = await titleLogo(d, path, key, fetcher);
-  return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
+  const nextEpisode = kind === 'tv' ? nextEpisodeOf(d) : null;
+  const upcoming = nextEpisode
+    ? await seasonEpisodes(id, nextEpisode.season, key, fetcher).then(episodes => scheduledEpisodes(episodes, nextEpisode.season)).catch(() => undefined)
+    : undefined;
+  return { nextEpisode, upcoming, popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
     logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d),
     ...(logo !== undefined ? { titleLogo: logo } : {}) };
 }
@@ -149,6 +155,17 @@ export function lastEpisodeOf(details) {
   const e = details?.last_episode_to_air;
   return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && e.season_number >= 0 && e.episode_number > 0
     ? { season: e.season_number, episode: e.episode_number, aired: e.air_date } : null;
+}
+
+export function nextEpisodeOf(details) {
+  const e = details?.next_episode_to_air;
+  return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && Number.isInteger(e.season_number) && e.season_number >= 0 && e.episode_number > 0
+    ? { season: e.season_number, episode: e.episode_number, aired: e.air_date, name: e.name || '' } : null;
+}
+
+function scheduledEpisodes(episodes, season, today = madridDay()) {
+  return episodes.filter(e => e.aired && e.aired > today)
+    .map(({ episode, aired, name, still }) => ({ season, episode, aired, name, still }));
 }
 
 /** The YouTube key of the title's trailer in Spanish (Spain first, then any Spanish), or ''. */
@@ -246,7 +263,7 @@ export async function correctTmdbTitle(item, tmdbId, key, fetcher = globalThis.f
 
 /**
  * A series with the links of one season saved: episodes of other seasons are kept, episodes of this season
- * take the new links, and an episode without a link is left out (it is not shown to viewers).
+ * take the new links. Future episodes are saved separately as metadata, without a play link.
  */
 export function seriesWithSeason(existing, info, season, episodes, links, id = existing?.tmdb?.id ? existing.id : `s${info.id}`) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
@@ -258,7 +275,9 @@ export function seriesWithSeason(existing, info, season, episodes, links, id = e
   });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
-  return { ...(existing || {}), id, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };
+  const upcoming = [...(existing?.tmdb?.upcoming || []).filter(e => e.season !== season && e.aired > madridDay()),
+    ...scheduledEpisodes(episodes, season)];
+  return { ...(existing || {}), id, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: upcoming.length ? { ...info, upcoming } : info, episodes: all };
 }
 
 /** The library in Firestore parts of up to ~850 KB: { index, parts: { 'movies-0': {...} } }. */

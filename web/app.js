@@ -1,4 +1,5 @@
 import { eventSport, eventSportTabs } from './event-sports.js';
+import { loadEpisodeHistory, saveEpisodeHistory, mergeEpisodeHistory, recordEpisode } from './episode-history.js';
 import { viewingSession } from './user-playback.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
@@ -21,8 +22,8 @@ import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js
 import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
-import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, isUpcomingEpisode, listedEpisodes, finished, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
+import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate, signIn } from './account.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
@@ -1132,16 +1133,41 @@ function open(c, fromRoute = false) {
 
 // ---- Continuar viendo: position of films and episodes, and the next episode when one ends ----------
 let lastSaved = 0;
+function episodeContext(page, item) {
+  const profile = activeProfile()?.id;
+  return { uid: profile ? signedUser()?.uid : null, profile, page, item };
+}
+async function fetchEpisodeHistory(context) {
+  const local = loadEpisodeHistory(context);
+  if (!context.uid) return local;
+  const sync = shared().then(service => service.syncEpisodeHistory(context, local, mergeEpisodeHistory))
+    .then(history => saveEpisodeHistory(context, history)).catch(() => local);
+  return Promise.race([sync, new Promise(resolve => setTimeout(() => resolve(local), 1500))]);
+}
+function rememberEpisode(player, completed = false) {
+  if (!player.progress?.episode || player.episodeCompleted || (!completed && player.episodeStarted)) return;
+  player.episodeStarted = true;
+  player.episodeCompleted = completed;
+  const { page, item, episode } = player.progress;
+  const context = player.episodeContext ||= episodeContext(page, item);
+  const local = saveEpisodeHistory(context, recordEpisode(loadEpisodeHistory(context), episode, completed));
+  if (context.uid) shared().then(service => service.syncEpisodeHistory(context, local, mergeEpisodeHistory))
+    .then(history => saveEpisodeHistory(context, history)).catch(() => {});
+}
 function rememberPosition(force = false) {
   if (!current?.vod || !current.progress || video.seeking) return;
   if (!force && Date.now() - lastSaved < 5000) return;
   lastSaved = Date.now();
   saveProgress(recordProgress(loadProgress(), current.progress, video.currentTime, video.duration));
+  if (video.currentTime >= 10) {
+    rememberEpisode(current, finished(video.currentTime, video.duration));
+  }
 }
 video.addEventListener('timeupdate', () => rememberPosition());
 video.addEventListener('pause', () => rememberPosition(true));
 function playNext() {
   if (!current?.vod) return;
+  rememberEpisode(current, true);
   saveProgress(removeProgress(loadProgress(), current.progress?.key));
   const following = current.next?.();
   if (!following) return;
@@ -1181,8 +1207,8 @@ async function resumeEntry(entry) {
   try {
     const library = await fetchLibrary();
     const item = (library.sections[section?.key] || []).find((i) => i.id === entry.item);
-    const episode = entry.episode ? item?.episodes?.find((e) => e.id === entry.episode) : null;
-    if (!item || (entry.episode && !episode)) throw new Error('Este título ya no está en el catálogo.');
+    const episode = entry.episode && item ? listedEpisodes(item).find(e => e.id === entry.episode) : null;
+    if (!item || (entry.episode && (!episode || isUpcomingEpisode(episode)))) throw new Error('Este título ya no está en el catálogo.');
     open(playable(section, item, episode));
   } catch (error) {
     view.prepend(el('p', { class: 'error', role: 'alert' }, error.message));
@@ -1441,17 +1467,21 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library, browseOptions())].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
-  const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
+  const play = (target, episode, restart = false) => {
+    if (!episode || !isUpcomingEpisode(episode)) open({ ...playable(section, target, episode), restart });
+  };
   const progress = loadProgress();
   const saved = (id) => progress[id] || null;
-  if (sub === 'capitulo') {
-    const episode = item.episodes?.find((e) => e.id === episodeId);
-    if (episode) { view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved)); return; }
+  const history = item.kind === 'tv' ? await fetchEpisodeHistory(episodeContext(page, item.id)) : {};
+  if (version !== routeVersion) return;
+  const episode = episodeId && item.kind === 'tv' ? listedEpisodes(item).find(e => e.id === episodeId) : null;
+  if (sub === 'capitulo' && episode) {
+    view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved, history));
+    return;
   }
-  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item)));
-  if (sub === 'ver') {
-    const episode = episodeId ? item.episodes?.find((e) => e.id === episodeId) : null;
-    const c = playable(section, item, episode);
+  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item), history));
+  if (sub === 'ver' && (item.kind !== 'tv' || (episode && !isUpcomingEpisode(episode)))) {
+    const c = playable(section, item, episode || null);
     if (player.hidden || current?.id !== c.id) open(c, true);
   }
 }

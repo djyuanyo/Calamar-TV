@@ -62,9 +62,10 @@ export const seasonLabel = (e) => `Temporada ${e.season}`;
 export const episodePath = (section, item, e) => `#/${section.page}/${encodeURIComponent(item.id)}/capitulo/${encodeURIComponent(e.id)}`;
 /** The next episode of the series (episodes come in season and episode order), or null after the last. */
 export function nextEpisode(item, episode) {
-  const list = item.episodes || [];
+  const list = listedEpisodes(item);
   const i = list.findIndex((e) => e.id === episode.id);
-  return i >= 0 ? list[i + 1] || null : null;
+  const next = i >= 0 ? list[i + 1] : null;
+  return next?.id && !isUpcomingEpisode(next) ? next : null;
 }
 
 // ---- Saltar intro y siguiente capítulo --------------------------------------------------------------
@@ -772,11 +773,41 @@ export function similarTitles(library, section, item, size = 12) {
   return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || b[2] - a[2] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
 }
 
-/** The episode to play from a series' page: the one left half watched most recently, else the first. */
-export function resumeEpisode(item, saved = () => null) {
-  const episodes = [...(item.episodes || [])].sort((a, b) => a.season - b.season || a.episode - b.episode);
-  const started = episodes.map((e) => [e, saved(e.id)]).filter(([, s]) => s).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
-  return started ? started[0] : episodes[0] || null;
+export const isUpcomingEpisode = (episode, today = madridDay()) => /^\d{4}-\d{2}-\d{2}$/.test(episode?.aired || '') && episode.aired > today
+  && Number.isFinite(Date.parse(episode.aired + 'T00:00:00Z'));
+
+export function listedEpisodes(item, today = madridDay()) {
+  const numbered = episode => `${episode.season}/${episode.episode}`;
+  const episodes = new Map((item.episodes || []).map(episode => [numbered(episode), episode]));
+  for (const upcoming of [...(item.tmdb?.upcoming || []), item.tmdb?.nextEpisode]) {
+    if (!isUpcomingEpisode(upcoming, today)) continue;
+    const key = numbered(upcoming);
+    const linked = episodes.get(key);
+    episodes.set(key, linked ? { ...linked, aired: upcoming.aired } : upcoming);
+  }
+  return [...episodes.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
+}
+
+const releaseDate = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const releaseLabel = episode => `Estreno el ${releaseDate.format(new Date(episode.aired + 'T00:00:00Z'))}`;
+const watchedEpisode = (history, episode) => Number.isFinite(history?.watched?.[episode.id]);
+const latestEpisodeProgress = (episodes, saved) => episodes.map(e => [e, saved(e.id)])
+  .filter(([, state]) => state).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
+
+export function defaultEpisodeSeason(item, saved, history) {
+  const episodes = listedEpisodes(item);
+  const started = latestEpisodeProgress(episodes, saved);
+  const recent = episodes.find(e => e.id && e.id === history?.recent?.episode);
+  if (recent && (!started || (history.recent.at || 0) > (started[1].at || 0))) return recent.season;
+  return started?.[0].season ?? episodes[0]?.season;
+}
+
+/** Resume the episode in progress, or offer the first one the profile has not finished. */
+export function resumeEpisode(item, saved = () => null, history = {}, today = madridDay()) {
+  const episodes = listedEpisodes(item, today).filter(episode => episode.id && !isUpcomingEpisode(episode, today));
+  const started = latestEpisodeProgress(episodes, saved);
+  if (started && (!watchedEpisode(history, started[0]) || (started[1].at || 0) > history.watched[started[0].id])) return started[0];
+  return episodes.find(episode => !watchedEpisode(history, episode)) || episodes[0] || null;
 }
 
 /**
@@ -784,20 +815,23 @@ export function resumeEpisode(item, saved = () => null) {
  * button, the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», and the tabs «Episodios»
  * (series: the season drop-down and its episodes), «Tráileres y más» (the trailer in Spanish) and «Similares».
  */
-export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = []) {
+export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = [], history = {}) {
   const info = item.tmdb || {};
   const title = itemTitle(item);
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
-  const seasons = series ? [...new Set(item.episodes.map((e) => e.season))].sort((a, b) => a - b) : [];
+  const episodes = series ? listedEpisodes(item) : [];
+  const seasons = [...new Set(episodes.map(e => e.season))];
+  let chosen = seasons.includes(initialSeason) ? initialSeason : defaultEpisodeSeason(item, saved, history);
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
     info.rating ? `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}` : ''].filter(Boolean).join(' · ');
   const brand = (info.providers || [])[0];
   // «Reproducir»: the film, or the episode of the series left half watched most recently (else the first).
   let action;
   if (series) {
-    const next = resumeEpisode(item, saved);
-    const left = next && saved(next.id);
+    const next = resumeEpisode(item, saved, history);
+    const progress = next && saved(next.id);
+    const left = progress && (!watchedEpisode(history, next) || progress.at > history.watched[next.id]) ? progress : null;
     action = next ? el('div', { class: 'library-actions' },
       el('button', { class: 'btn lg title-play', type: 'button', onclick: () => play(item, next, false) },
         left ? `▶ Continuar T${next.season}:E${next.episode} · ${clock(left.position)}` : `▶ Reproducir T${next.season}:E${next.episode}`), bar(el, left)) : null;
@@ -828,34 +862,23 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
       info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
       el('div', { class: 'title-actions' }, ...extras, share)));
-  if (trailer) {
-    const backdrop = head.querySelector('.title-backdrop');
-    const frame = el('iframe', { class: 'title-preview', src: `./trailer.html?v=${trailer}`, title: `Tráiler de ${itemTitle(item)}`,
-      allow: 'autoplay; encrypted-media; fullscreen; picture-in-picture', allowfullscreen: true });
-    backdrop.insertBefore(frame, backdrop.firstChild.nextSibling);
-    // Route changes remove the header; stop YouTube and release its frame immediately.
-    const onState = (event) => {
-      if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.type !== 'calamar-trailer') return;
-      frame.classList.toggle('ready', event.data.state === 'playing' || event.data.state === 'blocked');
-    };
-    window.addEventListener('message', onState);
-    const observer = new MutationObserver(() => { if (!head.isConnected) { window.removeEventListener('message', onState); frame.remove(); observer.disconnect(); } });
-    queueMicrotask(() => { if (head.isConnected) observer.observe(document.body, { childList: true, subtree: true }); });
-    head.addEventListener('click', (event) => { if (event.target.closest('.title-play, .library-actions button')) frame.contentWindow?.postMessage('pause-trailer', location.origin); });
-  }
   // The tabs.
   const panel = el('div', { class: 'title-panel' });
   const tabs = [];
   if (series) tabs.push(['episodes', 'Episodios', () => {
-    let chosen = seasons.includes(initialSeason) ? initialSeason : (resumeEpisode(item, saved)?.season ?? seasons[0]);
     const picker = el('select', { class: 'season-picker', 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: String(s) }, `Temporada ${s}`)));
     picker.value = String(chosen);
     const list = el('div', { class: 'episode-list' });
-    const draw = () => list.replaceChildren(...item.episodes.filter((e) => e.season === chosen).sort((a, b) => a.episode - b.episode).map((e) => el('a', { class: 'episode', href: episodePath(section, item, e) },
-      el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
-        el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), bar(el, saved(e.id))),
-      el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), e.runtime ? el('small', {}, `${e.runtime} min`) : null),
-      e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null)));
+    const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
+      const upcoming = isUpcomingEpisode(e), watched = !upcoming && watchedEpisode(history, e);
+      const badge = upcoming ? el('time', { class: 'episode-state upcoming', datetime: e.aired }, releaseLabel(e))
+        : watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null;
+      return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
+        el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
+          upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
+        el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
+        e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null);
+    }));
     picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
     draw();
     return [el('label', { class: 'browse-select season-select' }, picker), list];
@@ -893,17 +916,20 @@ function playButtons(el, saved, play) {
 }
 
 /** An episode's own page: its image, «Capítulo N», its name and synopsis, and the play button. */
-export function libraryEpisode(el, section, library, item, episode, play, saved = () => null) {
+export function libraryEpisode(el, section, library, item, episode, play, saved = () => null, history = {}) {
   const info = item.tmdb || {};
   const image = episode.still || info.backdrop || '';
   const next = nextEpisode(item, episode);
+  const upcoming = isUpcomingEpisode(episode);
   return [el('section', { class: 'library-hero episode-hero', style: image ? `--backdrop:url("${image.replace(/"/g, '')}")` : null },
     el('div', { class: 'library-info' },
       el('a', { class: 'library-back', href: `#/${section.page}/${encodeURIComponent(item.id)}/temporada/${episode.season}` }, `‹ ${itemTitle(item)}`),
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), soundNote(el, episode.file, episode.url),
+      upcoming ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, releaseLabel(episode)) : null,
+      !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
+      upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
     attribution(el, library)];
 }
@@ -1124,7 +1150,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         el('div', { class: 'library-skip-row' }, field('Intro desde', introFrom), field('hasta', introTo), field('Créditos (duración)', credits)),
         el('div', { class: 'actions' }, scope, saveSkip), skipNote);
       fillSkip();
-      editor.replaceChildren(head, field('Temporada', seasonPick, 'Elige la temporada que quieres subir y pega el enlace de cada capítulo. Los capítulos sin enlace no se muestran.'),
+      editor.replaceChildren(head, field('Temporada', seasonPick, 'Pega el enlace de cada capítulo disponible. Los próximos estrenos con fecha de TMDB se muestran automáticamente.'),
         rows, el('div', { class: 'actions' }, save, del, close), note, skipBox);
       await loadSeason();
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
@@ -1404,7 +1430,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         note.textContent = 'Tráiler guardado y publicado.';
       } catch (e) { note.textContent = e.message; } finally { save.disabled = false; }
     } }, 'Guardar tráiler');
-    editor.replaceChildren(el('h3', {}, `Tráiler · ${itemTitle(item)}`), field('Enlace del tráiler de YouTube', input, 'Se reproduce automáticamente en la cabecera. Déjalo vacío para mostrar la imagen.'),
+    editor.replaceChildren(el('h3', {}, `Tráiler · ${itemTitle(item)}`), field('Enlace del tráiler de YouTube', input, 'Disponible en la pestaña Tráileres y más.'),
       el('div', { class: 'actions' }, save, el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -1421,7 +1447,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   }
 
   // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
-  const TOP_REFRESHED = 'calamar-top-refreshed-v3'; // Refresh existing titles for their artwork too.
+  const TOP_REFRESHED = 'calamar-top-refreshed-v4'; // Refresh existing titles for their artwork too.
   const topNote = el('p', { class: 'note', role: 'status' });
   async function refreshTop(quiet = false) {
     const key = tmdbKey();
@@ -1442,7 +1468,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}),
         logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}),
         ...(facts[item.id].titleLogo !== undefined ? { titleLogo: facts[item.id].titleLogo } : {}),
-        ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}) } } : item)]));
+        ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}),
+        ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode,
+          ...(facts[item.id].upcoming ? { upcoming: [...(item.tmdb.upcoming || [])
+            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && isUpcomingEpisode(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);
@@ -1454,7 +1483,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     topButton.disabled = true;
     try { await refreshTop(); } catch (error) { topNote.textContent = error.message; } finally { topButton.disabled = false; }
-  } }, 'Actualizar top, plataformas y logos con TMDB');
+  } }, 'Actualizar top, plataformas y estrenos con TMDB');
 
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT } from '../web/library.js';
+import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT, libraryDetail, defaultEpisodeSeason, listedEpisodes, resumeEpisode } from '../web/library.js';
+import { mergeEpisodeHistory, recordEpisode } from '../web/episode-history.js';
 
 const section = { key: 'series', page: 'series', label: 'Series' };
 const paco = { id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', tmdb: { title: 'Los hombres de Paco', backdrop: 'https://image.tmdb.org/b.jpg' },
@@ -98,4 +99,36 @@ test('each title keeps the day it arrived, new ones get today, and TMDB platform
   assert.deepEqual(next.movies.map((i) => i.addedAt), [undefined, '2026-01-02', '2026-10-28']);
   assert.deepEqual(providersOf({ 'watch/providers': { results: { ES: { flatrate: [{ provider_name: 'Netflix' }], ads: [{ provider_name: 'Pluto TV' }], buy: [{ provider_name: 'Apple TV' }] }, US: { flatrate: [{ provider_name: 'Hulu' }] } } } }), ['Netflix', 'Pluto TV']);
   assert.deepEqual(providersOf({}), []);
+});
+
+test('a profile keeps its last season and watched episodes after finishing', () => {
+  const later = { id: 'e3', season: 2, episode: 1, url: 'https://example.test/1.mp4' };
+  const item = { ...paco, episodes: [...paco.episodes, later] };
+  const device = recordEpisode(recordEpisode({}, 'e1', true, 5), 'e3', true, 20);
+  const another = recordEpisode({}, 'e2', true, 10);
+  const history = mergeEpisodeHistory(device, another);
+  const oldProgress = id => id === 'e2' ? { at: 8 } : null;
+  assert.deepEqual(history.watched, { e1: 5, e3: 20, e2: 10 });
+  assert.equal(defaultEpisodeSeason(item, oldProgress, history), 2);
+  assert.equal(defaultEpisodeSeason(item, id => id === 'e1' ? { at: 22 } : null, history), 1);
+});
+
+test('title headers use artwork and scheduled episodes are dated but unavailable to play', () => {
+  const upcoming = { season: 1, episode: 3, aired: '2099-11-12', name: 'Estreno' };
+  const item = { ...paco, tmdb: { ...paco.tmdb, nextEpisode: upcoming, trailer: 'abcdefghijk' } };
+  assert.equal(listedEpisodes(item).at(-1), upcoming);
+  assert.equal(listedEpisodes(item, '2099-11-12').length, 2);
+  const history = recordEpisode({}, 'e1', true, 5);
+  assert.equal(resumeEpisode(item, () => null, history).id, 'e2');
+  const el = (tag, attrs, ...children) => ({ tag, attrs, children: children.flat().filter(Boolean),
+    dataset: { tab: attrs['data-tab'] }, append(...items) { this.children.push(...items); }, addEventListener() {},
+    replaceChildren(...items) { this.children = items; }, setAttribute(name, value) { this.attrs[name] = value; } });
+  const flatten = (items) => items.filter(node => typeof node === 'object').flatMap(node => [node, ...flatten(node.children)]);
+  const view = flatten(libraryDetail(el, section, { sections: { series: [item] } }, item, () => {}, () => null, null, [], history));
+  assert.ok(view.some(node => node.tag === 'img' && node.attrs.src === item.tmdb.backdrop));
+  assert.ok(view.every(node => node.tag !== 'iframe'));
+  assert.ok(view.some(node => node.children.includes('✓ Visto')));
+  const locked = view.find(node => node.attrs.class === 'episode episode-upcoming');
+  assert.equal(locked.tag, 'div');
+  assert.ok(flatten(locked.children).some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
 });

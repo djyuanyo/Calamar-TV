@@ -84,6 +84,25 @@ export async function writeAccount(data) {
   const user = currentUser();
   if (user) await setDoc(doc(db, USERS_PATH, user.uid), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
 }
+// Episode history lives per title and profile so older app versions can still write their progress.
+export async function syncEpisodeHistory(context, local, merge) {
+  const user = currentUser();
+  if (!user || user.uid !== context.uid || !context.profile) return local;
+  const bytes = new TextEncoder().encode(JSON.stringify([context.profile, context.page, context.item]));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('');
+  const ref = doc(db, USERS_PATH, user.uid, 'progress', 'eh' + hash.slice(0, 18));
+  if (!local.recent) return readJson(ref, local);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    let remote = null;
+    try { if (snapshot.exists()) remote = JSON.parse(snapshot.data().json); } catch {}
+    const combined = merge(local, remote);
+    if (JSON.stringify(combined) !== JSON.stringify(remote)) {
+      transaction.set(ref, { json: JSON.stringify(combined), updatedAt: serverTimestamp() });
+    }
+    return combined;
+  });
+}
 export async function readProfileData(profile) {
   const user = currentUser();
   return user ? readJson(doc(db, USERS_PATH, user.uid, 'profiles', profile), null) : null;
