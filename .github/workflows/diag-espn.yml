@@ -1,0 +1,16 @@
+name: diag espn h2h
+on:
+  push:
+    branches: [claude/diag-espn-h2h]
+permissions:
+  contents: write
+jobs:
+  diag:
+    if: "!contains(github.event.head_commit.message, 'dump data')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node diag/lulu.mjs
+      - run: |
+          git config user.name diag; git config user.email diag@example.com
+          git add -f diag/host3.json diag/web3-*.png || true; git add -f diag/host3.json && git commit -m "dump data" && git push
