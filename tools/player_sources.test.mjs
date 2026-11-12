@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sourceOptions, selectedSource, renderSourcePicker } from '../web/player-sources.js';
+import { aceContentId, resolveAceStreams } from '../web/acestream.js';
 
 test('Liga Campeones retains both sources when the second signed URL has expired', () => {
   const sources = sourceOptions([
@@ -26,6 +27,33 @@ test('single sources stay in the catalog and empty catalogs have no selection', 
   assert.equal(sourceOptions(['https://one.example/a.m3u8']).length, 1);
   assert.equal(selectedSource([], 0), null);
   assert.equal(selectedSource(sourceOptions(['https://one.example/a.m3u8?e=1000000000']), 0), null);
+});
+
+test('Ace Stream sources are normalized, registered once and stored as playable HLS', async () => {
+  const id = 'a123456789'.repeat(4);
+  const direct = `acestream://${id.toUpperCase()}`;
+  const query = `acestream:?content_id=${id}&infohash=${'b'.repeat(40)}&title=M%2B%20LaLiga`;
+  const regular = 'https://example.com/source.m3u8';
+  const hls = `https://video.calamarmenciano.com/ace-hls/${'c'.repeat(32)}/index.m3u8`;
+  const calls = [];
+  const result = await resolveAceStreams([regular, direct, query, hls], async () => 'test-token', async (url, options) => {
+    calls.push([url, options.headers.Authorization, JSON.parse(options.body)]);
+    return new Response(JSON.stringify({ url: hls }));
+  });
+  assert.deepEqual(calls, [['https://video.calamarmenciano.com/ace-register', 'Bearer test-token', { contentId: id }]]);
+  assert.deepEqual(result, [regular, hls]);
+  assert.equal(sourceOptions(result)[1].available, true);
+  assert.equal(aceContentId(regular), null);
+  assert.throws(() => aceContentId('acestream:?infohash=' + id), /Content ID/);
+  assert.throws(() => aceContentId(query + '&content_id=' + id), /Content ID/);
+});
+
+test('regular sources work without Ace Stream registration and failures surface in the editor', async () => {
+  const regular = 'https://example.com/source.m3u8';
+  assert.deepEqual(await resolveAceStreams([regular, regular], () => assert.fail('unexpected authentication')), [regular]);
+  const direct = 'acestream://' + 'a'.repeat(40);
+  await assert.rejects(resolveAceStreams([direct], async () => 'test', async () => new Response(null, { status: 401 })), /administración/);
+  await assert.rejects(resolveAceStreams([direct], async () => 'test', async () => Response.json({ url: regular })), /IONOS/);
 });
 
 

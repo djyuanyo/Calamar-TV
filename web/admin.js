@@ -14,6 +14,7 @@ import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './libra
 import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
 import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
+import { aceContentId, resolveAceStreams } from './acestream.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
 // reads their calendars from ESPN again and publishes the weeks that come in, in a single save.
@@ -81,20 +82,32 @@ function slug(text) {
 
 function validStreams(text) {
   const out = [];
-  for (const line of text.split(/\s+/)) {
+  const inputs = text.split(/\r?\n/).flatMap(line => /^acestream:/i.test(line.trim()) ? [line.trim()] : line.split(/\s+/));
+  for (const line of inputs) {
     if (!line) continue;
+    if (aceContentId(line)) {
+      out.push(line);
+      continue;
+    }
     let url;
     try {
       url = new URL(line);
     } catch {
       throw new Error(`Enlace no válido: ${line}`);
     }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Solo se admiten enlaces http(s): ${line}`);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Usa un enlace HTTP, HTTPS o Ace Stream válido: ${line}`);
     const source = zicoChannelPlayer(url.href) || url.href;
     if (!out.includes(source)) out.push(source);
   }
   if (!out.length) throw new Error('Añade al menos un enlace');
   return out;
+}
+
+function publishableStreams(links) {
+  return resolveAceStreams(links, async () => {
+    if (!administrator()) throw new Error('Entra con la cuenta de administración de Google.');
+    return auth.currentUser.getIdToken();
+  });
 }
 
 /** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
@@ -132,7 +145,7 @@ function channelForm(existing, rerender, state) {
   groupNewField.hidden = groupSelect.value !== NEW_GROUP;
   groupSelect.addEventListener('change', () => { groupNewField.hidden = groupSelect.value !== NEW_GROUP; if (!groupNewField.hidden) groupNew.focus(); });
   const group = { get value() { return groupSelect.value === NEW_GROUP ? groupNew.value : groupSelect.value; } };
-  let selectedLogo = existing?.logo || '', imageRevision = 0, preparingLogo = false;
+  let selectedLogo = existing?.logo || '', imageRevision = 0, preparingLogo = false, submitting = false;
   const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: selectedLogo.startsWith('https://') ? selectedLogo : '' });
   const preview = el('img', { class: 'channel-logo-preview', alt: 'Vista previa del logo del canal', hidden: true });
   const updatePreview = () => { preview.hidden = !validCover(selectedLogo); if (!preview.hidden) preview.src = selectedLogo; else preview.removeAttribute('src'); };
@@ -151,11 +164,11 @@ function channelForm(existing, rerender, state) {
     } catch (error) {
       if (request === imageRevision) { status.textContent = error.message; status.className = 'error'; }
     } finally {
-      if (request === imageRevision) { preparingLogo = false; submit.disabled = false; }
+      if (request === imageRevision) { preparingLogo = false; submit.disabled = submitting; }
     }
   } });
   logo.addEventListener('input', () => {
-    imageRevision++; preparingLogo = false; submit.disabled = false; upload.value = '';
+    imageRevision++; preparingLogo = false; submit.disabled = submitting; upload.value = '';
     selectedLogo = logo.value.trim(); updatePreview(); status.textContent = ''; status.className = 'note';
   });
   const clearLogo = el('button', { class: 'ghost', type: 'button', onclick: () => {
@@ -168,11 +181,12 @@ function channelForm(existing, rerender, state) {
       class: 'form',
       onsubmit: async (e) => {
         e.preventDefault();
-        if (preparingLogo) return;
+        if (preparingLogo || submitting) return;
         if (saving) {
           status.textContent = 'Hay otra publicación en curso. Tu canal sigue en el formulario; vuelve a pulsar Guardar.';
           return;
         }
+        submitting = true;
         try {
           if (selectedLogo && !validCover(selectedLogo)) throw new Error('El logo debe ser una imagen o un enlace HTTPS válido.');
           draftId ||= `mio-${slug(name.value)}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
@@ -188,8 +202,10 @@ function channelForm(existing, rerender, state) {
           const newGroup = groupSelect.value === NEW_GROUP;
           const highlighted = star.checked;
           status.className = 'note';
-          status.textContent = 'Guardando…';
           submit.disabled = true;
+          status.textContent = channel.streams.some(aceContentId) ? 'Preparando Ace Stream en IONOS…' : 'Guardando…';
+          channel.streams = await publishableStreams(channel.streams);
+          status.textContent = 'Guardando…';
           await saveChannel(data => {
             const next = { ...data };
             const previous = data.channels.find(c => c.id === channel.id);
@@ -211,6 +227,7 @@ function channelForm(existing, rerender, state) {
           status.textContent = explain(err);
           status.className = 'error';
         } finally {
+          submitting = false;
           submit.disabled = preparingLogo;
         }
       },
@@ -222,7 +239,7 @@ function channelForm(existing, rerender, state) {
     field('Logo (opcional)', logo, 'Pega un enlace HTTPS o sube una imagen desde tu dispositivo.'),
     field('Subir imagen del canal', upload, 'La imagen se adapta automáticamente y conserva la transparencia.'),
     preview, clearLogo,
-    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI solo se ven en la app. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. Los enlaces Ace Stream se convierten automáticamente a HLS al guardar. La web también reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI y algunas páginas de reproductor se ven en la app. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
@@ -663,6 +680,8 @@ function eventForm(existing, rerender, catalogState) {
     catch (error) { status.textContent = error.message; }
   } });
   const links = el('textarea', { rows: 4, placeholder: 'https://… (un enlace por línea)' }, (existing?.streams || []).join('\n'));
+  const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
+  let submitting = false;
   let selected = existing?.channelId || '';
   const chosen = el('p', { class: 'note' });
   const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales y los de TDT' });
@@ -685,7 +704,9 @@ function eventForm(existing, rerender, catalogState) {
   };
   query.addEventListener('input', draw); draw();
   return el('form', { class: 'form', onsubmit: async (event) => {
-    event.preventDefault(); if (saving) return;
+    event.preventDefault(); if (saving || submitting) return;
+    submitting = true;
+    submit.disabled = true;
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
@@ -699,6 +720,8 @@ function eventForm(existing, rerender, catalogState) {
           : existing?.matchUrl === link && existing.startAt === entry.startAt && existing.matchId ? existing : await checkMatch();
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
+      if (streams.some(aceContentId)) status.textContent = 'Preparando Ace Stream en IONOS…';
+      entry.streams = await publishableStreams(streams);
       if (fixtureImport) {
         // Only what differs from the import is kept, so the catalog stays small.
         const raw = data.fixtures.find((f) => f.id === existing.id);
@@ -726,8 +749,9 @@ function eventForm(existing, rerender, catalogState) {
       data.events = updated; data.channels = channels;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Enlaces adicionales del evento', links, 'Un enlace por línea. Se añaden a las fuentes del canal, o puedes usarlos sin seleccionar canal. Zico TV solo se muestra en la web. La reproducción depende del proveedor.'), field('Buscar canal (opcional si añades enlaces)', query), chosen, options,
-  el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
+    finally { submitting = false; submit.disabled = false; }
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Enlaces adicionales del evento', links, 'Un enlace por línea, incluidos enlaces Ace Stream. Se añaden a las fuentes del canal, o puedes usarlos sin seleccionar canal. Zico TV solo se muestra en la web. La reproducción depende del proveedor.'), field('Buscar canal (opcional si añades enlaces)', query), chosen, options,
+  el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
 
