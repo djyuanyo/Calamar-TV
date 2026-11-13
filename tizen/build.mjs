@@ -10,7 +10,7 @@ const root = dirname(tizen);
 const web = join(root, 'web');
 const destination = resolve(process.argv[2] || 'build/Calamar-TV-Tizen.wgt');
 const stage = await mkdtemp(join(tmpdir(), 'calamar-tizen-'));
-const files = ['styles.css', 'library-episodes.css', 'vps-panel.css', 'assets', 'images/manifest.json'];
+const files = ['styles.css', 'library-episodes.css', 'vps-panel.css', 'sleep-timer.css', 'assets', 'images/manifest.json'];
 const sdk = /^https:\/\/www\.gstatic\.com\/firebasejs\/13\.0\.0\/firebase-(app|auth|firestore)\.js$/;
 
 try {

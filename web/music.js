@@ -1,4 +1,5 @@
 // Calamar TV Música — catalogue supplied by Audius, not Spotify.
+import { playbackTimer } from './sleep-timer.js';
 const API = 'https://api.audius.co/v1';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const storeKey = uid => 'calamar_music_saved_v1_' + (uid || 'guest');
@@ -30,6 +31,7 @@ export function renderMusic(host, user) {
   const $ = s => host.querySelector(s);
   const results=$('#music-results'), favorites=$('#music-saved'), audio=$('#music-audio');
   const controls=$('.music-controls');
+  const timer = playbackTimer(controls, () => audio.pause(), { style: 'sleep-icon' });
   function play(t) {
     active=t; controls.hidden=false;
     $('#music-cover').src=t.artwork || ''; $('#music-playing').textContent=t.title; $('#music-artist').textContent=t.artist;
@@ -63,5 +65,5 @@ export function renderMusic(host, user) {
   $('.music-search').addEventListener('input',e=>{clearTimeout(debounce);$('#music-heading').textContent=e.target.value.trim()?'Resultados':'Descubre música';debounce=setTimeout(()=>search(e.target.value.trim()||'electronic'),350);});
   search('electronic');
   // Do not leave background audio playing when navigating out of the section.
-  return () => {disposed=true;clearTimeout(debounce);audio.pause();audio.removeAttribute('src');audio.load();};
+  return () => {disposed=true;clearTimeout(debounce);timer?.cancel();audio.pause();audio.removeAttribute('src');audio.load();};
 }

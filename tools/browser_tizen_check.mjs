@@ -37,6 +37,7 @@ try {
   const tv = await browser.newPage({ userAgent: samsungUA, acceptDownloads: true });
   await tv.route('**/*', route => route.request().url().startsWith(url) ? route.continue() : route.abort());
   await tv.goto(url);
+  assert.equal(await tv.getByRole('button', { name: 'Temporizador' }).count(), 0);
   const link = tv.getByRole('link', { name: 'Descargar para Samsung TV' });
   assert.equal(await link.getAttribute('href'), 'downloads/Calamar-TV-Tizen.wgt');
   const downloading = tv.waitForEvent('download');
@@ -75,6 +76,27 @@ try {
   await app.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'GoBack', bubbles: true })));
   assert.equal(await app.locator('dialog[open]').count(), 0);
   assert.deepEqual(errors, []);
+
+  const phone = await browser.newPage({
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36',
+    hasTouch: true,
+  });
+  await phone.route('**/*', route => route.request().url().startsWith(url) ? route.continue() : route.abort());
+  await phone.clock.install();
+  await phone.goto(url + '/direct-player.html');
+  const timerButton = phone.getByRole('button', { name: 'Temporizador' });
+  await timerButton.click();
+  const timerDialog = phone.getByRole('dialog', { name: 'Temporizador' });
+  await timerDialog.getByLabel('Minutos').fill('1');
+  await timerDialog.getByRole('button', { name: 'Iniciar' }).click();
+  await phone.clock.fastForward(60001);
+  assert.match(await phone.locator('#status').textContent(), /detenida por el temporizador/);
+  await timerButton.click();
+  await timerDialog.getByRole('button', { name: '15 min' }).click();
+  await timerDialog.getByRole('button', { name: 'Iniciar' }).click();
+  await phone.getByRole('button', { name: /Temporizador ·/ }).click();
+  await timerDialog.getByRole('button', { name: 'Cancelar temporizador' }).click();
+  assert.equal(await timerButton.getAttribute('aria-pressed'), 'false');
   console.log('Samsung download, packaged app startup and remote navigation verified.');
 } finally {
   await browser?.close();

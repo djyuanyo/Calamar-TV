@@ -22,6 +22,7 @@ import java.util.concurrent.*;
 /** Four independent native players. Adding a tile never restarts the other tiles. */
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class MultiPlayerActivity extends Activity {
+  private SleepTimer sleepTimer;
   static final String TITLES = "titles", STREAMS = "streams";
   private final List<Tile> tiles = new ArrayList<>();
   private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -188,6 +189,16 @@ public class MultiPlayerActivity extends Activity {
     bar.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xd9000000, 0x00000000}));
     Button exit = Ui.pill(this, "✕ Salir", Ui.Kind.SURFACE, true); exit.setOnClickListener(v -> finish()); bar.addView(exit);
     addButton = Ui.pill(this, "Añadir evento", Ui.Kind.SURFACE, true); addButton.setContentDescription("Añadir evento a multipantalla"); addButton.setOnClickListener(v -> chooseEvent()); bar.addView(addButton);
+    if (SleepTimer.supported(this)) {
+      sleepTimer = new SleepTimer(this, state == null ? getIntent().getLongExtra(SleepTimer.DEADLINE, 0) : state.getLong(SleepTimer.DEADLINE),
+          () -> {
+            active = false;
+            for (Tile tile : tiles) tile.stop();
+            setResult(SleepTimer.MULTI_SLEEP);
+            super.finish();
+          });
+      bar.addView(sleepTimer.button(), new LinearLayout.LayoutParams(dp(44), dp(44)));
+    }
     screen.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP)); setContentView(screen);
     ArrayList<String> targets = getIntent().getStringArrayListExtra("audience_targets"), channels = getIntent().getStringArrayListExtra("audience_channels");
     for (int i = 0; i < Math.min(titles.size(), MultiScreen.MAX); i++) append(titles.get(i), Arrays.asList(streams.get(i).split("\n")), targets != null && i < targets.size() ? targets.get(i) : "", channels != null && i < channels.size() ? channels.get(i) : "");
@@ -264,6 +275,7 @@ public class MultiPlayerActivity extends Activity {
   @Override protected void onStart() {
     super.onStart();
     if (isFinishing()) return;
+    if (sleepTimer != null && sleepTimer.resume()) return;
     View content = findViewById(android.R.id.content);
     content.setVisibility(View.INVISIBLE);
     stopAccess = AppAccess.observe(this, state -> {
@@ -278,8 +290,16 @@ public class MultiPlayerActivity extends Activity {
       }
     });
   }
-  @Override protected void onStop() { if (stopAccess != null) { stopAccess.run(); stopAccess = null; } active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
-  @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); worker.shutdownNow(); super.onDestroy(); }
+  @Override protected void onStop() { if (sleepTimer != null) sleepTimer.pause(); if (stopAccess != null) { stopAccess.run(); stopAccess = null; } active = false; if (picker != null) { picker.dismiss(); picker = null; } handler.removeCallbacks(hide); for (Tile tile : tiles) tile.stop(); super.onStop(); }
+  @Override protected void onDestroy() { if (sleepTimer != null) sleepTimer.close(); handler.removeCallbacksAndMessages(null); worker.shutdownNow(); super.onDestroy(); }
+  @Override protected void onSaveInstanceState(Bundle state) {
+    if (sleepTimer != null) state.putLong(SleepTimer.DEADLINE, sleepTimer.deadline());
+    super.onSaveInstanceState(state);
+  }
+  @Override public void finish() {
+    if (sleepTimer != null) setResult(RESULT_OK, new Intent().putExtra(SleepTimer.DEADLINE, sleepTimer.deadline()));
+    super.finish();
+  }
   @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused && (picker == null || !picker.isShowing())) immersive(); }
   private int dp(float value) { return Ui.dp(this, value); }
   @SuppressWarnings("deprecation") private void immersive() { systemBars(true); }

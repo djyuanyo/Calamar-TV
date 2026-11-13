@@ -219,7 +219,8 @@ final class Ui {
     BACK,
     PROFILE,
     SHARE,
-    MULTI
+    MULTI,
+    TIMER
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -249,6 +250,11 @@ final class Ui {
       } else if (icon == Icon.MULTI) {
         for (int y : new int[] {3, 14}) for (int x : new int[] {3, 14}) path.addRoundRect(x, y, x + 7, y + 7, 1.2f, 1.2f, Path.Direction.CW);
         paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f);
+      } else if (icon == Icon.TIMER) {
+        path.addCircle(12f, 14f, 8f, Path.Direction.CW);
+        path.moveTo(9f, 2f); path.lineTo(15f, 2f);
+        path.moveTo(12f, 10f); path.lineTo(12f, 14f); path.lineTo(15f, 16f);
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f); paint.setStrokeCap(Paint.Cap.ROUND);
       } else if (icon == Icon.SHARE) {
         // Three dots joined by two lines, as the web's share button.
         path.addCircle(18f, 5f, 3f, Path.Direction.CW);

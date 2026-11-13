@@ -5,6 +5,7 @@ import { soundChosen } from './autoplay.js';
 import { spanishTrack, trackLabel } from './player-tracks.js';
 
 const ICONS = {
+  timer: '<circle cx="12" cy="14" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 2h6m-3 8v4l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   play: '<path d="M8 5.5v13l11-6.5z"/>',
   pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>',
   volume: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M17.8 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',

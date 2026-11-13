@@ -4,6 +4,7 @@ import { viewingSession } from './user-playback.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
+import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
@@ -705,16 +706,22 @@ document.getElementById('ctl-multi').addEventListener('click', () => {
     if (current !== initial) return;
     const first = { ...initial, position: initial.vod ? video.currentTime : 0,
       streams: [...new Set([currentSourceUrl, ...initial.streams].filter(Boolean))] };
-    const origin = location.hash;
+    const origin = location.hash, sleepDeadline = sleepTimer?.deadline();
     hidePlayer(); inlineMulti = { hash: origin };
     openMulti([first, event], {
+      sleepDeadline,
       track: item => viewingSession(shared, item, undefined, true),
       onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
-      onClose: selected => {
+      onClose: (selected, deadline) => {
         const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
         closeMultiPicker(); closeMulti(); inlineMulti = null;
         open(initial, true);
+        if (deadline) sleepTimer?.setDeadline(deadline);
         if (initial.vod && resume > 0) video.addEventListener('loadedmetadata', () => { if (current === initial) video.currentTime = resume; }, { once: true });
+      },
+      onSleep: () => {
+        closeMultiPicker(); closeMulti(); inlineMulti = null;
+        closePlayer();
       },
     });
   });
@@ -728,6 +735,12 @@ const cast = initCast({
   onSent: () => { casting = true; stop(); watching?.privateViewing.watching(true); },
   onStatus: (message) => { playerStatus.textContent = message; },
   onDisconnect: () => { casting = false; if (current && webAccess.current().decision === 'allowed') playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
+});
+const sleepTimer = playbackTimer(player.querySelector('.player-toolbar'), () => {
+  const remote = casting;
+  casting = false;
+  closePlayer();
+  if (remote) cast.stop();
 });
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
@@ -1108,6 +1121,7 @@ function open(c, fromRoute = false) {
   paintFavorite();
   // An imported match without a channel has no video: only its match page and the notice.
   player.classList.toggle('pending', !!c.pending);
+  if (sleepTimer) sleepTimer.button.hidden = !!c.pending;
   playerTitle.textContent = c.name;
   refreshScores();
   playerLogo.hidden = !c.logo;
@@ -1363,6 +1377,7 @@ function showMatchCenter(c) {
 }
 
 function hidePlayer() {
+  sleepTimer?.cancel();
   document.querySelector('.mc-player-dialog')?.close();
   closeMultiPicker();
   showMatchCenter(null);

@@ -14,6 +14,7 @@ import { scanFolders, folderReference } from './library-folders.js';
 import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
+import { playbackTimer } from './sleep-timer.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -883,10 +884,15 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     draw();
     return [el('label', { class: 'browse-select season-select' }, picker), list];
   }]);
-  tabs.push(['trailers', 'Tráileres y más', () => (trailer
-    ? [el('div', { class: 'title-trailer' }, el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
-      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' }))]
-    : [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')])]);
+  tabs.push(['trailers', 'Tráileres y más', () => {
+    if (!trailer) return [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')];
+    const frame = el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
+      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' });
+    const controls = el('div', { class: 'trailer-timer' });
+    const timer = playbackTimer(controls, () => { frame.src = frame.src; });
+    const trailerPlayer = el('div', { class: 'title-trailer' }, frame);
+    return timer ? [trailerPlayer, controls] : [trailerPlayer];
+  }]);
   tabs.push(['similar', 'Similares', () => {
     const found = similarTitles(library, section, item);
     return found.length ? [el('div', { class: 'poster-grid similar-grid' }, found.map((other) => browseCard(el, section, other)))] : [el('p', { class: 'status' }, 'Todavía no hay títulos parecidos.')];

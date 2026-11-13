@@ -1,4 +1,5 @@
 import { streamExpiry, explainStreamError } from './catalog.js';
+import { playbackTimer } from './sleep-timer.js';
 
 /** The signed URL stays byte-for-byte intact and is never sent to the hosting server. */
 export function readSource(fragment) {
@@ -70,7 +71,7 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
     }
   };
   play.addEventListener('click', () => {
-    if (failed) start();
+    if (failed || (!hls && !video.hasAttribute('src'))) start();
     else if (video.paused) video.play().catch(() => { status.textContent = 'No se pudo iniciar el vídeo.'; });
     else video.pause();
   });
@@ -86,5 +87,9 @@ if (typeof document !== 'undefined') {
     play: document.getElementById('play'), retry: document.getElementById('retry'),
     fragment: location.hash, Hls: window.Hls,
   });
-  window.addEventListener('pagehide', unmount, { once: true });
+  const timer = playbackTimer(document.querySelector('footer'), () => {
+    unmount();
+    document.getElementById('status').textContent = 'Reproducción detenida por el temporizador.';
+  });
+  window.addEventListener('pagehide', () => { timer?.cancel(); unmount(); }, { once: true });
 }

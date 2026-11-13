@@ -6,6 +6,7 @@ import { mountTs } from './ts-player.js';
 import { mountRenewable } from './renewable-player.js';
 import { expandEventSources, zicoEventApi } from './event-sources.js';
 import { usesZicoAgenda } from './zico-agenda.js';
+import { playbackTimer } from './sleep-timer.js';
 
 export const MULTI_MAX = 4;
 export const multiKey = c => `${c.event ? 'e' : 'c'}:${c.eventId || c.id || c.slug}`;
@@ -94,7 +95,7 @@ export function playTile(video, channel, onStatus) {
 let view = null;
 
 /** Full screen grid. Adding or removing a tile leaves the other players running. */
-export function openMulti(items, { onClose, onWatch = () => {}, track = () => null, onAdd, onChange = () => {} } = {}) {
+export function openMulti(items, { onClose, onSleep, sleepDeadline, onWatch = () => {}, track = () => null, onAdd, onChange = () => {} } = {}) {
   closeMulti();
   const root = document.createElement('div');
   root.className = 'multi idle'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Multipantalla');
@@ -104,6 +105,10 @@ export function openMulti(items, { onClose, onWatch = () => {}, track = () => nu
   add.setAttribute('aria-label', 'Añadir evento a multipantalla'); add.hidden = !onAdd;
   const hint = Object.assign(document.createElement('span'), { className: 'multi-hint', textContent: 'Pulsa 🔊 en un vídeo para oírlo' });
   bar.append(close, add, hint, full);
+  const sleepTimer = playbackTimer(bar, () => {
+    if (onSleep) onSleep(); else close.click();
+  }, { style: 'pill-btn sleep-icon', until: sleepDeadline });
+  if (sleepTimer) full.before(sleepTimer.button);
   const grid = document.createElement('div'); grid.className = 'multi-grid'; root.append(grid, bar);
   let hideTimer = null, pointer = '', audible = null;
   const tiles = [];
@@ -166,11 +171,11 @@ export function openMulti(items, { onClose, onWatch = () => {}, track = () => nu
   };
   full.addEventListener('click', toggleFull);
   add.addEventListener('click', () => { if (tiles.length < MULTI_MAX) onAdd?.(snapshot(), append, root); });
-  close.addEventListener('click', () => onClose ? onClose(snapshot()) : closeMulti());
+  close.addEventListener('click', () => onClose ? onClose(snapshot(), sleepTimer?.deadline()) : closeMulti());
   const keys = e => { if (e.key === 'Escape' && !document.fullscreenElement && !document.querySelector('.multi-event-picker[open]')) close.click(); };
   document.addEventListener('keydown', keys);
   document.body.append(root); document.body.style.overflow = 'hidden'; root.tabIndex = -1;
-  view = { root, stops: () => tiles.forEach(t => t.stop()), keys, hideTimer: () => clearTimeout(hideTimer) };
+  view = { root, stops: () => { sleepTimer?.cancel(); tiles.forEach(t => t.stop()); }, keys, hideTimer: () => clearTimeout(hideTimer) };
   root.focus({ preventScroll: true });
   return { toggleFull, add: append, items: snapshot };
 }

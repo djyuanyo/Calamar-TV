@@ -50,6 +50,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private CastControls castControls;
   private boolean castPlayback;
   private Button sourceButton;
+  private SleepTimer sleepTimer;
+  private static final int MULTI_PLAYER = 12;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final ExecutorService sourceMenuWorker = Executors.newSingleThreadExecutor();
@@ -88,7 +90,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }).start();}
     handler.postDelayed(this,30000);
   }};
-  @Override protected void onResume(){super.onResume();matchActive=true;handler.removeCallbacks(matchRefresh);handler.post(matchRefresh);if(audience!=null)audience.open();handler.removeCallbacks(audiencePlayback);handler.post(audiencePlayback);}
+  @Override protected void onResume() {
+    super.onResume();
+    if (isFinishing() || (sleepTimer != null && sleepTimer.resume())) return;
+    matchActive = true;
+    handler.removeCallbacks(matchRefresh);
+    handler.post(matchRefresh);
+    if (audience != null) audience.open();
+    handler.removeCallbacks(audiencePlayback);
+    handler.post(audiencePlayback);
+  }
   @Override protected void onPause(){matchActive=false;handler.removeCallbacks(matchRefresh);handler.removeCallbacks(audiencePlayback);if(audience!=null)audience.close();super.onPause();}
   private boolean fullscreen;
   private NetworkTransport transport;
@@ -314,6 +325,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     multiButton.setBackground(Ui.focusFill(this, Ui.SURFACE, 0xff30352a, Ui.ACC, 999, 0));
     multiButton.setVisibility(getIntent().hasExtra("progress_entry") ? View.GONE : View.VISIBLE);
     multiButton.setOnClickListener(v -> chooseMultiEvent()); controls.addView(multiButton, new LinearLayout.LayoutParams(buttonSize));
+    if (SleepTimer.supported(this)) {
+      sleepTimer = new SleepTimer(this, state == null ? getIntent().getLongExtra(SleepTimer.DEADLINE, 0) : state.getLong(SleepTimer.DEADLINE),
+          () -> {
+            if (castPlayback && castControls != null) castControls.stopRemote();
+            active = false;
+            generation++;
+            clearWeb();
+            releasePlayer();
+            finish();
+          });
+      controls.addView(sleepTimer.button(), new LinearLayout.LayoutParams(buttonSize));
+    }
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
@@ -508,7 +531,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           .putStringArrayListExtra(MultiPlayerActivity.STREAMS, streams).putStringArrayListExtra("audience_targets", targets).putStringArrayListExtra("audience_channels", channels)
           .putExtra("initial_media", currentUrl).putExtra("initial_page", pageUrl).putExtra("initial_referer", mediaReferer()).putExtra("initial_endpoint", hostingEndpoint).putExtra("initial_signal", hostingSourceId)
           .putExtra("initial_position", progressEntry == null || player == null ? 0 : player.getCurrentPosition());
-      startActivity(intent);
+      if (sleepTimer != null) intent.putExtra(SleepTimer.DEADLINE, sleepTimer.deadline());
+      startActivityForResult(intent, MULTI_PLAYER);
     });
     multiPicker.setOnDismissListener(dialog -> {
       multiPicker = null;
@@ -1752,6 +1776,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onStop() {
+    if (sleepTimer != null) sleepTimer.pause();
     if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     if (multiPicker != null) { multiPicker.dismiss(); multiPicker = null; }
     active = false;
@@ -1767,6 +1792,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onDestroy() {
+    if (sleepTimer != null) sleepTimer.close();
     handler.removeCallbacks(skipTick);
     handler.removeCallbacks(remainingTick);
     if (castControls != null) castControls.destroy();
@@ -1776,6 +1802,18 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     super.onDestroy();
   }
 
+  @Override protected void onSaveInstanceState(Bundle state) {
+    if (sleepTimer != null) state.putLong(SleepTimer.DEADLINE, sleepTimer.deadline());
+    super.onSaveInstanceState(state);
+  }
+
+  @Override protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request != MULTI_PLAYER || sleepTimer == null) return;
+    if (result == SleepTimer.MULTI_SLEEP) finish();
+    else if (data != null) sleepTimer.setDeadline(data.getLongExtra(SleepTimer.DEADLINE, 0));
+  }
+
   /** Watched to the end (or «Siguiente capítulo»): out of «Continuar viendo», and the series plays the next one. */
   private void endEpisode() {
     if (ended || progressEntry == null) return;
@@ -1783,7 +1821,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     ended = true;
     handler.removeCallbacks(skipTick);
     Library.Progress.save(this, Library.Progress.remove(Library.Progress.load(this), progressEntry.optString("key")));
-    setResult(RESULT_OK, new Intent().putExtra("ended", progressEntry.optString("key")));
+    setResult(RESULT_OK, new Intent().putExtra("ended", progressEntry.optString("key"))
+        .putExtra(SleepTimer.DEADLINE, sleepTimer == null ? 0L : sleepTimer.deadline()));
     finish();
   }
 

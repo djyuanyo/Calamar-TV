@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
   }
   private final List<Dialog> contentDialogs = new ArrayList<>();
   private final Map<Dialog, Runnable> episodeViews = new java.util.LinkedHashMap<>();
+  private SleepTimer embeddedSleepTimer;
 
   private void showAccess(AppAccess.State state) {
     if (isFinishing() || isDestroyed()) return;
@@ -1539,6 +1540,7 @@ public class MainActivity extends Activity {
   }
 
   private void pauseContent() {
+    if (embeddedSleepTimer != null) embeddedSleepTimer.pause();
     if (updater != null) updater.pause();
     sharedSession++;
     handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
@@ -1559,6 +1561,7 @@ public class MainActivity extends Activity {
   }
 
   private void resumeContent() {
+    if (embeddedSleepTimer != null) embeddedSleepTimer.resume();
     if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
     if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
@@ -2656,6 +2659,10 @@ public class MainActivity extends Activity {
    * count in the channel audience. When one ends the player says so and the next episode starts.
    */
   void playEntry(JSONObject entry, boolean restart) {
+    playEntry(entry, restart, 0L);
+  }
+
+  private void playEntry(JSONObject entry, boolean restart, long sleepDeadline) {
     if (!contentAdmitted) return;
     if (entry.optString("url").isEmpty()) {
       // Left half watched on another device: the link and the marks come from the library.
@@ -2671,7 +2678,7 @@ public class MainActivity extends Activity {
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
     String anon = Library.Media.anonmp4(url);
-    if (anon != null) { embedPlayer(entry.optString("title"), anon, AudienceModel.libraryTarget(entry.optString("item"))); return; }
+    if (anon != null) { embedPlayer(entry.optString("title"), anon, AudienceModel.libraryTarget(entry.optString("item")), sleepDeadline); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
     String episode = entry.optString("episode");
     if (saved != null && !episode.isEmpty()) {
@@ -2691,6 +2698,7 @@ public class MainActivity extends Activity {
     } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
     intent.putExtra("title", entry.optString("title"));
     intent.putExtra("progress_entry", entry.toString());
+    intent.putExtra(SleepTimer.DEADLINE, sleepDeadline);
     // Its own statistics (l:<id>, all the episodes of a series together), without «people watching».
     String audienceTarget = AudienceModel.libraryTarget(entry.optString("item"));
     if (audienceTarget != null) intent.putExtra("audience_target", audienceTarget);
@@ -2702,7 +2710,7 @@ public class MainActivity extends Activity {
    * AnonMP4: its embed page (the address its API gives for other sites) with its own player, full screen.
    * Back closes it. «Continuar viendo» cannot know where it was left, as the player is AnonMP4's.
    */
-  void embedPlayer(String title, String address, String target) {
+  void embedPlayer(String title, String address, String target, long sleepDeadline) {
     if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
     final FrameLayout box = new FrameLayout(this);
@@ -2736,6 +2744,7 @@ public class MainActivity extends Activity {
       public void onShowCustomView(View view, CustomViewCallback callback) {
         full = view;
         box.addView(view, new FrameLayout.LayoutParams(-1, -1));
+        if (embeddedSleepTimer != null) embeddedSleepTimer.button().bringToFront();
       }
       @Override
       public void onHideCustomView() {
@@ -2744,6 +2753,19 @@ public class MainActivity extends Activity {
       }
     });
     box.addView(web, new FrameLayout.LayoutParams(-1, -1));
+    final SleepTimer timer = SleepTimer.supported(this) ? new SleepTimer(this, sleepDeadline, () -> {
+      if (web.getParent() == box) {
+        box.removeView(web);
+        web.destroy();
+      }
+      dialog.dismiss();
+    }) : null;
+    if (timer != null) {
+      embeddedSleepTimer = timer;
+      FrameLayout.LayoutParams timerSize = new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.TOP | Gravity.END);
+      timerSize.setMargins(0, dp(8), dp(8), 0);
+      box.addView(timer.button(), timerSize);
+    }
     dialog.setContentView(box);
     AudienceSession audience = new AudienceSession(this, target, null, title, null);
     Runnable measure = new Runnable() {
@@ -2757,6 +2779,8 @@ public class MainActivity extends Activity {
       }
     };
     dialog.setOnDismissListener(d -> {
+      if (timer != null) timer.close();
+      if (embeddedSleepTimer == timer) embeddedSleepTimer = null;
       handler.removeCallbacks(measure);
       audience.close();
       if (web.getParent() == box) {
@@ -2767,6 +2791,7 @@ public class MainActivity extends Activity {
     audience.open();
     handler.post(measure);
     showContentDialog(dialog);
+    if (timer != null && timer.resume()) return;
     web.loadUrl(address);
     web.requestFocus();
     Toast.makeText(this, title, Toast.LENGTH_SHORT).show();
@@ -3340,7 +3365,7 @@ public class MainActivity extends Activity {
         Library.Episode next = item.next(e);
         if (next == null) return;
         Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.title(), Toast.LENGTH_SHORT).show();
-        playEntry(item.entry(section[0], next), false);
+        playEntry(item.entry(section[0], next), false, data.getLongExtra(SleepTimer.DEADLINE, 0));
         return;
       }
   }

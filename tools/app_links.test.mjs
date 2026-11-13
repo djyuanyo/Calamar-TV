@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { APK_DOWNLOAD, TIZEN_DOWNLOAD, isSamsungTizen } from '../web/app-links.js';
+import { mobileTimer } from '../web/sleep-timer.js';
 import { withArtwork, keepArtwork } from '../web/library-art.js';
 test('download uses the fixed signed asset of the latest release', () => {
   assert.equal(APK_DOWNLOAD, 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
@@ -12,6 +13,14 @@ test('Samsung Smart TV is identified separately from mobile and Android TV', () 
   assert.ok(!isSamsungTizen('Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S921B) SamsungBrowser/24.0 Mobile Safari/537.36'));
   assert.ok(!isSamsungTizen('Mozilla/5.0 (Linux; Tizen 2.3; Samsung SM-Z130H) SamsungBrowser/1.0 Mobile Safari/537.3'));
   assert.ok(!isSamsungTizen('Mozilla/5.0 (Linux; Android 12; SHIELD Android TV) Chrome/94.0.4606.31'));
+});
+test('sleep timer is for phones and tablets, excluding televisions and desktop', () => {
+  assert.equal(mobileTimer({userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile'}), true);
+  assert.equal(mobileTimer({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X)', maxTouchPoints:5}), true);
+  assert.equal(mobileTimer({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X)', maxTouchPoints:0}), false);
+  assert.equal(mobileTimer({userAgent:'Mozilla/5.0 (SMART-TV; Linux; Tizen 7.0)'}), false);
+  assert.equal(mobileTimer({userAgent:'Mozilla/5.0 (Linux; Android 12; SHIELD Android TV)'}), false);
+  assert.equal(mobileTimer({userAgent:'Android'}, 'tizen'), false);
 });
 test('artwork changes preserve film links, episodes and metadata through TMDB refreshes', () => {
   const item = {id:'s1', episodes:[{url:'https://example.com/1.mp4'}], skip:{intro:[30,90]}, tmdb:{id:1,title:'Serie',poster:'old'}};
