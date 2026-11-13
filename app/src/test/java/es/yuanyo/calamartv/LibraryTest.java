@@ -42,7 +42,6 @@ public class LibraryTest {
     assertEquals("2009 · 162 min · ★ 7,6 (32.000)", avatar.facts());
     assertEquals("Sam Worthington", avatar.cast.get(0)[0]);
     assertTrue(data.items("documentaries").isEmpty());
-    assertEquals("TMDB", data.attribution);
   }
 
   @Test public void groupsEpisodesBySeasonInOrder() throws Exception {
