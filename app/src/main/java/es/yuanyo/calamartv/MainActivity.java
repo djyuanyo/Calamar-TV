@@ -2005,7 +2005,6 @@ public class MainActivity extends Activity {
     boolean filtered = !genre.isEmpty() || libYear > 0 || !libPlatform.isEmpty() || !libOnly.isEmpty();
     if (!filtered && libOrder.isEmpty() && query.trim().isEmpty() && !items.isEmpty()) {
       browseRows(section, items);
-      if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
       return;
     }
     if (items.isEmpty())
@@ -2028,7 +2027,6 @@ public class MainActivity extends Activity {
         r.addView(poster(items.get(i), width));
       }
     }
-    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }
 
   /** A 2:3 poster with the title under it; without a TMDB poster the title is written on the card. */
@@ -2353,7 +2351,6 @@ public class MainActivity extends Activity {
     tabScroll.addView(tabs);
     body.addView(tabScroll);
     body.addView(panel);
-    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
 
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
     showContentDialog(dialog);
@@ -2661,7 +2658,6 @@ public class MainActivity extends Activity {
       addButton(r, following);
       body.addView(r);
     }
-    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
     showContentDialog(dialog);
     observeEpisodeHistory(dialog, episodeHistory, refreshBadge);
@@ -2849,7 +2845,7 @@ public class MainActivity extends Activity {
   /** A top row with big numbers next to the posters, as on Netflix. */
   void topRow(List<Library.Item> items, String title) {
     if (items.isEmpty()) return;
-    heading(title, "Según TMDB");
+    heading(title, null);
     int width = wide() ? 190 : 140;
     lazyRow(width * 3 / 2 + 24, () -> topCarousel(items, width));
   }
@@ -3255,7 +3251,6 @@ public class MainActivity extends Activity {
     list.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 280)));
     if (all.isEmpty()) list.addView(label("Todavía no hay títulos de " + name + ".", 15, MUTED));
     for (Library.Row row : rows) posterRail(row.title, row.items, wide() ? 140 : 108);
-    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }
 
   /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */

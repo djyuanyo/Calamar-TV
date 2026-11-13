@@ -815,7 +815,6 @@ final class Library {
 
   static final class Data {
     final Map<String, List<Item>> sections = new LinkedHashMap<>();
-    final String attribution;
 
     Data(JSONObject json) {
       JSONObject s = json.optJSONObject("sections");
@@ -831,7 +830,6 @@ final class Library {
           }
         sections.put(section[0], items);
       }
-      attribution = json.optString("attribution");
     }
 
     /** The section key of a title. */
@@ -1299,7 +1297,7 @@ final class Library {
       }
       sections.put(section, items);
     }
-    library.put("sections", sections).put("attribution", index == null ? "" : index.optString("attribution"));
+    library.put("sections", sections);
     return new Data(library);
   }
 

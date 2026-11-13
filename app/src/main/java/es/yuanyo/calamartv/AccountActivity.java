@@ -369,6 +369,20 @@ public class AccountActivity extends Activity {
       lp.setMargins(0, dp(6), 0, dp(6));
       body.addView(box, lp);
     }
+    button("Créditos", Ui.Kind.SURFACE, this::credits);
+  }
+
+  private void credits() {
+    LinearLayout content = new LinearLayout(this);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setPadding(dp(24), dp(16), dp(24), dp(8));
+    ImageView logo = new ImageView(this);
+    logo.setImageResource(R.drawable.tmdb_logo);
+    logo.setContentDescription("The Movie Database (TMDB)");
+    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    content.addView(logo, new LinearLayout.LayoutParams(dp(80), dp(58)));
+    content.addView(label("Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.", 15, Ui.FG));
+    new AlertDialog.Builder(this).setTitle("Créditos").setView(content).setPositiveButton("Cerrar", null).show();
   }
 
   private void profileForm() {
@@ -524,6 +538,7 @@ public class AccountActivity extends Activity {
     TextView foot = label("Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.", 13, 0x88ffffff);
     foot.setGravity(Gravity.CENTER);
     outer.addView(foot);
+    button("Créditos", Ui.Kind.GHOST, this::credits);
     (byQr ? google : tabs.getChildAt(creating ? 1 : 0)).requestFocus();
   }
 

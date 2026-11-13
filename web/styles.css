@@ -397,6 +397,10 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .foot a { color: var(--muted); }
 .foot a:hover { color: var(--accent); }
 .foot .brand { color: var(--fg); }
+.credits-dialog { width: min(400px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-2); color: var(--fg); }
+.credits-dialog::backdrop { background: #0009; }
+.credits-dialog h2 { margin: 0 0 16px; }
+.credits-dialog p { color: var(--muted); }
 
 /* ---- Admin ---- */
 .panel { max-width: 860px; padding-top: 12px; }
@@ -676,7 +680,6 @@ label[hidden] { display: none; }
 .cast-list { list-style: none; padding: 0; margin: 0 0 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; }
 .cast-list li { display: grid; }
 .cast-list span { color: var(--muted); font-size: 13px; }
-.library-credit { margin-top: 24px; }
 .library-switch { margin: 8px 0 16px; font-weight: 700; }
 .library-admin-list h3 { margin: 20px 0 8px; }
 .library-item summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }

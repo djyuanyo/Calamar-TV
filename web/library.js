@@ -310,7 +310,7 @@ export function rankTop(sections, trending, popularity, size = TOP_SIZE) {
 
 /** A top row with big numbers next to the posters, as on Netflix. */
 export function topRow(el, entries, what, title = what === 'documentales' ? documentaryTopTitle(entries.length) : `Top ${entries.length} ${what} de la semana`) {
-  return [el('div', { class: 'section-head' }, el('h2', {}, title), el('span', {}, 'Según TMDB')),
+  return [el('div', { class: 'section-head' }, el('h2', {}, title)),
     el('div', { class: 'rail top-rail' }, entries.map(({ section, item }, i) => el('a', { class: 'top-card', href: itemPath(section, item), title: itemTitle(item) },
       el('span', { class: 'top-rank', 'aria-hidden': 'true' }, String(i + 1)),
       el('span', { class: 'poster-frame' }, poster(el, item), posterLabel(item) ? el('span', { class: 'poster-new' }, posterLabel(item)) : null),
@@ -603,7 +603,7 @@ export function libraryPage(el, section, library, { watching = [], name = '', op
   draw();
   return [el('div', { class: 'browse-head' }, el('h1', { class: 'browse-title' }, section.label),
     el('div', { class: 'browse-controls' }, genres.length ? el('label', { class: 'browse-select' }, picker) : null, toggle)),
-    filters, body, attribution(el, library)];
+    filters, body];
 }
 
 /** The tagline of a slide: «Nuevo episodio disponible», «Recién llegada», «Nº 1 de la semana»… */
@@ -669,7 +669,6 @@ export function platformPage(el, library, name, random = Math.random, settings =
   for (const row of rows) nodes.push(el('div', { class: 'section-head' }, el('h2', {}, row.title)),
     el('div', { class: 'rail browse-rail' }, row.entries.map(({ section, item }) => browseCard(el, section, item))));
   if (!all.length) nodes.push(el('p', { class: 'status' }, `Todavía no hay títulos de ${name}.`));
-  nodes.push(attribution(el, library));
   return nodes;
 }
 
@@ -703,7 +702,6 @@ export function horrorBanner(el, title, entries, { href = '#', onclick = null } 
     el('a', { class: 'halloween-all', href, onclick }, 'Descubrir todo'))];
 }
 
-const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
 
 /**
  * «Similares»: other titles of the same section that share genres with this one, the closest first
@@ -944,7 +942,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   };
   for (const [key, label] of tabs) bar_.append(el('button', { class: 'title-tab', type: 'button', role: 'tab', 'data-tab': key, onclick: () => open(key) }, label));
   open(series ? 'episodes' : 'similar');
-  return [head, bar_, panel, attribution(el, library)];
+  return [head, bar_, panel];
 }
 
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
@@ -962,7 +960,7 @@ function playButtons(el, saved, play) {
 }
 
 /** An episode's own page: its image, «Capítulo N», its name and synopsis, and the play button. */
-export function libraryEpisode(el, section, library, item, episode, play, saved = () => null, history = {}) {
+export function libraryEpisode(el, section, item, episode, play, saved = () => null, history = {}) {
   const info = item.tmdb || {};
   const image = episode.still || info.backdrop || '';
   const next = nextEpisode(item, episode);
@@ -977,8 +975,7 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
       episodePremiereBadge(el, episode, today),
       !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
       upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
-      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
-    attribution(el, library)];
+      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null))];
 }
 
 // ---- Administration ---------------------------------------------------------------------------

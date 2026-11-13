@@ -424,7 +424,7 @@ try {
   assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
-    movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
+    movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched', trend: 1,
       tmdb: { title: 'Avatar', titleLogo: 'https://image.tmdb.org/t/p/w500/TestAvatar.png', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
       { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', titleLogo: 'https://image.tmdb.org/t/p/w500/NoSuchLogo.png', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
@@ -657,6 +657,15 @@ try {
   // Netflix-style rows without filters: today's picks and the genre rows, under «Todas las categorías».
   await page.getByRole('heading', { name: 'Recomendaciones de hoy para ti', exact: true }).waitFor();
   assert.ok(await page.locator('.browse-rail').count() > 0);
+  await page.locator('.top-rail').waitFor();
+  assert.equal(await page.getByText('Según TMDB', { exact: true }).count(), 0);
+  assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);
+  await page.getByRole('button', { name: 'Créditos', exact: true }).click();
+  const creditDialog = page.getByRole('dialog', { name: 'Créditos' });
+  await creditDialog.getByText(/Este producto usa la API de TMDB/).waitFor();
+  await creditDialog.getByRole('img', { name: 'The Movie Database (TMDB)' }).waitFor();
+  await creditDialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await creditDialog.waitFor({ state: 'hidden' });
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
@@ -674,6 +683,7 @@ try {
     };
   });
   await page.locator('.poster-card', { hasText: 'Torrente' }).first().click();
+  assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
   assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');

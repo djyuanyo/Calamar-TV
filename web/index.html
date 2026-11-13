@@ -122,8 +122,16 @@
           <a href="https://github.com/LaQuay/TDTChannels" rel="noopener">TDTChannels</a>. Algunas emisiones solo
           funcionan desde España. La app Android/TV usa el mismo catálogo.
         </p>
+        <button class="ghost" type="button" id="open-credits" aria-haspopup="dialog">Créditos</button>
       </div>
     </footer>
+
+    <dialog id="credits" class="credits-dialog" aria-labelledby="credits-title">
+      <h2 id="credits-title">Créditos</h2>
+      <a href="https://www.themoviedb.org/" rel="noopener"><img src="assets/tmdb-logo.png" alt="The Movie Database (TMDB)" width="80" height="58" /></a>
+      <p>Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.</p>
+      <form method="dialog"><button class="btn secondary" autofocus>Cerrar</button></form>
+    </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js"></script>

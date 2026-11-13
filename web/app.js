@@ -111,6 +111,8 @@ function el(tag, attrs = {}, ...children) {
 }
 export { el };
 
+document.getElementById('open-credits').addEventListener('click', () => document.getElementById('credits').showModal());
+
 function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
@@ -1493,7 +1495,7 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   if (version !== routeVersion) return;
   const episode = episodeId && item.kind === 'tv' ? listedEpisodes(item).find(e => e.id === episodeId) : null;
   if (sub === 'capitulo' && episode) {
-    view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved, history));
+    view.replaceChildren(...libraryEpisode(el, section, item, episode, play, saved, history));
     return;
   }
   view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item), history));
