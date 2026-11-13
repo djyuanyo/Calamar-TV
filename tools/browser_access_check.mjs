@@ -95,7 +95,12 @@ try{
   await page.getByText('Esta cuenta no es de administración.',{exact:false}).waitFor();
   assert.equal(await page.locator('.users-panel').count(),0);assert.equal(await page.locator('#player').isVisible(),false);
   await page.locator('#account-link').click();
-  await page.getByRole('heading',{name:'Perfil',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Mi Cuenta',exact:true}).waitFor();
+  const downloads = page.locator('.account-downloads');
+  await downloads.getByText('Descargas').click();
+  await downloads.getByRole('link',{name:'Descargar la app Android'}).waitFor();
+  await page.locator('.account-profiles summary').click();
+  await page.getByRole('button',{name:'Administrar perfiles',exact:true}).first().waitFor();
   assert.equal(await page.getByRole('button',{name:'Administración',exact:true}).count(),0);
   await page.evaluate(()=>{location.hash='#/canal/sports-one';});await page.locator('#player:not([hidden])').waitFor();
   await page.locator('#ctl-multi').click();const picker=page.getByRole('dialog',{name:'Añadir evento',exact:true});await picker.waitFor();

@@ -189,6 +189,7 @@ public class AccountActivity extends Activity {
     profile.addView(profiles);
     body.addView(profile);
     menuItem("↓", "Descargas", () -> { editing = "descargas"; draw(); });
+    body.addView(label("Tus películas y capítulos para ver sin conexión.", 14, Ui.MUTED));
     accountRows();
     menuItem("✎", "Administrar perfiles", () -> { editing = "all"; draw(); });
     menuItem("👤", "Datos de la cuenta", () -> { editing = "cuenta"; draw(); });
@@ -296,7 +297,11 @@ public class AccountActivity extends Activity {
   }
 
   private void accountRows() {
-    if (library == null && !loadingLibrary && !OfflineVideos.disconnected(this) && AppAccess.current() == AppAccess.State.ALLOWED) {
+    java.util.List<JSONObject> liked = ProfileData.entries(Profiles.data(), "ratings");
+    liked.removeIf(entry -> entry.optInt("value") <= 0);
+    java.util.List<JSONObject> mine = ProfileData.entries(Profiles.data(), "list");
+    if ((!liked.isEmpty() || !mine.isEmpty()) && library == null && !loadingLibrary
+        && !OfflineVideos.disconnected(this) && AppAccess.current() == AppAccess.State.ALLOWED) {
       loadingLibrary = true;
       new Thread(() -> {
         try {
@@ -306,10 +311,8 @@ public class AccountActivity extends Activity {
       }).start();
     }
     accountRail("Seguir viendo", Library.Progress.list(Library.Progress.load(this)), true);
-    java.util.List<JSONObject> liked = ProfileData.entries(Profiles.data(), "ratings");
-    liked.removeIf(entry -> entry.optInt("value") <= 0);
     accountRail("Series y películas que te han gustado", liked, false);
-    accountRail("Mi lista", ProfileData.entries(Profiles.data(), "list"), false);
+    accountRail("Mi lista", mine, false);
   }
 
   private void accountRail(String heading, java.util.List<JSONObject> entries, boolean resume) {

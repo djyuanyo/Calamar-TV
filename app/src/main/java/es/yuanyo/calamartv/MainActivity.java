@@ -81,6 +81,7 @@ public class MainActivity extends Activity {
   AppLink pendingAppLink;
   private Runnable stopAccess;
   private boolean contentAdmitted, catalogRestored;
+  private boolean offlineLanding;
   private AppAccess.State admission = AppAccess.State.LOADING;
   private boolean requiredLoginOpen;
   private static final int REQUIRED_LOGIN = 218;
@@ -100,6 +101,7 @@ public class MainActivity extends Activity {
     OfflineVideos.rememberAccess(this, state);
     admission = state;
     boolean offline = OfflineVideos.disconnected(this) && OfflineVideos.admitted(this, state) && !OfflineVideos.list(this).isEmpty();
+    offlineLanding = offline;
     if (state == AppAccess.State.ALLOWED && !offline) {
       enterContent();
       return;
@@ -1578,6 +1580,7 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     resumed = true;
+    if (offlineLanding || (contentAdmitted && OfflineVideos.disconnected(this))) showAccess(admission);
     if (contentAdmitted) resumeContent();
     else openRequiredLogin();
   }
