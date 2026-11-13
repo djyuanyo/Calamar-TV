@@ -4,7 +4,7 @@ import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js'
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
@@ -134,6 +134,15 @@ export async function publishDeviceLogin(id) {
 /** Calls back with false once the app has used (deleted) the sign-in. */
 export const watchDeviceLogin = (id, changed) => onSnapshot(doc(db, DEVICE_LOGIN_PATH, id), (s) => changed(s.exists()), () => changed(null));
 export const cancelDeviceLogin = (id) => deleteDoc(doc(db, DEVICE_LOGIN_PATH, id)).catch(() => {});
+export async function acceptDeviceLogin(id, signal) {
+  const ref = doc(db, DEVICE_LOGIN_PATH, id);
+  const snapshot = await getDocFromServer(ref);
+  const token = snapshot.data()?.idToken;
+  if (!token || signal.aborted) return false;
+  await signInWithCredential(auth, GoogleAuthProvider.credential(token));
+  await cancelDeviceLogin(id);
+  return true;
+}
 export function login() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
@@ -147,7 +156,7 @@ function unpack(snapshot, fallback) {
 }
 let migratedImages;
 async function imageManifest() {
-  if (!migratedImages) migratedImages = fetch(new URL('./images/manifest.json', import.meta.url), { cache: 'no-store' })
+  if (!migratedImages) migratedImages = fetch(new URL('./images/manifest.json', document.baseURI), { cache: 'no-store' })
     .then(r => { if (!r.ok) throw Error(); return r.json(); }).catch(() => ({}));
   return migratedImages;
 }

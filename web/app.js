@@ -3,7 +3,7 @@ import { loadEpisodeHistory, saveEpisodeHistory, mergeEpisodeHistory, recordEpis
 import { viewingSession } from './user-playback.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
-import { updateAppDownload } from './app-links.js';
+import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
@@ -63,6 +63,8 @@ function loadSports() {
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
 export async function fetchJson(path) {
+  const bundled = window.calamarTizenData?.[path];
+  if (bundled) return structuredClone(bundled);
   const response = await fetch(`${path}?t=${Date.now()}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
@@ -1536,6 +1538,7 @@ onProfilesChanged(() => {
 webAccess.start();
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
+if (isSamsungTizen(navigator.userAgent)) updateAppDownload();
 async function route() {
   const admission = webAccess.current();
   const accessPage = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];

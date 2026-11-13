@@ -1369,6 +1369,7 @@ body.gate-open { overflow: hidden; }
   box-shadow: 0 8px 22px #0005; color: #f8faf4; text-decoration: none;
 }
 .download-app[hidden] { display: none; }
+.tizen-install-link { display: block; width: fit-content; margin: 0 auto 1rem; color: var(--accent); }
 .download-app:hover, .download-app:focus-visible { border-color: var(--accent); }
 .download-app:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .download-app-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: var(--accent); color: #141900; }

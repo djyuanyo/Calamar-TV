@@ -2,7 +2,7 @@ name: Calamar TV · Web y catálogo
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/calamar-vidara.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
+    paths: ['web/**', 'tizen/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/calamar-vidara.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
   schedule:
     - cron: '17 */6 * * *'
     # Event preview pages (evento/<slug>/) follow the catalog edited in the admin within ~15 minutes.
@@ -78,6 +78,16 @@ jobs:
           # Copies of the administrator's logos on this web: some logo sites are blocked in Spain.
           python tools/logo_mirror.py _site .share-cache
           python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tizen/package-lock.json
+      - name: Empaquetar Calamar TV para Samsung Tizen
+        run: |
+          npm ci --prefix tizen --no-audit --no-fund
+          node tizen/build.mjs _site/downloads/Calamar-TV-Tizen.wgt
+          unzip -tq _site/downloads/Calamar-TV-Tizen.wgt
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

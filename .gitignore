@@ -8,6 +8,7 @@ local.properties
 *.apk
 
 node_modules/
+/tizen/node_modules
 *-debug.log
 .firebase/
 firebase/package-lock.json

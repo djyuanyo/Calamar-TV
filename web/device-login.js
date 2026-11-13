@@ -6,6 +6,11 @@
 export const DEVICE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // No 0/O or 1/I: easy to read and type.
 export const DEVICE_LOGIN_PATH = 'calamarDeviceLogins';
 export const DEVICE_LOGIN_MINUTES = 5;
+export const DEVICE_LOGIN_URL = 'https://djyuanyo.github.io/Calamar-TV/tv/';
+
+export function newDeviceKey() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(4)), byte => DEVICE_ALPHABET[byte % DEVICE_ALPHABET.length]).join('');
+}
 
 /** The app's key or code, upper case, or null when it is not 4 characters of the alphabet. */
 export function deviceKey(text) {

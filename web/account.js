@@ -1,9 +1,48 @@
 import { GOOGLE_G } from './google-icon.js';
+import { DEVICE_LOGIN_MINUTES, DEVICE_LOGIN_URL, newDeviceKey } from './device-login.js';
 // «Mi cuenta» (#/cuenta): sign in with Google or with email and password, «¿Quién está viendo?» and
 // the profiles of the account (add, rename, colour, delete), as in Netflix.
 import { MAX_PROFILES, PROFILE_COLORS, signedUser, accountProfiles, activeProfile, chooseProfile, addProfile, editProfile, removeProfile } from './profiles.js';
 
 export const profileInitial = (profile) => String(profile?.name || '?').trim().charAt(0).toLocaleUpperCase('es') || '?';
+
+function mobileSignIn(el, firebase, done) {
+  const key = newDeviceKey(), code = newDeviceKey();
+  const controller = new AbortController();
+  const link = DEVICE_LOGIN_URL + key;
+  const status = el('p', { role: 'status' }, 'Esperando a que confirmes el código…');
+  const close = el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cerrar');
+  const dialog = el('dialog', { class: 'auth-card', 'aria-labelledby': 'tizen-login-title' },
+    el('h2', { id: 'tizen-login-title' }, 'Entra con Google desde tu móvil'),
+    el('p', {}, 'Abre esta dirección en el móvil y escribe el código de la tele.'),
+    el('p', {}, el('strong', {}, link.replace('https://', ''))),
+    el('p', { class: 'tizen-code' }, code), status, close);
+  dialog.addEventListener('close', () => { controller.abort(); dialog.remove(); }, { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
+  const deadline = Date.now() + DEVICE_LOGIN_MINUTES * 60000;
+  let checking = false;
+  const poll = async () => {
+    if (controller.signal.aborted || checking) return;
+    if (Date.now() >= deadline) {
+      status.textContent = 'El código ha caducado. Cierra esta ventana y vuelve a pulsar «Entrar con el móvil».';
+      clearInterval(timer);
+      return;
+    }
+    checking = true;
+    try {
+      if (await firebase.acceptDeviceLogin(key + code, controller.signal)) {
+        if (!controller.signal.aborted) dialog.close();
+        done();
+      }
+    } catch (error) {
+      if (error.code !== 'permission-denied')
+        status.textContent = 'No se pudo comprobar el código. Seguimos intentando conectar…';
+    } finally { checking = false; }
+  };
+  const timer = setInterval(poll, 3000);
+  controller.signal.addEventListener('abort', () => clearInterval(timer), { once: true });
+}
 
 function avatar(el, profile, size = '') {
   return el('span', { class: `profile-avatar${size ? ` ${size}` : ''}`, style: `--profile:${profile.color}`, 'aria-hidden': 'true' }, profileInitial(profile));
@@ -56,7 +95,9 @@ export function signIn(el, f, done) {
       catch (error) { say(f.explain(error), true); }
     } }, '¿Olvidaste tu contraseña?');
     const submit = el('button', { class: 'auth-submit', type: 'submit' }, creating ? 'Crear cuenta' : 'Iniciar sesión');
-    const google = el('button', { class: 'auth-provider', type: 'button', onclick: () => busy(google, () => f.loginGoogle()) });
+    const tizen = document.documentElement.dataset.platform === 'tizen';
+    const google = el('button', { class: 'auth-provider', type: 'button',
+      onclick: () => tizen ? mobileSignIn(el, f, done) : busy(google, () => f.loginGoogle()) });
     const resend = creating ? null : el('button', { class: 'auth-link', type: 'submit' }, 'Reenviar correo de verificación');
     const notice = (title, message) => {
       const dialog = el('dialog', { class: 'auth-verification auth-card', 'aria-label': title },
@@ -89,7 +130,7 @@ export function signIn(el, f, done) {
       finally { for (const action of [submit, google, resend]) if (action) action.disabled = false; }
     };
     google.innerHTML = GOOGLE_G;
-    google.append('Google');
+    google.append(tizen ? 'Entrar con el móvil' : 'Google');
     const tab = (key, label) => el('button', { class: 'auth-tab', type: 'button', role: 'tab', 'aria-selected': String(mode === key),
       onclick: () => { if (mode !== key) { mode = key; draw(); } } }, label);
     card.replaceChildren(

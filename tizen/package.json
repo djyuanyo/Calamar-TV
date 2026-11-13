@@ -1,0 +1,11 @@
+{
+  "name": "calamar-tv-tizen",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "firebase": "13.0.0",
+    "hls.js": "1.5.17",
+    "mpegts.js": "1.8.2"
+  }
+}
