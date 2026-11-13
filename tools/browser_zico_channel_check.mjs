@@ -27,6 +27,8 @@ let browser;
 try {
   browser = await chromium.launch({headless:true,...(process.env.CALAMAR_CHROME_CHANNEL?{channel:process.env.CALAMAR_CHROME_CHANNEL}:{})});
   const page = await browser.newPage({viewport:{width:390,height:844}}), requests=[],errors=[];
+  // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
+  await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=> {
     const u = new URL(route.request().url());
@@ -67,7 +69,7 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: admin channel page -> saved player id -> channel card -> native HLS video in own web player');
   await page.locator('#player-close').click();
-  const start_time = new Date(Date.now()+3600000).toISOString();
+  const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   let ownChannel = true;
   await page.route('https://bp.zicotv.cc/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
     {id:700,title:'Partido con canal propio',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
