@@ -1648,7 +1648,11 @@ async function route() {
       if (version !== routeVersion) return;
       view.replaceChildren(...accountPage(el, f, { rerender: route, dashboard: accountDashboard, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
         chosen: () => { accountEditing = null; const destination = accessReturnHash || '#/'; accessReturnHash = null; location.hash = destination; } }));
-      if (signedUser() && libraryShown() && !cachedLibrary()) fetchLibrary().then(() => { if (version === routeVersion) route(); }).catch(() => {});
+      if (admission.decision === 'allowed' && signedUser() && !cachedLibrary()) {
+        const catalog = state.tdt ? Promise.resolve() : loadCatalog();
+        catalog.then(() => libraryShown() ? fetchLibrary() : null)
+          .then(library => { if (library && version === routeVersion) route(); }).catch(() => {});
+      }
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Comprueba la conexión y recarga.'));
     }
