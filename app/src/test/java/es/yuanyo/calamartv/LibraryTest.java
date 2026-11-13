@@ -390,6 +390,10 @@ public class LibraryTest {
         .put("episodes", new JSONArray().put(uploaded)).put("tmdb", new JSONObject().put("nextEpisode", metadata)));
     Library.Episode premiere = item.seasons().get(2).get(0);
     assertTrue(premiere.upcoming());
+    assertSame(premiere, item.nextPremiere());
+    assertEquals(1, Library.defaultSeason(item, new JSONObject(), new JSONObject()));
+    assertFalse(item.seasons("2099-11-12").get(2).get(0).available());
+    assertFalse(item.seasons("2099-11-13").containsKey(2));
     assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel());
     assertNull(item.next(item.episode("e1")));
     assertEquals("e1", Library.resumeEpisode(item, new JSONObject()).id);

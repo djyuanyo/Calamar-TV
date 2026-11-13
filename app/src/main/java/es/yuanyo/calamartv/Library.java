@@ -88,6 +88,12 @@ final class Library {
 
     boolean upcoming() { return Library.upcoming(aired); }
 
+    boolean available() { return !id.isEmpty() && !upcoming(); }
+
+    boolean hasPremiereDate(String today) {
+      return isDate(aired) && aired.compareTo(today) >= 0;
+    }
+
     String premiereLabel() {
       java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
       format.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -96,7 +102,11 @@ final class Library {
   }
 
   static boolean upcoming(String aired) {
-    return aired != null && aired.matches("\\d{4}-\\d{2}-\\d{2}") && aired.compareTo(madridDay(System.currentTimeMillis())) > 0;
+    return isDate(aired) && aired.compareTo(madridDay(System.currentTimeMillis())) > 0;
+  }
+
+  private static boolean isDate(String aired) {
+    return aired != null && aired.matches("\\d{4}-\\d{2}-\\d{2}");
   }
 
   static final long DAY = 86400000L;
@@ -262,7 +272,8 @@ final class Library {
     private void addScheduled(JSONObject metadata) {
       if (metadata == null) return;
       Episode episode = new Episode(metadata);
-      if (episode.episode > 0 && episode.upcoming()) scheduled.put(episode.season + "/" + episode.episode, episode);
+      if (episode.season >= 0 && episode.episode > 0 && isDate(episode.aired))
+        scheduled.put(episode.season + "/" + episode.episode, episode);
     }
 
     boolean playable() {
@@ -287,9 +298,13 @@ final class Library {
 
     /** Episodes grouped by season, in order. */
     Map<Integer, List<Episode>> seasons() {
+      return seasons(madridDay(System.currentTimeMillis()));
+    }
+
+    Map<Integer, List<Episode>> seasons(String today) {
       Map<Integer, List<Episode>> out = new LinkedHashMap<>();
       List<Episode> sorted = new ArrayList<>(episodes);
-      for (Episode e : scheduled.values()) if (e.upcoming()) sorted.add(e);
+      for (Episode e : scheduled.values()) if (e.hasPremiereDate(today)) sorted.add(e);
       Collections.sort(
           sorted,
           (a, b) -> a.season != b.season ? Integer.compare(a.season, b.season) : Integer.compare(a.episode, b.episode));
@@ -299,6 +314,14 @@ final class Library {
         list.add(e);
       }
       return out;
+    }
+
+    Episode nextPremiere() {
+      String today = madridDay(System.currentTimeMillis());
+      Episode next = null;
+      for (List<Episode> season : seasons(today).values()) for (Episode e : season)
+        if (e.hasPremiereDate(today) && (next == null || e.aired.compareTo(next.aired) < 0)) next = e;
+      return next;
     }
 
     /** The player's title: «Los hombres de Paco · T1 · Piloto» (or «· Capítulo 1» without a name). */
@@ -312,7 +335,7 @@ final class Library {
       for (List<Episode> season : seasons().values()) all.addAll(season);
       for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) {
         Episode following = all.get(i + 1);
-        return following.id.isEmpty() || following.upcoming() ? null : following;
+        return following.available() ? following : null;
       }
       return null;
     }
@@ -704,7 +727,7 @@ final class Library {
     Episode first = null;
     for (List<Episode> season : item.seasons().values())
       for (Episode e : season) {
-        if (e.upcoming() || e.id.isEmpty()) continue;
+        if (!e.available()) continue;
         if (first == null) first = e;
         if (EpisodeHistory.watchedAt(history, e.id) == 0) return e;
       }

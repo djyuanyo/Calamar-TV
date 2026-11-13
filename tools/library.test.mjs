@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT, libraryDetail, defaultEpisodeSeason, listedEpisodes, resumeEpisode } from '../web/library.js';
+import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT, libraryDetail, defaultEpisodeSeason, episodeAvailable, listedEpisodes, nextPremiere, resumeEpisode } from '../web/library.js';
 import { mergeEpisodeHistory, recordEpisode } from '../web/episode-history.js';
 
 const section = { key: 'series', page: 'series', label: 'Series' };
@@ -117,7 +117,12 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   const upcoming = { season: 1, episode: 3, aired: '2099-11-12', name: 'Estreno' };
   const item = { ...paco, tmdb: { ...paco.tmdb, nextEpisode: upcoming, trailer: 'abcdefghijk' } };
   assert.equal(listedEpisodes(item).at(-1), upcoming);
-  assert.equal(listedEpisodes(item, '2099-11-12').length, 2);
+  const sameDay = listedEpisodes(item, '2099-11-12');
+  assert.equal(sameDay.length, 3);
+  assert.equal(nextPremiere(sameDay, '2099-11-12'), upcoming);
+  assert.equal(episodeAvailable(upcoming, '2099-11-12'), false);
+  assert.equal(episodeAvailable({ ...upcoming, id: 'e3', url: 'https://example.com/3.mp4' }, '2099-11-12'), true);
+  assert.equal(listedEpisodes(item, '2099-11-13').length, 2);
   const history = recordEpisode({}, 'e1', true, 5);
   assert.equal(resumeEpisode(item, () => null, history).id, 'e2');
   const el = (tag, attrs, ...children) => ({ tag, attrs, children: children.flat().filter(Boolean),
@@ -131,4 +136,10 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   const locked = view.find(node => node.attrs.class === 'episode episode-upcoming');
   assert.equal(locked.tag, 'div');
   assert.ok(flatten(locked.children).some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
+  const newSeason = { ...item, tmdb: { ...item.tmdb, nextEpisode: { ...upcoming, season: 2, episode: 1 } } };
+  const seasonOne = flatten(libraryDetail(el, section, { sections: { series: [newSeason] } }, newSeason, () => {}, () => null, null, [], history));
+  assert.equal(seasonOne.find(node => node.attrs.class === 'season-picker').value, '1');
+  assert.ok(flatten(seasonOne.find(node => node.attrs.class === 'title-premiere').children)
+    .some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
+  assert.equal(seasonOne.some(node => node.attrs.class === 'episode episode-upcoming'), false);
 });

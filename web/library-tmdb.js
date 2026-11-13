@@ -164,7 +164,7 @@ export function nextEpisodeOf(details) {
 }
 
 function scheduledEpisodes(episodes, season, today = madridDay()) {
-  return episodes.filter(e => e.aired && e.aired > today)
+  return episodes.filter(e => e.aired && e.aired >= today)
     .map(({ episode, aired, name, still }) => ({ season, episode, aired, name, still }));
 }
 
@@ -275,7 +275,7 @@ export function seriesWithSeason(existing, info, season, episodes, links, id = e
   });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
-  const upcoming = [...(existing?.tmdb?.upcoming || []).filter(e => e.season !== season && e.aired > madridDay()),
+  const upcoming = [...(existing?.tmdb?.upcoming || []).filter(e => e.season !== season && e.aired >= madridDay()),
     ...scheduledEpisodes(episodes, season)];
   return { ...(existing || {}), id, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: upcoming.length ? { ...info, upcoming } : info, episodes: all };
 }

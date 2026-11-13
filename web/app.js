@@ -23,7 +23,7 @@ import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js
 import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, isUpcomingEpisode, listedEpisodes, finished, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, episodeAvailable, listedEpisodes, finished, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
 import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
 import { accountPage, paintAccountButton, profileGate, signIn } from './account.js';
 import { initCast } from './cast-player.js';
@@ -1224,7 +1224,7 @@ async function resumeEntry(entry) {
     const library = await fetchLibrary();
     const item = (library.sections[section?.key] || []).find((i) => i.id === entry.item);
     const episode = entry.episode && item ? listedEpisodes(item).find(e => e.id === entry.episode) : null;
-    if (!item || (entry.episode && (!episode || isUpcomingEpisode(episode)))) throw new Error('Este título ya no está en el catálogo.');
+    if (!item || (entry.episode && !episodeAvailable(episode))) throw new Error('Este título ya no está en el catálogo.');
     open(playable(section, item, episode));
   } catch (error) {
     view.prepend(el('p', { class: 'error', role: 'alert' }, error.message));
@@ -1485,7 +1485,7 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
   const play = (target, episode, restart = false) => {
-    if (!episode || !isUpcomingEpisode(episode)) open({ ...playable(section, target, episode), restart });
+    if (!episode || episodeAvailable(episode)) open({ ...playable(section, target, episode), restart });
   };
   const progress = loadProgress();
   const saved = (id) => progress[id] || null;
@@ -1497,7 +1497,7 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
     return;
   }
   view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item), history));
-  if (sub === 'ver' && (item.kind !== 'tv' || (episode && !isUpcomingEpisode(episode)))) {
+  if (sub === 'ver' && (item.kind !== 'tv' || episodeAvailable(episode))) {
     const c = playable(section, item, episode || null);
     if (player.hidden || current?.id !== c.id) open(c, true);
   }

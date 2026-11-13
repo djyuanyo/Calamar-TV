@@ -4,3 +4,4 @@
 .episode-upcoming .episode-still { opacity: .7; }
 .episode-upcoming:hover { cursor: default; }
 .episode-hero .episode-state { margin: 0 0 10px; }
+.title-premiere { margin: 10px 0; color: #ffd284; line-height: 1.4; }

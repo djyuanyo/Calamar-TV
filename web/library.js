@@ -66,7 +66,7 @@ export function nextEpisode(item, episode) {
   const list = listedEpisodes(item);
   const i = list.findIndex((e) => e.id === episode.id);
   const next = i >= 0 ? list[i + 1] : null;
-  return next?.id && !isUpcomingEpisode(next) ? next : null;
+  return next && episodeAvailable(next) ? next : null;
 }
 
 // ---- Saltar intro y siguiente capítulo --------------------------------------------------------------
@@ -774,19 +774,25 @@ export function similarTitles(library, section, item, size = 12) {
   return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || b[2] - a[2] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
 }
 
-export const isUpcomingEpisode = (episode, today = madridDay()) => /^\d{4}-\d{2}-\d{2}$/.test(episode?.aired || '') && episode.aired > today
-  && Number.isFinite(Date.parse(episode.aired + 'T00:00:00Z'));
+export const hasPremiereDate = (episode, today = madridDay()) => /^\d{4}-\d{2}-\d{2}$/.test(episode?.aired || '')
+  && episode.aired >= today && Number.isFinite(Date.parse(episode.aired + 'T00:00:00Z'));
+export const isUpcomingEpisode = (episode, today = madridDay()) => hasPremiereDate(episode, today) && episode.aired > today;
+export const episodeAvailable = (episode, today = madridDay()) => !!episode?.id && !isUpcomingEpisode(episode, today);
 
 export function listedEpisodes(item, today = madridDay()) {
   const numbered = episode => `${episode.season}/${episode.episode}`;
   const episodes = new Map((item.episodes || []).map(episode => [numbered(episode), episode]));
   for (const upcoming of [...(item.tmdb?.upcoming || []), item.tmdb?.nextEpisode]) {
-    if (!isUpcomingEpisode(upcoming, today)) continue;
+    if (!hasPremiereDate(upcoming, today)) continue;
     const key = numbered(upcoming);
     const linked = episodes.get(key);
     episodes.set(key, linked ? { ...linked, aired: upcoming.aired } : upcoming);
   }
   return [...episodes.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
+}
+
+export function nextPremiere(episodes, today = madridDay()) {
+  return episodes.filter(e => hasPremiereDate(e, today)).sort((a, b) => a.aired.localeCompare(b.aired) || a.season - b.season || a.episode - b.episode)[0];
 }
 
 const releaseDate = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -805,7 +811,7 @@ export function defaultEpisodeSeason(item, saved, history) {
 
 /** Resume the episode in progress, or offer the first one the profile has not finished. */
 export function resumeEpisode(item, saved = () => null, history = {}, today = madridDay()) {
-  const episodes = listedEpisodes(item, today).filter(episode => episode.id && !isUpcomingEpisode(episode, today));
+  const episodes = listedEpisodes(item, today).filter(episode => episodeAvailable(episode, today));
   const started = latestEpisodeProgress(episodes, saved);
   if (started && (!watchedEpisode(history, started[0]) || (started[1].at || 0) > history.watched[started[0].id])) return started[0];
   return episodes.find(episode => !watchedEpisode(history, episode)) || episodes[0] || null;
@@ -821,7 +827,9 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   const title = itemTitle(item);
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
-  const episodes = series ? listedEpisodes(item) : [];
+  const today = madridDay();
+  const episodes = series ? listedEpisodes(item, today) : [];
+  const premiere = nextPremiere(episodes, today);
   const seasons = [...new Set(episodes.map(e => e.season))];
   let chosen = seasons.includes(initialSeason) ? initialSeason : defaultEpisodeSeason(item, saved, history);
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
@@ -857,6 +865,8 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       el('h1', {}, info.titleLogo ? el('img', { class: 'title-logo', src: info.titleLogo, alt: title, referrerpolicy: 'no-referrer',
         onerror: (event) => event.target.replaceWith(title) }) : title),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
+      premiere ? el('p', { class: 'title-premiere' }, el('strong', {}, 'Próximo estreno'),
+        ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, releaseLabel(premiere))) : null,
       action, !series ? soundNote(el, item.file, item.url) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
       starring,
@@ -871,13 +881,13 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     picker.value = String(chosen);
     const list = el('div', { class: 'episode-list' });
     const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
-      const upcoming = isUpcomingEpisode(e), watched = !upcoming && watchedEpisode(history, e);
-      const badge = upcoming ? el('time', { class: 'episode-state upcoming', datetime: e.aired }, releaseLabel(e))
-        : watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null;
+      const upcoming = !episodeAvailable(e, today), watched = !upcoming && watchedEpisode(history, e);
+      const badge = hasPremiereDate(e, today) ? el('time', { class: 'episode-state upcoming', datetime: e.aired }, releaseLabel(e)) : null;
       return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
         el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
           upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
-        el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
+        el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge,
+          watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
         e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null);
     }));
     picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
@@ -926,14 +936,14 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
   const info = item.tmdb || {};
   const image = episode.still || info.backdrop || '';
   const next = nextEpisode(item, episode);
-  const upcoming = isUpcomingEpisode(episode);
+  const upcoming = !episodeAvailable(episode);
   return [el('section', { class: 'library-hero episode-hero', style: image ? `--backdrop:url("${image.replace(/"/g, '')}")` : null },
     el('div', { class: 'library-info' },
       el('a', { class: 'library-back', href: `#/${section.page}/${encodeURIComponent(item.id)}/temporada/${episode.season}` }, `‹ ${itemTitle(item)}`),
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      upcoming ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, releaseLabel(episode)) : null,
+      hasPremiereDate(episode) ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, releaseLabel(episode)) : null,
       !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
       upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
@@ -1477,7 +1487,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}),
         ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode,
           ...(facts[item.id].upcoming ? { upcoming: [...(item.tmdb.upcoming || [])
-            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && isUpcomingEpisode(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
+            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && hasPremiereDate(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);

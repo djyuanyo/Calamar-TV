@@ -2192,6 +2192,12 @@ public class MainActivity extends Activity {
     }
     String facts = item.facts();
     if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
+    Library.Episode premiere = item.series ? item.nextPremiere() : null;
+    if (premiere != null) {
+      TextView note = label("Próximo estreno · T" + premiere.season + ":E" + premiere.episode + " · " + premiere.premiereLabel(), 15, 0xffffd284);
+      note.setPadding(0, dp(10), 0, dp(4));
+      body.addView(note);
+    }
     final JSONObject progress = Library.Progress.load(this);
     final EpisodeHistory episodeHistory = item.series ? new EpisodeHistory(this, section, item.id) : null;
     final Runnable refreshPlay;
@@ -2457,8 +2463,8 @@ public class MainActivity extends Activity {
   }
 
   View episodeRow(final String section, final Library.Item item, final Library.Episode e, JSONObject progress, JSONObject seen) {
-    boolean upcoming = e.upcoming();
-    boolean watched = EpisodeHistory.watchedAt(seen, e.id) > 0;
+    boolean upcoming = !e.available();
+    boolean watched = !upcoming && EpisodeHistory.watchedAt(seen, e.id) > 0;
     LinearLayout box = new LinearLayout(this);
     box.setOrientation(LinearLayout.VERTICAL);
     box.setFocusable(true);
@@ -2500,9 +2506,10 @@ public class MainActivity extends Activity {
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(14), 0, dp(4), 0);
     texts.addView(name);
-    String state = upcoming ? e.premiereLabel() : watched ? "✓ Visto" : "";
+    boolean dated = e.hasPremiereDate(Library.madridDay(System.currentTimeMillis()));
+    String state = dated ? e.premiereLabel() + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
     if (!state.isEmpty()) {
-      TextView badge = label(state, 13, upcoming ? 0xffffd284 : Ui.ACC);
+      TextView badge = label(state, 13, dated ? 0xffffd284 : Ui.ACC);
       badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
       badge.setPadding(dp(14), dp(3), dp(4), 0);
       texts.addView(badge);
@@ -2627,15 +2634,17 @@ public class MainActivity extends Activity {
     overview.setPadding(0, dp(10), 0, dp(10));
     body.addView(overview);
     EpisodeHistory episodeHistory = new EpisodeHistory(this, section, item.id);
-    TextView badge = label("", 14, e.upcoming() ? 0xffffd284 : Ui.ACC);
+    boolean dated = e.hasPremiereDate(Library.madridDay(System.currentTimeMillis()));
+    TextView badge = label("", 14, dated ? 0xffffd284 : Ui.ACC);
     Runnable refreshBadge = () -> {
-      String state = e.upcoming() ? e.premiereLabel() : EpisodeHistory.watchedAt(episodeHistory.local(), e.id) > 0 ? "✓ Visto" : "";
+      boolean watched = e.available() && EpisodeHistory.watchedAt(episodeHistory.local(), e.id) > 0;
+      String state = dated ? e.premiereLabel() + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
       badge.setText(state);
       badge.setVisibility(state.isEmpty() ? View.GONE : View.VISIBLE);
     };
     refreshBadge.run();
     body.addView(badge);
-    if (!e.upcoming()) playButtons(body, item.entry(section, e));
+    if (e.available()) playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
       Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
