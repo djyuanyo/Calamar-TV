@@ -135,8 +135,9 @@ public class LibraryTest {
 
   @Test public void documentariesHaveTheSameTopOnHomeAndTheirSection() throws Exception {
     JSONArray documentaries = new JSONArray();
+    String url = "https://calamarmenciano.com/documentary.mp4";
+    assertTrue(Library.Media.allowed(url));
     for (int i = 1; i <= 12; i++) {
-      String url = "https://example.com/documentary.mp4";
       JSONObject documentary = new JSONObject().put("id", "d" + i).put("tmdb", new JSONObject().put("id", i).put("votes", i));
       if (i % 2 == 0) {
         JSONObject episode = new JSONObject().put("id", "e1").put("season", 1).put("episode", 1).put("url", url);
