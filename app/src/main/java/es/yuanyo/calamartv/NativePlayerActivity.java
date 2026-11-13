@@ -139,6 +139,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** Films and episodes: their «Continuar viendo» entry, where to start, and whether it reached the end. */
   private org.json.JSONObject progressEntry;
+  private String offlineKey;
   private EpisodeHistory episodeHistory;
   private boolean episodeStarted, episodeCompleted;
   private long resumeMs;
@@ -222,6 +223,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     } catch (org.json.JSONException ignored) {
     }
     resumeMs = getIntent().getLongExtra("resume_ms", 0);
+    offlineKey = getIntent().getStringExtra(OfflineVideos.KEY);
+    OfflineVideos.Saved offline = offlineKey == null ? null : OfflineVideos.get(this, offlineKey);
+    if (offlineKey != null && offline == null) { finish(); return; }
     ArrayList<String> urls = getIntent().getStringArrayListExtra("media_urls");
     if (urls == null) urls = new ArrayList<>();
     urls.add(0, getIntent().getStringExtra("media_url"));
@@ -229,6 +233,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       String url = UserChannels.normalize(candidate);
       if (url != null && !AppSources.webOnly(url) && !directUrls.contains(url)) directUrls.add(url);
     }
+    if (offline != null) directUrls.add(Uri.fromFile(offline.video).toString());
     // Channels: player pages among their links are read as pages (one after another), not played as
     // videos. Films keep their single link as it is (a Drive link has no extension either).
     ArrayList<String> everything = getIntent().getStringArrayListExtra("channel_streams");
@@ -337,7 +342,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           });
       controls.addView(sleepTimer.button(), new LinearLayout.LayoutParams(buttonSize));
     }
-    castControls = new CastControls(this, controls,
+    if (offlineKey == null) castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
         () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
@@ -646,7 +651,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (root == null || isFinishing()) return;
     root.setVisibility(View.INVISIBLE);
     stopAccess = AppAccess.observe(this, state -> {
-      if (state == AppAccess.State.ALLOWED) {
+      if (offlineKey == null ? state == AppAccess.State.ALLOWED
+          : OfflineVideos.admitted(this, state) && OfflineVideos.get(this, offlineKey) != null) {
         root.setVisibility(View.VISIBLE);
         if (!active) startPlayback();
       } else if (state != AppAccess.State.LOADING || active) {
@@ -969,7 +975,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     final boolean hostedSource = hostingPlayback && HostingPlayback.isRelay(source.url);
     final boolean requestHttp1 = mediaHttp1 || hostedSource;
     try {
-      if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || HostingPlayback.isRelay(source.url)
+      if (offlineKey != null) http = androidx.media3.datasource.FileDataSource::new;
+      else if (chromiumNetwork && ("hls".equals(UserChannels.kind(source.url)) || HostingPlayback.isRelay(source.url)
           || source.url.startsWith(Library.LULU_ENDPOINT))) http = ChromiumNetwork.get(this).mediaFactory(directUrl != null ? null : mediaReferer());
       else {
         http =
@@ -1067,7 +1074,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             } else if (state == Player.STATE_BUFFERING) {
               keepControlsVisible(true);
               status.setText("Cargando vídeo…");
-              armBufferingTimeout(instance, source);
+              if (offlineKey == null) armBufferingTimeout(instance, source);
             } else if (state == Player.STATE_ENDED && progressEntry != null) {
               endEpisode();
             } else cancelBufferingTimeout();
@@ -1092,6 +1099,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             lastReport += "\nVídeo: " + error.getErrorCodeName() + " · " + detail;
             lastReport += "\n" + mediaProgress;
             cancelBufferingTimeout();
+            if (offlineKey != null) { problem("No se pudo reproducir esta descarga. Puedes borrarla y volver a descargarla."); return; }
             if (tryCompatibleDrive(source)) return;
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
@@ -1829,7 +1837,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private void addSkipButtons() {
     skipMarks = new int[] {progressEntry.optInt("intro_start", -1), progressEntry.optInt("intro_end", -1), progressEntry.optInt("credits", Library.CREDITS_DEFAULT), -1, 0};
     hasNext = progressEntry.optBoolean("has_next");
-    askIntroDb();
+    if (offlineKey == null) askIntroDb();
     LinearLayout row = new LinearLayout(this);
     row.setGravity(Gravity.CENTER_VERTICAL);
     skipIntroButton = Ui.pill(this, "Saltar intro", Ui.Kind.SURFACE, false);

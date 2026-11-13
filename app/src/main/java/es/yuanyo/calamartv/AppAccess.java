@@ -30,6 +30,8 @@ final class AppAccess {
 
   private AppAccess() {}
 
+  static State current() { return state; }
+
   static Runnable observe(Context context, Listener listener) {
     if (auth == null && testState == null) retry(context);
     listeners.add(listener);

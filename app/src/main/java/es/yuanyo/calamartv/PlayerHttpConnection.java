@@ -15,12 +15,18 @@ import okhttp3.Response;
 /** GET/HEAD adapter for the bounded, HTTPS-only document reader. */
 public final class PlayerHttpConnection extends HttpURLConnection {
   private final OkHttpClient client;
+  private final long callTimeoutSeconds;
   private Response response;
   private Call call;
 
   public PlayerHttpConnection(URL url, OkHttpClient client) {
+    this(url, client, 35);
+  }
+
+  PlayerHttpConnection(URL url, OkHttpClient client, long callTimeoutSeconds) {
     super(url);
     this.client = client;
+    this.callTimeoutSeconds = callTimeoutSeconds;
   }
 
   @Override
@@ -36,7 +42,7 @@ public final class PlayerHttpConnection extends HttpURLConnection {
             .newBuilder()
             .connectTimeout(getConnectTimeout(), TimeUnit.MILLISECONDS)
             .readTimeout(getReadTimeout(), TimeUnit.MILLISECONDS)
-            .callTimeout(35, TimeUnit.SECONDS)
+            .callTimeout(callTimeoutSeconds, TimeUnit.SECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
             .build();

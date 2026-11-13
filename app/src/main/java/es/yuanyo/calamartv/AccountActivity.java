@@ -48,6 +48,20 @@ public class AccountActivity extends Activity {
   private boolean emailWorking;
   private String emailValue = "";
   private Runnable stopAccess;
+  private Runnable stopDownloads;
+  private Runnable stopDownloadAccess;
+  private LinearLayout downloadsBody;
+  private Library.Data library;
+  private boolean loadingLibrary;
+  private final java.util.concurrent.ExecutorService posterWorker = java.util.concurrent.Executors.newFixedThreadPool(3);
+  private final android.os.Handler downloadUpdates = new android.os.Handler(android.os.Looper.getMainLooper());
+  private final java.util.Map<OfflineVideos.Transfer, TextView> transferStatus = new java.util.HashMap<>();
+  private final Runnable refreshTransfers = new Runnable() {
+    @Override public void run() {
+      transferStatus.forEach((job, view) -> view.setText(transferLabel(job)));
+      if (!transferStatus.isEmpty()) downloadUpdates.postDelayed(this, 500);
+    }
+  };
 
   @Override
   protected void onCreate(Bundle state) {
@@ -62,6 +76,11 @@ public class AccountActivity extends Activity {
   protected void onStart() {
     super.onStart();
     Profiles.listen(redraw);
+    stopDownloads = OfflineVideos.observe(this::drawDownloads);
+    if (!required) stopDownloadAccess = AppAccess.observe(this, state -> {
+      OfflineVideos.rememberAccess(this, state);
+      drawDownloads();
+    });
     if (required) stopAccess = AppAccess.observe(this, state -> {
       if (state == AppAccess.State.ALLOWED || state == AppAccess.State.BLOCKED || state == AppAccess.State.ERROR) {
         setResult(RESULT_OK);
@@ -72,15 +91,24 @@ public class AccountActivity extends Activity {
       authListener = auth -> runOnUiThread(this::draw);
       SharedCatalog.auth(this).addAuthStateListener(authListener);
     } catch (RuntimeException unavailable) { authListener = null; }
+    drawDownloads();
   }
 
   @Override
   protected void onStop() {
+    downloadUpdates.removeCallbacks(refreshTransfers);
+    if (stopDownloads != null) { stopDownloads.run(); stopDownloads = null; }
+    if (stopDownloadAccess != null) { stopDownloadAccess.run(); stopDownloadAccess = null; }
     if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     Profiles.forget(redraw);
     if (authListener != null) SharedCatalog.auth(this).removeAuthStateListener(authListener);
     stopPhoneLogin();
     super.onStop();
+  }
+
+  @Override protected void onDestroy() {
+    posterWorker.shutdownNow();
+    super.onDestroy();
   }
 
   private int dp(int n) { return Ui.dp(this, n); }
@@ -139,72 +167,207 @@ public class AccountActivity extends Activity {
 
   private void draw() {
     if (isFinishing() || emailWorking) return;
+    downloadsBody = null;
+    transferStatus.clear();
     if (phone != null && !phoneInline) return; // The phone sign-in screen stays until it ends.
     if (required || Profiles.user(this) == null) { signIn(); return; }
-    if (editing != null && !editing.equals("all") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
+    if ("descargas".equals(editing)) { downloads(); return; }
+    if (editing != null && !editing.equals("all") && !editing.equals("elegir") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
     JSONObject current = Profiles.active();
     if ("all".equals(editing) || current == null) { manage(current == null); return; }
+    if ("elegir".equals(editing)) { chooseProfile(); return; }
     if ("cuenta".equals(editing)) { accountFacts(); return; }
     if ("ayuda".equals(editing)) { help(); return; }
-    sheet("Perfil", null);
-    // The profile watching: big, with its name, the account's email and ✎ to edit it.
-    FrameLayout card = new FrameLayout(this);
-    card.setBackground(Ui.shape(this, CARD, 26, 0, 0));
-    LinearLayout who = new LinearLayout(this);
-    who.setOrientation(LinearLayout.VERTICAL);
-    who.setGravity(Gravity.CENTER_HORIZONTAL);
-    who.setPadding(dp(16), dp(22), dp(16), dp(24));
-    who.addView(avatar(this, current, 120), new LinearLayout.LayoutParams(dp(120), dp(120)));
-    TextView name = label(current.optString("name"), 22, Ui.FG);
-    name.setGravity(Gravity.CENTER);
-    who.addView(name);
-    String mail = Profiles.user(this).getEmail();
-    TextView email = label(mail == null ? "" : mail, 15, 0x99ffffff);
-    email.setGravity(Gravity.CENTER);
-    email.setPadding(0, 0, 0, 0);
-    who.addView(email);
-    card.addView(who, new FrameLayout.LayoutParams(-1, -2));
-    TextView pencil = label("✎", 26, Ui.FG);
-    pencil.setFocusable(true);
-    pencil.setClickable(true);
-    pencil.setPadding(dp(12), dp(6), dp(12), dp(6));
-    pencil.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 999, 0));
-    pencil.setContentDescription("Editar " + current.optString("name"));
-    final String currentId = current.optString("id");
-    pencil.setOnClickListener(v -> { editing = currentId; draw(); });
-    card.addView(pencil, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
-    LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-    cp.setMargins(0, dp(8), 0, dp(18));
-    body.addView(card, cp);
-    // The other profiles (pick one) and «Añadir».
-    LinearLayout others = new LinearLayout(this);
-    others.setGravity(Gravity.CENTER);
-    for (JSONObject profile : Profiles.profiles()) {
-      if (profile.optString("id").equals(currentId)) continue;
-      final String id = profile.optString("id");
-      others.addView(tile(avatar(this, profile, 76), profile.optString("name"), 76, () -> { Profiles.choose(this, id, true); draw(); }));
-    }
-    if (Profiles.profiles().size() < ProfileData.MAX_PROFILES) others.addView(tile(tool("+", 76), "Añadir", 76, () -> { editing = "new"; draw(); }));
-    HorizontalScrollView othersScroll = new HorizontalScrollView(this);
-    othersScroll.setHorizontalScrollBarEnabled(false);
-    othersScroll.addView(others);
-    LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, -2);
-    op.gravity = Gravity.CENTER_HORIZONTAL;
-    body.addView(othersScroll, op);
-    Button manage = Ui.pill(this, "Administrar perfiles", Ui.Kind.SURFACE, false);
-    manage.setOnClickListener(v -> { editing = "all"; draw(); });
-    LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, dp(52));
-    mp.gravity = Gravity.CENTER_HORIZONTAL;
-    mp.setMargins(0, dp(16), 0, dp(20));
-    body.addView(manage, mp);
-    menuItem("👤", "Cuenta", () -> { editing = "cuenta"; draw(); });
+    sheet("Mi Cuenta", null);
+    body.setBackgroundColor(Ui.BG);
+    LinearLayout profile = new LinearLayout(this);
+    profile.setGravity(Gravity.CENTER_VERTICAL);
+    profile.addView(avatar(this, current, 44), new LinearLayout.LayoutParams(dp(44), dp(44)));
+    Button profiles = Ui.pill(this, current.optString("name") + "   ▾", Ui.Kind.GHOST, true);
+    profiles.setContentDescription("Cambiar de perfil · " + current.optString("name"));
+    profiles.setOnClickListener(v -> { editing = "elegir"; draw(); });
+    profile.addView(profiles);
+    body.addView(profile);
+    menuItem("↓", "Descargas", () -> { editing = "descargas"; draw(); });
+    accountRows();
+    menuItem("✎", "Administrar perfiles", () -> { editing = "all"; draw(); });
+    menuItem("👤", "Datos de la cuenta", () -> { editing = "cuenta"; draw(); });
     menuItem("？", "Ayuda", () -> { editing = "ayuda"; draw(); });
     if (SharedCatalog.administrator(Profiles.user(this))) {
       menuItem("⚙", "Administración", () -> startActivity(new Intent(this, AdminActivity.class)));
     }
     menuItem("⇥", "Cerrar sesión", () -> SharedCatalog.auth(this).signOut());
     body.addView(status);
-    manage.requestFocus();
+    profiles.requestFocus();
+  }
+
+  private void chooseProfile() {
+    sheet("Cambiar de perfil", "");
+    for (JSONObject profile : Profiles.profiles()) {
+      String id = profile.optString("id");
+      String name = profile.optString("name", "Perfil");
+      menuItem("●", name, () -> {
+        Profiles.choose(this, id, true);
+        editing = null;
+        draw();
+      });
+    }
+    if (Profiles.profiles().size() < ProfileData.MAX_PROFILES)
+      button("Añadir perfil", Ui.Kind.SURFACE, () -> { editing = "new"; draw(); });
+  }
+
+  private void downloads() {
+    sheet("Descargas", "");
+    downloadsBody = new LinearLayout(this);
+    downloadsBody.setOrientation(LinearLayout.VERTICAL);
+    body.addView(downloadsBody);
+    drawDownloads();
+  }
+
+  private void drawDownloads() {
+    if (downloadsBody == null || isFinishing() || isDestroyed()) return;
+    downloadsBody.removeAllViews();
+    transferStatus.clear();
+    downloadUpdates.removeCallbacks(refreshTransfers);
+    if (!OfflineVideos.admitted(this, AppAccess.current())) {
+      downloadsBody.addView(label("Conéctate a Internet para comprobar el acceso a tus descargas.", 15, Ui.MUTED));
+      return;
+    }
+    java.util.List<OfflineVideos.Saved> saved = OfflineVideos.list(this);
+    java.util.List<OfflineVideos.Transfer> active = OfflineVideos.active(this);
+    if (active.isEmpty() && saved.isEmpty())
+      downloadsBody.addView(label("Aquí verás las películas y los capítulos que descargues para ver sin conexión.", 15, Ui.MUTED));
+    for (OfflineVideos.Transfer transfer : active) {
+      TextView text = downloadRow(transfer.entry, transferLabel(transfer), null, "Cancelar", () -> OfflineVideos.cancel(transfer));
+      transferStatus.put(transfer, text);
+    }
+    for (OfflineVideos.Saved item : saved) {
+      String size = android.text.format.Formatter.formatFileSize(this, item.video.length());
+      downloadRow(item.entry, size, () -> playOffline(item), "Borrar", () -> new AlertDialog.Builder(this)
+          .setTitle("Borrar descarga").setMessage(item.entry.optString("title"))
+          .setNegativeButton("Cancelar", null).setPositiveButton("Borrar", (dialog, which) -> {
+            if (!OfflineVideos.remove(this, item.entry.optString("key"))) say("No se pudo borrar la descarga.");
+          }).show());
+    }
+    downloadsBody.addView(status);
+    if (!transferStatus.isEmpty()) downloadUpdates.postDelayed(refreshTransfers, 500);
+  }
+
+  private String transferLabel(OfflineVideos.Transfer job) {
+    String sub = job.entry.optString("sub");
+    String state = job.cancelled ? "Cancelando…" : job.percent < 0 ? "Descargando…" : job.percent + " %";
+    return sub.isEmpty() ? state : sub + " · " + state;
+  }
+
+  private TextView downloadRow(JSONObject entry, String subtitle, Runnable play, String action, Runnable manage) {
+    LinearLayout row = new LinearLayout(this);
+    row.setGravity(Gravity.CENTER_VERTICAL);
+    row.setPadding(dp(8), dp(8), dp(8), dp(8));
+    row.setBackground(Ui.shape(this, CARD, 10, 0, 0));
+    LinearLayout info = new LinearLayout(this);
+    info.setOrientation(LinearLayout.VERTICAL);
+    if (play != null) {
+      info.setFocusable(true);
+      info.setContentDescription("Reproducir " + entry.optString("title"));
+      info.setBackground(Ui.focusFill(this, CARD, 0x22ffffff, Ui.ACC, 8, 0));
+      info.setOnClickListener(v -> play.run());
+    }
+    info.addView(label((play == null ? "" : "▶  ") + entry.optString("name"), 16, Ui.FG));
+    String sub = entry.optString("sub");
+    TextView detail = label(play == null || sub.isEmpty() ? subtitle : sub + " · " + subtitle, 13, Ui.MUTED);
+    info.addView(detail);
+    row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+    Button control = Ui.pill(this, action, Ui.Kind.SURFACE, true);
+    control.setOnClickListener(v -> manage.run());
+    row.addView(control);
+    LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
+    spacing.bottomMargin = dp(8);
+    downloadsBody.addView(row, spacing);
+    return detail;
+  }
+
+  private void playOffline(OfflineVideos.Saved item) {
+    if (!OfflineVideos.admitted(this, AppAccess.current())) { drawDownloads(); return; }
+    String key = item.entry.optString("key");
+    JSONObject progress = Library.Progress.load(this).optJSONObject(key);
+    startActivity(new Intent(this, NativePlayerActivity.class).putExtra(OfflineVideos.KEY, key)
+        .putExtra("title", item.entry.optString("title")).putExtra("progress_entry", item.entry.toString())
+        .putExtra("resume_ms", progress == null ? 0L : progress.optLong("position")));
+  }
+
+  private void accountRows() {
+    if (library == null && !loadingLibrary && !OfflineVideos.disconnected(this) && AppAccess.current() == AppAccess.State.ALLOWED) {
+      loadingLibrary = true;
+      new Thread(() -> {
+        try {
+          Library.Data result = Library.download();
+          runOnUiThread(() -> { library = result; if (editing == null && !isDestroyed()) draw(); });
+        } catch (Exception unavailable) { /* The list can be loaded the next time this screen opens. */ }
+      }).start();
+    }
+    accountRail("Seguir viendo", Library.Progress.list(Library.Progress.load(this)), true);
+    java.util.List<JSONObject> liked = ProfileData.entries(Profiles.data(), "ratings");
+    liked.removeIf(entry -> entry.optInt("value") <= 0);
+    accountRail("Series y películas que te han gustado", liked, false);
+    accountRail("Mi lista", ProfileData.entries(Profiles.data(), "list"), false);
+  }
+
+  private void accountRail(String heading, java.util.List<JSONObject> entries, boolean resume) {
+    LinearLayout rail = new LinearLayout(this);
+    for (JSONObject entry : entries) {
+      String[] location = library == null ? null : library.locate(entry);
+      Library.Item title = location == null ? null : library.find(location[0], location[1]);
+      if (title == null && !resume) continue;
+      String name = title == null ? entry.optString("name") : title.title;
+      String art = title == null ? entry.optString("image") : title.poster.isEmpty() ? title.backdrop : title.poster;
+      LinearLayout card = new LinearLayout(this);
+      card.setOrientation(LinearLayout.VERTICAL);
+      card.setFocusable(true);
+      card.setContentDescription(name);
+      card.setBackground(Ui.focusFill(this, CARD, 0x22ffffff, Ui.ACC, 8, 0));
+      ImageView image = new ImageView(this);
+      image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      image.setBackground(Ui.artBackground(this, Palette.hue(name), 8));
+      card.addView(image, new LinearLayout.LayoutParams(-1, dp(150)));
+      if (art.startsWith("https://")) posterWorker.execute(() -> {
+        android.graphics.Bitmap cover = MainActivity.readBitmap(art);
+        if (cover != null) runOnUiThread(() -> { if (!isDestroyed()) image.setImageBitmap(cover); });
+      });
+      TextView titleLabel = label(name, 14, Ui.FG);
+      titleLabel.setMaxLines(2);
+      card.addView(titleLabel);
+      if (resume && entry.optLong("duration") > 0) {
+        android.widget.ProgressBar track = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        track.setProgress((int)Math.min(100, entry.optLong("position") * 100d / entry.optLong("duration")));
+        card.addView(track, new LinearLayout.LayoutParams(-1, dp(5)));
+      }
+      card.setOnClickListener(v -> {
+        if (resume && OfflineVideos.admitted(this, AppAccess.current())) {
+          OfflineVideos.Saved download = OfflineVideos.get(this, entry.optString("key"));
+          if (download != null && OfflineVideos.disconnected(this)) { playOffline(download); return; }
+        }
+        if (location == null && entry.optString("section").isEmpty()) return;
+        String page = location == null ? Library.page(entry.optString("section")) : Library.page(location[0]);
+        String id = location == null ? entry.optString("item") : location[1];
+        Intent open = new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+            .setData(android.net.Uri.parse("https://djyuanyo.github.io/Calamar-TV/" + page + "/" + android.net.Uri.encode(id) + "/"));
+        if (resume) open.putExtra("account_resume", entry.toString());
+        startActivity(open);
+        finish();
+      });
+      LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(dp(104), -2);
+      margin.rightMargin = dp(8);
+      rail.addView(card, margin);
+      if (rail.getChildCount() >= 20) break;
+    }
+    if (rail.getChildCount() == 0) return;
+    TextView title = label(heading, 20, Ui.FG);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    body.addView(title);
+    HorizontalScrollView scroll = new HorizontalScrollView(this);
+    scroll.setHorizontalScrollBarEnabled(false);
+    scroll.addView(rail);
+    body.addView(scroll);
   }
 
   /** A dark sheet as Netflix's «Perfil»: its title, ✕ to close and, inside it, ‹ to go back. */
@@ -328,7 +491,7 @@ public class AccountActivity extends Activity {
   }
 
   private void accountFacts() {
-    sheet("Cuenta", "");
+    sheet("Datos de la cuenta", "");
     com.google.firebase.auth.FirebaseUser user = Profiles.user(this);
     boolean google = false;
     for (com.google.firebase.auth.UserInfo info : user.getProviderData()) if ("google.com".equals(info.getProviderId())) google = true;

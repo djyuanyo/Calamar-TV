@@ -1,5 +1,6 @@
 import { GOOGLE_G } from './google-icon.js';
 import { DEVICE_LOGIN_MINUTES, DEVICE_LOGIN_URL, newDeviceKey } from './device-login.js';
+import { APK_DOWNLOAD } from './app-links.js';
 // «Mi cuenta» (#/cuenta): sign in with Google or with email and password, «¿Quién está viendo?» and
 // the profiles of the account (add, rename, colour, delete), as in Netflix.
 import { MAX_PROFILES, PROFILE_COLORS, signedUser, accountProfiles, activeProfile, chooseProfile, addProfile, editProfile, removeProfile } from './profiles.js';
@@ -193,7 +194,7 @@ const svg = (el, name, cls = '') => { const span = el('span', { class: cls, 'ari
  * (✎ to edit it), the others and «Añadir», «Administrar perfiles», «Cuenta», «Ayuda» and «Cerrar sesión».
  * `chosen` runs after picking a profile (back to the home page).
  */
-export function accountPage(el, f, { rerender, chosen, editing = null, setEditing = () => {} }) {
+export function accountPage(el, f, { rerender, chosen, dashboard = () => [], editing = null, setEditing = () => {} }) {
   const user = signedUser();
   if (!user) return signIn(el, f, rerender);
   const note = el('p', { class: 'note', role: 'status' });
@@ -223,7 +224,7 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
   }
   if (editing === 'cuenta') {
     const provider = (user.providerData || []).some((p) => p.providerId === 'google.com') ? 'Google' : 'Email y contraseña';
-    return [el('section', { class: 'profile-sheet' }, head('Cuenta', 'perfil'),
+    return [el('section', { class: 'profile-sheet' }, head('Datos de la cuenta', 'perfil'),
       el('dl', { class: 'sheet-facts' }, el('dt', {}, 'Email'), el('dd', {}, user.email || '—'), el('dt', {}, 'Acceso'), el('dd', {}, provider),
         el('dt', {}, 'Perfiles'), el('dd', {}, `${profiles.length} de ${MAX_PROFILES}`)),
       provider === 'Google' ? null : el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
@@ -243,14 +244,17 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
   if (profiles.length < MAX_PROFILES) others.push(el('button', { class: 'sheet-profile', type: 'button', onclick: () => go('new') },
     el('span', { class: 'profile-avatar mid tool', 'aria-hidden': 'true' }, '+'), el('span', {}, 'Añadir')));
   const item = (icon, label, action) => el('li', {}, el('button', { class: 'sheet-item', type: 'button', onclick: action }, svg(el, icon, 'sheet-icon'), el('span', {}, label), el('span', { class: 'sheet-chevron', 'aria-hidden': 'true' }, '›')));
-  return [el('section', { class: 'profile-sheet' }, head('Perfil'),
-    el('div', { class: 'sheet-current' },
-      el('button', { class: 'sheet-edit', type: 'button', 'aria-label': `Editar ${current.name}`, onclick: () => go(current.id) }, svg(el, 'pencil')),
-      avatar(el, current, 'big'), el('p', { class: 'sheet-name' }, current.name), el('p', { class: 'sheet-mail' }, user.email || user.displayName || '')),
+  return [el('section', { class: 'profile-sheet account-dashboard' }, head('Mi Cuenta'),
+    el('details', { class: 'account-profiles' }, el('summary', { 'aria-label': `Cambiar de perfil · ${current.name}` },
+      avatar(el, current, 'mid'), el('strong', {}, current.name)),
     el('div', { class: 'sheet-profiles' }, others),
-    el('button', { class: 'sheet-manage', type: 'button', onclick: () => go('all') }, 'Administrar perfiles'),
+    el('button', { class: 'sheet-manage', type: 'button', onclick: () => go('all') }, 'Administrar perfiles')),
+    el('details', { class: 'account-downloads' }, el('summary', {}, el('strong', {}, '↓   Descargas')),
+      el('p', {}, 'Guarda películas y capítulos en Calamar TV para Android y Android TV y reprodúcelos sin conexión.'),
+      el('a', { class: 'btn secondary', href: APK_DOWNLOAD }, 'Descargar la app Android')),
+    ...dashboard(),
     el('ul', { class: 'sheet-menu' },
-      item('account', 'Cuenta', () => go('cuenta')),
+      item('account', 'Datos de la cuenta', () => go('cuenta')),
       item('help', 'Ayuda', () => go('ayuda')),
       f.administrator(user) ? item('admin', 'Administración', () => { setEditing(null); location.hash = '#/admin'; }) : null,
       item('out', 'Cerrar sesión', async () => { await f.logout(); setEditing(null); rerender(); })),
@@ -262,7 +266,7 @@ export function paintAccountButton(el, link) {
   const profile = activeProfile();
   if (!signedUser()) { link.replaceChildren('Entrar'); link.title = 'Entrar o crear una cuenta'; link.setAttribute('aria-label', 'Entrar'); return; }
   link.replaceChildren(profile ? avatar(el, profile) : el('span', { class: 'profile-avatar' }, '?'));
-  link.title = profile ? `${profile.name} · Cambiar de perfil` : '¿Quién está viendo?';
+  link.title = 'Mi Cuenta';
   link.setAttribute('aria-label', link.title);
 }
 

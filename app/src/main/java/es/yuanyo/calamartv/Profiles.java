@@ -126,6 +126,7 @@ final class Profiles {
     UserDirectory.touch(app, user);
     db(app).document("calamarUsers/" + uid).get(Source.SERVER).addOnCompleteListener(task -> {
       if (!now.equals(uid)) return;
+      if (!task.isSuccessful() && !profiles().isEmpty()) { changed(); return; }
       JSONObject found = null;
       if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
         try { found = new JSONObject(task.getResult().getString("json")); } catch (Exception broken) { found = null; }

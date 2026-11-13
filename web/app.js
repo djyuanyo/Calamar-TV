@@ -493,6 +493,26 @@ function profileRows(library) {
   return nodes;
 }
 
+function accountDashboard() {
+  const nodes = [];
+  const library = libraryShown() ? cachedLibrary() : null;
+  const entries = libraryShown() ? progressList(loadProgress()) : [];
+  const find = ({ page, item }) => {
+    const section = sectionByPage(page);
+    const match = section && (library?.sections?.[section.key] || []).find(title => title.id === item);
+    return match && browseCard(el, section, match);
+  };
+  if (entries.length) nodes.push(...continueRow(el, entries, { open: resumeEntry,
+    remove: entry => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }, 'Seguir viendo'));
+  const row = (title, entries) => {
+    const cards = entries.map(find).filter(Boolean);
+    if (cards.length) nodes.push(sectionHead(title), el('div', { class: 'rail browse-rail' }, cards));
+  };
+  row('Series y películas que te han gustado', Object.values(profileData().ratings || {}).filter(entry => entry.value > 0).sort((a, b) => b.at - a.at));
+  row('Mi lista', listEntries(profileData()));
+  return nodes;
+}
+
 /** «+ Mi lista», «Me gusta» and «No me gusta» on a title's page; they change in place. */
 function titleExtras(section, item) {
   const mark = (button, on, label) => { button.setAttribute('aria-pressed', String(on)); button.lastChild.textContent = label; };
@@ -1626,8 +1646,9 @@ async function route() {
     try {
       const f = await shared();
       if (version !== routeVersion) return;
-      view.replaceChildren(...accountPage(el, f, { rerender: route, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
+      view.replaceChildren(...accountPage(el, f, { rerender: route, dashboard: accountDashboard, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
         chosen: () => { accountEditing = null; const destination = accessReturnHash || '#/'; accessReturnHash = null; location.hash = destination; } }));
+      if (signedUser() && libraryShown() && !cachedLibrary()) fetchLibrary().then(() => { if (version === routeVersion) route(); }).catch(() => {});
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Comprueba la conexión y recarga.'));
     }

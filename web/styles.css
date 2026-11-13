@@ -1502,3 +1502,11 @@ body.gate-open { overflow: hidden; }
 .sport-tab.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .sport-tab:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
 .sport-count { opacity: .72; font-size: 12px; font-variant-numeric: tabular-nums; }
+.profile-sheet.account-dashboard { width: min(100%, 980px); background: var(--bg); }
+.account-profiles { margin: 12px 0 20px; }
+.account-profiles summary { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 24px; }
+.account-profiles summary::after { content: '▾'; font-size: 16px; }
+.account-downloads { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+.account-downloads summary { cursor: pointer; font-size: 20px; }
+.account-downloads p { color: var(--muted); }
+.account-dashboard .section-head h2 { font-size: clamp(19px, 3vw, 24px); }

@@ -97,8 +97,10 @@ public class MainActivity extends Activity {
 
   private void showAccess(AppAccess.State state) {
     if (isFinishing() || isDestroyed()) return;
+    OfflineVideos.rememberAccess(this, state);
     admission = state;
-    if (state == AppAccess.State.ALLOWED) {
+    boolean offline = OfflineVideos.disconnected(this) && OfflineVideos.admitted(this, state) && !OfflineVideos.list(this).isEmpty();
+    if (state == AppAccess.State.ALLOWED && !offline) {
       enterContent();
       return;
     }
@@ -109,7 +111,7 @@ public class MainActivity extends Activity {
       contentDialogs.clear();
       pauseContent();
     }
-    if (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN) {
+    if (!offline && (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN)) {
       // The profile chooser can open over this blank host while admission is checked.
       showAccessBackground();
       if (state == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
@@ -127,14 +129,15 @@ public class MainActivity extends Activity {
     screen.setBackgroundColor(Ui.BG);
     screen.setFitsSystemWindows(true);
     screen.addView(label("Calamar TV", 30, FG));
-    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
+    String message = offline ? "Sin conexión" : state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
     TextView note = label(message, 17, MUTED);
     note.setGravity(Gravity.CENTER);
     screen.addView(note);
     boolean retry = state == AppAccess.State.ERROR;
-    Button action = Ui.pill(this, retry ? "Reintentar" : "Mi cuenta", Ui.Kind.ACCENT, true);
+    Button action = Ui.pill(this, offline ? "Descargas" : retry ? "Reintentar" : "Mi Cuenta", Ui.Kind.ACCENT, true);
     action.setOnClickListener(v -> {
-      if (retry) AppAccess.retry(this);
+      if (offline) startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
+      else if (retry) AppAccess.retry(this);
       else startActivity(new Intent(this, AccountActivity.class));
     });
     screen.addView(action);
@@ -254,7 +257,21 @@ public class MainActivity extends Activity {
     if (destination == null && selected == null && title == null) return;
     pendingAppLink = null;
     query = "";
-    if (title != null) { libraryDetail(titleSection, title); }
+    if (title != null) {
+      String resume = getIntent().getStringExtra("account_resume");
+      getIntent().removeExtra("account_resume");
+      if (resume != null) {
+        try {
+          JSONObject entry = new JSONObject(resume);
+          Library.Episode episode = title.episode(entry.optString("episode"));
+          if (!title.series || (episode != null && episode.available())) {
+            playEntry(title.entry(titleSection, episode), false);
+            return;
+          }
+        } catch (JSONException ignored) {}
+      }
+      libraryDetail(titleSection, title);
+    }
     else if (destination != null) { mode = destination; home(); }
     else if (selected.event && MatchScores.expired(selected.matchId, System.currentTimeMillis())) {
       startActivity(new Intent(this, MatchActivity.class).putExtra("title", selected.name)
@@ -267,7 +284,8 @@ public class MainActivity extends Activity {
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
     if (isFinishing() || isDestroyed()) return;
     if (!contentAdmitted) {
-      if (admission == AppAccess.State.ALLOWED) enterContent();
+      if (OfflineVideos.disconnected(this) && OfflineVideos.admitted(this, admission)) showAccess(admission);
+      else if (admission == AppAccess.State.ALLOWED) enterContent();
       else if (admission == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
       return;
     }
@@ -606,7 +624,7 @@ public class MainActivity extends Activity {
       profile.addView(avatar, new FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER));
       profile.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 10, 0));
       profile.setFocusable(true);
-      String profileLabel = active == null ? "¿Quién está viendo?" : active.optString("name") + " · Cambiar de perfil";
+      String profileLabel = "Mi Cuenta";
       profile.setContentDescription(profileLabel);
       if (android.os.Build.VERSION.SDK_INT >= 26) profile.setTooltipText(profileLabel);
       profile.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
@@ -2239,6 +2257,7 @@ public class MainActivity extends Activity {
         body.addView(restart, rp);
         body.addView(progressBar(saved), progressBarParams(dp(4)));
       }
+      addOfflineButton(body, entry);
     }
     if (!item.overview.isEmpty()) {
       TextView overview = label(item.overview, 16, 0xffffffff);
@@ -2572,7 +2591,36 @@ public class MainActivity extends Activity {
     scroll.addView(actions);
     parent.addView(scroll);
     if (saved != null) parent.addView(progressBar(saved), progressBarParams(dp(4)));
+    addOfflineButton(parent, entry);
     watch.requestFocus();
+  }
+
+  private void addOfflineButton(LinearLayout parent, JSONObject entry) {
+    if (Profiles.active() == null || !OfflineVideos.supports(entry.optString("url"))) return;
+    String key = entry.optString("key");
+    Button download = Ui.pill(this, OfflineVideos.get(this, key) == null ? "↓ Descargar" : "✓ Descargado", Ui.Kind.SURFACE, true);
+    download.setOnClickListener(v -> {
+      if (OfflineVideos.get(this, key) != null) {
+        startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
+        return;
+      }
+      if (!contentAdmitted || OfflineVideos.disconnected(this)) {
+        Toast.makeText(this, "Conéctate a Internet para descargar.", Toast.LENGTH_SHORT).show();
+        return;
+      }
+      if (OfflineVideos.start(this, entry, message -> {
+        if (isFinishing() || isDestroyed()) return;
+        download.setEnabled(true);
+        download.setText(OfflineVideos.get(this, key) == null ? "↓ Descargar" : "✓ Descargado");
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+      })) {
+        download.setEnabled(false);
+        download.setText("Descargando…");
+      } else Toast.makeText(this, "Consulta el progreso en Mi Cuenta → Descargas.", Toast.LENGTH_SHORT).show();
+    });
+    LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(-2, -2);
+    margin.topMargin = dp(8);
+    parent.addView(download, margin);
   }
 
   /** The watched part of a film or episode, as a lime bar. */
