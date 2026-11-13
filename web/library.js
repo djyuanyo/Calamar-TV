@@ -265,44 +265,51 @@ export function continueRow(el, entries, { open, remove }, title = 'Continuar vi
 // ---- Portada: destacadas y Top 10 ----------------------------------------------------------------
 // The administrator marks titles «En portada» (item.featured: when it was marked, so they keep that
 // order) and they join the featured slider of the home page. item.trend is the title's place in the
-// weekly top of its section (1 = first), set from TMDB in the admin page; the home page shows the first
-// 10 films and the first 10 series (or as many as there are).
+// weekly top of its section (1 = first), set from TMDB in the admin page.
 const everyItem = (library) => LIBRARY_SECTIONS.flatMap((section) => (library?.sections?.[section.key] || []).map((item) => ({ section, item })));
 export const libraryFeatured = (library) => everyItem(library).filter(({ item }) => item.featured).sort((a, b) => a.item.featured - b.item.featured);
 export const TOP_SIZE = 10;
-/** The sections with a weekly top on the home page. */
-export const TOP_SECTIONS = ['movies', 'series'];
-export const libraryTop = (library, sectionKey) => everyItem(library).filter(({ section, item }) => section.key === sectionKey && item.trend > 0)
-  .sort((a, b) => a.item.trend - b.item.trend).slice(0, TOP_SIZE);
+function topItems(sectionKey, items) {
+  const ranked = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend);
+  if (!ranked.length && sectionKey === 'documentaries') {
+    // Until the first weekly ranking is published, use the TMDB votes already in the catalogue.
+    ranked.push(...items.filter((item) => !unidentifiedItem(item)).sort((a, b) =>
+      (b.tmdb.votes || 0) - (a.tmdb.votes || 0) || (b.tmdb.rating || 0) - (a.tmdb.rating || 0)
+      || (a.id < b.id ? -1 : Number(a.id > b.id))));
+  }
+  return ranked.slice(0, TOP_SIZE);
+}
+export function libraryTop(library, sectionKey) {
+  const section = LIBRARY_SECTIONS.find(({ key }) => key === sectionKey);
+  return section ? topItems(sectionKey, library?.sections?.[sectionKey] || []).map((item) => ({ section, item })) : [];
+}
+const documentaryTopTitle = (size) => `Top ${size} de documentales`;
 /** «Película · 2024 · Drama, Comedia · ★ 7,4» */
 export const itemLine = (section, item) => [section.one[0].toUpperCase() + section.one.slice(1), itemYear(item), (item.tmdb?.genres || []).slice(0, 2).join(', '),
   item.tmdb?.rating ? `★ ${item.tmdb.rating.toLocaleString('es-ES')}` : ''].filter(Boolean).join(' · ');
 export const itemPath = (section, item) => `#/${section.page}/${encodeURIComponent(item.id)}`;
 
 /**
- * The weekly top of films and of series among the library's titles, each on its own: first those in TMDB's
+ * The weekly top of each section among the library's titles: first those in TMDB's
  * trending of the week (in its order), then the rest by TMDB popularity. `trending` is [{ id, kind }] and
- * `popularity` maps «movie:123» to a number. Documentaries have no top.
+ * `popularity` maps «movie:123» to a number.
  */
 export function rankTop(sections, trending, popularity, size = TOP_SIZE) {
   const place = new Map(trending.map((t, i) => [`${t.kind}:${t.id}`, i]));
   const keyOf = (item) => item.tmdb?.id && item.status !== 'unmatched' ? `${item.kind === 'tv' ? 'tv' : 'movie'}:${item.tmdb.id}` : null;
-  const rank = new Map();
-  for (const sectionKey of TOP_SECTIONS) {
-    (sections[sectionKey] || []).filter((item) => keyOf(item))
+  return Object.fromEntries(Object.entries(sections).map(([key, items]) => {
+    const rank = new Map();
+    if (LIBRARY_SECTIONS.some((section) => section.key === key)) items.filter((item) => keyOf(item))
       .map((item) => ({ item, trend: place.get(keyOf(item)) ?? Infinity, popularity: popularity[keyOf(item)] || 0 }))
       .sort((a, b) => a.trend - b.trend || b.popularity - a.popularity)
       .slice(0, size)
       .forEach((r, i) => rank.set(r.item.id, i + 1));
-  }
-  return Object.fromEntries(Object.entries(sections).map(([key, items]) => [key, items.map((item) => {
-    const { trend, ...rest } = item;
-    return rank.has(item.id) ? { ...rest, trend: rank.get(item.id) } : rest;
-  })]));
+    return [key, items.map(({ trend, ...item }) => rank.has(item.id) ? { ...item, trend: rank.get(item.id) } : item)];
+  }));
 }
 
-/** A home page row of the weekly top («películas» or «series»): big numbers next to the posters, as on Netflix. */
-export function topRow(el, entries, what, title = `Top ${entries.length} ${what} de la semana`) {
+/** A top row with big numbers next to the posters, as on Netflix. */
+export function topRow(el, entries, what, title = what === 'documentales' ? documentaryTopTitle(entries.length) : `Top ${entries.length} ${what} de la semana`) {
   return [el('div', { class: 'section-head' }, el('h2', {}, title), el('span', {}, 'Según TMDB')),
     el('div', { class: 'rail top-rail' }, entries.map(({ section, item }, i) => el('a', { class: 'top-card', href: itemPath(section, item), title: itemTitle(item) },
       el('span', { class: 'top-rank', 'aria-hidden': 'true' }, String(i + 1)),
@@ -437,10 +444,10 @@ export function browseRows(section, items, { now = Date.now(), watchedIds = [], 
   const genre = (row, kind = 'poster') => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest), kind); };
   add('spanish', SPANISH_ROW[section.key] || `${section.label} españolas`, items.filter(isSpanish).sort(byInterest));
   add('today', 'Recomendaciones de hoy para ti', todaysPicks(items, watchedIds, madridDay(now)));
-  if (TOP_SECTIONS.includes(section.key)) {
-    const top = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend).slice(0, TOP_SIZE);
-    add('top', top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`, top, 'top');
-  }
+  const top = topItems(section.key, items);
+  const topTitle = section.key === 'documentaries' ? documentaryTopTitle(top.length)
+    : top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`;
+  add('top', topTitle, top, 'top');
   // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
   genre(GENRE_ROWS.terror, 'horror');
   // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
@@ -519,7 +526,7 @@ export function librarySearch(library, q, size = 30) {
 export function browseCard(el, section, item, { big = false } = {}) {
   return el('a', { class: `poster-card browse-card${big ? ' big' : ''}`, href: itemPath(section, item), title: itemTitle(item), 'aria-label': itemTitle(item) },
     el('span', { class: 'poster-frame' }, poster(el, item),
-      item.trend > 0 && TOP_SECTIONS.includes(section.key) ? el('span', { class: 'poster-top', 'aria-hidden': 'true' }, el('small', {}, 'TOP'), el('b', {}, '10')) : null,
+      item.trend > 0 ? el('span', { class: 'poster-top', 'aria-hidden': 'true' }, el('small', {}, 'TOP'), el('b', {}, '10')) : null,
       posterLabel(item) ? el('span', { class: 'poster-new' }, posterLabel(item)) : null));
 }
 
@@ -729,7 +736,7 @@ export function gateSlides(library, size = 12) {
   const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => libraryTop(library, key)
     .filter(({ item }) => art(item)).map(({ item }, i) => ({ title: itemTitle(item), image: art(item), label: `N.º ${i + 1} en ${what} hoy` })));
   const docs = (library?.sections?.documentaries || []).filter((item) => art(item) && !unidentifiedItem(item))
-    .sort((a, b) => (b.trend ? 1000 - b.trend : 0) - (a.trend ? 1000 - a.trend : 0) || (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0))
+    .sort((a, b) => (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0))
     .slice(0, 3).map((item) => ({ title: itemTitle(item), image: art(item), label: 'Documental destacado' }));
   const out = [];
   for (let i = 0; out.length < size && (i < tops[0].length || i < tops[1].length); i++) {
@@ -833,6 +840,7 @@ export function resumeEpisode(item, saved = () => null, history = {}, today = ma
  */
 export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = [], history = {}) {
   const info = item.tmdb || {};
+  const overview = info.overview?.trim();
   const title = itemTitle(item);
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
@@ -879,7 +887,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
         ? [el('strong', {}, `Temporada ${newSeason.season}`), ' el ', el('time', { datetime: newSeason.aired }, formattedRelease(newSeason.aired))]
         : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, releaseLabel(premiere))])) : null,
       action, !series ? soundNote(el, item.file, item.url) : null,
-      el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
+      overview ? el('p', { class: 'library-overview' }, overview) : null,
       starring,
       creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
       info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
@@ -1072,7 +1080,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const where = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key, selected: s.key === inSection }, s.label)));
       const head = el('div', { class: 'library-editor-head' },
         info.poster ? el('img', { src: info.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
-        el('div', {}, el('h3', {}, `${info.title}${info.year ? ` (${info.year})` : ''}`), el('p', { class: 'note' }, info.overview.slice(0, 260) || 'Sin sinopsis.'), field('Sección', where)));
+        el('div', {}, el('h3', {}, `${info.title}${info.year ? ` (${info.year})` : ''}`),
+          info.overview?.trim() ? el('p', { class: 'note' }, info.overview.slice(0, 260)) : null, field('Sección', where)));
       const note = el('p', { class: 'note', role: 'status' });
       if (kind !== 'tv') {
         const link = linkInput(existing?.url, 'Enlace del vídeo');
@@ -1474,7 +1483,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   }
 
   // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
-  const TOP_REFRESHED = 'calamar-top-refreshed-v5'; // Backfill season premiere dates on the next admin visit.
+  const TOP_REFRESHED = 'calamar-top-refreshed-v6'; // Publish the documentary top on the next admin visit.
   const topNote = el('p', { class: 'note', role: 'status' });
   async function refreshTop(quiet = false) {
     const key = tmdbKey();
@@ -1503,9 +1512,9 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);
     try { localStorage.setItem(TOP_REFRESHED, new Date().toISOString().slice(0, 10)); } catch {}
-    const lines = TOP_SECTIONS.map((key) => [LIBRARY_SECTIONS.find((sec) => sec.key === key).label, libraryTop({ sections: ranked }, key)])
+    const lines = LIBRARY_SECTIONS.map(({ key, label }) => [label, libraryTop({ sections: ranked }, key)])
       .filter(([, top]) => top.length).map(([label, top]) => `${label}: ${top.map(({ item }, i) => `${i + 1}. ${itemTitle(item)}`).join(' · ')}`);
-    topNote.textContent = lines.length ? `Top actualizado. ${lines.join(' — ')}` : 'Todavía no hay películas ni series con ficha de TMDB para el top.';
+    topNote.textContent = lines.length ? `Top actualizado. ${lines.join(' — ')}` : 'Todavía no hay títulos con ficha de TMDB para el top.';
   }
   const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     topButton.disabled = true;
@@ -1608,8 +1617,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     el('h3', {}, 'Leer las carpetas de LuluStream'),
     el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
     el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,
-    el('h3', {}, 'Portada y Top 10 de películas y series'),
-    el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en cualquier título de la lista de abajo para que salga en la portada de inicio, junto a los eventos destacados. La portada muestra el top de la semana de tus películas y el de tus series (hasta 10 de cada, o las que haya), ordenadas por las tendencias de la semana en TMDB y su popularidad; se actualiza solo una vez al día al abrir esta página.'),
+    el('h3', {}, 'Portada y Top 10 de películas, series y documentales'),
+    el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en un título para que salga en Inicio junto a los eventos destacados. Los tops de películas, series y documentales siguen las tendencias de la semana y la popularidad de TMDB. Se actualizan una vez al día al abrir esta página.'),
     el('div', { class: 'actions' }, topButton), topNote,
     el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
 }

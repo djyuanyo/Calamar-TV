@@ -443,12 +443,12 @@ function home() {
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
   if (libraryShown()) refreshProgress();
-  const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => [libraryTop(library, key), what]);
+  const tops = LIBRARY_SECTIONS.map(({ key, label }) => [libraryTop(library, key), label.toLowerCase()]);
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // The profile's own rows: «Mi lista» and «Porque te gustó…», as in Netflix.
   if (libraryShown() && library) nodes.push(...profileRows(library));
-  // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
+  // One top per library section, in menu order.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
   if (libraryShown() && halloweenOn()) nodes.push(...halloweenRow(el, library));

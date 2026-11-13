@@ -133,6 +133,7 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   assert.ok(flatten(view.find(node => node.attrs.class === 'title-premiere').children)
     .some(node => node.children.includes('Próximo estreno')));
   assert.ok(view.some(node => node.tag === 'img' && node.attrs.src === item.tmdb.backdrop));
+  assert.equal(view.some(node => node.attrs.class === 'library-overview'), false);
   assert.ok(view.every(node => node.tag !== 'iframe'));
   assert.ok(view.some(node => node.children.includes('✓ Visto')));
   const locked = view.find(node => node.attrs.class === 'episode episode-upcoming');
@@ -146,9 +147,10 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
     ['Temporada 2', ' el ', '12 de noviembre de 2099']);
   assert.ok(flatten(newNotice.children).some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
   assert.equal(seasonOne.some(node => node.attrs.class === 'episode episode-upcoming'), false);
-  const withSeasonDate = { ...item, tmdb: { ...item.tmdb, seasonPremieres: [{ season: 2, aired: '2099-11-14' }] } };
-  const announced = flatten(libraryDetail(el, section, { sections: { series: [withSeasonDate] } }, withSeasonDate, () => {}, () => null))
-    .find(node => node.attrs.class === 'title-premiere');
+  const withSeasonDate = { ...item, tmdb: { ...item.tmdb, overview: 'Una sinopsis.', seasonPremieres: [{ season: 2, aired: '2099-11-14' }] } };
+  const announcedView = flatten(libraryDetail(el, section, { sections: { series: [withSeasonDate] } }, withSeasonDate, () => {}, () => null));
+  assert.deepEqual(announcedView.find(node => node.attrs.class === 'library-overview').children, ['Una sinopsis.']);
+  const announced = announcedView.find(node => node.attrs.class === 'title-premiere');
   assert.deepEqual(announced.children.map(node => node.children?.join('') ?? node),
     ['Temporada 2', ' el ', '14 de noviembre de 2099']);
 });

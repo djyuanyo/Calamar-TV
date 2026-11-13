@@ -884,8 +884,12 @@ public class MainActivity extends Activity {
         continueRow();
         if (library != null) profileRows();
         if (library != null) {
-          topRow(library.top("movies"), "películas");
-          topRow(library.top("series"), "series");
+          for (String[] section : Library.SECTIONS) {
+            List<Library.Item> top = library.top(section[0]);
+            String title = section[0].equals("documentaries") ? Library.documentaryTopTitle(top.size())
+                : "Top " + top.size() + " " + section[1].toLowerCase(java.util.Locale.ROOT) + " de la semana";
+            topRow(top, title);
+          }
           // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
           if (Library.halloweenOn(System.currentTimeMillis())) halloweenRow();
         }
@@ -2238,10 +2242,12 @@ public class MainActivity extends Activity {
         body.addView(progressBar(saved), progressBarParams(dp(4)));
       }
     }
-    TextView overview = label(item.overview.isEmpty() ? "Sin sinopsis." : item.overview, 16, 0xffffffff);
-    overview.setPadding(0, dp(14), 0, dp(8));
-    overview.setLineSpacing(0, 1.15f);
-    body.addView(overview);
+    if (!item.overview.isEmpty()) {
+      TextView overview = label(item.overview, 16, 0xffffffff);
+      overview.setPadding(0, dp(14), 0, dp(8));
+      overview.setLineSpacing(0, 1.15f);
+      body.addView(overview);
+    }
     if (!item.cast.isEmpty()) {
       final List<String> names = new ArrayList<>();
       for (String[] person : item.cast) names.add(person[0]);
@@ -2838,12 +2844,8 @@ public class MainActivity extends Activity {
     else libraryDetail(parts[0], item);
   }
 
-  /** «Top 10 películas / series de la semana» (or as many as there are): big numbers next to the posters, as on Netflix. */
-  void topRow(List<Library.Item> items, String what) {
-    topRow(items, what, "Top " + items.size() + " " + what + " de la semana");
-  }
-
-  void topRow(List<Library.Item> items, String what, String title) {
+  /** A top row with big numbers next to the posters, as on Netflix. */
+  void topRow(List<Library.Item> items, String title) {
     if (items.isEmpty()) return;
     heading(title, "Según TMDB");
     int width = wide() ? 190 : 140;
@@ -2907,7 +2909,7 @@ public class MainActivity extends Activity {
         // «Descubrir todo»: every horror title of this section, as when «Terror» is chosen in the categories.
         horrorBanner(row.title, entries, () -> { genre = "Terror"; render(); });
       }
-      else if (row.kind.equals("top")) topRow(row.items, "", row.title);
+      else if (row.kind.equals("top")) topRow(row.items, row.title);
       else posterRail(row.title, row.items, row.kind.equals("big") ? (wide() ? 230 : 170) : (wide() ? 140 : 108));
     }
   }

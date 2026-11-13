@@ -191,7 +191,7 @@ final class Library {
     private final Map<Integer, String> seasonPremieres = new HashMap<>();
     /** «Saltar intro» and «Siguiente capítulo» times set in the admin page (or empty). */
     final JSONObject skip;
-    /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
+    /** TMDB id of the title (0 without a TMDB record). */
     final int tmdbId;
     /** «En portada»: when the administrator marked it (0 when not); and its place in the weekly top (0 outside). */
     final long featured;
@@ -224,7 +224,7 @@ final class Library {
       title = t.optString("title", "").isEmpty() ? o.optString("title") : t.optString("title");
       year = t.optInt("year", o.optInt("year", 0));
       url = o.optString("url");
-      overview = t.optString("overview");
+      overview = t.isNull("overview") ? "" : t.optString("overview").trim();
       poster = t.optString("poster");
       backdrop = t.optString("backdrop");
       titleLogo = t.optString("titleLogo", "");
@@ -484,6 +484,23 @@ final class Library {
     return java.text.Normalizer.normalize(s.toLowerCase(new Locale("es", "ES")), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
   }
 
+  static String documentaryTopTitle(int size) {
+    return "Top " + size + " de documentales";
+  }
+
+  private static List<Item> topItems(String section, List<Item> items) {
+    List<Item> top = new ArrayList<>();
+    for (Item item : items) if (item.trend > 0) top.add(item);
+    if (top.isEmpty() && section.equals("documentaries")) {
+      // Until the first weekly ranking is published, use the votes already in the catalogue.
+      for (Item item : items) if (item.tmdbId > 0) top.add(item);
+      top.sort(java.util.Comparator.comparingInt((Item item) -> item.votes).reversed()
+          .thenComparing(java.util.Comparator.comparingDouble((Item item) -> item.rating).reversed())
+          .thenComparing(item -> item.id));
+    } else top.sort(java.util.Comparator.comparingInt(item -> item.trend));
+    return top.size() > 10 ? new ArrayList<>(top.subList(0, 10)) : top;
+  }
+
   /** The rows of a section page, in the web's order; empty rows are left out except «Seguir viendo» (filled by the page). */
   static List<Row> browseRows(String section, List<Item> items, java.util.Set<String> watched, String name, long now) {
     List<Row> rows = new ArrayList<>();
@@ -494,13 +511,11 @@ final class Library {
     Collections.sort(spanish, INTEREST);
     add(rows, "spanish", section.equals("series") ? "Series españolas" : section.equals("documentaries") ? "Documentales españoles" : "Películas españolas", spanish, "poster");
     add(rows, "today", "Recomendaciones de hoy para ti", todaysPicks(items, watched, madridDay(now), 15), "poster");
-    if (!section.equals("documentaries")) {
-      List<Item> top = new ArrayList<>();
-      for (Item item : items) if (item.trend > 0) top.add(item);
-      Collections.sort(top, (a, b) -> Integer.compare(a.trend, b.trend));
-      if (top.size() > 10) top = new ArrayList<>(top.subList(0, 10));
-      add(rows, "top", top.size() > 1 ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana" : "La " + one(section) + " más popular de la semana", top, "top");
-    }
+    List<Item> top = topItems(section, items);
+    String topTitle = section.equals("documentaries") ? documentaryTopTitle(top.size()) : top.size() > 1
+        ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana"
+        : "La " + one(section) + " más popular de la semana";
+    add(rows, "top", topTitle, top, "top");
     // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
     genre(rows, GENRE_ROWS[0], label + " de terror", items, used, "horror");
     // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
@@ -818,12 +833,9 @@ final class Library {
       return out;
     }
 
-    /** The weekly top of one section (films or series, set from TMDB in the admin page), at most 10. */
+    /** The top of one section, at most 10. */
     List<Item> top(String section) {
-      List<Item> out = new ArrayList<>();
-      for (Item item : items(section)) if (item.trend > 0) out.add(item);
-      Collections.sort(out, (a, b) -> Integer.compare(a.trend, b.trend));
-      return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
+      return topItems(section, items(section));
     }
 
     Item find(String section, String id) {

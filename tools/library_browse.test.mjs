@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { browseRows, todaysPicks, dailyLuck, halloweenOn, horrorTitles, isSpanish, LIBRARY_SECTIONS, hasNewEpisode, posterLabel, freshTitles, heroTitles, platformsOf, platformRows } from '../web/library.js';
+import { browseRows, todaysPicks, dailyLuck, halloweenOn, horrorTitles, isSpanish, LIBRARY_SECTIONS, hasNewEpisode, posterLabel, freshTitles, heroTitles, platformsOf, platformRows, libraryTop } from '../web/library.js';
 import { countriesOf, providerLogosOf, stampAdded, lastEpisodeOf } from '../web/library-tmdb.js';
 
 const movies = LIBRARY_SECTIONS[0], docs = LIBRARY_SECTIONS[2];
@@ -24,9 +24,19 @@ test('a section page is a stack of Netflix-style rows in a fixed order', () => {
   assert.deepEqual(by.new.items.map((i) => i.id), ['weapons'], 'only the new arrivals, with the large posters');
 });
 
-test('empty rows are left out and documentaries have no top', () => {
-  const rows = browseRows(docs, [item('d1', { genres: ['Documental'] })], { now });
-  assert.deepEqual(rows.map((r) => r.title), ['Recomendaciones de hoy para ti', 'Seguir viendo']);
+test('the documentary section and home show the same top, using votes until ranks are published', () => {
+  const popular = item('popular', { genres: ['Documental'], votes: 100 });
+  const rated = item('rated', { genres: ['Documental'], votes: 5, rating: 9 });
+  const unmatched = item('unmatched', { votes: 1000 }, { status: 'unmatched' });
+  const others = Array.from({ length: 10 }, (_, i) => item(`doc-${i}`, { genres: ['Documental'] }));
+  const items = [rated, ...others, popular, unmatched];
+  const row = browseRows(docs, items, { now }).find(({ key }) => key === 'top');
+  assert.equal(row.title, 'Top 10 de documentales');
+  assert.equal(row.items.length, 10);
+  assert.deepEqual(row.items.slice(0, 2), [popular, rated]);
+  assert.deepEqual(libraryTop({ sections: { documentaries: items } }, docs.key).map(({ item }) => item), row.items);
+  assert.deepEqual(browseRows(docs, [{ ...rated, trend: 1 }, popular], { now }).find(({ key }) => key === 'top').items.map(({ id }) => id), ['rated']);
+  assert.equal(browseRows(docs, [unmatched], { now }).some(({ key }) => key === 'top'), false);
 });
 
 test('Spanish titles go by production country, or by language without one', () => {

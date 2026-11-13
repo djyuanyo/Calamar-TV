@@ -133,6 +133,25 @@ public class LibraryTest {
     assertNull(data.find("series", "m5"));
   }
 
+  @Test public void documentariesHaveTheSameTopOnHomeAndTheirSection() throws Exception {
+    JSONArray documentaries = new JSONArray();
+    for (int i = 1; i <= 12; i++) {
+      documentaries.put(new JSONObject().put("id", "d" + i).put("kind", i % 2 == 0 ? "tv" : "movie")
+          .put("tmdb", new JSONObject().put("id", i).put("votes", i)));
+    }
+    Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("documentaries", documentaries)));
+    List<Library.Item> top = data.top("documentaries");
+    assertEquals(10, top.size());
+    assertEquals("d12", top.get(0).id);
+    List<Library.Row> rows = Library.browseRows("documentaries", data.items("documentaries"), new HashSet<>(), "", 0);
+    Library.Row row = rows.stream().filter(r -> r.key.equals("top")).findFirst().get();
+    assertEquals("Top 10 de documentales", row.title);
+    assertEquals(top, row.items);
+    documentaries.getJSONObject(0).put("trend", 1);
+    Library.Data ranked = new Library.Data(new JSONObject().put("sections", new JSONObject().put("documentaries", documentaries)));
+    assertEquals("d1", ranked.top("documentaries").get(0).id);
+  }
+
   @Test public void visibilityIsAnOptionalBoolean() throws Exception {
     JSONObject catalog = new JSONObject("{\"channels\":[],\"featured\":[],\"hidden\":[]}");
     assertFalse(Library.visible(catalog));
