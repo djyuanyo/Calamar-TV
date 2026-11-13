@@ -418,8 +418,9 @@ public class LibraryTest {
     assertEquals("Temporada 2 el 12 de noviembre de 2099", item.premiereNotice("2099-11-11"));
     assertEquals(1, Library.defaultSeason(item, new JSONObject(), new JSONObject()));
     assertFalse(item.seasons("2099-11-12").get(2).get(0).available());
-    assertFalse(item.seasons("2099-11-13").containsKey(2));
-    assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel());
+    assertEquals("Estrenado Ayer", item.seasons("2099-11-13").get(2).get(0).premiereLabel("2099-11-13"));
+    assertFalse(item.seasons("2099-11-14").containsKey(2));
+    assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel("2099-11-11"));
     assertNull(item.next(item.episode("e1")));
     assertEquals("e1", Library.resumeEpisode(item, new JSONObject()).id);
     JSONObject regular = new JSONObject().put("season", 1).put("episode", 2).put("aired", "2099-11-12");
@@ -428,8 +429,26 @@ public class LibraryTest {
     JSONObject series = new JSONObject().put("kind", "tv").put("tmdb", tmdb);
     assertEquals("Próximo estreno · T1:E2 · Estreno el 12 de noviembre de 2099",
         new Library.Item(series).premiereNotice("2099-11-11"));
+    assertEquals("Estreno Hoy · T1:E2", new Library.Item(series).premiereNotice("2099-11-12"));
+    tmdb.remove("nextEpisode");
+    tmdb.put("lastEpisode", regular);
+    JSONObject linked = new JSONObject().put("season", 1).put("episode", 2).put("id", "e2")
+        .put("url", "https://calamarmenciano.com/S/2.mkv");
+    series.put("episodes", new JSONArray().put(linked));
+    assertEquals("Estrenado Hoy · T1:E2", new Library.Item(series).premiereNotice("2099-11-12"));
     tmdb.put("seasonPremieres", new JSONArray().put(seasonDate));
     assertEquals("Temporada 2 el 14 de noviembre de 2099", new Library.Item(series).premiereNotice("2099-11-11"));
     assertTrue(new Library.Item(series).premiereNotice("2099-11-15").isEmpty());
+  }
+
+  @Test public void premiereLabelsUseMadridDaysAcrossYearBoundaries() throws Exception {
+    String today = Library.madridDay(SportsCatalog.instant("2026-12-31T23:30:00Z"));
+    assertEquals("2027-01-01", today);
+    JSONObject data = new JSONObject().put("id", "pending").put("aired", today);
+    assertEquals("Estreno Hoy", new Library.Episode(data).premiereLabel(today));
+    data.put("url", "https://calamarmenciano.com/S/2.mkv");
+    assertEquals("Estrenado Hoy", new Library.Episode(data).premiereLabel(today));
+    assertEquals("Estrenado Ayer", new Library.Episode(data, "2026-12-31").premiereLabel(today));
+    assertEquals("", new Library.Episode(data, "2026-12-30").premiereLabel(today));
   }
 }

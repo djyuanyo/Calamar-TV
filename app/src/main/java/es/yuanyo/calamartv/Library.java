@@ -89,13 +89,24 @@ final class Library {
 
     boolean upcoming() { return Library.upcoming(aired); }
 
-    boolean available() { return !id.isEmpty() && !upcoming(); }
+    private boolean hasVideo() { return !id.isEmpty() && !url.trim().isEmpty(); }
+
+    boolean available() { return hasVideo() && !upcoming(); }
 
     boolean hasPremiereDate(String today) {
       return isDate(aired) && aired.compareTo(today) >= 0;
     }
 
-    String premiereLabel() { return "Estreno el " + formattedPremiere(aired); }
+    boolean inPremiereWindow(String today) {
+      return isDate(aired) && (aired.compareTo(today) >= 0 || day(today) - day(aired) == DAY);
+    }
+
+    String premiereLabel(String today) {
+      if (!inPremiereWindow(today)) return "";
+      if (aired.equals(today)) return hasVideo() ? "Estrenado Hoy" : "Estreno Hoy";
+      if (aired.compareTo(today) < 0) return "Estrenado Ayer";
+      return "Estreno el " + formattedPremiere(aired);
+    }
   }
 
   private static String formattedPremiere(String aired) {
@@ -259,6 +270,7 @@ final class Library {
           JSONObject p = c.optJSONObject(i);
           if (p != null) cast.add(new String[] {p.optString("name"), p.optString("character")});
         }
+      addScheduled(le);
       JSONArray upcoming = t.optJSONArray("upcoming");
       if (upcoming != null) for (int i = 0; i < upcoming.length(); i++) addScheduled(upcoming.optJSONObject(i));
       addScheduled(t.optJSONObject("nextEpisode"));
@@ -316,7 +328,7 @@ final class Library {
     Map<Integer, List<Episode>> seasons(String today) {
       Map<Integer, List<Episode>> out = new LinkedHashMap<>();
       List<Episode> sorted = new ArrayList<>(episodes);
-      for (Episode e : scheduled.values()) if (e.hasPremiereDate(today)) sorted.add(e);
+      for (Episode e : scheduled.values()) if (e.inPremiereWindow(today)) sorted.add(e);
       Collections.sort(
           sorted,
           (a, b) -> a.season != b.season ? Integer.compare(a.season, b.season) : Integer.compare(a.episode, b.episode));
@@ -347,7 +359,10 @@ final class Library {
         }
       }
       if (nextSeason != 0) return "Temporada " + nextSeason + " el " + formattedPremiere(date);
-      return next == null ? "" : "Próximo estreno · T" + next.season + ":E" + next.episode + " · " + next.premiereLabel();
+      if (next == null) return "";
+      String number = "T" + next.season + ":E" + next.episode;
+      String label = next.premiereLabel(today);
+      return next.aired.equals(today) ? label + " · " + number : "Próximo estreno · " + number + " · " + label;
     }
 
     /** The player's title: «Los hombres de Paco · T1 · Piloto» (or «· Capítulo 1» without a name). */

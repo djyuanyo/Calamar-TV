@@ -8,7 +8,7 @@ import { youtubeId, trailerId } from './trailer.js';
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded,
-  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle } from './library-tmdb.js';
+  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle, episodePremiereWindow } from './library-tmdb.js';
 import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
 import { scanFolders, folderReference } from './library-folders.js';
 import { videoKey } from './library-sync.js';
@@ -781,19 +781,19 @@ export function similarTitles(library, section, item, size = 12) {
   return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || b[2] - a[2] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
 }
 
-export const hasPremiereDate = (episode, today = madridDay()) => /^\d{4}-\d{2}-\d{2}$/.test(episode?.aired || '')
-  && episode.aired >= today && Number.isFinite(Date.parse(episode.aired + 'T00:00:00Z'));
+const hasPremiereDate = (episode, today = madridDay()) => episodePremiereWindow(episode, today) && episode.aired >= today;
 export const isUpcomingEpisode = (episode, today = madridDay()) => hasPremiereDate(episode, today) && episode.aired > today;
-export const episodeAvailable = (episode, today = madridDay()) => !!episode?.id && !isUpcomingEpisode(episode, today);
+const hasEpisodeVideo = episode => !!(episode?.id && episode.url?.trim());
+export const episodeAvailable = (episode, today = madridDay()) => hasEpisodeVideo(episode) && !isUpcomingEpisode(episode, today);
 
 export function listedEpisodes(item, today = madridDay()) {
   const numbered = episode => `${episode.season}/${episode.episode}`;
   const episodes = new Map((item.episodes || []).map(episode => [numbered(episode), episode]));
-  for (const upcoming of [...(item.tmdb?.upcoming || []), item.tmdb?.nextEpisode]) {
-    if (!hasPremiereDate(upcoming, today)) continue;
-    const key = numbered(upcoming);
+  for (const entry of [item.tmdb?.lastEpisode, ...(item.tmdb?.upcoming || []), item.tmdb?.nextEpisode]) {
+    if (!episodePremiereWindow(entry, today)) continue;
+    const key = numbered(entry);
     const linked = episodes.get(key);
-    episodes.set(key, linked ? { ...linked, aired: upcoming.aired } : upcoming);
+    episodes.set(key, linked?.id ? { ...linked, aired: entry.aired } : entry);
   }
   return [...episodes.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
 }
@@ -804,7 +804,16 @@ export function nextPremiere(episodes, today = madridDay()) {
 
 const releaseDate = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const formattedRelease = aired => releaseDate.format(new Date(aired + 'T00:00:00Z'));
-const releaseLabel = episode => `Estreno el ${formattedRelease(episode.aired)}`;
+export function episodePremiereLabel(episode, today = madridDay()) {
+  if (!episodePremiereWindow(episode, today)) return '';
+  if (episode.aired === today) return hasEpisodeVideo(episode) ? 'Estrenado Hoy' : 'Estreno Hoy';
+  return episode.aired < today ? 'Estrenado Ayer' : `Estreno el ${formattedRelease(episode.aired)}`;
+}
+
+function episodePremiereBadge(el, episode, today) {
+  const label = episodePremiereLabel(episode, today);
+  return label ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, label) : null;
+}
 
 function nextSeasonPremiere(item, episodes, today) {
   const premieres = new Map(episodes.filter(e => e.season > 1 && e.episode === 1 && hasPremiereDate(e, today))
@@ -885,7 +894,9 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       facts ? el('p', { class: 'library-facts' }, facts) : null,
       premiere ? el('p', { class: 'title-premiere' }, ...(newSeason
         ? [el('strong', {}, `Temporada ${newSeason.season}`), ' el ', el('time', { datetime: newSeason.aired }, formattedRelease(newSeason.aired))]
-        : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, releaseLabel(premiere))])) : null,
+        : premiere.aired === today
+          ? [el('strong', {}, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))), ` · T${premiere.season}:E${premiere.episode}`]
+          : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))])) : null,
       action, !series ? soundNote(el, item.file, item.url) : null,
       overview ? el('p', { class: 'library-overview' }, overview) : null,
       starring,
@@ -901,7 +912,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     const list = el('div', { class: 'episode-list' });
     const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
       const upcoming = !episodeAvailable(e, today), watched = !upcoming && watchedEpisode(history, e);
-      const badge = hasPremiereDate(e, today) ? el('time', { class: 'episode-state upcoming', datetime: e.aired }, releaseLabel(e)) : null;
+      const badge = episodePremiereBadge(el, e, today);
       return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
         el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
           upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
@@ -955,14 +966,15 @@ export function libraryEpisode(el, section, library, item, episode, play, saved 
   const info = item.tmdb || {};
   const image = episode.still || info.backdrop || '';
   const next = nextEpisode(item, episode);
-  const upcoming = !episodeAvailable(episode);
+  const today = madridDay();
+  const upcoming = !episodeAvailable(episode, today);
   return [el('section', { class: 'library-hero episode-hero', style: image ? `--backdrop:url("${image.replace(/"/g, '')}")` : null },
     el('div', { class: 'library-info' },
       el('a', { class: 'library-back', href: `#/${section.page}/${encodeURIComponent(item.id)}/temporada/${episode.season}` }, `‹ ${itemTitle(item)}`),
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      hasPremiereDate(episode) ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, releaseLabel(episode)) : null,
+      episodePremiereBadge(el, episode, today),
       !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
       upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
@@ -1507,7 +1519,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}),
         ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode, seasonPremieres: facts[item.id].seasonPremieres,
           ...(facts[item.id].upcoming ? { upcoming: [...(item.tmdb.upcoming || [])
-            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && hasPremiereDate(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
+            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && episodePremiereWindow(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);

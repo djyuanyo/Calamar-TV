@@ -2512,8 +2512,9 @@ public class MainActivity extends Activity {
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(14), 0, dp(4), 0);
     texts.addView(name);
-    boolean dated = e.hasPremiereDate(Library.madridDay(System.currentTimeMillis()));
-    String state = dated ? e.premiereLabel() + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
+    String premiere = e.premiereLabel(Library.madridDay(System.currentTimeMillis()));
+    boolean dated = !premiere.isEmpty();
+    String state = dated ? premiere + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
     if (!state.isEmpty()) {
       TextView badge = label(state, 13, dated ? 0xffffd284 : Ui.ACC);
       badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -2640,11 +2641,12 @@ public class MainActivity extends Activity {
     overview.setPadding(0, dp(10), 0, dp(10));
     body.addView(overview);
     EpisodeHistory episodeHistory = new EpisodeHistory(this, section, item.id);
-    boolean dated = e.hasPremiereDate(Library.madridDay(System.currentTimeMillis()));
+    String premiere = e.premiereLabel(Library.madridDay(System.currentTimeMillis()));
+    boolean dated = !premiere.isEmpty();
     TextView badge = label("", 14, dated ? 0xffffd284 : Ui.ACC);
     Runnable refreshBadge = () -> {
       boolean watched = e.available() && EpisodeHistory.watchedAt(episodeHistory.local(), e.id) > 0;
-      String state = dated ? e.premiereLabel() + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
+      String state = dated ? premiere + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
       badge.setText(state);
       badge.setVisibility(state.isEmpty() ? View.GONE : View.VISIBLE);
     };

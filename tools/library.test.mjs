@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT, libraryDetail, defaultEpisodeSeason, episodeAvailable, listedEpisodes, nextPremiere, resumeEpisode } from '../web/library.js';
+import { episodeLabel, episodeTitle, nextEpisode, playable, recordProgress, removeProgress, progressList, progressPath, finished, clock, PROGRESS_LIMIT, libraryDetail, defaultEpisodeSeason, episodeAvailable, listedEpisodes, nextPremiere, resumeEpisode, episodePremiereLabel } from '../web/library.js';
+import { madridDay } from '../web/audience.js';
 import { mergeEpisodeHistory, recordEpisode } from '../web/episode-history.js';
 
 const section = { key: 'series', page: 'series', label: 'Series' };
@@ -122,7 +123,8 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   assert.equal(nextPremiere(sameDay, '2099-11-12'), upcoming);
   assert.equal(episodeAvailable(upcoming, '2099-11-12'), false);
   assert.equal(episodeAvailable({ ...upcoming, id: 'e3', url: 'https://example.com/3.mp4' }, '2099-11-12'), true);
-  assert.equal(listedEpisodes(item, '2099-11-13').length, 2);
+  assert.equal(listedEpisodes(item, '2099-11-13').length, 3);
+  assert.equal(listedEpisodes(item, '2099-11-14').length, 2);
   const history = recordEpisode({}, 'e1', true, 5);
   assert.equal(resumeEpisode(item, () => null, history).id, 'e2');
   const el = (tag, attrs, ...children) => ({ tag, attrs, children: children.flat().filter(Boolean),
@@ -139,6 +141,11 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   const locked = view.find(node => node.attrs.class === 'episode episode-upcoming');
   assert.equal(locked.tag, 'div');
   assert.ok(flatten(locked.children).some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
+  const today = madridDay();
+  const recent = { ...paco, tmdb: { ...paco.tmdb, lastEpisode: { ...upcoming, episode: 2, aired: today }, nextEpisode: { ...upcoming, aired: today } } };
+  const todayView = flatten(libraryDetail(el, section, { sections: { series: [recent] } }, recent, () => {}));
+  assert.ok(todayView.some(node => node.tag === 'time' && node.children.includes('Estrenado Hoy')));
+  assert.ok(todayView.some(node => node.tag === 'time' && node.children.includes('Estreno Hoy')));
   const newSeason = { ...item, tmdb: { ...item.tmdb, nextEpisode: { ...upcoming, season: 2, episode: 1 } } };
   const seasonOne = flatten(libraryDetail(el, section, { sections: { series: [newSeason] } }, newSeason, () => {}, () => null, null, [], history));
   assert.equal(seasonOne.find(node => node.attrs.class === 'season-picker').value, '1');
@@ -153,4 +160,16 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   const announced = announcedView.find(node => node.attrs.class === 'title-premiere');
   assert.deepEqual(announced.children.map(node => node.children?.join('') ?? node),
     ['Temporada 2', ' el ', '14 de noviembre de 2099']);
+});
+
+test('the episode premiere badge uses a Madrid calendar day and distinguishes linked videos', () => {
+  const today = madridDay(Date.parse('2026-12-31T23:30:00Z'));
+  assert.equal(today, '2027-01-01');
+  const episode = { season: 1, episode: 3, aired: today };
+  assert.equal(episodePremiereLabel(episode, today), 'Estreno Hoy');
+  assert.equal(episodePremiereLabel({ ...episode, id: 'pending' }, today), 'Estreno Hoy');
+  assert.equal(episodePremiereLabel({ ...episode, id: 'e3', url: 'https://example.com/3.mp4' }, today), 'Estrenado Hoy');
+  assert.equal(episodePremiereLabel({ ...episode, aired: '2026-12-31' }, today), 'Estrenado Ayer');
+  assert.equal(episodePremiereLabel({ ...episode, aired: '2026-12-30' }, today), '');
+  assert.equal(episodePremiereLabel({ ...episode, aired: '2027-01-02' }, today), 'Estreno el 2 de enero de 2027');
 });

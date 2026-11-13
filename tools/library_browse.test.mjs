@@ -139,7 +139,8 @@ test('the title page: trailer in Spanish, creators, similar titles and the episo
   assert.deepEqual(creatorsOf({ credits: { crew: [{ job: 'Director', name: 'James Cameron' }, { job: 'Writer', name: 'X' }] } }), ['James Cameron']);
   const library = { sections: { series: [item('a', { genres: ['Drama', 'Crimen'] }), item('b', { genres: ['Drama', 'Crimen'], rating: 5 }), item('c', { genres: ['Drama'], rating: 9 }), item('d', { genres: ['Western'] })] } };
   assert.deepEqual(similarTitles(library, LIBRARY_SECTIONS[1], library.sections.series[0]).map((i) => i.id), ['b', 'c']);
-  const show = { episodes: [{ id: 'e2', season: 1, episode: 2 }, { id: 'e1', season: 1, episode: 1 }, { id: 'f1', season: 2, episode: 1 }] };
+  const show = { episodes: [{ id: 'e2', season: 1, episode: 2 }, { id: 'e1', season: 1, episode: 1 }, { id: 'f1', season: 2, episode: 1 }]
+    .map(episode => ({ ...episode, url: 'https://example.com/episode.mp4' })) };
   assert.equal(resumeEpisode(show).id, 'e1');
   assert.equal(resumeEpisode(show, (id) => ({ e2: { at: 5 }, f1: { at: 9 } })[id] || null).id, 'f1');
 });
