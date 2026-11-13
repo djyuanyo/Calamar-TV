@@ -136,8 +136,13 @@ public class LibraryTest {
   @Test public void documentariesHaveTheSameTopOnHomeAndTheirSection() throws Exception {
     JSONArray documentaries = new JSONArray();
     for (int i = 1; i <= 12; i++) {
-      documentaries.put(new JSONObject().put("id", "d" + i).put("kind", i % 2 == 0 ? "tv" : "movie")
-          .put("tmdb", new JSONObject().put("id", i).put("votes", i)));
+      String url = "https://example.com/documentary.mp4";
+      JSONObject documentary = new JSONObject().put("id", "d" + i).put("tmdb", new JSONObject().put("id", i).put("votes", i));
+      if (i % 2 == 0) {
+        JSONObject episode = new JSONObject().put("id", "e1").put("season", 1).put("episode", 1).put("url", url);
+        documentary.put("kind", "tv").put("episodes", new JSONArray().put(episode));
+      } else documentary.put("kind", "movie").put("url", url);
+      documentaries.put(documentary);
     }
     Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("documentaries", documentaries)));
     List<Library.Item> top = data.top("documentaries");
