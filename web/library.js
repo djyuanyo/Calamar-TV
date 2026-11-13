@@ -792,11 +792,20 @@ export function listedEpisodes(item, today = madridDay()) {
 }
 
 export function nextPremiere(episodes, today = madridDay()) {
-  return episodes.filter(e => hasPremiereDate(e, today)).sort((a, b) => a.aired.localeCompare(b.aired) || a.season - b.season || a.episode - b.episode)[0];
+  return episodes.filter(e => hasPremiereDate(e, today)).sort((a, b) => a.aired.localeCompare(b.aired) || a.season - b.season || (a.episode || 0) - (b.episode || 0))[0];
 }
 
 const releaseDate = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-const releaseLabel = episode => `Estreno el ${releaseDate.format(new Date(episode.aired + 'T00:00:00Z'))}`;
+const formattedRelease = aired => releaseDate.format(new Date(aired + 'T00:00:00Z'));
+const releaseLabel = episode => `Estreno el ${formattedRelease(episode.aired)}`;
+
+function nextSeasonPremiere(item, episodes, today) {
+  const premieres = new Map(episodes.filter(e => e.season > 1 && e.episode === 1 && hasPremiereDate(e, today))
+    .map(e => [e.season, e]));
+  for (const season of item.tmdb?.seasonPremieres || [])
+    if (season?.season > 1 && hasPremiereDate(season, today)) premieres.set(season.season, season);
+  return nextPremiere([...premieres.values()], today);
+}
 const watchedEpisode = (history, episode) => Number.isFinite(history?.watched?.[episode.id]);
 const latestEpisodeProgress = (episodes, saved) => episodes.map(e => [e, saved(e.id)])
   .filter(([, state]) => state).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
@@ -829,7 +838,8 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   const series = item.kind === 'tv';
   const today = madridDay();
   const episodes = series ? listedEpisodes(item, today) : [];
-  const premiere = nextPremiere(episodes, today);
+  const newSeason = series ? nextSeasonPremiere(item, episodes, today) : null;
+  const premiere = newSeason || nextPremiere(episodes, today);
   const seasons = [...new Set(episodes.map(e => e.season))];
   let chosen = seasons.includes(initialSeason) ? initialSeason : defaultEpisodeSeason(item, saved, history);
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
@@ -865,8 +875,9 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
       el('h1', {}, info.titleLogo ? el('img', { class: 'title-logo', src: info.titleLogo, alt: title, referrerpolicy: 'no-referrer',
         onerror: (event) => event.target.replaceWith(title) }) : title),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
-      premiere ? el('p', { class: 'title-premiere' }, el('strong', {}, 'Próximo estreno'),
-        ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, releaseLabel(premiere))) : null,
+      premiere ? el('p', { class: 'title-premiere' }, ...(newSeason
+        ? [el('strong', {}, `Temporada ${newSeason.season}`), ' el ', el('time', { datetime: newSeason.aired }, formattedRelease(newSeason.aired))]
+        : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, releaseLabel(premiere))])) : null,
       action, !series ? soundNote(el, item.file, item.url) : null,
       el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
       starring,
@@ -1463,7 +1474,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   }
 
   // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
-  const TOP_REFRESHED = 'calamar-top-refreshed-v4'; // Refresh existing titles for their artwork too.
+  const TOP_REFRESHED = 'calamar-top-refreshed-v5'; // Backfill season premiere dates on the next admin visit.
   const topNote = el('p', { class: 'note', role: 'status' });
   async function refreshTop(quiet = false) {
     const key = tmdbKey();
@@ -1485,7 +1496,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}),
         ...(facts[item.id].titleLogo !== undefined ? { titleLogo: facts[item.id].titleLogo } : {}),
         ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}),
-        ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode,
+        ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode, seasonPremieres: facts[item.id].seasonPremieres,
           ...(facts[item.id].upcoming ? { upcoming: [...(item.tmdb.upcoming || [])
             .filter(episode => episode.season !== facts[item.id].nextEpisode.season && hasPremiereDate(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);

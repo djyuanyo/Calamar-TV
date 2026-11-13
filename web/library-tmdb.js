@@ -103,6 +103,7 @@ export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
   if (logo !== undefined) info.titleLogo = logo;
+  if (kind === 'tv') info.seasonPremieres = seasonPremieresOf(d);
   const seasons = kind === 'tv' ? (d.seasons || []).map((s) => ({ season: s.season_number, name: s.name || `Temporada ${s.season_number}`, episodes: s.episode_count || 0 }))
     .sort((a, b) => (a.season === 0) - (b.season === 0) || a.season - b.season) : [];
   return { info, seasons };
@@ -133,7 +134,8 @@ export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
   const upcoming = nextEpisode
     ? await seasonEpisodes(id, nextEpisode.season, key, fetcher).then(episodes => scheduledEpisodes(episodes, nextEpisode.season)).catch(() => undefined)
     : undefined;
-  return { nextEpisode, upcoming, popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
+  return { nextEpisode, upcoming, seasonPremieres: kind === 'tv' ? seasonPremieresOf(d) : undefined,
+    popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
     logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d),
     ...(logo !== undefined ? { titleLogo: logo } : {}) };
 }
@@ -161,6 +163,12 @@ export function nextEpisodeOf(details) {
   const e = details?.next_episode_to_air;
   return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && Number.isInteger(e.season_number) && e.season_number >= 0 && e.episode_number > 0
     ? { season: e.season_number, episode: e.episode_number, aired: e.air_date, name: e.name || '' } : null;
+}
+
+export function seasonPremieresOf(details, today = madridDay()) {
+  return (details?.seasons || []).filter(s => Number.isInteger(s?.season_number) && s.season_number > 1
+    && /^\d{4}-\d{2}-\d{2}$/.test(s.air_date || '') && s.air_date >= today)
+    .map(s => ({ season: s.season_number, aired: s.air_date }));
 }
 
 function scheduledEpisodes(episodes, season, today = madridDay()) {

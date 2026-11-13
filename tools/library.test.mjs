@@ -130,6 +130,8 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
     replaceChildren(...items) { this.children = items; }, setAttribute(name, value) { this.attrs[name] = value; } });
   const flatten = (items) => items.filter(node => typeof node === 'object').flatMap(node => [node, ...flatten(node.children)]);
   const view = flatten(libraryDetail(el, section, { sections: { series: [item] } }, item, () => {}, () => null, null, [], history));
+  assert.ok(flatten(view.find(node => node.attrs.class === 'title-premiere').children)
+    .some(node => node.children.includes('Próximo estreno')));
   assert.ok(view.some(node => node.tag === 'img' && node.attrs.src === item.tmdb.backdrop));
   assert.ok(view.every(node => node.tag !== 'iframe'));
   assert.ok(view.some(node => node.children.includes('✓ Visto')));
@@ -139,7 +141,14 @@ test('title headers use artwork and scheduled episodes are dated but unavailable
   const newSeason = { ...item, tmdb: { ...item.tmdb, nextEpisode: { ...upcoming, season: 2, episode: 1 } } };
   const seasonOne = flatten(libraryDetail(el, section, { sections: { series: [newSeason] } }, newSeason, () => {}, () => null, null, [], history));
   assert.equal(seasonOne.find(node => node.attrs.class === 'season-picker').value, '1');
-  assert.ok(flatten(seasonOne.find(node => node.attrs.class === 'title-premiere').children)
-    .some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
+  const newNotice = seasonOne.find(node => node.attrs.class === 'title-premiere');
+  assert.deepEqual(newNotice.children.map(node => node.children?.join('') ?? node),
+    ['Temporada 2', ' el ', '12 de noviembre de 2099']);
+  assert.ok(flatten(newNotice.children).some(node => node.tag === 'time' && node.attrs.datetime === upcoming.aired));
   assert.equal(seasonOne.some(node => node.attrs.class === 'episode episode-upcoming'), false);
+  const withSeasonDate = { ...item, tmdb: { ...item.tmdb, seasonPremieres: [{ season: 2, aired: '2099-11-14' }] } };
+  const announced = flatten(libraryDetail(el, section, { sections: { series: [withSeasonDate] } }, withSeasonDate, () => {}, () => null))
+    .find(node => node.attrs.class === 'title-premiere');
+  assert.deepEqual(announced.children.map(node => node.children?.join('') ?? node),
+    ['Temporada 2', ' el ', '14 de noviembre de 2099']);
 });

@@ -39,6 +39,21 @@ test('title logos can use other languages and preserve existing metadata when im
   assert.equal((await tmdbFacts(7, 'tv', 'key', fake({ '/tv/7': show, '/tv/7/images': { logos: [] } }))).titleLogo, '');
 });
 
+test('TMDB season dates are kept when the first episode has no published date', async () => {
+  const show = { name: 'Serie', seasons: [
+    { season_number: 0, air_date: '2099-11-13' },
+    { season_number: 1, air_date: '2000-01-01' },
+    { season_number: 2, air_date: '2099-11-14' },
+    { season_number: 3, air_date: null },
+  ] };
+  const fetcher = fake({ '/tv/7': show });
+  const { info } = await tmdbDetails(7, 'tv', 'key', fetcher);
+  const facts = await tmdbFacts(7, 'tv', 'key', fetcher);
+  assert.equal(facts.nextEpisode, null);
+  assert.deepEqual(facts.seasonPremieres, [{ season: 2, aired: '2099-11-14' }]);
+  assert.deepEqual(info.seasonPremieres, facts.seasonPremieres);
+});
+
 test('correcting TMDB metadata keeps film IDs, catalogue links and artwork', async () => {
   const old = { ...movieItem({ id: 6, title: 'Incorrecta' }, 'https://example.test/movie.mp4'),
     artwork: { poster: 'https://example.test/poster.jpg' }, addedAt: '2026-10-20', featured: 1,

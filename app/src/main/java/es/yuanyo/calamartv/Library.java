@@ -94,11 +94,13 @@ final class Library {
       return isDate(aired) && aired.compareTo(today) >= 0;
     }
 
-    String premiereLabel() {
-      java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
-      format.setTimeZone(TimeZone.getTimeZone("UTC"));
-      return "Estreno el " + format.format(new java.util.Date(day(aired)));
-    }
+    String premiereLabel() { return "Estreno el " + formattedPremiere(aired); }
+  }
+
+  private static String formattedPremiere(String aired) {
+    java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
+    format.setTimeZone(TimeZone.getTimeZone("UTC"));
+    return format.format(new java.util.Date(day(aired)));
   }
 
   static boolean upcoming(String aired) {
@@ -185,6 +187,7 @@ final class Library {
     final List<String[]> cast = new ArrayList<>();
     final List<Episode> episodes = new ArrayList<>();
     final Map<String, Episode> scheduled = new LinkedHashMap<>();
+    private final Map<Integer, String> seasonPremieres = new HashMap<>();
     /** «Saltar intro» and «Siguiente capítulo» times set in the admin page (or empty). */
     final JSONObject skip;
     /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
@@ -258,6 +261,14 @@ final class Library {
       JSONArray upcoming = t.optJSONArray("upcoming");
       if (upcoming != null) for (int i = 0; i < upcoming.length(); i++) addScheduled(upcoming.optJSONObject(i));
       addScheduled(t.optJSONObject("nextEpisode"));
+      JSONArray premieres = t.optJSONArray("seasonPremieres");
+      if (premieres != null) for (int i = 0; i < premieres.length(); i++) {
+        JSONObject premiere = premieres.optJSONObject(i);
+        if (premiere == null) continue;
+        int season = premiere.optInt("season");
+        String aired = premiere.optString("aired");
+        if (season > 1 && isDate(aired)) seasonPremieres.put(season, aired);
+      }
       JSONArray e = o.optJSONArray("episodes");
       if (e != null)
         for (int i = 0; i < e.length(); i++) {
@@ -316,12 +327,26 @@ final class Library {
       return out;
     }
 
-    Episode nextPremiere() {
-      String today = madridDay(System.currentTimeMillis());
+    String premiereNotice(String today) {
+      Map<Integer, String> dates = new HashMap<>();
       Episode next = null;
-      for (List<Episode> season : seasons(today).values()) for (Episode e : season)
-        if (e.hasPremiereDate(today) && (next == null || e.aired.compareTo(next.aired) < 0)) next = e;
-      return next;
+      for (List<Episode> season : seasons(today).values()) for (Episode e : season) {
+        if (!e.hasPremiereDate(today)) continue;
+        if (e.season > 1 && e.episode == 1) dates.put(e.season, e.aired);
+        if (next == null || e.aired.compareTo(next.aired) < 0) next = e;
+      }
+      seasonPremieres.forEach((season, aired) -> { if (aired.compareTo(today) >= 0) dates.put(season, aired); });
+      int nextSeason = 0;
+      String date = "";
+      for (Map.Entry<Integer, String> entry : dates.entrySet()) {
+        int order = entry.getValue().compareTo(date);
+        if (date.isEmpty() || order < 0 || (order == 0 && entry.getKey() < nextSeason)) {
+          nextSeason = entry.getKey();
+          date = entry.getValue();
+        }
+      }
+      if (nextSeason != 0) return "Temporada " + nextSeason + " el " + formattedPremiere(date);
+      return next == null ? "" : "Próximo estreno · T" + next.season + ":E" + next.episode + " · " + next.premiereLabel();
     }
 
     /** The player's title: «Los hombres de Paco · T1 · Piloto» (or «· Capítulo 1» without a name). */

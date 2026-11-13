@@ -390,12 +390,21 @@ public class LibraryTest {
         .put("episodes", new JSONArray().put(uploaded)).put("tmdb", new JSONObject().put("nextEpisode", metadata)));
     Library.Episode premiere = item.seasons().get(2).get(0);
     assertTrue(premiere.upcoming());
-    assertSame(premiere, item.nextPremiere());
+    assertEquals("Temporada 2 el 12 de noviembre de 2099", item.premiereNotice("2099-11-11"));
     assertEquals(1, Library.defaultSeason(item, new JSONObject(), new JSONObject()));
     assertFalse(item.seasons("2099-11-12").get(2).get(0).available());
     assertFalse(item.seasons("2099-11-13").containsKey(2));
     assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel());
     assertNull(item.next(item.episode("e1")));
     assertEquals("e1", Library.resumeEpisode(item, new JSONObject()).id);
+    JSONObject regular = new JSONObject().put("season", 1).put("episode", 2).put("aired", "2099-11-12");
+    JSONObject seasonDate = new JSONObject().put("season", 2).put("aired", "2099-11-14");
+    JSONObject tmdb = new JSONObject().put("nextEpisode", regular);
+    JSONObject series = new JSONObject().put("kind", "tv").put("tmdb", tmdb);
+    assertEquals("Próximo estreno · T1:E2 · Estreno el 12 de noviembre de 2099",
+        new Library.Item(series).premiereNotice("2099-11-11"));
+    tmdb.put("seasonPremieres", new JSONArray().put(seasonDate));
+    assertEquals("Temporada 2 el 14 de noviembre de 2099", new Library.Item(series).premiereNotice("2099-11-11"));
+    assertTrue(new Library.Item(series).premiereNotice("2099-11-15").isEmpty());
   }
 }

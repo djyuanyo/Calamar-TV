@@ -2192,9 +2192,9 @@ public class MainActivity extends Activity {
     }
     String facts = item.facts();
     if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
-    Library.Episode premiere = item.series ? item.nextPremiere() : null;
-    if (premiere != null) {
-      TextView note = label("Próximo estreno · T" + premiere.season + ":E" + premiere.episode + " · " + premiere.premiereLabel(), 15, 0xffffd284);
+    String premiere = item.series ? item.premiereNotice(Library.madridDay(System.currentTimeMillis())) : "";
+    if (!premiere.isEmpty()) {
+      TextView note = label(premiere, 15, 0xffffd284);
       note.setPadding(0, dp(10), 0, dp(4));
       body.addView(note);
     }
