@@ -1,17 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { APK_DOWNLOAD, TIZEN_DOWNLOAD, androidTitleDownload, isSamsungTizen } from '../web/app-links.js';
+import { APK_DOWNLOAD, TIZEN_DOWNLOAD, isSamsungTizen } from '../web/app-links.js';
 import { mobileTimer } from '../web/sleep-timer.js';
 import { withArtwork, keepArtwork } from '../web/library-art.js';
 test('download uses the fixed signed asset of the latest release', () => {
   assert.equal(APK_DOWNLOAD, 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
-});
-test('web download controls deep-link to the selected episode or season in Android', () => {
-  const chapter = androidTitleDownload('series', 'serie', 'ep5');
-  assert.ok(chapter.startsWith('intent://djyuanyo.github.io/Calamar-TV/series/serie/?capitulo=ep5#Intent;'));
-  assert.ok(chapter.includes('package=es.yuanyo.calamartv;'));
-  assert.ok(chapter.includes(encodeURIComponent(APK_DOWNLOAD)));
-  assert.ok(androidTitleDownload('documentales', 'doc', '', 2).includes('/doc/?temporada=2#Intent;'));
 });
 test('Samsung Smart TV is identified separately from mobile and Android TV', () => {
   assert.equal(TIZEN_DOWNLOAD, 'downloads/Calamar-TV-Tizen.wgt');

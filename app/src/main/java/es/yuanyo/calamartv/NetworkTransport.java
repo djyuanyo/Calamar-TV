@@ -64,10 +64,6 @@ public final class NetworkTransport implements PlayerDocument.ConnectionFactory 
     return url -> new PlayerHttpConnection(url, pageClient);
   }
 
-  HttpURLConnection openDownload(URL url) {
-    return new PlayerHttpConnection(url, SecureDnsClients.forMedia(client, false), 0);
-  }
-
   public DataSource.Factory mediaFactory(String referer) {
     return mediaFactory(referer, false);
   }

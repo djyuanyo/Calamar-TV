@@ -1,6 +1,5 @@
 import { GOOGLE_G } from './google-icon.js';
 import { DEVICE_LOGIN_MINUTES, DEVICE_LOGIN_URL, newDeviceKey } from './device-login.js';
-import { APK_DOWNLOAD } from './app-links.js';
 // «Mi cuenta» (#/cuenta): sign in with Google or with email and password, «¿Quién está viendo?» and
 // the profiles of the account (add, rename, colour, delete), as in Netflix.
 import { MAX_PROFILES, PROFILE_COLORS, signedUser, accountProfiles, activeProfile, chooseProfile, addProfile, editProfile, removeProfile } from './profiles.js';
@@ -249,9 +248,6 @@ export function accountPage(el, f, { rerender, chosen, dashboard = () => [], edi
       avatar(el, current, 'mid'), el('strong', {}, current.name)),
     el('div', { class: 'sheet-profiles' }, others),
     el('button', { class: 'sheet-manage', type: 'button', onclick: () => go('all') }, 'Administrar perfiles')),
-    el('details', { class: 'account-downloads' }, el('summary', {}, el('strong', {}, '↓   Descargas')),
-      el('p', {}, 'Guarda películas y capítulos en Calamar TV para Android y Android TV y reprodúcelos sin conexión.'),
-      el('a', { class: 'btn secondary', href: APK_DOWNLOAD }, 'Descargar la app Android')),
     ...dashboard(),
     el('ul', { class: 'sheet-menu' },
       item('account', 'Datos de la cuenta', () => go('cuenta')),

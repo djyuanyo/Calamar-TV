@@ -48,21 +48,9 @@ public class AccountActivity extends Activity {
   private boolean emailWorking;
   private String emailValue = "";
   private Runnable stopAccess;
-  private Runnable stopDownloads;
-  private Runnable stopDownloadAccess;
-  private LinearLayout downloadsBody;
   private Library.Data library;
   private boolean loadingLibrary;
   private final java.util.concurrent.ExecutorService posterWorker = java.util.concurrent.Executors.newFixedThreadPool(3);
-  private final android.os.Handler downloadUpdates = new android.os.Handler(android.os.Looper.getMainLooper());
-  private final java.util.Map<OfflineVideos.Transfer, TextView> transferStatus = new java.util.HashMap<>();
-  private final Runnable refreshTransfers = new Runnable() {
-    @Override public void run() {
-      transferStatus.forEach((job, view) -> view.setText(transferLabel(job)));
-      if (!transferStatus.isEmpty()) downloadUpdates.postDelayed(this, 500);
-    }
-  };
-
   @Override
   protected void onCreate(Bundle state) {
     super.onCreate(state);
@@ -76,11 +64,6 @@ public class AccountActivity extends Activity {
   protected void onStart() {
     super.onStart();
     Profiles.listen(redraw);
-    stopDownloads = OfflineVideos.observe(this::drawDownloads);
-    if (!required) stopDownloadAccess = AppAccess.observe(this, state -> {
-      OfflineVideos.rememberAccess(this, state);
-      drawDownloads();
-    });
     if (required) stopAccess = AppAccess.observe(this, state -> {
       if (state == AppAccess.State.ALLOWED || state == AppAccess.State.BLOCKED || state == AppAccess.State.ERROR) {
         setResult(RESULT_OK);
@@ -91,14 +74,10 @@ public class AccountActivity extends Activity {
       authListener = auth -> runOnUiThread(this::draw);
       SharedCatalog.auth(this).addAuthStateListener(authListener);
     } catch (RuntimeException unavailable) { authListener = null; }
-    drawDownloads();
   }
 
   @Override
   protected void onStop() {
-    downloadUpdates.removeCallbacks(refreshTransfers);
-    if (stopDownloads != null) { stopDownloads.run(); stopDownloads = null; }
-    if (stopDownloadAccess != null) { stopDownloadAccess.run(); stopDownloadAccess = null; }
     if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     Profiles.forget(redraw);
     if (authListener != null) SharedCatalog.auth(this).removeAuthStateListener(authListener);
@@ -167,11 +146,8 @@ public class AccountActivity extends Activity {
 
   private void draw() {
     if (isFinishing() || emailWorking) return;
-    downloadsBody = null;
-    transferStatus.clear();
     if (phone != null && !phoneInline) return; // The phone sign-in screen stays until it ends.
     if (required || Profiles.user(this) == null) { signIn(); return; }
-    if ("descargas".equals(editing)) { downloads(); return; }
     if (editing != null && !editing.equals("all") && !editing.equals("elegir") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
     JSONObject current = Profiles.active();
     if ("all".equals(editing) || current == null) { manage(current == null); return; }
@@ -188,8 +164,6 @@ public class AccountActivity extends Activity {
     profiles.setOnClickListener(v -> { editing = "elegir"; draw(); });
     profile.addView(profiles);
     body.addView(profile);
-    menuItem("↓", "Descargas", () -> { editing = "descargas"; draw(); });
-    body.addView(label("Tus películas y capítulos para ver sin conexión.", 14, Ui.MUTED));
     accountRows();
     menuItem("✎", "Administrar perfiles", () -> { editing = "all"; draw(); });
     menuItem("👤", "Datos de la cuenta", () -> { editing = "cuenta"; draw(); });
@@ -217,91 +191,12 @@ public class AccountActivity extends Activity {
       button("Añadir perfil", Ui.Kind.SURFACE, () -> { editing = "new"; draw(); });
   }
 
-  private void downloads() {
-    sheet("Descargas", "");
-    downloadsBody = new LinearLayout(this);
-    downloadsBody.setOrientation(LinearLayout.VERTICAL);
-    body.addView(downloadsBody);
-    drawDownloads();
-  }
-
-  private void drawDownloads() {
-    if (downloadsBody == null || isFinishing() || isDestroyed()) return;
-    downloadsBody.removeAllViews();
-    transferStatus.clear();
-    downloadUpdates.removeCallbacks(refreshTransfers);
-    if (!OfflineVideos.admitted(this, AppAccess.current())) {
-      downloadsBody.addView(label("Conéctate a Internet para comprobar el acceso a tus descargas.", 15, Ui.MUTED));
-      return;
-    }
-    java.util.List<OfflineVideos.Saved> saved = OfflineVideos.list(this);
-    java.util.List<OfflineVideos.Transfer> active = OfflineVideos.active(this);
-    if (active.isEmpty() && saved.isEmpty())
-      downloadsBody.addView(label("Aquí verás las películas y los capítulos que descargues para ver sin conexión.", 15, Ui.MUTED));
-    for (OfflineVideos.Transfer transfer : active) {
-      TextView text = downloadRow(transfer.entry, transferLabel(transfer), null, "Cancelar", () -> OfflineVideos.cancel(transfer));
-      transferStatus.put(transfer, text);
-    }
-    for (OfflineVideos.Saved item : saved) {
-      String size = android.text.format.Formatter.formatFileSize(this, item.video.length());
-      downloadRow(item.entry, size, () -> playOffline(item), "Borrar", () -> new AlertDialog.Builder(this)
-          .setTitle("Borrar descarga").setMessage(item.entry.optString("title"))
-          .setNegativeButton("Cancelar", null).setPositiveButton("Borrar", (dialog, which) -> {
-            if (!OfflineVideos.remove(this, item.entry.optString("key"))) say("No se pudo borrar la descarga.");
-          }).show());
-    }
-    downloadsBody.addView(status);
-    if (!transferStatus.isEmpty()) downloadUpdates.postDelayed(refreshTransfers, 500);
-  }
-
-  private String transferLabel(OfflineVideos.Transfer job) {
-    String sub = job.entry.optString("sub");
-    String state = job.cancelled ? "Cancelando…" : job.percent < 0 ? "Descargando…" : job.percent + " %";
-    return sub.isEmpty() ? state : sub + " · " + state;
-  }
-
-  private TextView downloadRow(JSONObject entry, String subtitle, Runnable play, String action, Runnable manage) {
-    LinearLayout row = new LinearLayout(this);
-    row.setGravity(Gravity.CENTER_VERTICAL);
-    row.setPadding(dp(8), dp(8), dp(8), dp(8));
-    row.setBackground(Ui.shape(this, CARD, 10, 0, 0));
-    LinearLayout info = new LinearLayout(this);
-    info.setOrientation(LinearLayout.VERTICAL);
-    if (play != null) {
-      info.setFocusable(true);
-      info.setContentDescription("Reproducir " + entry.optString("title"));
-      info.setBackground(Ui.focusFill(this, CARD, 0x22ffffff, Ui.ACC, 8, 0));
-      info.setOnClickListener(v -> play.run());
-    }
-    info.addView(label((play == null ? "" : "▶  ") + entry.optString("name"), 16, Ui.FG));
-    String sub = entry.optString("sub");
-    TextView detail = label(play == null || sub.isEmpty() ? subtitle : sub + " · " + subtitle, 13, Ui.MUTED);
-    info.addView(detail);
-    row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-    Button control = Ui.pill(this, action, Ui.Kind.SURFACE, true);
-    control.setOnClickListener(v -> manage.run());
-    row.addView(control);
-    LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
-    spacing.bottomMargin = dp(8);
-    downloadsBody.addView(row, spacing);
-    return detail;
-  }
-
-  private void playOffline(OfflineVideos.Saved item) {
-    if (!OfflineVideos.admitted(this, AppAccess.current())) { drawDownloads(); return; }
-    String key = item.entry.optString("key");
-    JSONObject progress = Library.Progress.load(this).optJSONObject(key);
-    startActivity(new Intent(this, NativePlayerActivity.class).putExtra(OfflineVideos.KEY, key)
-        .putExtra("title", item.entry.optString("title")).putExtra("progress_entry", item.entry.toString())
-        .putExtra("resume_ms", progress == null ? 0L : progress.optLong("position")));
-  }
-
   private void accountRows() {
     java.util.List<JSONObject> liked = ProfileData.entries(Profiles.data(), "ratings");
     liked.removeIf(entry -> entry.optInt("value") <= 0);
     java.util.List<JSONObject> mine = ProfileData.entries(Profiles.data(), "list");
     if ((!liked.isEmpty() || !mine.isEmpty()) && library == null && !loadingLibrary
-        && !OfflineVideos.disconnected(this) && AppAccess.current() == AppAccess.State.ALLOWED) {
+        && AppAccess.current() == AppAccess.State.ALLOWED) {
       loadingLibrary = true;
       new Thread(() -> {
         try {
@@ -345,10 +240,6 @@ public class AccountActivity extends Activity {
         card.addView(track, new LinearLayout.LayoutParams(-1, dp(5)));
       }
       card.setOnClickListener(v -> {
-        if (resume && OfflineVideos.admitted(this, AppAccess.current())) {
-          OfflineVideos.Saved download = OfflineVideos.get(this, entry.optString("key"));
-          if (download != null && OfflineVideos.disconnected(this)) { playOffline(download); return; }
-        }
         if (location == null && entry.optString("section").isEmpty()) return;
         String page = location == null ? Library.page(entry.optString("section")) : Library.page(location[0]);
         String id = location == null ? entry.optString("item") : location[1];

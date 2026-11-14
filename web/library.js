@@ -15,7 +15,6 @@ import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
 import { playbackTimer } from './sleep-timer.js';
-import { APK_DOWNLOAD, androidTitleDownload } from './app-links.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -901,7 +900,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
           ? [el('strong', {}, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))), ` · T${premiere.season}:E${premiere.episode}`]
           : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))])) : null,
       action,
-      el('div', { class: 'title-actions' }, trailerButton, extras[0], !series ? titleDownload(el, section, item) : null),
+      el('div', { class: 'title-actions' }, trailerButton, extras[0]),
       overview ? el('p', { class: 'library-overview' }, overview) : null));
   // The tabs.
   const panel = el('div', { class: 'title-panel' });
@@ -913,21 +912,16 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
       const upcoming = !episodeAvailable(e, today), watched = !upcoming && watchedEpisode(history, e);
       const badge = episodePremiereBadge(el, e, today);
-      const episode = el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
+      return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
         el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
           upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
         el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge,
           watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
         e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null);
-      return upcoming ? episode : el('div', { class: 'episode-with-download' }, episode, titleDownload(el, section, item, e));
     }));
-    const seasonAction = el('div', { class: 'season-download' });
-    const drawSeasonDownload = () => seasonAction.replaceChildren(...(chosen != null && episodes.some(e => e.season === chosen && episodeAvailable(e, today))
-      ? [titleDownload(el, section, item, null, chosen)] : []));
-    picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); drawSeasonDownload(); });
+    picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
     draw();
-    drawSeasonDownload();
-    return [el('div', { class: 'season-toolbar' }, el('label', { class: 'browse-select season-select' }, picker), seasonAction), list];
+    return [el('label', { class: 'browse-select season-select' }, picker), list];
   }]);
   tabs.push(['similar', 'Sugerencias', () => {
     const found = similarTitles(library, section, item);
@@ -960,21 +954,6 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   return [head, bar_, panel];
 }
 
-function titleDownload(el, section, item, episode = null, season = '') {
-  const label = episode ? `Descargar capítulo ${episode.episode}` : season ? `Descargar temporada ${season}` : 'Descargar';
-  return el('button', { type: 'button', class: `title-action${episode ? ' episode-download' : ''}`, 'aria-label': label, onclick: () => {
-    const android = /\bAndroid\b/i.test(navigator.userAgent);
-    const href = android ? androidTitleDownload(section.page, item.id, episode?.id, season) : APK_DOWNLOAD;
-    const dialog = el('dialog', { class: 'credits-dialog' }, el('h2', {}, label),
-      el('p', {}, 'Guarda el vídeo dentro de la app de Calamar TV para verlo sin conexión.'),
-      el('a', { class: 'btn', href }, android ? 'Abrir en Calamar TV' : 'Descargar la app Android'),
-      el('form', { method: 'dialog' }, el('button', { class: 'btn secondary', autofocus: true }, 'Cerrar')));
-    dialog.addEventListener('close', () => dialog.remove(), { once: true });
-    document.body.append(dialog);
-    dialog.showModal();
-  } }, el('span', { 'aria-hidden': 'true' }, '⤓'), episode ? null : el('span', {}, season ? 'Temporada' : 'Descargar'));
-}
-
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
 const soundNote = (el, file, url) => webPlayback(url).compatibility
   ? el('p', { class: 'note library-sound' }, 'Si el vídeo no se oye bien, elige Modo compatible en Fuentes.')
@@ -1005,7 +984,6 @@ export function libraryEpisode(el, section, item, episode, play, saved = () => n
       episodePremiereBadge(el, episode, today),
       !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
       upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
-      upcoming ? null : titleDownload(el, section, item, episode),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null))];
 }
 

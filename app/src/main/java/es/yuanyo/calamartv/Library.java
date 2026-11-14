@@ -51,7 +51,6 @@ final class Library {
 
   static final class Episode {
     final String id, url, name, overview, still;
-    final String offlineUrl;
     final int season, episode;
     /** The day it arrived in the library (YYYY-MM-DD or empty), for «Nuevo episodio». */
     final String addedAt;
@@ -67,7 +66,6 @@ final class Library {
       runtime = e.optInt("runtime", 0);
       addedAt = e.optString("addedAt");
       url = e.optString("url");
-      offlineUrl = OfflineVideos.source(url, e.optJSONArray("mirrors"));
       season = e.optInt("season", 1);
       episode = e.optInt("episode", 0);
       name = e.optString("name");
@@ -194,7 +192,6 @@ final class Library {
 
   static final class Item {
     final String id, title, url, overview, poster, backdrop, titleLogo;
-    final String offlineUrl;
     final int year, runtime, votes;
     final double rating;
     final boolean series;
@@ -238,7 +235,6 @@ final class Library {
       title = t.optString("title", "").isEmpty() ? o.optString("title") : t.optString("title");
       year = t.optInt("year", o.optInt("year", 0));
       url = o.optString("url");
-      offlineUrl = OfflineVideos.source(url, o.optJSONArray("mirrors"));
       overview = t.isNull("overview") ? "" : t.optString("overview").trim();
       poster = t.optString("poster");
       backdrop = t.optString("backdrop");
@@ -409,12 +405,6 @@ final class Library {
         throw new IllegalStateException(impossible);
       }
       return o;
-    }
-
-    JSONObject downloadEntry(String section, Episode episode) {
-      JSONObject entry = entry(section, episode);
-      try { return entry.put("url", episode == null ? offlineUrl : episode.offlineUrl); }
-      catch (JSONException impossible) { throw new IllegalStateException(impossible); }
     }
   }
 

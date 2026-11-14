@@ -81,7 +81,6 @@ public class MainActivity extends Activity {
   AppLink pendingAppLink;
   private Runnable stopAccess;
   private boolean contentAdmitted, catalogRestored;
-  private boolean offlineLanding;
   private AppAccess.State admission = AppAccess.State.LOADING;
   private boolean requiredLoginOpen;
   private static final int REQUIRED_LOGIN = 218;
@@ -98,11 +97,8 @@ public class MainActivity extends Activity {
 
   private void showAccess(AppAccess.State state) {
     if (isFinishing() || isDestroyed()) return;
-    OfflineVideos.rememberAccess(this, state);
     admission = state;
-    boolean offline = OfflineVideos.disconnected(this) && OfflineVideos.admitted(this, state) && !OfflineVideos.list(this).isEmpty();
-    offlineLanding = offline;
-    if (state == AppAccess.State.ALLOWED && !offline) {
+    if (state == AppAccess.State.ALLOWED) {
       enterContent();
       return;
     }
@@ -113,7 +109,7 @@ public class MainActivity extends Activity {
       contentDialogs.clear();
       pauseContent();
     }
-    if (!offline && (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN)) {
+    if (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN) {
       // The profile chooser can open over this blank host while admission is checked.
       showAccessBackground();
       if (state == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
@@ -131,15 +127,14 @@ public class MainActivity extends Activity {
     screen.setBackgroundColor(Ui.BG);
     screen.setFitsSystemWindows(true);
     screen.addView(label("Calamar TV", 30, FG));
-    String message = offline ? "Sin conexión" : state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
+    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
     TextView note = label(message, 17, MUTED);
     note.setGravity(Gravity.CENTER);
     screen.addView(note);
     boolean retry = state == AppAccess.State.ERROR;
-    Button action = Ui.pill(this, offline ? "Descargas" : retry ? "Reintentar" : "Mi Cuenta", Ui.Kind.ACCENT, true);
+    Button action = Ui.pill(this, retry ? "Reintentar" : "Mi Cuenta", Ui.Kind.ACCENT, true);
     action.setOnClickListener(v -> {
-      if (offline) startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
-      else if (retry) AppAccess.retry(this);
+      if (retry) AppAccess.retry(this);
       else startActivity(new Intent(this, AccountActivity.class));
     });
     screen.addView(action);
@@ -296,8 +291,7 @@ public class MainActivity extends Activity {
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
     if (isFinishing() || isDestroyed()) return;
     if (!contentAdmitted) {
-      if (OfflineVideos.disconnected(this) && OfflineVideos.admitted(this, admission)) showAccess(admission);
-      else if (admission == AppAccess.State.ALLOWED) enterContent();
+      if (admission == AppAccess.State.ALLOWED) enterContent();
       else if (admission == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
       return;
     }
@@ -1590,7 +1584,6 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     resumed = true;
-    if (offlineLanding || (contentAdmitted && OfflineVideos.disconnected(this))) showAccess(admission);
     if (contentAdmitted) resumeContent();
     else openRequiredLogin();
   }
@@ -2358,7 +2351,6 @@ public class MainActivity extends Activity {
     Button trailerAction = titleAction("Tráiler", Ui.Icon.FILM);
     if (!item.trailer.isEmpty()) quickActions.addView(trailerAction);
     quickActions.addView(listButton);
-    if (!item.series) quickActions.addView(offlineButton(item.downloadEntry(section, null), "Descargar", false));
 
     // The tabs.
     final LinearLayout tabs = row();
@@ -2462,7 +2454,6 @@ public class MainActivity extends Activity {
     final Map<Integer, List<Library.Episode>> seasons = item.seasons();
     if (seasons.isEmpty()) return () -> {};
     final Button picker = Ui.pill(this, "", Ui.Kind.SURFACE, false);
-    final Button downloadSeason = titleAction("Temporada", Ui.Icon.DOWNLOAD);
     final LinearLayout episodes = new LinearLayout(this);
     episodes.setOrientation(LinearLayout.VERTICAL);
     final Runnable draw = () -> {
@@ -2470,15 +2461,8 @@ public class MainActivity extends Activity {
       int selected = seasons.containsKey(selectedSeason[0]) ? selectedSeason[0] : Library.defaultSeason(item, progress, seen);
       if (!seasons.containsKey(selected)) selected = seasons.keySet().iterator().next();
       picker.setText("Temporada " + selected + "  ▾");
-      final List<JSONObject> entries = new ArrayList<>();
       episodes.removeAllViews();
-      for (Library.Episode e : seasons.get(selected)) {
-        episodes.addView(episodeRow(section, item, e, progress, seen));
-        if (e.available()) entries.add(item.downloadEntry(section, e));
-      }
-      final int season = selected;
-      downloadSeason.setContentDescription("Descargar temporada " + selected);
-      downloadSeason.setOnClickListener(v -> downloadSeason(season, entries));
+      for (Library.Episode e : seasons.get(selected)) episodes.addView(episodeRow(section, item, e, progress, seen));
     };
     picker.setOnClickListener(v -> {
       final List<Integer> numbers = new ArrayList<>(seasons.keySet());
@@ -2487,13 +2471,9 @@ public class MainActivity extends Activity {
       showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { selectedSeason[0] = numbers.get(which); draw.run(); }).create());
     });
     draw.run();
-    LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, -2);
+    LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
     pp.setMargins(0, dp(10), 0, dp(10));
-    LinearLayout controls = row();
-    controls.setGravity(Gravity.CENTER_VERTICAL);
-    controls.addView(picker, new LinearLayout.LayoutParams(0, dp(50), 1));
-    controls.addView(downloadSeason, new LinearLayout.LayoutParams(-2, -2));
-    panel.addView(controls, pp);
+    panel.addView(picker, pp);
     panel.addView(episodes);
     return draw;
   }
@@ -2603,8 +2583,6 @@ public class MainActivity extends Activity {
       texts.addView(minutes);
     }
     r.addView(texts, new LinearLayout.LayoutParams(0, -1, 1));
-    if (!upcoming) r.addView(offlineButton(item.downloadEntry(section, e), "Descargar " + e.label().toLowerCase(Locale.ROOT), true),
-        new LinearLayout.LayoutParams(dp(44), dp(48)));
     box.addView(r);
     if (!e.overview.isEmpty()) {
       TextView about = label(e.overview, 14, 0xffb3b8c0);
@@ -2666,75 +2644,6 @@ public class MainActivity extends Activity {
     button.setCompoundDrawablesWithIntrinsicBounds(null, Ui.icon(icon, Ui.FG, dp(24)), null, null);
     button.setCompoundDrawablePadding(dp(5));
     return button;
-  }
-
-  private Button offlineButton(JSONObject entry, String label, boolean compact) {
-    String key = entry.optString("key");
-    Button download = titleAction("", Ui.Icon.DOWNLOAD);
-    Runnable paint = () -> {
-      boolean ready = OfflineVideos.get(this, key) != null;
-      download.setText(compact ? "" : ready ? "Descargado" : "Descargar");
-      download.setContentDescription(ready ? "Ver descarga" : label);
-      download.setCompoundDrawablesWithIntrinsicBounds(null, Ui.icon(ready ? Ui.Icon.CHECK : Ui.Icon.DOWNLOAD, Ui.FG, dp(24)), null, null);
-    };
-    paint.run();
-    download.setOnClickListener(v -> {
-      if (OfflineVideos.get(this, key) != null) {
-        startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
-        return;
-      }
-      if (!canStartDownload()) return;
-      if (!OfflineVideos.supports(entry.optString("url"))) { downloadNotice("La fuente de este título solo está disponible para ver en línea."); return; }
-      if (OfflineVideos.start(this, entry, message -> {
-        if (isFinishing() || isDestroyed()) return;
-        download.setEnabled(true);
-        paint.run();
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-      })) {
-        download.setEnabled(false);
-        if (!compact) download.setText("Descargando…");
-        download.setContentDescription("Descargando");
-      } else Toast.makeText(this, "Consulta el progreso en Mi Cuenta → Descargas.", Toast.LENGTH_SHORT).show();
-    });
-    return download;
-  }
-
-  private boolean canStartDownload() {
-    if (!contentAdmitted || OfflineVideos.disconnected(this)) { downloadNotice("Conéctate a Internet para descargar."); return false; }
-    if (!OfflineVideos.profileReady(this)) {
-      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Descargas")
-          .setMessage("Entra en Mi Cuenta y elige un perfil para guardar descargas.")
-          .setNegativeButton("Cancelar", null)
-          .setPositiveButton("Mi Cuenta", (dialog, which) -> startActivity(new Intent(this, AccountActivity.class))).create());
-      return false;
-    }
-    return true;
-  }
-
-  private void downloadNotice(String message) {
-    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-  }
-
-  private void downloadSeason(int season, List<JSONObject> entries) {
-    if (!canStartDownload()) return;
-    List<JSONObject> available = new ArrayList<>();
-    for (JSONObject entry : entries) if (OfflineVideos.supports(entry.optString("url"))) available.add(entry);
-    if (available.isEmpty()) { downloadNotice("Esta temporada aún no tiene capítulos disponibles para descargar."); return; }
-    List<JSONObject> pending = new ArrayList<>();
-    for (JSONObject entry : available) if (!OfflineVideos.queuedOrSaved(this, entry.optString("key"))) pending.add(entry);
-    if (pending.isEmpty()) { startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas")); return; }
-    String message = "Se añadirán " + (pending.size() == 1 ? "1 capítulo" : pending.size() + " capítulos") + " a Descargas.";
-    if (available.size() < entries.size()) message += " Algunos capítulos solo están disponibles en línea.";
-    showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Descargar temporada " + season).setMessage(message)
-        .setNegativeButton("Cancelar", null).setPositiveButton("Descargar", (dialog, which) -> {
-          if (!canStartDownload()) return;
-          for (JSONObject entry : pending) {
-            OfflineVideos.start(this, entry, text -> {
-              if (!"Guardado en Descargas.".equals(text) && !"Descarga cancelada.".equals(text)) downloadNotice(text);
-            });
-          }
-          startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
-        }).create());
   }
 
   /** The watched part of a film or episode, as a lime bar. */
@@ -2811,10 +2720,7 @@ public class MainActivity extends Activity {
     };
     refreshBadge.run();
     body.addView(badge);
-    if (e.available()) {
-      playButtons(body, item.entry(section, e));
-      body.addView(offlineButton(item.downloadEntry(section, e), "Descargar", false));
-    }
+    if (e.available()) playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
       Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
