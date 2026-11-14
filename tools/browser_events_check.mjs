@@ -698,8 +698,10 @@ try {
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector('.title-logo')?.naturalWidth > 0);
   assert.equal(await page.locator('.title-body h1').textContent(), '');
-  assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
+  assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · Ciencia ficción/);
+  await page.getByRole('tab', { name: 'Detalles' }).click();
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
+  await page.locator('.title-panel').getByText(/★ 7,6/).waitFor();
   // Simulate an iPhone media element that freezes at minute 15 without reporting an error.
   await page.evaluate(() => {
     const video = document.getElementById('video');

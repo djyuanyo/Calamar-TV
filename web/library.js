@@ -943,9 +943,11 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     return timer ? [trailerPlayer, controls] : [trailerPlayer];
   }]);
   tabs.push(['details', 'Detalles', () => [
+    info.rating ? el('p', { class: 'title-credit' }, `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}`) : null,
     starring,
     creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
     info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
+    !series ? soundNote(el, item.file, item.url) : null,
     ...extras.slice(1),
   ].filter(Boolean)]);
   const bar_ = el('div', { class: 'title-tabs', role: 'tablist' });
