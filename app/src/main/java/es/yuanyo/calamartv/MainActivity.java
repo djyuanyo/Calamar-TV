@@ -272,7 +272,17 @@ public class MainActivity extends Activity {
           }
         } catch (JSONException ignored) {}
       }
-      libraryDetail(titleSection, title);
+      int season = -1;
+      String episodeId = "";
+      if (getIntent().getData() != null && getIntent().getData().isHierarchical()) {
+        Uri data = getIntent().getData();
+        try { season = Integer.parseInt(data.getQueryParameter("temporada")); } catch (NumberFormatException ignored) {}
+        String requested = data.getQueryParameter("capitulo");
+        if (requested != null) episodeId = requested;
+      }
+      Library.Episode episode = title.series ? title.episode(episodeId) : null;
+      if (episode != null && episode.available()) episodePage(titleSection, title, episode);
+      else libraryDetail(titleSection, title, season);
     }
     else if (destination != null) { mode = destination; home(); }
     else if (selected.event && MatchScores.expired(selected.matchId, System.currentTimeMillis())) {
@@ -2144,10 +2154,15 @@ public class MainActivity extends Activity {
    */
 
   void libraryDetail(final String section, final Library.Item item) {
+    libraryDetail(section, item, -1);
+  }
+
+  private void libraryDetail(final String section, final Library.Item item, int initialSeason) {
     if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
-    scroll.setBackgroundColor(0xff000000);
+    final int surface = 0xff17171c;
+    scroll.setBackgroundColor(surface);
     final LinearLayout page = new LinearLayout(this);
     page.setOrientation(LinearLayout.VERTICAL);
     page.setPadding(0, 0, 0, dp(28));
@@ -2163,7 +2178,7 @@ public class MainActivity extends Activity {
       image(backdrop, picture);
     }
     View scrim = new View(this);
-    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
+    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {surface, 0x0017171c, 0x0017171c, 0x66000000}));
     hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
     Button back = Ui.pill(this, "‹", Ui.Kind.SURFACE, true);
     back.setContentDescription("Volver");
@@ -2172,12 +2187,14 @@ public class MainActivity extends Activity {
     bp.setMargins(dp(gutter()), dp(12), 0, 0);
     hero.addView(back, bp);
     int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
-    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.min(wide() ? 420 : 300, screen * 9 / 16))));
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? Math.min(420, screen * 9 / 16) : Math.min(430, screen * 3 / 4))));
 
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(LinearLayout.VERTICAL);
     body.setPadding(dp(gutter() + 4), dp(4), dp(gutter() + 4), 0);
-    page.addView(body);
+    LinearLayout.LayoutParams bodySize = new LinearLayout.LayoutParams(-1, -2);
+    bodySize.topMargin = -dp(26);
+    page.addView(body, bodySize);
     if (!item.providers.isEmpty()) {
       String name = item.providers.get(0), logo = item.logos.get(name);
       JSONArray platforms = custom == null ? null : custom.optJSONArray("platforms");
@@ -2190,12 +2207,14 @@ public class MainActivity extends Activity {
         brand.setContentDescription(name);
         brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams logoSize = new LinearLayout.LayoutParams(dp(64), dp(64));
-        logoSize.setMargins(0, 0, 0, dp(8));
+        logoSize.gravity = Gravity.CENTER_HORIZONTAL;
+        logoSize.height = dp(38);
         body.addView(brand, logoSize); image(brand, logo);
-      } else body.addView(noPad(label(name, 18, 0xffe50914)));
+      }
     }
     TextView title = text(item.title, wide() ? 36 : 30);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(Gravity.CENTER);
     title.setPadding(0, 0, 0, dp(4));
     body.addView(title);
     if (!item.titleLogo.isEmpty()) {
@@ -2208,16 +2227,23 @@ public class MainActivity extends Activity {
         }
       };
       titleArt.setContentDescription(item.title);
-      titleArt.setScaleType(ImageView.ScaleType.FIT_START);
+      titleArt.setScaleType(ImageView.ScaleType.FIT_CENTER);
       titleArt.setVisibility(View.GONE);
       body.addView(titleArt, new LinearLayout.LayoutParams(-1, dp(wide() ? 104 : 80)));
       image(titleArt, item.titleLogo);
     }
     String facts = item.facts();
-    if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
+    String genres = String.join(", ", item.genres.subList(0, Math.min(2, item.genres.size())));
+    String metadata = genres.isEmpty() ? facts : facts.isEmpty() ? genres : facts + " · " + genres;
+    if (!metadata.isEmpty()) {
+      TextView factsView = noPad(label(metadata, 15, 0xffe7e7eb));
+      factsView.setGravity(Gravity.CENTER);
+      body.addView(factsView);
+    }
     String premiere = item.series ? item.premiereNotice(Library.madridDay(System.currentTimeMillis())) : "";
     if (!premiere.isEmpty()) {
       TextView note = label(premiere, 15, 0xffffd284);
+      note.setGravity(Gravity.CENTER);
       note.setPadding(0, dp(10), 0, dp(4));
       body.addView(note);
     }
@@ -2260,8 +2286,15 @@ public class MainActivity extends Activity {
         body.addView(restart, rp);
         body.addView(progressBar(saved), progressBarParams(dp(4)));
       }
-      addOfflineButton(body, entry);
     }
+    LinearLayout quickActions = row();
+    quickActions.setGravity(Gravity.CENTER);
+    LinearLayout.LayoutParams actionsSize = new LinearLayout.LayoutParams(-1, -2);
+    actionsSize.topMargin = dp(15);
+    body.addView(quickActions, actionsSize);
+    LinearLayout details = new LinearLayout(this);
+    details.setOrientation(LinearLayout.VERTICAL);
+    if (!metadata.isEmpty()) details.addView(label(metadata, 15, MUTED));
     if (!item.overview.isEmpty()) {
       TextView overview = label(item.overview, 16, 0xffffffff);
       overview.setPadding(0, dp(14), 0, dp(8));
@@ -2282,18 +2315,18 @@ public class MainActivity extends Activity {
         starring.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 6, 0));
         starring.setOnClickListener(v -> { all[0] = true; drawCast.run(); });
       }
-      body.addView(noPad(starring));
+      details.addView(noPad(starring));
     }
     if (!item.creators.isEmpty())
-      body.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
-    if (!item.genres.isEmpty()) body.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
+      details.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
+    if (!item.genres.isEmpty()) details.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
     // «Mi lista», «Me gusta» and «No me gusta» of the profile watching (in this device without an account).
     final String titlePage = Library.page(section);
     LinearLayout mine = row();
-    final Button listButton = Ui.pill(this, "", Ui.Kind.SURFACE, true), up = Ui.pill(this, "", Ui.Kind.SURFACE, true), down = Ui.pill(this, "", Ui.Kind.SURFACE, true);
+    final Button listButton = titleAction("Mi lista", Ui.Icon.ADD), up = Ui.pill(this, "", Ui.Kind.SURFACE, true), down = Ui.pill(this, "", Ui.Kind.SURFACE, true);
     final Runnable paintMine = () -> {
       JSONObject data = Profiles.data();
-      listButton.setText(ProfileData.inList(data, titlePage, item.id) ? "✓  En mi lista" : "+  Mi lista");
+      listButton.setText(ProfileData.inList(data, titlePage, item.id) ? "En mi lista" : "Mi lista");
       int rating = ProfileData.rating(data, titlePage, item.id);
       up.setText(rating > 0 ? "👍  Te gusta" : "👍  Me gusta");
       down.setText(rating < 0 ? "👎  No te gusta" : "👎  No me gusta");
@@ -2302,7 +2335,7 @@ public class MainActivity extends Activity {
     listButton.setOnClickListener(v -> { Profiles.toggleList(this, titlePage, item.id); paintMine.run(); });
     up.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, 1); paintMine.run(); });
     down.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, -1); paintMine.run(); });
-    for (Button b : new Button[] {listButton, up, down}) {
+    for (Button b : new Button[] {up, down}) {
       LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, dp(44));
       mp.setMargins(0, dp(12), dp(8), 0);
       mine.addView(b, mp);
@@ -2310,17 +2343,22 @@ public class MainActivity extends Activity {
     HorizontalScrollView mineScroll = new HorizontalScrollView(this);
     mineScroll.setHorizontalScrollBarEnabled(false);
     mineScroll.addView(mine);
-    body.addView(mineScroll);
-    Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
+    details.addView(mineScroll);
+    Button share = titleAction("", Ui.Icon.SHARE);
+    share.setContentDescription("Compartir");
     share.setOnClickListener(v -> {
       Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
           .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/" + Library.page(section) + "/" + Uri.encode(item.id) + "/");
       try { startActivity(Intent.createChooser(send, "Compartir")); }
       catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });
-    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
-    sp.setMargins(0, dp(12), 0, dp(6));
-    body.addView(share, sp);
+    FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.END);
+    sp.setMargins(0, dp(12), dp(gutter()), 0);
+    hero.addView(share, sp);
+    Button trailerAction = titleAction("Tráiler", Ui.Icon.FILM);
+    if (!item.trailer.isEmpty()) quickActions.addView(trailerAction);
+    quickActions.addView(listButton);
+    if (!item.series) quickActions.addView(offlineButton(item.downloadEntry(section, null), "Descargar", false));
 
     // The tabs.
     final LinearLayout tabs = row();
@@ -2328,28 +2366,29 @@ public class MainActivity extends Activity {
     panel.setOrientation(LinearLayout.VERTICAL);
     final List<String> tabNames = new ArrayList<>();
     if (item.series) tabNames.add("Episodios");
-    tabNames.add("Tráileres y más");
-    tabNames.add("Similares");
+    tabNames.add("Sugerencias");
+    tabNames.add("Extras");
+    tabNames.add("Detalles");
     final Runnable[] open = new Runnable[1];
-    final String[] chosen = {item.series ? "Episodios" : "Similares"};
-    final int[] selectedSeason = {-1};
+    final String[] chosen = {item.series ? "Episodios" : "Sugerencias"};
+    final int[] selectedSeason = {initialSeason};
     final Runnable[] refreshEpisodes = {() -> {}};
     open[0] = () -> {
       tabs.removeAllViews();
       for (final String name : tabNames) {
-        // The open tab has a red bar on top, as on Netflix.
+        // The selected tab is underlined.
         LinearLayout tab = new LinearLayout(this);
         tab.setOrientation(LinearLayout.VERTICAL);
         tab.setFocusable(true);
         tab.setClickable(true);
         tab.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 4, 0));
         View bar = new View(this);
-        bar.setBackgroundColor(name.equals(chosen[0]) ? 0xffe50914 : 0x00000000);
-        tab.addView(bar, new LinearLayout.LayoutParams(-1, dp(4)));
+        bar.setBackgroundColor(name.equals(chosen[0]) ? 0xffffffff : 0x00000000);
         TextView text = label(name, 16, name.equals(chosen[0]) ? 0xffffffff : 0xffb3b8c0);
         text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         text.setPadding(dp(4), dp(12), dp(4), dp(10));
         tab.addView(text);
+        tab.addView(bar, new LinearLayout.LayoutParams(-1, dp(3)));
         tab.setContentDescription(name + (name.equals(chosen[0]) ? ", seleccionada" : ""));
         tab.setOnClickListener(v -> { chosen[0] = name; open[0].run(); });
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
@@ -2359,9 +2398,15 @@ public class MainActivity extends Activity {
       panel.removeAllViews();
       refreshEpisodes[0] = () -> {};
       if (chosen[0].equals("Episodios")) refreshEpisodes[0] = episodesTab(panel, section, item, episodeHistory, selectedSeason);
-      else if (chosen[0].equals("Tráileres y más")) trailerTab(panel, item);
+      else if (chosen[0].equals("Extras")) trailerTab(panel, item);
+      else if (chosen[0].equals("Detalles")) panel.addView(details);
       else similarTab(panel, section, item, dialog);
     };
+    trailerAction.setOnClickListener(v -> {
+      chosen[0] = "Extras";
+      open[0].run();
+      panel.post(() -> scroll.smoothScrollTo(0, body.getTop() + tabs.getTop()));
+    });
     open[0].run();
     View line = new View(this);
     line.setBackgroundColor(0x33ffffff);
@@ -2377,7 +2422,7 @@ public class MainActivity extends Activity {
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
     showContentDialog(dialog);
     if (episodeHistory != null) observeEpisodeHistory(dialog, episodeHistory, () -> { refreshPlay.run(); refreshEpisodes[0].run(); });
-    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
+    dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(surface));
     dialog.getWindow().setLayout(-1, -1);
   }
 
@@ -2395,7 +2440,7 @@ public class MainActivity extends Activity {
     play.setTextSize(18);
     play.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     play.setTextColor(0xff111111);
-    play.setBackground(Ui.focusFill(this, 0xffffffff, 0xffdddddd, Ui.ACC, 6, 0));
+    play.setBackground(Ui.focusFill(this, 0xffffffff, 0xffdddddd, Ui.ACC, 999, 0));
     play.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, 0xff111111, dp(20)), null, null, null);
     play.setCompoundDrawablePadding(dp(8));
     play.setPadding(dp(16), dp(10), dp(16), dp(10));
@@ -2417,6 +2462,7 @@ public class MainActivity extends Activity {
     final Map<Integer, List<Library.Episode>> seasons = item.seasons();
     if (seasons.isEmpty()) return () -> {};
     final Button picker = Ui.pill(this, "", Ui.Kind.SURFACE, false);
+    final Button downloadSeason = titleAction("Temporada", Ui.Icon.DOWNLOAD);
     final LinearLayout episodes = new LinearLayout(this);
     episodes.setOrientation(LinearLayout.VERTICAL);
     final Runnable draw = () -> {
@@ -2424,8 +2470,15 @@ public class MainActivity extends Activity {
       int selected = seasons.containsKey(selectedSeason[0]) ? selectedSeason[0] : Library.defaultSeason(item, progress, seen);
       if (!seasons.containsKey(selected)) selected = seasons.keySet().iterator().next();
       picker.setText("Temporada " + selected + "  ▾");
+      final List<JSONObject> entries = new ArrayList<>();
       episodes.removeAllViews();
-      for (Library.Episode e : seasons.get(selected)) episodes.addView(episodeRow(section, item, e, progress, seen));
+      for (Library.Episode e : seasons.get(selected)) {
+        episodes.addView(episodeRow(section, item, e, progress, seen));
+        if (e.available()) entries.add(item.downloadEntry(section, e));
+      }
+      final int season = selected;
+      downloadSeason.setContentDescription("Descargar temporada " + selected);
+      downloadSeason.setOnClickListener(v -> downloadSeason(season, entries));
     };
     picker.setOnClickListener(v -> {
       final List<Integer> numbers = new ArrayList<>(seasons.keySet());
@@ -2434,9 +2487,13 @@ public class MainActivity extends Activity {
       showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { selectedSeason[0] = numbers.get(which); draw.run(); }).create());
     });
     draw.run();
-    LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
+    LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, -2);
     pp.setMargins(0, dp(10), 0, dp(10));
-    panel.addView(picker, pp);
+    LinearLayout controls = row();
+    controls.setGravity(Gravity.CENTER_VERTICAL);
+    controls.addView(picker, new LinearLayout.LayoutParams(0, dp(50), 1));
+    controls.addView(downloadSeason, new LinearLayout.LayoutParams(-2, -2));
+    panel.addView(controls, pp);
     panel.addView(episodes);
     return draw;
   }
@@ -2523,7 +2580,7 @@ public class MainActivity extends Activity {
         still.addView(progressBar(saved), barSize);
       }
     }
-    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 140), dp(wide() ? 112 : 79)));
+    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 110), dp(wide() ? 112 : 62)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
     texts.setGravity(Gravity.CENTER_VERTICAL);
@@ -2546,6 +2603,8 @@ public class MainActivity extends Activity {
       texts.addView(minutes);
     }
     r.addView(texts, new LinearLayout.LayoutParams(0, -1, 1));
+    if (!upcoming) r.addView(offlineButton(item.downloadEntry(section, e), "Descargar " + e.label().toLowerCase(Locale.ROOT), true),
+        new LinearLayout.LayoutParams(dp(44), dp(48)));
     box.addView(r);
     if (!e.overview.isEmpty()) {
       TextView about = label(e.overview, 14, 0xffb3b8c0);
@@ -2594,36 +2653,88 @@ public class MainActivity extends Activity {
     scroll.addView(actions);
     parent.addView(scroll);
     if (saved != null) parent.addView(progressBar(saved), progressBarParams(dp(4)));
-    addOfflineButton(parent, entry);
     watch.requestFocus();
   }
 
-  private void addOfflineButton(LinearLayout parent, JSONObject entry) {
-    if (Profiles.active() == null || !OfflineVideos.supports(entry.optString("url"))) return;
+  private Button titleAction(String label, Ui.Icon icon) {
+    Button button = Ui.pill(this, label, Ui.Kind.GHOST, true);
+    button.setMinWidth(dp(44));
+    button.setMinimumWidth(dp(44));
+    button.setMinHeight(dp(48));
+    button.setMinimumHeight(dp(48));
+    button.setPadding(dp(7), dp(5), dp(7), dp(5));
+    button.setCompoundDrawablesWithIntrinsicBounds(null, Ui.icon(icon, Ui.FG, dp(24)), null, null);
+    button.setCompoundDrawablePadding(dp(5));
+    return button;
+  }
+
+  private Button offlineButton(JSONObject entry, String label, boolean compact) {
     String key = entry.optString("key");
-    Button download = Ui.pill(this, OfflineVideos.get(this, key) == null ? "↓ Descargar" : "✓ Descargado", Ui.Kind.SURFACE, true);
+    Button download = titleAction("", Ui.Icon.DOWNLOAD);
+    Runnable paint = () -> {
+      boolean ready = OfflineVideos.get(this, key) != null;
+      download.setText(compact ? "" : ready ? "Descargado" : "Descargar");
+      download.setContentDescription(ready ? "Ver descarga" : label);
+      download.setCompoundDrawablesWithIntrinsicBounds(null, Ui.icon(ready ? Ui.Icon.CHECK : Ui.Icon.DOWNLOAD, Ui.FG, dp(24)), null, null);
+    };
+    paint.run();
     download.setOnClickListener(v -> {
       if (OfflineVideos.get(this, key) != null) {
         startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
         return;
       }
-      if (!contentAdmitted || OfflineVideos.disconnected(this)) {
-        Toast.makeText(this, "Conéctate a Internet para descargar.", Toast.LENGTH_SHORT).show();
-        return;
-      }
+      if (!canStartDownload()) return;
+      if (!OfflineVideos.supports(entry.optString("url"))) { downloadNotice("La fuente de este título solo está disponible para ver en línea."); return; }
       if (OfflineVideos.start(this, entry, message -> {
         if (isFinishing() || isDestroyed()) return;
         download.setEnabled(true);
-        download.setText(OfflineVideos.get(this, key) == null ? "↓ Descargar" : "✓ Descargado");
+        paint.run();
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
       })) {
         download.setEnabled(false);
-        download.setText("Descargando…");
+        if (!compact) download.setText("Descargando…");
+        download.setContentDescription("Descargando");
       } else Toast.makeText(this, "Consulta el progreso en Mi Cuenta → Descargas.", Toast.LENGTH_SHORT).show();
     });
-    LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(-2, -2);
-    margin.topMargin = dp(8);
-    parent.addView(download, margin);
+    return download;
+  }
+
+  private boolean canStartDownload() {
+    if (!contentAdmitted || OfflineVideos.disconnected(this)) { downloadNotice("Conéctate a Internet para descargar."); return false; }
+    if (!OfflineVideos.profileReady(this)) {
+      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Descargas")
+          .setMessage("Entra en Mi Cuenta y elige un perfil para guardar descargas.")
+          .setNegativeButton("Cancelar", null)
+          .setPositiveButton("Mi Cuenta", (dialog, which) -> startActivity(new Intent(this, AccountActivity.class))).create());
+      return false;
+    }
+    return true;
+  }
+
+  private void downloadNotice(String message) {
+    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+  }
+
+  private void downloadSeason(int season, List<JSONObject> entries) {
+    if (!canStartDownload()) return;
+    List<JSONObject> available = new ArrayList<>();
+    for (JSONObject entry : entries) if (OfflineVideos.supports(entry.optString("url"))) available.add(entry);
+    if (available.isEmpty()) { downloadNotice("Esta temporada aún no tiene capítulos disponibles para descargar."); return; }
+    List<JSONObject> pending = new ArrayList<>();
+    for (JSONObject entry : available) if (!OfflineVideos.queuedOrSaved(this, entry.optString("key"))) pending.add(entry);
+    if (pending.isEmpty()) { startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas")); return; }
+    String message = "Se añadirán " + (pending.size() == 1 ? "1 capítulo" : pending.size() + " capítulos") + " a Descargas.";
+    if (available.size() < entries.size()) message += " Algunos capítulos solo están disponibles en línea.";
+    showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Descargar temporada " + season).setMessage(message)
+        .setNegativeButton("Cancelar", null).setPositiveButton("Descargar", (dialog, which) -> {
+          if (!canStartDownload()) return;
+          for (JSONObject entry : pending) {
+            OfflineVideos.start(this, entry, text -> {
+              if (!"Guardado en Descargas.".equals(text) && !"Descarga cancelada.".equals(text)) downloadNotice(text);
+            });
+          }
+          startActivity(new Intent(this, AccountActivity.class).putExtra("editing", "descargas"));
+        }).create());
   }
 
   /** The watched part of a film or episode, as a lime bar. */
@@ -2700,7 +2811,10 @@ public class MainActivity extends Activity {
     };
     refreshBadge.run();
     body.addView(badge);
-    if (e.available()) playButtons(body, item.entry(section, e));
+    if (e.available()) {
+      playButtons(body, item.entry(section, e));
+      body.addView(offlineButton(item.downloadEntry(section, e), "Descargar", false));
+    }
     final Library.Episode next = item.next(e);
     if (next != null) {
       Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);

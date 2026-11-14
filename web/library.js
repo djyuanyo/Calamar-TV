@@ -15,6 +15,7 @@ import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
 import { playbackTimer } from './sleep-timer.js';
+import { APK_DOWNLOAD, androidTitleDownload } from './app-links.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -858,7 +859,7 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   const seasons = [...new Set(episodes.map(e => e.season))];
   let chosen = seasons.includes(initialSeason) ? initialSeason : defaultEpisodeSeason(item, saved, history);
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
-    info.rating ? `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}` : ''].filter(Boolean).join(' · ');
+    (info.genres || []).slice(0, 2).join(', ')].filter(Boolean).join(' · ');
   const brand = (info.providers || [])[0];
   // «Reproducir»: the film, or the episode of the series left half watched most recently (else the first).
   let action;
@@ -878,13 +879,17 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     starring.append('… ', more);
   }
   const creators = (info.creators || []).filter(Boolean);
-  const share = el('button', { class: 'title-action', type: 'button', onclick: async () => {
+  const share = el('button', { class: 'title-share', type: 'button', 'aria-label': 'Compartir', onclick: async () => {
     const url = new URL(`${section.page}/${encodeURIComponent(item.id)}/`, new URL('./', location.href)).href;
-    try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.lastChild.textContent = 'Enlace copiado'; } } catch {}
-  } }, el('span', { 'aria-hidden': 'true' }, '⤴'), el('span', {}, 'Compartir'));
+    try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.setAttribute('aria-label', 'Enlace copiado'); } } catch {}
+  } }, '⤴');
+  const trailerButton = trailer ? el('button', { class: 'title-action', type: 'button', onclick: () => {
+    open('trailers');
+    panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  } }, el('span', { 'aria-hidden': 'true' }, '▣'), el('span', {}, 'Tráiler')) : null;
   const head = el('section', { class: 'title-page' },
     el('div', { class: 'title-backdrop' }, info.backdrop ? el('img', { src: info.backdrop, alt: '', referrerpolicy: 'no-referrer' }) : poster(el, item, 'library-poster'),
-      el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹')),
+      el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹'), share),
     el('div', { class: 'title-body' },
       brand ? el('p', { class: 'title-brand' }, info.logos?.[brand] ? el('img', { class: 'title-platform-logo', src: info.logos[brand], alt: brand, referrerpolicy: 'no-referrer', onerror: (event) => { event.target.replaceWith(brand); } }) : brand) : null,
       el('h1', {}, info.titleLogo ? el('img', { class: 'title-logo', src: info.titleLogo, alt: title, referrerpolicy: 'no-referrer',
@@ -895,12 +900,9 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
         : premiere.aired === today
           ? [el('strong', {}, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))), ` · T${premiere.season}:E${premiere.episode}`]
           : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))])) : null,
-      action, !series ? soundNote(el, item.file, item.url) : null,
-      overview ? el('p', { class: 'library-overview' }, overview) : null,
-      starring,
-      creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
-      info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
-      el('div', { class: 'title-actions' }, ...extras, share)));
+      action,
+      el('div', { class: 'title-actions' }, trailerButton, extras[0], !series ? titleDownload(el, section, item) : null),
+      overview ? el('p', { class: 'library-overview' }, overview) : null));
   // The tabs.
   const panel = el('div', { class: 'title-panel' });
   const tabs = [];
@@ -911,18 +913,27 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
       const upcoming = !episodeAvailable(e, today), watched = !upcoming && watchedEpisode(history, e);
       const badge = episodePremiereBadge(el, e, today);
-      return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
+      const episode = el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
         el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
           upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
         el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge,
           watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
         e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null);
+      return upcoming ? episode : el('div', { class: 'episode-with-download' }, episode, titleDownload(el, section, item, e));
     }));
-    picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
+    const seasonAction = el('div', { class: 'season-download' });
+    const drawSeasonDownload = () => seasonAction.replaceChildren(...(chosen != null && episodes.some(e => e.season === chosen && episodeAvailable(e, today))
+      ? [titleDownload(el, section, item, null, chosen)] : []));
+    picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); drawSeasonDownload(); });
     draw();
-    return [el('label', { class: 'browse-select season-select' }, picker), list];
+    drawSeasonDownload();
+    return [el('div', { class: 'season-toolbar' }, el('label', { class: 'browse-select season-select' }, picker), seasonAction), list];
   }]);
-  tabs.push(['trailers', 'Tráileres y más', () => {
+  tabs.push(['similar', 'Sugerencias', () => {
+    const found = similarTitles(library, section, item);
+    return found.length ? [el('div', { class: 'poster-grid similar-grid' }, found.map((other) => browseCard(el, section, other)))] : [el('p', { class: 'status' }, 'Todavía no hay títulos parecidos.')];
+  }]);
+  tabs.push(['trailers', 'Extras', () => {
     if (!trailer) return [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')];
     const frame = el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
       allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' });
@@ -931,10 +942,12 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     const trailerPlayer = el('div', { class: 'title-trailer' }, frame);
     return timer ? [trailerPlayer, controls] : [trailerPlayer];
   }]);
-  tabs.push(['similar', 'Similares', () => {
-    const found = similarTitles(library, section, item);
-    return found.length ? [el('div', { class: 'poster-grid similar-grid' }, found.map((other) => browseCard(el, section, other)))] : [el('p', { class: 'status' }, 'Todavía no hay títulos parecidos.')];
-  }]);
+  tabs.push(['details', 'Detalles', () => [
+    starring,
+    creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
+    info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
+    ...extras.slice(1),
+  ].filter(Boolean)]);
   const bar_ = el('div', { class: 'title-tabs', role: 'tablist' });
   const open = (key) => {
     for (const b of bar_.children) b.setAttribute('aria-selected', String(b.dataset.tab === key));
@@ -943,6 +956,21 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   for (const [key, label] of tabs) bar_.append(el('button', { class: 'title-tab', type: 'button', role: 'tab', 'data-tab': key, onclick: () => open(key) }, label));
   open(series ? 'episodes' : 'similar');
   return [head, bar_, panel];
+}
+
+function titleDownload(el, section, item, episode = null, season = '') {
+  const label = episode ? `Descargar capítulo ${episode.episode}` : season ? `Descargar temporada ${season}` : 'Descargar';
+  return el('button', { type: 'button', class: `title-action${episode ? ' episode-download' : ''}`, 'aria-label': label, onclick: () => {
+    const android = /\bAndroid\b/i.test(navigator.userAgent);
+    const href = android ? androidTitleDownload(section.page, item.id, episode?.id, season) : APK_DOWNLOAD;
+    const dialog = el('dialog', { class: 'credits-dialog' }, el('h2', {}, label),
+      el('p', {}, 'Guarda el vídeo dentro de la app de Calamar TV para verlo sin conexión.'),
+      el('a', { class: 'btn', href }, android ? 'Abrir en Calamar TV' : 'Descargar la app Android'),
+      el('form', { method: 'dialog' }, el('button', { class: 'btn secondary', autofocus: true }, 'Cerrar')));
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  } }, el('span', { 'aria-hidden': 'true' }, '⤓'), episode ? null : el('span', {}, season ? 'Temporada' : 'Descargar'));
 }
 
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
@@ -975,6 +1003,7 @@ export function libraryEpisode(el, section, item, episode, play, saved = () => n
       episodePremiereBadge(el, episode, today),
       !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
       upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
+      upcoming ? null : titleDownload(el, section, item, episode),
       next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null))];
 }
 

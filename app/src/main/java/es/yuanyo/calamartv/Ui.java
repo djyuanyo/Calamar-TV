@@ -220,7 +220,11 @@ final class Ui {
     PROFILE,
     SHARE,
     MULTI,
-    TIMER
+    TIMER,
+    DOWNLOAD,
+    ADD,
+    CHECK,
+    FILM
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -267,6 +271,24 @@ final class Ui {
         paint.setStyle(Paint.Style.FILL_AND_STROKE);
         paint.setStrokeWidth(2.2f);
         paint.setStrokeCap(Paint.Cap.ROUND);
+      } else if (icon == Icon.DOWNLOAD || icon == Icon.ADD || icon == Icon.CHECK || icon == Icon.FILM) {
+        if (icon == Icon.DOWNLOAD) {
+          path.moveTo(12, 3); path.lineTo(12, 15);
+          path.moveTo(6, 10); path.lineTo(12, 16); path.lineTo(18, 10);
+          path.moveTo(4, 21); path.lineTo(20, 21);
+        } else if (icon == Icon.ADD) {
+          path.moveTo(12, 4); path.lineTo(12, 20);
+          path.moveTo(4, 12); path.lineTo(20, 12);
+        } else if (icon == Icon.CHECK) {
+          path.moveTo(4, 12); path.lineTo(9, 17); path.lineTo(20, 6);
+        } else {
+          path.addRoundRect(3, 5, 21, 19, 2, 2, Path.Direction.CW);
+          path.moveTo(10, 9); path.lineTo(15, 12); path.lineTo(10, 15); path.close();
+        }
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
       } else if (icon == Icon.PROFILE) {
         path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);
         path.moveTo(5f, 20f);

@@ -2,6 +2,15 @@
 export const APK_DOWNLOAD = 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk';
 export const TIZEN_DOWNLOAD = 'downloads/Calamar-TV-Tizen.wgt';
 
+export function androidTitleDownload(section, id, chapter = '', season = '') {
+  const query = new URLSearchParams();
+  if (chapter) query.set('capitulo', chapter);
+  else if (season) query.set('temporada', season);
+  const path = `/Calamar-TV/${section}/${encodeURIComponent(id)}/`;
+  const address = path + (query.size ? '?' + query : '');
+  return `intent://djyuanyo.github.io${address}#Intent;scheme=https;package=es.yuanyo.calamartv;S.browser_fallback_url=${encodeURIComponent(APK_DOWNLOAD)};end`;
+}
+
 export function isSamsungTizen(userAgent = '') {
   return /\bTizen\b/i.test(userAgent) && /\b(?:Smart[- ]?TV|TV Safari)\b/i.test(userAgent)
     && !/\b(?:Android|Mobile)\b/i.test(userAgent);

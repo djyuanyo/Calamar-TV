@@ -683,6 +683,9 @@ try {
     };
   });
   await page.locator('.poster-card', { hasText: 'Torrente' }).first().click();
+  await page.getByRole('button', { name: 'Descargar', exact: true }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Descargar la app Android' }).waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).click();
   assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
@@ -750,9 +753,11 @@ try {
   await page.waitForFunction(() => document.querySelector('.title-body h1')?.textContent === 'Los hombres de Paco');
   assert.equal(await page.getByLabel('Temporada', { exact: true }).inputValue(), '10');
   await page.getByRole('button', { name: '▶ Reproducir T10:E1', exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'Tráileres y más' }).click();
+  await page.getByRole('button', { name: 'Descargar temporada 10' }).waitFor();
+  await page.getByRole('button', { name: 'Descargar capítulo 1' }).waitFor();
+  await page.getByRole('tab', { name: 'Extras' }).click();
   await page.getByText('Este título no tiene tráiler en español.').waitFor();
-  await page.getByRole('tab', { name: 'Similares' }).click();
+  await page.getByRole('tab', { name: 'Sugerencias' }).click();
   await page.getByRole('tab', { name: 'Episodios' }).click();
   // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
   assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');

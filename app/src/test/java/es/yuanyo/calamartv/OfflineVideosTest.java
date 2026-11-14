@@ -21,6 +21,7 @@ public class OfflineVideosTest {
     assertFalse(OfflineVideos.supports(drive + "&hls=1"));
     assertFalse(OfflineVideos.supports("https://calamarmenciano.com/video/file.m3u8"));
     assertFalse(OfflineVideos.supports("https://luluvido.com/example"));
+    assertEquals(drive, OfflineVideos.source("https://luluvido.com/example", new org.json.JSONArray().put(drive)));
   }
 
   @Test public void publishesOnlyACompleteLocalCopyAndOmitsTheOriginalLink() throws Exception {

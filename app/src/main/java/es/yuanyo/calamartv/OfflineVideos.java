@@ -87,6 +87,13 @@ final class OfflineVideos {
     return root == null || key == null || key.isEmpty() ? null : new File(root, hash(key));
   }
 
+  static boolean profileReady(Context context) { return directory(context) != null; }
+
+  static boolean queuedOrSaved(Context context, String key) {
+    File dest = folder(context, key);
+    return dest != null && (transfers.containsKey(dest) || read(dest) != null);
+  }
+
   static boolean supports(String address) {
     if (!Library.Media.allowed(address)) return false;
     URI uri = URI.create(address);
@@ -97,6 +104,15 @@ final class OfflineVideos {
         && !java.util.Arrays.stream(uri.getRawQuery().split("&")).anyMatch(part -> part.startsWith("hls="));
     return ("calamarmenciano.com".equalsIgnoreCase(uri.getHost()) || "www.calamarmenciano.com".equalsIgnoreCase(uri.getHost()))
         && path.toLowerCase(Locale.ROOT).matches(".*\\.(mp4|m4v|mkv|webm|mov|avi|mpg|mpeg)$");
+  }
+
+  static String source(String primary, org.json.JSONArray mirrors) {
+    if (supports(primary)) return primary;
+    if (mirrors != null) for (int i = 0; i < mirrors.length(); i++) {
+      String candidate = mirrors.optString(i);
+      if (supports(candidate)) return candidate;
+    }
+    return "";
   }
 
   static final class Saved {
