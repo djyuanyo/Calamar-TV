@@ -448,8 +448,9 @@ export function browseRows(section, items, { now = Date.now(), watchedIds = [], 
   const topTitle = section.key === 'documentaries' ? documentaryTopTitle(top.length)
     : top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`;
   add('top', topTitle, top, 'top');
-  // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
-  genre(GENRE_ROWS.terror, 'horror');
+  // Movies offer horror through the category picker without a dedicated row.
+  if (section.key === 'movies') GENRE_ROWS.terror.genres.forEach(g => used.add(g));
+  else genre(GENRE_ROWS.terror, 'horror');
   // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
   add('new', 'Novedades en Calamar TV', freshTitles(items, now), 'big');
   add('continue', name ? `Seguir viendo para ${name}` : 'Seguir viendo', [], 'continue');

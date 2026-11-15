@@ -426,7 +426,7 @@ try {
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
     movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched', trend: 1,
       tmdb: { title: 'Avatar', titleLogo: 'https://image.tmdb.org/t/p/w500/TestAvatar.png', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
-      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia', 'Terror'] } }],
     series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', titleLogo: 'https://image.tmdb.org/t/p/w500/NoSuchLogo.png', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
@@ -657,6 +657,10 @@ try {
   // Netflix-style rows without filters: today's picks and the genre rows, under «Todas las categorías».
   await page.getByRole('heading', { name: 'Recomendaciones de hoy para ti', exact: true }).waitFor();
   assert.ok(await page.locator('.browse-rail').count() > 0);
+  assert.equal(await page.getByText('Colección de terror', { exact: true }).count(), 0);
+  await page.getByLabel('Categoría', { exact: true }).selectOption('Terror');
+  assert.deepEqual(await page.locator('.poster-card .name').allTextContents(), ['Torrente']);
+  await page.getByLabel('Categoría', { exact: true }).selectOption('');
   await page.locator('.top-rail').waitFor();
   assert.equal(await page.getByText('Según TMDB', { exact: true }).count(), 0);
   assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);

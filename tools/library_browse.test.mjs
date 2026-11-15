@@ -16,7 +16,7 @@ test('a section page is a stack of Netflix-style rows in a fixed order', () => {
   ];
   const rows = browseRows(movies, items, { now, name: 'Yuanyo' });
   assert.deepEqual(rows.map((r) => r.title), ['Películas españolas', 'Recomendaciones de hoy para ti', 'Las 2 películas más populares de la semana',
-    'Películas de terror', 'Novedades en Calamar TV', 'Seguir viendo para Yuanyo', 'Ciencia ficción y fantasía', '¿Quieres echarte unas risas?',
+    'Novedades en Calamar TV', 'Seguir viendo para Yuanyo', 'Ciencia ficción y fantasía', '¿Quieres echarte unas risas?',
     'Acción a tope', 'Misterios por resolver', 'Películas de western']);
   const by = Object.fromEntries(rows.map((r) => [r.key, r]));
   assert.deepEqual(by.top.items.map((i) => i.id), ['weapons', 'torrente']);
