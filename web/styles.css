@@ -561,6 +561,16 @@ main { flex: 1; padding: 0 var(--gutter) 64px; outline: none; max-width: 1760px;
 .linkish { position: relative; display: block; width: 100%; text-align: left; background: none; border: 0; padding: 2px 6px; color: inherit; font: inherit; cursor: pointer; border-radius: 6px; isolation: isolate; }
 .linkish .share { position: absolute; inset: 0 auto 0 0; width: var(--w); background: rgba(214, 255, 0, 0.12); border-radius: 6px; z-index: -1; }
 .linkish:hover { text-decoration: underline; }
+.stats-viewers-dialog {
+  width: min(540px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 20px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.stats-viewers-dialog::backdrop { background: #000a; }
+.stats-viewers-dialog h2 { margin: 0 0 8px; }
+.stats-viewers-dialog .actions { justify-content: flex-end; margin-top: 16px; }
+.stats-viewers-results .stats-viewer-names { padding: 0; border: none; }
+.stats-viewers-results li { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
 @media (max-width: 720px) { .stats-live { grid-template-columns: 1fr; } }
 
 /* Home rows per league: logo and name. */

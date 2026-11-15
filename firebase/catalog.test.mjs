@@ -224,6 +224,10 @@ test('only the owner and administrator can read the private history; only the ow
   await assertFails(setDoc(doc(owner, path), { ...entry, startedAt: new Date(0) }));
   await assertSucceeds(setDoc(doc(owner, path), entry));
   await assertSucceeds(getDocs(collection(admin(), 'calamarViewing/viewer/sessions')));
+  const byTarget = db => query(collection(db, 'calamarViewing/viewer/sessions'), where('target', 'in', ['l:film', 'e:game']));
+  assert.deepEqual((await assertSucceeds(getDocs(byTarget(admin())))).docs.map(item => item.data().target), ['l:film']);
+  await assertFails(getDocs(byTarget(other)));
+  await assertFails(getDocs(byTarget(guest)));
   await assertSucceeds(getDoc(doc(owner, path)));
   await assertFails(getDocs(collection(guest, 'calamarViewing/viewer/sessions')));
   await assertFails(getDoc(doc(other, path)));

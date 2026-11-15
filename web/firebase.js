@@ -1,7 +1,7 @@
 import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
-import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
+import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf, viewingSummary } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
@@ -390,6 +390,28 @@ export async function readViewingHistory(uid, cursor) {
   const snapshot = await getDocs(query(items, orderBy('startedAt', 'desc'), ...(cursor ? [startAfter(cursor)] : []), limit(31)));
   const page = snapshot.docs.slice(0, 30);
   return { entries: page.map(d => d.data()), cursor: snapshot.size > 30 ? page.at(-1) : null };
+}
+
+export async function readContentViewers(users, targets, from, to) {
+  requireAdministrator();
+  // Query the existing private subcollections by target, using the single-field index.
+  const groups = [];
+  for (let i = 0; i < targets.length; i += 30) groups.push(targets.slice(i, i + 30));
+  const people = [];
+  for (let i = 0; i < users.length; i += 10) {
+    const batch = await Promise.all(users.slice(i, i + 10).map(async user => {
+      const sessions = collection(db, 'calamarViewing', user.uid, 'sessions');
+      const entries = [];
+      for (const group of groups) {
+        const snapshot = await getDocs(query(sessions, where('target', 'in', group)));
+        entries.push(...snapshot.docs.map(doc => doc.data()));
+      }
+      const summary = viewingSummary(entries, from, to);
+      return summary && { uid: user.uid, name: user.name || summary.latest.profile || 'Usuario registrado', ...summary };
+    }));
+    people.push(...batch.filter(Boolean));
+  }
+  return people.sort((a, b) => b.at - a.at || a.name.localeCompare(b.name, 'es'));
 }
 
 export async function readLiveViewers() {

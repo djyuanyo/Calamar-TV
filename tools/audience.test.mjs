@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { audienceTarget, liveBeats, presence, visitKey, madridDay, liveCounts, summarize, eventLabel, nextStart, sessionId } from '../web/audience.js';
+import { audienceTarget, liveBeats, presence, visitKey, madridDay, liveCounts, summarize, eventLabel, nextStart, sessionId, viewingSummary } from '../web/audience.js';
 const now = Date.parse('2026-12-01T19:30:20Z');
 test('presence documents name only what is watched and readers accept nearby minutes', () => {
   assert.equal(audienceTarget({ id: 'la-1' }), 'c:la-1');
@@ -24,6 +24,14 @@ test('visit keys are safe field names and days follow Madrid', () => {
   assert.equal(visitKey('event', 'evento x/1'), 'e_evento_x_1');
   assert.equal(madridDay(Date.parse('2026-12-31T23:30:00Z')), '2027-01-01');
   assert.equal(madridDay(Date.parse('2026-07-01T21:59:00Z')), '2026-07-01');
+});
+test('historical viewers use the report period in Madrid and keep the latest playback', () => {
+  const at = Date.parse('2026-11-29T23:20:00Z');
+  const latest = { startedAt: { toMillis: () => at }, device: 'tv', profile: 'Salón' };
+  const entries = [latest, { startedAt: at - 120000 }, { startedAt: at - 1800000 },
+    { startedAt: '2026-11-30T23:00:00Z' }, { startedAt: null }];
+  assert.deepEqual(viewingSummary(entries, '2026-11-30', '2026-11-30'), { count: 2, latest, at });
+  assert.equal(viewingSummary(entries, '2026-12-02', '2026-12-02'), null);
 });
 test('visits add up by day, month and year and can follow one channel', () => {
   const days = [{ id: '2026-11-30', data: { 'c_la-1': 2, last: 'c_la-1' } }, { id: '2026-12-01', data: { 'c_la-1': 1, e_m: 4 } }, { id: '2027-01-01', data: { e_m: 1 } }];

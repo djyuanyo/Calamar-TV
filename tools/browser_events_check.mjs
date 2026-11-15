@@ -184,12 +184,45 @@ try {
   await page.waitForFunction(() => !document.querySelector('.multi'));
   assert.equal(await page.locator('header a[href="#/admin"]').count(), 0);
   await page.goto(base + '/#/admin');
+  await page.evaluate(eventId => {
+    window.__statsVisitDays = [{ id: '2026-11-30', data: { 'c_sport-one': 3, [`e_${eventId}`]: 1, 'e_old-event': 1, 'l_archived-movie': 2, 'l_guest-movie': 1 } }];
+    window.__contentTestHistory = [
+      { uid: 'member-fixture', target: 'c:sport-one', startedAt: '2026-11-30T10:00:00Z', device: 'web' },
+      { uid: 'member-fixture', target: `e:${eventId}`, startedAt: '2026-11-30T11:00:00Z', device: 'tv' },
+      { uid: 'admin-fixture', target: 'c:sport-one', startedAt: '2026-11-29T12:00:00Z', device: 'web' },
+      { uid: 'member-fixture', target: 'e:old-event', startedAt: '2026-11-30T12:00:00Z', device: 'android' },
+      { uid: 'member-fixture', target: 'l:archived-movie', startedAt: '2026-11-30T13:00:00Z', device: 'web' },
+    ];
+  }, published.events[0].id);
   await page.locator('.admin-stats a').filter({ hasText: 'Estadísticas' }).click();
   await page.getByRole('heading', { name: 'En vivo ahora', exact: true }).waitFor();
   await page.locator('.stats-table').filter({ hasText: 'Sports One' }).waitFor();
-  assert.match(await page.locator('.stats-total').last().textContent(), /3 visitas/);
+  assert.match(await page.locator('.stats-total').last().textContent(), /6 visitas/);
+  assert.equal(await page.evaluate(() => window.__contentViewerQueries), undefined);
+  const report = page.locator('.stats-history');
+  const viewing = page.getByRole('dialog');
+  await report.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Álvaro', exact: true }).waitFor();
+  assert.equal(await viewing.getByRole('link', { name: 'Álvaro', exact: true }).count(), 1);
+  await viewing.getByText(/2 reproducciones.*Android TV/).waitFor();
+  assert.equal(await viewing.getByRole('link', { name: 'Administrador' }).count(), 0);
+  await viewing.getByRole('button', { name: 'Ver evolución' }).click();
+  await report.getByRole('heading', { name: /Evolución de Sports One/ }).waitFor();
+  await report.getByRole('button', { name: 'old-event (eliminado)', exact: true }).click();
+  assert.equal(await viewing.getByRole('link', { name: 'Álvaro' }).getAttribute('href'), '#/admin/usuarios/member-fixture');
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
+  await report.getByRole('button', { name: 'archived-movie (eliminado)', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Álvaro' }).waitFor();
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
+  await report.getByRole('button', { name: 'guest-movie (eliminado)', exact: true }).click();
+  await viewing.getByText('No hay usuarios identificados en este periodo.').waitFor();
+  await page.keyboard.press('Escape');
+  await viewing.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Año', exact: true }).click();
   assert.equal(await page.locator('.stats-chart .bar').count(), 12);
+  await report.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Administrador' }).waitFor();
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
   await page.locator('.admin-stats a').filter({ hasText: 'Eventos' }).click();
   await page.locator('.item').filter({ hasText: 'Local vs visitante' }).getByRole('link', { name: 'Editar', exact: true }).click();
   await page.getByRole('heading', { name: 'Editar evento', exact: true }).waitFor();

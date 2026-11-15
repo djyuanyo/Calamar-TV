@@ -1,4 +1,5 @@
 import { usersAdmin } from './users-admin.js';
+import { mergeUserDirectory } from './access-policy.js';
 import { zicoChannelPlayer } from './zico-channel.js';
 import { viewerDevice } from './user-playback.js';
 import * as userService from './firebase.js';
@@ -1070,28 +1071,35 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 const statsView = { mode: 'day', day: '', month: '', year: '', only: null };
 
 /** Names for every channel and event, including TDT channels that are hidden from the public. */
-function statsNames(state) {
-  const names = new Map();
+function statsCatalog(state) {
+  const names = new Map(), targets = new Map(), channelEvents = new Map();
+  const add = (kind, id, label) => {
+    const key = visitKey(kind, id), target = `${key[0]}:${id}`;
+    names.set(key, label); names.set(target, label); targets.set(key, target);
+  };
   for (const c of [...merge(state.tdt || { channels: [] }, null), ...file.data.channels]) {
-    names.set(visitKey('channel', c.id), c.name); names.set(`c:${c.id}`, c.name);
+    add('channel', c.id, c.name);
   }
   // Manual events and imported matches («Levante - Athletic» rather than partido-401874993).
   for (const e of [...file.data.events, ...(file.data.fixtures || []).map((f) => fixtureEvent(f, file.data))]) {
     const label = `${e.name}${e.startAt ? ` · ${eventMeta({ startAt: e.startAt }, null)}` : ''}`;
-    names.set(visitKey('event', e.id), label); names.set(`e:${e.id}`, label);
+    add('event', e.id, label);
+    if (e.channelId) {
+      const key = visitKey('channel', e.channelId);
+      if (!channelEvents.has(key)) channelEvents.set(key, []);
+      channelEvents.get(key).push(`e:${e.id}`);
+    }
   }
-  return names;
+  return { names, targets, channelEvents, add };
 }
 /** Films, series and documentaries by their statistics keys (l:<id> live, l_<id> visits), with their section. */
-async function libraryNames(names) {
+async function libraryNames(add) {
   try {
     const library = await fetchLibrary();
     for (const section of LIBRARY_SECTIONS) for (const item of library.sections?.[section.key] || []) {
-      const label = `${itemTitle(item)} · ${section.label}`;
-      names.set(`l:${item.id}`, label); names.set(visitKey('library', item.id), label);
+      add('library', item.id, `${itemTitle(item)} · ${section.label}`);
     }
   } catch {}
-  return names;
 }
 
 const plural = (n, one, many) => `${n.toLocaleString('es-ES')} ${n === 1 ? one : many}`;
@@ -1104,10 +1112,43 @@ function liveTile() {
   return value;
 }
 
+function viewingDialog(findPeople, showGraph) {
+  const title = el('h2', { id: 'stats-viewers-title' });
+  const body = el('div', { class: 'stats-viewers-results', 'aria-live': 'polite' });
+  const graph = el('button', { type: 'button', class: 'ghost' }, 'Ver evolución');
+  const close = el('button', { type: 'button', class: 'btn secondary', autofocus: '' }, 'Cerrar');
+  const dialog = el('dialog', { class: 'stats-viewers-dialog', 'aria-labelledby': 'stats-viewers-title' },
+    title, el('p', { class: 'note' }, 'Cuentas con reproducción registrada en el periodo seleccionado.'), body,
+    el('div', { class: 'actions' }, graph, close));
+  close.addEventListener('click', () => dialog.close());
+  const format = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Madrid' });
+  let request = 0;
+  const open = async (key, name, from, to) => {
+    const mine = ++request;
+    title.textContent = name;
+    body.replaceChildren(el('p', { role: 'status', class: 'note' }, 'Cargando usuarios…'));
+    graph.onclick = () => { dialog.close(); showGraph(key); };
+    dialog.showModal();
+    try {
+      const people = await findPeople(key, from, to);
+      if (mine !== request || !dialog.open) return;
+      body.replaceChildren(
+        el('p', { class: 'note' }, people.length ? plural(people.length, 'usuario', 'usuarios') : 'No hay usuarios identificados en este periodo.'),
+        people.length ? el('ul', { class: 'stats-viewer-names' }, people.map(person =>
+          el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
+            el('small', {}, [plural(person.count, 'reproducción', 'reproducciones'), format.format(person.at),
+              viewerDevice(person.latest.device), person.latest.profile !== person.name ? person.latest.profile : ''].filter(Boolean).join(' · '))))) : null);
+    } catch (error) {
+      if (mine === request && dialog.open) body.replaceChildren(el('p', { class: 'error' }, `No se pudo leer el historial: ${explain(error)}`));
+    }
+  };
+  return { dialog, open };
+}
+
 function statsPanel(state) {
-  const names = statsNames(state);
+  const { names, targets, channelEvents, add } = statsCatalog(state);
   // The library's titles arrive a moment later; the live lists and the visits are drawn again with them.
-  libraryNames(names).then(() => { if (liveBody.isConnected) { drawLive(); load(); } });
+  libraryNames(add).then(() => { if (liveBody.isConnected) { drawLive(); load(); } });
   const today = madridDay();
   statsView.day ||= today; statsView.month ||= today.slice(0, 7); statsView.year ||= today.slice(0, 4);
 
@@ -1179,6 +1220,21 @@ function statsPanel(state) {
 
   // History: one document per Madrid day with one counter per channel and event.
   const history = el('div', { class: 'stats-history' }, el('p', { class: 'note' }, 'Cargando visitas…'));
+  let directory, report = null;
+  const viewers = viewingDialog(async (key, from, to) => {
+    directory ||= userService.readUserDirectory().then(({ members, profiles, access }) => mergeUserDirectory(members, profiles, access))
+      .catch(error => { directory = null; throw error; });
+    const target = targets.get(key) || `${key[0]}:${key.slice(2)}`;
+    return userService.readContentViewers(await directory, [...new Set([target, ...(channelEvents.get(key) || [])])], from, to);
+  }, key => {
+    statsView.only = key;
+    drawReport();
+    history.querySelector('.stats-chart-card')?.scrollIntoView({ block: 'nearest' });
+  });
+  const drawReport = () => {
+    if (report) history.replaceChildren(...visitReport(report.days, names, report.from, report.to, viewers.open,
+      () => { statsView.only = null; drawReport(); }));
+  };
   const modes = [['day', 'Día'], ['month', 'Mes'], ['year', 'Año'], ['all', 'Por años']];
   const modeButtons = el('div', { class: 'chips', role: 'group', 'aria-label': 'Periodo' }, modes.map(([mode, label]) =>
     el('button', { class: 'chip', type: 'button', 'aria-pressed': String(statsView.mode === mode), onclick: () => { statsView.mode = mode; statsView.only = null; redraw(); } }, label)));
@@ -1202,10 +1258,11 @@ function statsPanel(state) {
     const [from, to] = mode === 'day' ? [shiftDay(statsView.day, -29), statsView.day]
       : mode === 'month' ? [`${statsView.month}-01`, `${statsView.month}-31`]
       : mode === 'year' ? [`${statsView.year}-01-01`, `${statsView.year}-12-31`] : ['2000-01-01', '2999-12-31'];
+    report = null;
     history.replaceChildren(el('p', { class: 'note' }, 'Cargando visitas…'));
     try {
       const days = await visits(from, to);
-      if (mine === request) history.replaceChildren(...visitReport(days, names, from, to));
+      if (mine === request) { report = { days, from, to }; drawReport(); }
     } catch (error) { if (mine === request) history.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer las visitas: ${explain(error)}`)); }
   };
   redraw();
@@ -1216,11 +1273,11 @@ function statsPanel(state) {
     el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
     el('p', { class: 'note' }, 'Cada vez que alguien abre un canal, un evento, una película o una serie cuenta como una visita; la visita a un evento también suma a su canal, y todos los capítulos de una serie suman a la serie (días según el horario de Madrid).'),
     el('div', { class: 'stats-controls' }, modeButtons, picker),
-    history,
+    history, viewers.dialog,
   ];
 }
 
-function visitReport(days, names, from, to) {
+function visitReport(days, names, from, to, openViewers, resetGraph) {
   const { mode, only } = statsView;
   // Tables: the selected day, month, year or everything.
   const tableDays = mode === 'day' ? days.filter((d) => d.id === statsView.day) : days;
@@ -1234,7 +1291,8 @@ function visitReport(days, names, from, to) {
     return el('div', { class: 'stats-card' }, el('h3', {}, `${title} · ${plural(sum(prefix), 'visita', 'visitas')}`),
       rows.length ? el('table', { class: 'stats-table' }, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, prefix === 'c_' ? 'Canal' : prefix === 'l_' ? 'Título' : 'Evento'), el('th', { scope: 'col' }, 'Visitas'))),
         el('tbody', {}, rows.map(([key, value]) => el('tr', { 'aria-selected': String(key === only) },
-          el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver su evolución en la gráfica', onclick: () => { statsView.only = key === only ? null : key; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } },
+          el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver quién lo ha visto', 'aria-haspopup': 'dialog',
+            onclick: () => openViewers(key, names.get(key) || `${key.slice(2)} (eliminado)`, mode === 'day' ? to : from, to) },
             el('span', { class: 'share', style: `--w:${Math.max(2, Math.round(value / top * 100))}%`, 'aria-hidden': 'true' }), names.get(key) || `${key.slice(2)} (eliminado)`)),
           el('td', {}, value.toLocaleString('es-ES'))))))
         : el('p', { class: 'note' }, `Sin visitas a ${title.toLowerCase()} en este periodo.`));
@@ -1257,7 +1315,7 @@ function visitReport(days, names, from, to) {
     el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_') + sum('l_'), 'visita', 'visitas')), ` · ${period}`),
     el('div', { class: 'stats-card stats-chart-card' },
       el('h3', {}, `${only ? `Evolución de ${names.get(only) || only.slice(2)}` : 'Evolución de todas las visitas'} · ${mode === 'day' ? 'últimos 30 días' : mode === 'month' ? 'día a día' : mode === 'year' ? 'mes a mes' : 'año a año'}`),
-      only ? el('button', { type: 'button', class: 'ghost', onclick: () => { statsView.only = null; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } }, 'Ver todas') : null,
+      only ? el('button', { type: 'button', class: 'ghost', onclick: resetGraph }, 'Ver todas') : null,
       chart),
     el('div', { class: 'stats-live' }, table('Canales', 'c_'), table('Eventos', 'e_'), table('Pelis y series', 'l_')),
   ];

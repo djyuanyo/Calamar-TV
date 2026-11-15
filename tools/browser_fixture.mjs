@@ -1,5 +1,6 @@
 export const fakeFirebase = fixture => `
 import { validateCatalog } from './shared-catalog.js';
+import { viewingSummary } from './audience.js';
 let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
 export const ready = Promise.resolve(), auth = { currentUser: Object.prototype.hasOwnProperty.call(window, '__initialAuth') ? window.__initialAuth : { uid: 'admin-fixture', email: 'admin@example.com', getIdToken: async () => 'token' } };
 export const currentUser = () => auth.currentUser?.emailVerified === false ? null : auth.currentUser;
@@ -33,7 +34,7 @@ export const audience = async () => [...present.values()].map(target => ({ targe
 export const viewersOf = async targets => new Map(targets.map(target => [target, [...present.values()].filter(t => t === target).length]));
 export const purgeAudience = async () => {};
 export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
-export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
+export const visits = async () => window.__statsVisitDays || [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
 export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
 export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
 export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; window.__libraryPublishCount = (window.__libraryPublishCount || 0) + 1; };
@@ -86,6 +87,14 @@ export const readUserDetails = async uid => {
     ? [{id: 'main', name: 'Álvaro', data: {favorites: {'sport-one': {at: Date.now()}}}}] : []};
 };
 export const readViewingHistory = async uid => ({entries: [...privateHistory.values()].filter(v => v.uid === uid), cursor: null});
+export const readContentViewers = async (users, targets, from, to) => {
+  window.__contentViewerQueries = [...(window.__contentViewerQueries || []), { targets, from, to }];
+  const entries = [...privateHistory.values(), ...(window.__contentTestHistory || [])];
+  return users.flatMap(({uid,name}) => {
+    const summary = viewingSummary(entries.filter(v => v.uid === uid && targets.includes(v.target)), from, to);
+    return summary ? [{uid,name,...summary}] : [];
+  }).sort((a,b) => b.at - a.at);
+};
 export const readLiveViewers = async () => [
   ...[...liveViewers.values()].map(record => ({...record, name: 'Álvaro'})),
   {uid: 'member-fixture', name: 'Álvaro', profile: 'Álvaro', title: 'Sports One', device: 'tv', target: 'c:sport-one'},
