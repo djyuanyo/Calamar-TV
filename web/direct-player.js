@@ -1,7 +1,7 @@
-import { streamExpiry, explainStreamError } from './catalog.js';
+import { streamExpiry, explainStreamError, rfafHostedAddress } from './catalog.js';
 import { playbackTimer } from './sleep-timer.js';
 
-/** The signed URL stays byte-for-byte intact and is never sent to the hosting server. */
+/** Read the source as supplied; its playback route is chosen when the player starts. */
 export function readSource(fragment) {
   try {
     const address = decodeURIComponent(fragment.replace(/^#/, ''));
@@ -14,7 +14,8 @@ export function readSource(fragment) {
 }
 
 export function mount({ video, status, play, retry, fragment, Hls }) {
-  const address = readSource(fragment);
+  const source = readSource(fragment);
+  const address = rfafHostedAddress(source) || source;
   let hls = null;
   let generation = 0;
   let failed = false;
@@ -35,7 +36,7 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
       status.textContent = 'Enlace HLS no válido.';
       return;
     }
-    const expiry = streamExpiry(address);
+    const expiry = streamExpiry(source);
     if (expiry && expiry <= Date.now()) {
       status.textContent = 'El enlace ha caducado. Actualízalo en el catálogo.';
       return;

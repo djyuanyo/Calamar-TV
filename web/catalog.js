@@ -247,6 +247,12 @@ export function playerEndpoint(address) {
 }
 export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
+/** The published RFAF source authorizes the hosting to serve its playlist and segments. */
+export function rfafHostedAddress(url) {
+  return /^https:\/\/cdnlive\.codev8\.net\/rfaf20live\/smil:channel11\.smil\/(?:playlist|chunklist_b1500000)\.m3u8$/.test(url)
+    ? playerPageRelay(url) : null;
+}
+
 // AnonMP4 (anonmp4.art, anonmp4.to…): its API gives each video an embed page (embed_url) for other sites.
 // The video plays in that page, with AnonMP4's own player, inside ours.
 const ANON_HOST = /^(?:www\.)?anonmp4\.[a-z]{2,10}$/;
@@ -294,7 +300,10 @@ export function webPlayback(url, { pages = false } = {}) {
   if (httpTsSource(url)) return { ok: true, kind: 'ts', relay: true };
   if (u.protocol === 'http:') return { ok: false, reason: 'Este enlace HTTP no es un flujo TS/IPTV compatible con el puente' };
   if (u.protocol !== 'https:') return { ok: false, reason: 'Este enlace usa http:// y el navegador lo bloquea en una web segura' };
-  if (path.endsWith('.m3u8')) return { ok: true, kind: 'hls' };
+  if (path.endsWith('.m3u8')) {
+    const address = rfafHostedAddress(url);
+    return address ? { ok: true, kind: 'hls', address } : { ok: true, kind: 'hls' };
+  }
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };

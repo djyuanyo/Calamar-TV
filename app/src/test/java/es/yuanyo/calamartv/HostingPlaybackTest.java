@@ -8,6 +8,16 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.Test;
 
 public class HostingPlaybackTest {
+  @Test public void relaysOnlyThePublishedRfafChannel11() {
+    String base = "https://cdnlive.codev8.net/rfaf20live/smil:channel11.smil/";
+    for (String name : new String[]{"playlist.m3u8", "chunklist_b1500000.m3u8"}) {
+      String source = base + name;
+      assertEquals(Library.playerRelay(source), HostingPlayback.liveAddress(source));
+    }
+    String other = base.replace("channel11", "channel12") + "playlist.m3u8";
+    assertEquals(other, HostingPlayback.liveAddress(other));
+  }
+
   @Test public void countOnlyRelayStillSelectsEverySignalThroughHosting() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse().setBody("{\"sources\":5}"));

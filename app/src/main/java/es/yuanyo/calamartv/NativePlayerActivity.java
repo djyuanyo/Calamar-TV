@@ -940,7 +940,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private static String castAddress(String original) {
     String compatible = CastSource.driveCompatibility(original);
-    return compatible == null ? original : compatible;
+    return compatible == null ? HostingPlayback.liveAddress(original) : compatible;
   }
 
   private boolean tryCompatibleDrive(VideoResolver.Source source) {
@@ -955,8 +955,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private final java.util.Map<String,String> eventSourceNames = new java.util.HashMap<>();
 
-  private void playSource(VideoResolver.Source source) {
+  private void playSource(VideoResolver.Source selected) {
     if (!active) return;
+    String address = HostingPlayback.liveAddress(selected.url);
+    VideoResolver.Source source = address.equals(selected.url) ? selected : new VideoResolver.Source(selected.label, address);
     castPlayback = false;
     long expiry = directUrl != null ? -1 : VideoResolver.expiryMillis(source.url);
     if (expiry > 0 && expiry <= System.currentTimeMillis()) {

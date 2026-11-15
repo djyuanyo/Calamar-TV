@@ -15,6 +15,12 @@ final class HostingPlayback {
   private HostingPlayback() {}
   static final String AUTOMATIC = "0000000000000000";
   static final String ALTERNATE_ENDPOINT = "https://www.calamarmenciano.com/calamar-player.php";
+  private static final java.util.regex.Pattern RFAF = java.util.regex.Pattern.compile(
+      "https://cdnlive\\.codev8\\.net/rfaf20live/smil:channel11\\.smil/(?:playlist|chunklist_b1500000)\\.m3u8");
+
+  static String liveAddress(String address) {
+    return address != null && RFAF.matcher(address).matches() ? Library.playerRelay(address) : address;
+  }
 
   static boolean networkUnavailable(Throwable error) {
     boolean network = false;
