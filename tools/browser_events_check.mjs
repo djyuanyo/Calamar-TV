@@ -215,7 +215,9 @@ try {
   await viewing.getByRole('link', { name: 'Álvaro' }).waitFor();
   await viewing.getByRole('button', { name: 'Cerrar' }).click();
   await report.getByRole('button', { name: 'guest-movie (eliminado)', exact: true }).click();
-  await viewing.getByText('No hay usuarios identificados en este periodo.').waitFor();
+  const emptyHistory = 'No hay usuarios identificados en este periodo.';
+  await viewing.getByText(emptyHistory, { exact: true }).waitFor();
+  assert.equal(await viewing.locator('.stats-viewers-results').textContent(), emptyHistory);
   await page.keyboard.press('Escape');
   await viewing.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Año', exact: true }).click();

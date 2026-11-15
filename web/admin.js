@@ -1132,12 +1132,12 @@ function viewingDialog(findPeople, showGraph) {
     try {
       const people = await findPeople(key, from, to);
       if (mine !== request || !dialog.open) return;
-      body.replaceChildren(
-        el('p', { class: 'note' }, people.length ? plural(people.length, 'usuario', 'usuarios') : 'No hay usuarios identificados en este periodo.'),
-        people.length ? el('ul', { class: 'stats-viewer-names' }, people.map(person =>
-          el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
-            el('small', {}, [plural(person.count, 'reproducción', 'reproducciones'), format.format(person.at),
-              viewerDevice(person.latest.device), person.latest.profile !== person.name ? person.latest.profile : ''].filter(Boolean).join(' · '))))) : null);
+      body.replaceChildren(el('p', { class: 'note' },
+        people.length ? plural(people.length, 'usuario', 'usuarios') : 'No hay usuarios identificados en este periodo.'));
+      if (people.length) body.append(el('ul', { class: 'stats-viewer-names' }, people.map(person =>
+        el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
+          el('small', {}, [plural(person.count, 'reproducción', 'reproducciones'), format.format(person.at),
+            viewerDevice(person.latest.device), person.latest.profile !== person.name ? person.latest.profile : ''].filter(Boolean).join(' · '))))));
     } catch (error) {
       if (mine === request && dialog.open) body.replaceChildren(el('p', { class: 'error' }, `No se pudo leer el historial: ${explain(error)}`));
     }
