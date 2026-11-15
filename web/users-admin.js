@@ -175,16 +175,45 @@ function historyPanel(el, service, uid) {
   return el('section', { class: 'user-surface' }, el('h2', {}, 'Historial de reproducción'), note, rows, more);
 }
 
+function reminderAction(el, service, user, verification) {
+  if (user.provider !== 'password' || user.verified !== false || !user.email) return null;
+  const note = el('p', { class: 'note', role: 'status' });
+  const draft = el('a', { class: 'btn secondary', hidden: true }, 'Abrir borrador de correo');
+  const send = button(el, 'Reenviar correo de verificación', async () => {
+    send.disabled = true;
+    draft.hidden = true;
+    draft.removeAttribute('href');
+    note.textContent = 'Preparando el recordatorio…';
+    try {
+      const result = await service.resendVerificationReminder(user.uid);
+      if (result.verified) {
+        verification.textContent = 'Verificado';
+        send.hidden = true;
+        note.textContent = 'Esta cuenta ya ha verificado su correo.';
+      } else if (result.sent) {
+        note.textContent = 'Recordatorio enviado. Si no aparece, puede revisar la carpeta de spam.';
+      } else {
+        draft.href = result.draft;
+        draft.hidden = false;
+        note.textContent = 'El enlace está listo. Abre el borrador y envíalo desde tu correo.';
+      }
+    } catch (error) { note.textContent = service.explain(error); }
+    finally { send.disabled = false; }
+  });
+  return el('div', {}, el('div', { class: 'actions' }, send, draft), note);
+}
+
 function userDetails(el, service, state, uid) {
   const panel = el('div', { class: 'user-detail' }, el('p', { class: 'note', role: 'status' }, 'Cargando cuenta…'));
   service.readUserDetails(uid).then(user => {
     if (!user) { panel.replaceChildren(el('p', { class: 'note' }, 'No se ha encontrado la cuenta.')); return; }
     const provider = { 'google.com': 'Google', password: 'Correo y contraseña' }[user.provider] || 'Sin datos';
+    const verification = el('span', {}, user.verified ? 'Verificado' : 'Sin verificar');
     const details = [
       ['Registro', format(user.registeredAt, { dateStyle: 'medium', timeStyle: 'short' })],
       ['Último acceso', format(user.lastSeen, { dateStyle: 'medium', timeStyle: 'short' })],
       ['Método de acceso', provider],
-      ...(user.provider === 'password' ? [['Correo', user.verified ? 'Verificado' : 'Sin verificar']] : []),
+      ...(user.provider === 'password' ? [['Correo', verification]] : []),
       ['Perfiles', String(user.profiles.length)],
     ];
     const names = new Map((state.channels || []).map(channel => [channel.id, channel.name]));
@@ -203,7 +232,7 @@ function userDetails(el, service, state, uid) {
       el('header', { class: 'user-surface' }, el('h1', {}, name(user)), el('p', { class: 'note' }, email(user)),
         el('dl', { class: 'user-facts' }, details.flatMap(([label, value]) =>
           [el('dt', {}, label), el('dd', {}, value)])),
-        accessAction(el, service, user)),
+        reminderAction(el, service, user, verification), accessAction(el, service, user)),
       favorites, historyPanel(el, service, uid));
   }).catch(error => panel.replaceChildren(el('p', { class: 'error' }, service.explain(error))));
   return panel;

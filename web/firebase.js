@@ -3,6 +3,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf, viewingSummary } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
+import { REMINDER_ENDPOINT, verificationCode, verificationDraft } from './verification-reminder.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
@@ -312,16 +313,20 @@ export async function setUserBlocked(uid, blocked) {
   await setDoc(doc(db, 'calamarUserAccess', uid), { blocked: blocked === true, updatedAt: serverTimestamp() });
 }
 
-export async function deleteUserAccount(uid) {
-  requireAdministrator();
-  const admin = currentUser();
-  if (!uid || uid === admin.uid) throw Error('No puedes eliminar tu propia cuenta de administración.');
-  // Google checks IAM on the project. The Google access token stays in this call and goes only to Google.
+async function adminIdentityToken(admin) {
+  // Google checks IAM on the project. Its OAuth token is sent only to Google.
   const provider = new GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/identitytoolkit');
   provider.setCustomParameters({ login_hint: ADMIN_EMAIL });
   const result = await reauthenticateWithPopup(admin, provider);
-  const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+  return GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+}
+
+export async function deleteUserAccount(uid) {
+  requireAdministrator();
+  const admin = currentUser();
+  if (!uid || uid === admin.uid) throw Error('No puedes eliminar tu propia cuenta de administración.');
+  const token = await adminIdentityToken(admin);
   if (!token) throw Error('Google no ha autorizado la eliminación. Vuelve a intentarlo.');
   const url = `https://identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}/accounts:delete`;
   const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -337,6 +342,42 @@ export async function deleteUserAccount(uid) {
     await setUserBlocked(uid, true).catch(() => {});
     throw Error('Firebase eliminó la cuenta, pero el directorio no se actualizó. Publica las reglas de Firestore y vuelve a pulsar «Eliminar cuenta».');
   }
+}
+
+export async function resendVerificationReminder(uid) {
+  requireAdministrator();
+  const admin = currentUser();
+  const access = await adminIdentityToken(admin);
+  if (!access) throw Error('Google no ha autorizado el recordatorio.');
+  const base = `https://identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}/accounts:`;
+  const authRequest = async (method, payload) => {
+    const response = await fetch(base + method, {
+      method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (response.status === 401 || response.status === 403) throw Error('La cuenta de Google necesita permiso para gestionar usuarios y generar enlaces de verificación en Firebase.');
+    if (!response.ok) throw Error('Firebase no pudo preparar el recordatorio. Vuelve a intentarlo.');
+    return response.json();
+  };
+  const { users } = await authRequest('lookup', { localId: [uid] });
+  const account = users?.find(user => user.localId === uid);
+  if (!account?.email || !account.providerUserInfo?.some(provider => provider.providerId === 'password'))
+    throw Error('Esta cuenta no tiene un registro por correo y contraseña.');
+  if (account.emailVerified) return { verified: true };
+  const { oobLink } = await authRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', email: account.email, returnOobLink: true });
+  const code = verificationCode(oobLink, firebaseConfig);
+  requireAdministrator();
+  if (currentUser()?.uid !== admin.uid) throw Error('La sesión de administración ha cambiado.');
+  const available = await fetch(REMINDER_ENDPOINT, { cache: 'no-store', signal: AbortSignal.timeout(7000) })
+    .then(response => response.ok ? response.json() : null).catch(() => null);
+  if (available?.ready !== true) return { draft: verificationDraft(account.email, oobLink) };
+  const response = await fetch(REMINDER_ENDPOINT, {
+    method: 'POST', headers: { Authorization: `Bearer ${await admin.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, email: account.email }), signal: AbortSignal.timeout(25000),
+  }).catch(() => { throw Error('No se pudo confirmar el envío. Comprueba si llegó antes de repetirlo.'); });
+  const status = await response.json().catch(() => null);
+  if (!response.ok || !status?.sent) throw Error(status?.error || 'No se pudo enviar el recordatorio.');
+  return { sent: true };
 }
 
 // ---- Private viewing history and administrator live viewers -----------------------------------

@@ -2,7 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accessDecision, webPolicy, mergeUserDirectory, findUsers } from '../web/access-policy.js';
 import { createWebAccess } from '../web/web-access.js';
+import { verificationCode, verificationDraft } from '../web/verification-reminder.js';
 const base = { policy: { requireLogin:true }, policyReady:true, authReady:true, blockReady:true, user:null };
+test('verification reminder accepts the project link and prepares an email for the same recipient', () => {
+  const project = { authDomain: 'menciamedia.firebaseapp.com', apiKey: 'demoKey' };
+  const link = 'https://menciamedia.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=from_firebase&apiKey=demoKey';
+  assert.equal(verificationCode(link, project), 'from_firebase');
+  for (const invalid of [link.replace('verifyEmail', 'resetPassword'), link.replace('demoKey', 'otherKey'),
+    link.replace('.firebaseapp.com', '.example.net'), undefined]) assert.throws(() => verificationCode(invalid, project), /válido/);
+  const draft = new URL(verificationDraft('usuario+tv@example.org', link));
+  assert.equal(decodeURIComponent(draft.pathname), 'usuario+tv@example.org');
+  assert.match(draft.searchParams.get('subject'), /Calamar TV/);
+  assert.ok(draft.searchParams.get('body').includes(link));
+});
 test('required admission is the default; optional access restores guest browsing',()=>{
   assert.equal(webPolicy(null).requireLogin,true);
   assert.equal(accessDecision(base),'login');

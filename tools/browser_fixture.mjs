@@ -83,8 +83,13 @@ export const readUserDetails = async uid => {
   if (deleted.has(uid)) return null;
   const directory = await readUserDirectory();
   const member = directory.members.find(m => m.uid === uid);
-  return member && {...member, blocked: blocks.get(uid) === true, profiles: uid === 'member-fixture'
+  return member && {...member, ...(uid === 'member-fixture' && window.__verificationPending ? {verified: false} : {}),
+    blocked: blocks.get(uid) === true, profiles: uid === 'member-fixture'
     ? [{id: 'main', name: 'Álvaro', data: {favorites: {'sport-one': {at: Date.now()}}}}] : []};
+};
+export const resendVerificationReminder = async uid => {
+  window.__verificationReminderUid = uid;
+  return window.__verificationReminderResult || {sent: true};
 };
 export const readViewingHistory = async uid => ({entries: [...privateHistory.values()].filter(v => v.uid === uid), cursor: null});
 export const readContentViewers = async (users, targets, from, to) => {
