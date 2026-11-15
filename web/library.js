@@ -1054,10 +1054,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     await store(sections);
   };
   const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
-  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://luluvido.com/… o https://anonmp4.art/v/…', 'aria-label': label, class: 'library-link' });
+  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://www.youtube.com/watch?v=…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
     const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
-    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…), de Vidara o AnonMP4, o un vídeo MP4/HLS por HTTPS.`); }
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega un enlace de vídeo de YouTube, LuluStream, Vidara, AnonMP4 o un vídeo MP4/HLS por HTTPS.`); }
   };
 
   // ---- Search ----

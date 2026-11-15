@@ -5,7 +5,7 @@ export function youtubeId(value) {
   if (/^[\w-]{11}$/.test(value)) return value;
   try {
     const u = new URL(value);
-    if (u.protocol !== 'https:' || u.username || u.password) return '';
+    if (u.protocol !== 'https:' || u.username || u.password || u.port) return '';
     const host = u.hostname.toLowerCase();
     const id = host === 'youtu.be' ? u.pathname.slice(1) : ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(host)
       ? (u.pathname === '/watch' ? u.searchParams.get('v') : /^\/(embed|shorts|live)\//.test(u.pathname) ? u.pathname.split('/')[2] : '') : '';
@@ -13,6 +13,14 @@ export function youtubeId(value) {
   } catch { return ''; }
 }
 export const trailerId = (item) => youtubeId(Object.hasOwn(item, 'trailerUrl') ? item.trailerUrl : item.tmdb?.trailer);
+
+export function youtubeVideo(value) {
+  const id = typeof value === 'string' && value.trim().startsWith('https://') ? youtubeId(value) : '';
+  return id ? {
+    embed: `https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0`,
+    watch: `https://www.youtube.com/watch?v=${id}`,
+  } : null;
+}
 
 // Establish YouTube connections while the visitor browses the catalogue, before opening a title.
 if (typeof document !== 'undefined') for (const href of ['https://www.youtube.com', 'https://www.youtube-nocookie.com', 'https://i.ytimg.com']) {

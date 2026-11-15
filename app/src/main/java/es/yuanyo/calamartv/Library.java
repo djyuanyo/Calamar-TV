@@ -177,7 +177,8 @@ final class Library {
     if (value.matches("[A-Za-z0-9_-]{11}")) return value;
     try {
       java.net.URI uri = java.net.URI.create(value);
-      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null) return "";
+      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null
+          || (uri.getPort() != -1 && uri.getPort() != 443)) return "";
       String host = uri.getHost(), id = "";
       if ("youtu.be".equalsIgnoreCase(host)) id = uri.getPath().substring(1);
       else if (host != null && java.util.Arrays.asList("youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com").contains(host.toLowerCase(java.util.Locale.ROOT))) {
@@ -1226,6 +1227,15 @@ final class Library {
   static final class Media {
     private Media() {}
 
+    static String youtubeId(String address) {
+      return address != null && address.trim().startsWith("https://") ? youtubeTrailer(address) : "";
+    }
+
+    static String youtubeEmbed(String address) {
+      String id = youtubeId(address);
+      return id.isEmpty() ? null : "https://www.youtube-nocookie.com/embed/" + id + "?playsinline=1&rel=0";
+    }
+
     /** The LuluStream player page (https://luluvido.com/e/CODE: LuluStream's site since lulustream.com went down) of a LuluStream link, or null. */
     static String embed(String address) {
       try {
@@ -1263,7 +1273,7 @@ final class Library {
     }
 
     static boolean allowed(String address) {
-      if (embed(address) != null || anonmp4(address) != null || ProviderPlayers.vidara(address) != null) return true;
+      if (!youtubeId(address).isEmpty() || embed(address) != null || anonmp4(address) != null || ProviderPlayers.vidara(address) != null) return true;
       try {
         java.net.URI u = java.net.URI.create(address);
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);

@@ -18,6 +18,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -50,6 +51,9 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private CastControls castControls;
   private boolean castPlayback;
   private Button sourceButton;
+  private Button youtubeLink;
+  private View youtubeFullscreen;
+  private WebChromeClient.CustomViewCallback youtubeFullscreenCallback;
   private SleepTimer sleepTimer;
   private static final int MULTI_PLAYER = 12;
   private final Handler handler = new Handler(Looper.getMainLooper());
@@ -340,7 +344,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     castControls = new CastControls(this, controls,
         // A LuluStream film only plays for whoever opened its page (with its headers): the TV gets the
         // hosting's copy of it, which it can read.
-        () -> pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
+        () -> Library.Media.youtubeEmbed(pageUrl) != null ? null
+            : pageUrl != null && Library.Media.hosting(pageUrl) != null ? Library.Media.hosting(pageUrl)
             : castAddress(!currentUrl.isEmpty() ? currentUrl
                 : directUrls.isEmpty() ? null : directUrls.get(Math.min(selection, directUrls.size() - 1))),
         title, () -> {
@@ -384,6 +389,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
       @Override public void afterTextChanged(android.text.Editable s) { status.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); }
     });    panel.addView(status);
+    youtubeLink = button(panel, "Abrir en YouTube", this::openYouTube);
+    youtubeLink.setVisibility(View.GONE);
     root.addView(panel);
 
     stage = new FrameLayout(this);
@@ -704,7 +711,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       problem("Usa el enlace de canal o evento de Zico TV.");
       return;
     }
-    if (ProviderPlayers.embed(pageUrl) != null) {
+    if (Library.Media.youtubeEmbed(pageUrl) != null || ProviderPlayers.embed(pageUrl) != null) {
       openWeb();
       return;
     }
@@ -1570,7 +1577,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     playerView.setVisibility(View.GONE);
     browser = new WebView(this);
     final int browserGeneration = generation;
-    final String embed = ProviderPlayers.embed(pageUrl);
+    final String youtube = Library.Media.youtubeEmbed(pageUrl);
+    final String embed = youtube == null ? ProviderPlayers.embed(pageUrl) : youtube;
     browser.getSettings().setJavaScriptEnabled(true);
     if (embed != null) browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
     browser.getSettings().setDomStorageEnabled(true);
@@ -1581,6 +1589,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new PlaybackWebClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            if (youtube != null) {
+              Uri candidate = Uri.parse(url);
+              Uri player = Uri.parse(youtube);
+              return !"https".equals(candidate.getScheme()) || !player.getAuthority().equals(candidate.getAuthority())
+                  || !player.getPath().equals(candidate.getPath());
+            }
             return !url.startsWith("https://") || AppSources.zico(url) || AppSources.webOnly(url)
                 || (embed != null && ProviderPlayers.embed(url) == null);
           }
@@ -1588,6 +1602,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             return request.isForMainFrame() && shouldOverrideUrlLoading(view, request.getUrl().toString());
+          }
+
+          @Override
+          public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+            if (youtube != null && request.isForMainFrame() && active && browser == view && generation == browserGeneration)
+              problem("No se pudo cargar el reproductor de YouTube.");
           }
 
           @Override
@@ -1624,8 +1644,51 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText(embed == null ? "Modo web · Pulsa ▶ para detectar el vídeo." : "Abriendo reproductor…");
-    browser.loadUrl(embed == null ? pageUrl : embed);
+    if (youtube == null) browser.loadUrl(embed == null ? pageUrl : embed);
+    else {
+      youtubeLink.setVisibility(View.VISIBLE);
+      browser.setWebChromeClient(new WebChromeClient() {
+        @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+          if (!active || youtubeFullscreen != null) { callback.onCustomViewHidden(); return; }
+          youtubeFullscreen = view;
+          youtubeFullscreenCallback = callback;
+          setFullscreen(true);
+          stage.addView(view, new FrameLayout.LayoutParams(-1, -1));
+          view.requestFocus();
+        }
+
+        @Override public void onHideCustomView() { closeYouTubeFullscreen(); }
+      });
+      // The embedded player needs the identity of its host in the HTTP Referer.
+      browser.loadUrl(youtube, java.util.Collections.singletonMap("Referer", "https://es.yuanyo.calamartv/"));
+    }
     browser.requestFocus();
+  }
+
+  private void openYouTube() {
+    String id = Library.Media.youtubeId(pageUrl);
+    if (id.isEmpty()) return;
+    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=" + id))); }
+    catch (android.content.ActivityNotFoundException missing) {
+      Toast.makeText(this, "No hay ninguna aplicación para abrir YouTube.", Toast.LENGTH_LONG).show();
+    }
+  }
+
+  private void closeYouTubeFullscreen() {
+    if (youtubeFullscreen == null) return;
+    stage.removeView(youtubeFullscreen);
+    youtubeFullscreen = null;
+    WebChromeClient.CustomViewCallback callback = youtubeFullscreenCallback;
+    youtubeFullscreenCallback = null;
+    setFullscreen(false);
+    callback.onCustomViewHidden();
+    if (browser != null) browser.requestFocus();
+  }
+
+  @Override @SuppressWarnings("deprecation")
+  public void onBackPressed() {
+    if (youtubeFullscreen != null) closeYouTubeFullscreen();
+    else super.onBackPressed();
   }
 
   /** Keep HLS inside Chromium. Do not detect it and send it back to the failed native engine. */
@@ -1717,6 +1780,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void clearWeb() {
+    closeYouTubeFullscreen();
+    if (youtubeLink != null) youtubeLink.setVisibility(View.GONE);
     if (browser != null) {
       browser.stopLoading();
       stage.removeView(browser);

@@ -2775,7 +2775,8 @@ public class MainActivity extends Activity {
     Intent intent = new Intent(this, NativePlayerActivity.class);
     String vidara = ProviderPlayers.vidara(url);
     String embed = Library.Media.embed(url);
-    if (vidara != null) intent.putExtra("page_url", vidara);
+    if (Library.Media.youtubeEmbed(url) != null) intent.putExtra("page_url", url);
+    else if (vidara != null) intent.putExtra("page_url", vidara);
     else if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
       intent.putExtra("page_url", embed);
       intent.putExtra("football_fallback", true);

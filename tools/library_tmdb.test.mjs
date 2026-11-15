@@ -5,6 +5,18 @@ import { searchTmdb, tmdbDetails, tmdbFacts, seasonEpisodes, movieItem, seriesWi
 import { lulustreamEmbed, webPlayback } from '../web/catalog.js';
 import { validVideoLink } from '../web/library.js';
 
+test('YouTube links are valid catalogue videos and open the same embedded player', () => {
+  const watch = 'https://www.youtube.com/watch?v=12345678901';
+  const embed = 'https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0';
+  for (const url of [watch + '&list=PLExample', 'https://youtu.be/12345678901?si=test',
+    'https://m.youtube.com/shorts/12345678901', 'https://www.youtube.com/live/12345678901', embed]) {
+    assert.ok(validVideoLink(url));
+    assert.deepEqual(webPlayback(url), { ok: true, kind: 'frame', address: embed, youtube: watch });
+  }
+  for (const url of ['https://youtube.com.evil.test/watch?v=12345678901',
+    'https://www.youtube.com/playlist?list=PLExample', '12345678901']) assert.ok(!validVideoLink(url));
+});
+
 const fake = (bodies, calls = []) => async (url, init) => {
   calls.push([url, init?.headers?.Authorization]);
   const path = new URL(url).pathname;

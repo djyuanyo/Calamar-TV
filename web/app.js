@@ -927,14 +927,17 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   const showFrame = () => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
-      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',
+      referrerpolicy: source.how.youtube ? 'strict-origin-when-cross-origin' : null });
     frame.addEventListener('load', () => {
       if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
     }, { once: true });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
     controls.attach(null);
-    playerStatus.textContent = '';
+    playerStatus.replaceChildren(...(source.how.youtube
+      ? [el('a', { href: source.how.youtube, target: '_blank', rel: 'noopener' }, 'Abrir en YouTube')]
+      : []));
   };
   if (source.how.kind === 'event') {
     const message = c.sourceErrors?.[source.url] || 'No se pudieron obtener las fuentes de este evento.';

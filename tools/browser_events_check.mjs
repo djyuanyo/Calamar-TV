@@ -751,6 +751,25 @@ try {
     const video = document.getElementById('video');
     for (const name of ['paused', 'duration', 'currentTime', 'src', 'load', 'play']) delete video[name];
   });
+  const youtubeEmbed = 'https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0';
+  const youtubeWatch = 'https://www.youtube.com/watch?v=12345678901';
+  const refreshLibrary = () => page.evaluate(async () => (await import('./library.js')).fetchLibrary({ fresh: true }));
+  library.sections.movies.push({ id: 'myoutube', kind: 'movie', title: 'Vídeo de YouTube', url: 'https://youtu.be/12345678901' });
+  let youtubeReferer;
+  await page.route(youtubeEmbed, async route => {
+    youtubeReferer = await route.request().headerValue('referer');
+    await route.fulfill({ contentType: 'text/html', body: '<p>Reproductor de YouTube</p>' });
+  });
+  await refreshLibrary();
+  await page.goto(base + '/#/peliculas/myoutube');
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
+  await page.frameLocator('#player-frame').getByText('Reproductor de YouTube').waitFor();
+  assert.equal(youtubeReferer, base + '/');
+  assert.equal(await page.getByRole('link', { name: 'Abrir en YouTube' }).getAttribute('href'), youtubeWatch);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.waitForFunction(() => location.hash === '#/peliculas/myoutube');
+  library.sections.movies.pop();
+  await refreshLibrary();
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
   // A series' page as on Netflix: «Reproducir» the first episode, the tabs, and the season drop-down.

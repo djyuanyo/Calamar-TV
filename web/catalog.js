@@ -8,6 +8,7 @@ import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures, madridWeek, MATCH_SPAN_MS } from './competitions.js';
 import { httpTsSource } from './http-stream.js';
+import { youtubeVideo } from './trailer.js';
 // Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
 const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
@@ -266,6 +267,8 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const youtube = youtubeVideo(url);
+  if (youtube) return { ok: true, kind: 'frame', address: youtube.embed, youtube: youtube.watch };
   if (pages && playerEndpoint(url)
       && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
     return { ok: true, kind: 'hls', page: true, renewable: true };

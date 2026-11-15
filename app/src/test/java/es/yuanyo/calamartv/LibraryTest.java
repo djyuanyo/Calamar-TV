@@ -25,6 +25,20 @@ public class LibraryTest {
     assertEquals("", Library.youtubeTrailer("https://youtube.com.evil.test/watch?v=abcdefghijk"));
   }
 
+  @Test public void acceptsYouTubeVideosAsCatalogueSources() throws Exception {
+    String watch = "https://www.youtube.com/watch?v=12345678901&list=PLExample";
+    String embed = "https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0";
+    for (String url : Arrays.asList(watch, "https://youtu.be/12345678901?si=test",
+        "https://m.youtube.com/shorts/12345678901", "https://www.youtube.com/live/12345678901", embed)) {
+      assertTrue(Library.Media.allowed(url));
+      assertEquals(embed, Library.Media.youtubeEmbed(url));
+    }
+    assertFalse(Library.Media.allowed("https://youtube.com.evil.test/watch?v=12345678901"));
+    assertFalse(Library.Media.allowed("https://www.youtube.com/playlist?list=PLExample"));
+    assertFalse(Library.Media.allowed("12345678901"));
+    assertEquals(watch, new Library.Item(new JSONObject().put("url", watch)).entry("movies", null).getString("url"));
+  }
+
   private static final String JSON = "{\"sections\":{"
       + "\"movies\":[{\"id\":\"mavatar\",\"kind\":\"movie\",\"title\":\"Avatar\",\"year\":2009,\"url\":\"https://calamarmenciano.com/MENCIA%20MEDIA/PELICULAS/Avatar.mkv\","
       + "\"tmdb\":{\"title\":\"Avatar\",\"year\":2009,\"overview\":\"Pandora\",\"genres\":[\"Acción\"],\"cast\":[{\"name\":\"Sam Worthington\",\"character\":\"Jake\"}],\"rating\":7.6,\"votes\":32000,\"runtime\":162}},"
