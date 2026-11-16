@@ -36,8 +36,12 @@ export const purgeAudience = async () => {};
 export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
 export const visits = async () => window.__statsVisitDays || [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
 export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
-export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
-export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; window.__libraryPublishCount = (window.__libraryPublishCount || 0) + 1; };
+export const saveLibrarySettings = async (settings) => { window.__librarySettings = { ...(await readLibrarySettings()), ...settings }; };
+export const publishLibraryParts = async ({ importState, beforeUpdatedAt, ...parts }) => {
+  window.__libraryParts = parts;
+  if (importState !== undefined) window.__librarySettings = { ...(await readLibrarySettings()), importState };
+  window.__libraryPublishCount = (window.__libraryPublishCount || 0) + 1;
+};
 export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
 export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
 export const readAccount = async () => window.__account || null;

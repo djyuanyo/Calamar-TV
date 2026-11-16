@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { searchTmdb, tmdbDetails, tmdbFacts, seasonEpisodes, movieItem, seriesWithSeason, libraryParts,
-  correctTmdbTitle, findTmdbTitle, freeTmdbTitleId } from '../web/library-tmdb.js';
+  correctTmdbTitle, findTmdbTitle, freeTmdbTitleId, applyEpisodeTitles } from '../web/library-tmdb.js';
 import { lulustreamEmbed, webPlayback } from '../web/catalog.js';
 import { validVideoLink } from '../web/library.js';
 
@@ -254,4 +254,20 @@ test('unidentified includes records without a usable TMDB id as well as imported
   assert.equal(unidentifiedItem({ status: 'unmatched', tmdb: { id: 4 } }), true);
   for (const tmdb of [undefined, {}, { id: 0 }, { id: -1 }, { id: 'wrong' }]) assert.equal(unidentifiedItem({ status: 'matched', tmdb }), true);
   for (const id of [4500, '76600']) assert.equal(unidentifiedItem({ tmdb: { id } }), false);
+});
+
+
+test('manual episode names survive a link change and clearing them restores the source name', () => {
+  const tmdb = { id: 40, title: 'Serie', nextEpisode: { season: 1, episode: 1, name: 'Piloto original' } };
+  const existing = { id: 's40', kind: 'tv', tmdb, episodeTitles: { '1x1': 'Mi piloto' },
+    episodes: [{ id: 'episodio-existente', season: 1, episode: 1, name: 'Piloto original', url: 'https://example.com/previous.mp4' }] };
+  const published = applyEpisodeTitles(existing);
+  assert.equal(published.tmdb.nextEpisode.name, 'Mi piloto');
+  const rebuilt = seriesWithSeason(published, published.tmdb, 1, published.episodes, { 1: 'https://example.net/replacement.mp4' });
+  const edited = applyEpisodeTitles(rebuilt);
+  assert.deepEqual([edited.episodes[0].id, edited.episodes[0].name, edited.episodes[0].sourceName],
+    ['episodio-existente', 'Mi piloto', 'Piloto original']);
+  const reset = applyEpisodeTitles({ ...edited, episodeTitles: {} });
+  assert.equal(reset.episodes[0].name, 'Piloto original');
+  assert.equal(reset.tmdb.nextEpisode.name, 'Piloto original');
 });

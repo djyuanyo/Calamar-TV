@@ -8,8 +8,8 @@ import { youtubeId, trailerId } from './trailer.js';
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
 import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded,
-  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle, episodePremiereWindow } from './library-tmdb.js';
-import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
+  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle, episodePremiereWindow, episodeTitleKey, applyEpisodeTitles } from './library-tmdb.js';
+import { luluFolder, scanLulu, libraryFromScan, matchUnmatched, rememberFolderMatches } from './library-lulu.js';
 import { scanFolders, folderReference } from './library-folders.js';
 import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
@@ -1022,7 +1022,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     catch (error) { toggle.checked = !toggle.checked; say(error.message, true); }
     finally { toggle.disabled = false; }
   });
-  let settings = {}, current = { sections: {} };
+  let settings = {}, current = { sections: {} }, remembered = {};
   const key = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de TMDB (v3) o token de lectura (v4)' });
   const saveKey = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave');
   const tmdbKey = () => { if (!settings.tmdb) throw new Error('Primero añade la clave de TMDB en «Configuración».'); return settings.tmdb; };
@@ -1031,11 +1031,22 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const store = async (sections) => {
     // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
     // LuluStream links are saved on its current site (luluvido.com), whatever name they were pasted with.
-    const prepared = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (sections[s.key] || []).map((item) => keepArtwork(Object.values(current.sections).flat().find((old) => old.id === item.id), item))]));
+    const prepared = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (sections[s.key] || []).map(item =>
+      applyEpisodeTitles(keepArtwork(Object.values(current.sections).flat().find(old => old.id === item.id), item)))]));
     const next = stampAdded(luluvidoLinks(prepared).sections, current.sections);
-    await publish(libraryParts(next));
-    current = { ...current, sections: next };
-    cached = current; cachedAt = Date.now();
+    const publicSections = {}, pending = {};
+    for (const [section, items] of Object.entries(next)) {
+      publicSections[section] = items.filter(item => !item.pendingIdentification);
+      pending[section] = items.filter(item => item.pendingIdentification);
+    }
+    const matches = rememberFolderMatches(remembered, current.sections, next);
+    const importState = JSON.stringify({ matches, pending });
+    const publication = libraryParts(publicSections);
+    await publish({ ...publication, importState, beforeUpdatedAt: current.updatedAt || '' });
+    remembered = matches;
+    cached = { sections: publicSections, attribution: publication.index.attribution, updatedAt: publication.index.updatedAt };
+    cachedAt = Date.now();
+    current = { ...cached, sections: next };
     drawList();
   };
   const sectionOf = (id) => LIBRARY_SECTIONS.find((s) => (current.sections[s.key] || []).some((item) => item.id === id))?.key || null;
@@ -1045,14 +1056,22 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     if (before && Object.hasOwn(before, 'trailerUrl') && !Object.hasOwn(item, 'trailerUrl')) item = { ...item, trailerUrl: before.trailerUrl };
     if (before?.featured && item.featured === undefined) item = { ...item, featured: before.featured };
     if (before?.trend && item.trend === undefined) item = { ...item, trend: before.trend };
+    if (before?.kind === 'movie') {
+      for (const name of ['folder', 'files', 'file']) if (before[name] && !item[name]) item = { ...item, [name]: before[name] };
+    }
     if (before?.url && videoKey(before.url) === videoKey(item.url)) {
-      for (const name of ['fromFolder', 'folderSources', 'mirrors', 'files', 'addedAt'])
+      for (const name of ['fromFolder', 'folderSources', 'mirrors', 'addedAt'])
         if (Object.hasOwn(before, name) && !Object.hasOwn(item, name)) item = { ...item, [name]: before[name] };
     }
     const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
     sections[section] = [...sections[section], item].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
     await store(sections);
   };
+  const savedIdentity = (kind, tmdbId) => {
+    const hits = Object.entries(remembered).filter(([id, entry]) => entry.kind === kind && entry.tmdbId === Number(tmdbId) && !sectionOf(id));
+    return hits.length === 1 ? { id: hits[0][0], ...hits[0][1] } : null;
+  };
+  const availableId = (kind, tmdbId) => freeTmdbTitleId(current.sections, kind, tmdbId, Object.keys(remembered));
   const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
   const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://www.youtube.com/watch?v=…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
@@ -1060,7 +1079,11 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega un enlace de vídeo de YouTube, LuluStream, Vidara, AnonMP4 o un vídeo MP4/HLS por HTTPS.`); }
   };
 
-  // ---- Search ----
+  // ---- Search published titles; add new titles separately ----
+  const publishedQuery = el('input', { type: 'search', class: 'library-link', placeholder: 'Buscar por título', 'aria-label': 'Buscar títulos publicados', oninput: () => drawList() });
+  const publishedType = el('select', { 'aria-label': 'Tipo de título', onchange: () => drawList() }, el('option', { value: '' }, 'Todo el catálogo'),
+    LIBRARY_SECTIONS.map(s => el('option', { value: s.key }, s.label)));
+  const publishedSearch = el('div', { class: 'library-published-search library-search-form' }, el('div', { class: 'library-search-row' }, publishedType, publishedQuery));
   const sectionPick = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key }, s.label)));
   const query = el('input', { type: 'search', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar en TMDB' });
   const searchButton = el('button', { class: 'btn', type: 'submit' }, 'Buscar en TMDB');
@@ -1082,14 +1105,19 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   } }, el('div', { class: 'library-search-row' }, sectionPick, query, searchButton));
 
   // ---- Editor: a film's link, or a series' episode links season by season ----
-  async function openEditor(section, tmdbId, kind) {
+  async function openEditor(section, tmdbId, kind, savedItem) {
     editor.hidden = false;
-    editor.replaceChildren(el('p', { class: 'note' }, 'Cargando la ficha de TMDB…'));
+    editor.replaceChildren(el('p', { class: 'note' }, 'Cargando la ficha…'));
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
     try {
-      const { info, seasons } = await tmdbDetails(tmdbId, kind, tmdbKey());
-      const existing = findTmdbTitle(current.sections, kind, info.id);
-      const id = existing?.id || freeTmdbTitleId(current.sections, kind, info.id);
+      const storedDetails = () => ({ info: { ...savedItem.tmdb, title: itemTitle(savedItem), year: itemYear(savedItem) }, seasons: [] });
+      let details;
+      try { details = savedItem && !tmdbId ? storedDetails() : await tmdbDetails(tmdbId, kind, tmdbKey()); }
+      catch (error) { if (!savedItem || kind !== 'tv') throw error; details = storedDetails(); }
+      const { info, seasons } = details;
+      const existing = savedItem || findTmdbTitle(current.sections, kind, info.id);
+      const memory = !existing && savedIdentity(kind, info.id);
+      const id = existing?.id || memory?.id || availableId(kind, info.id);
       const inSection = existing ? sectionOf(id) : section;
       const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
       const del = existing ? el('button', { class: 'ghost danger', type: 'button', onclick: async () => {
@@ -1120,7 +1148,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       }
       // Series: choose the season, then paste the link of each episode.
       const tmdbSeasons = new Set(seasons.map(s => s.season));
-      const extraSeasons = [...new Set((existing?.episodes || []).map(e => e.season))]
+      const extraSeasons = [...new Set([...(existing?.episodes || []), ...(existing?.tmdb?.upcoming || [])].map(e => e.season))]
         .filter(season => !tmdbSeasons.has(season)).map(season => ({ season, name: `Temporada ${season}` }));
       const editableSeasons = [...seasons, ...extraSeasons];
       const seasonPick = el('select', { 'aria-label': 'Temporada' }, editableSeasons.map((s) => el('option', { value: s.season },
@@ -1128,36 +1156,67 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const firstWithLinks = editableSeasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
       seasonPick.value = String((firstWithLinks || editableSeasons.find((s) => s.season > 0) || editableSeasons[0])?.season ?? 1);
       const rows = el('div', { class: 'library-episodes' });
-      let episodes = [], inputs = {};
+      const readSaved = () => Object.values(current.sections).flat().find(item => item.id === id);
+      let draft, request = 0;
       const loadSeason = async () => {
+        const mine = ++request;
+        draft = null;
+        save.disabled = true;
         rows.replaceChildren(el('p', { class: 'note' }, 'Cargando capítulos…'));
         const season = Number(seasonPick.value);
         try {
-          episodes = tmdbSeasons.has(season) ? await seasonEpisodes(info.id, season, tmdbKey()) : [];
-          const savedEpisodes = (current.sections[sectionOf(id)] || []).find(item => item.id === id)?.episodes?.filter(e => e.season === season) || [];
-          episodes = [...episodes, ...savedEpisodes.filter(e => !episodes.some(found => found.episode === e.episode))].sort((a, b) => a.episode - b.episode);
-          const saved = new Map(savedEpisodes.map(e => [e.episode, e.url]));
-          inputs = Object.fromEntries(episodes.map((e) => [e.episode, linkInput(saved.get(e.episode), `Enlace del capítulo ${e.episode}`)]));
-          rows.replaceChildren(...episodes.map((e) => el('label', { class: 'library-episode-row' },
-            el('span', {}, el('b', {}, `${e.episode}.`), ` ${e.name || `Capítulo ${e.episode}`}`), inputs[e.episode])));
-          if (!episodes.length) rows.append(el('p', { class: 'note' }, 'TMDB no tiene capítulos para esta temporada.'));
-        } catch (error) { rows.replaceChildren(el('p', { class: 'error' }, error.message)); }
+          const item = readSaved();
+          const saved = new Map((item?.episodes || []).filter(e => e.season === season).map(e => [e.episode, e]));
+          const stored = new Map([...(item?.tmdb?.upcoming || []).filter(e => e.season === season).map(e => [e.episode, e]), ...saved]);
+          const remote = tmdbSeasons.has(season) ? await seasonEpisodes(info.id, season, tmdbKey()).catch(error => {
+            if (!stored.size) throw error;
+            return [];
+          }) : [];
+          if (mine !== request) return;
+          const episodes = [...new Map([...stored, ...remote.map(e => [e.episode, e])]).values()].sort((a, b) => a.episode - b.episode);
+          const fields = episodes.map(e => {
+            const original = e.sourceName ?? e.name ?? '';
+            const title = el('input', { type: 'text', class: 'library-link', maxlength: '250',
+              'aria-label': `Título del capítulo ${e.episode}`, placeholder: original || episodeLabel(e),
+              value: (item?.episodeTitles || memory?.episodeTitles)?.[episodeTitleKey(season, e.episode)] || original });
+            return { episode: e.episode, original, title, link: linkInput(saved.get(e.episode)?.url, `Enlace del capítulo ${e.episode}`) };
+          });
+          draft = { season, episodes, fields };
+          rows.replaceChildren(...fields.map(({ episode, title, link }) => el('div', { class: 'library-episode-row' },
+            el('b', {}, `Capítulo ${episode}`), el('label', {}, 'Título', title), el('label', {}, 'Enlace del vídeo', link))));
+          if (!fields.length) rows.append(el('p', { class: 'note' }, 'No hay capítulos para esta temporada.'));
+          save.disabled = !fields.length;
+        } catch (error) { if (mine === request) rows.replaceChildren(el('p', { class: 'error' }, error.message)); }
       };
       seasonPick.addEventListener('change', loadSeason);
       const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
         try {
-          checkLinks(Object.values(inputs));
-          const links = Object.fromEntries(Object.entries(inputs).map(([n, input]) => [n, input.value]));
-          const season = Number(seasonPick.value);
-          const before = Object.values(current.sections).flat().find((item) => item.id === id);
-          const item = seriesWithSeason(before, info, season, episodes, links, id);
+          if (!draft) return;
+          const { season, episodes, fields } = draft;
+          checkLinks(fields.map(f => f.link));
+          const links = Object.fromEntries(fields.map(f => [f.episode, f.link.value]));
+          const before = readSaved();
+          const restored = memory ? { id, tmdb: info, episodeIds: memory.episodeIds, episodeTitles: memory.episodeTitles, skip: memory.skip } : null;
+          const item = seriesWithSeason(before || restored, info, season, episodes, links, id);
+          if (before && unidentifiedItem(before)) {
+            item.status = before.status || 'unmatched';
+            if (!before.tmdb) delete item.tmdb;
+          }
+          const titles = { ...(before || restored)?.episodeTitles };
+          for (const { episode, title, original } of fields) {
+            const key = episodeTitleKey(season, episode), name = title.value.trim();
+            if (name && name !== original) titles[key] = name;
+            else delete titles[key];
+          }
+          if (Object.keys(titles).length) item.episodeTitles = titles;
+          else delete item.episodeTitles;
           if (!item.episodes.length) throw new Error('Pega el enlace de al menos un capítulo.');
-          save.disabled = true; note.textContent = 'Guardando…';
+          save.disabled = seasonPick.disabled = true; note.textContent = 'Guardando…';
           await upsert(where.value, item);
           const count = item.episodes.filter((e) => e.season === season).length;
-          note.textContent = `Temporada ${season} guardada y publicada: ${count} ${count === 1 ? 'capítulo' : 'capítulos'} con enlace.`;
+          note.textContent = `Temporada ${season} ${item.pendingIdentification ? 'guardada, pendiente de identificar' : 'guardada y publicada'}: ${count} ${count === 1 ? 'capítulo' : 'capítulos'} con enlace.`;
           [...seasonPick.options].find((o) => Number(o.value) === season).textContent = `${seasons.find((s) => s.season === season)?.name || `Temporada ${season}`} · ${count} con enlace ✓`;
-        } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+        } catch (error) { note.textContent = error.message; } finally { save.disabled = seasonPick.disabled = false; }
       } }, 'Guardar temporada');
       // «Saltar intro» and «Siguiente capítulo»: times for the whole series, or for one season that differs.
       const introFrom = el('input', { type: 'text', inputmode: 'numeric', placeholder: '0:30', 'aria-label': 'La intro empieza en', class: 'library-clock' });
@@ -1205,7 +1264,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         el('div', { class: 'library-skip-row' }, field('Intro desde', introFrom), field('hasta', introTo), field('Créditos (duración)', credits)),
         el('div', { class: 'actions' }, scope, saveSkip), skipNote);
       fillSkip();
-      editor.replaceChildren(head, field('Temporada', seasonPick, 'Pega el enlace de cada capítulo disponible. Los próximos estrenos con fecha de TMDB se muestran automáticamente.'),
+      editor.replaceChildren(head, field('Temporada', seasonPick, 'Edita el título y el enlace de cada capítulo. Deja el título vacío para usar el original.'),
         rows, el('div', { class: 'actions' }, save, del, close), note, skipBox);
       await loadSeason();
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
@@ -1304,10 +1363,10 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         folderNote.textContent = 'No se pudo leer ninguna de las carpetas seleccionadas.';
         return;
       }
-      const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
+      const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true, remembered,
         onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
       if (result.changed) await store(result.sections);
-      const pending = result.added.pending ? ' Revisa los títulos sin ficha en «No identificadas».' : '';
+      const pending = result.added.pending ? ' Elige su ficha en «No identificadas» para publicarlos.' : '';
       folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.${pending}`;
       if (scan.partialVidara) folderNote.append(' Se conservaron los enlaces de Vidara que el escaneo no pudo verificar.');
       folderReport.append(...result.unknown.map(line => el('p', { class: 'note' }, line)));
@@ -1326,12 +1385,12 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const key = tmdbKey();
       scanNote.textContent = 'Leyendo las carpetas de LuluStream…';
       const scan = await scanLulu(settings.lulu, { onFolder: (name) => { scanNote.textContent = `Leyendo «${name}» en LuluStream…`; } });
-      const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
+      const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, remembered, onProgress: (n, total, title) => { scanNote.textContent = `Revisando ${n} de ${total}: ${title}…`; } });
       scanNote.textContent = 'Publicando…';
       if (result.changed) await store(result.sections);
       const { films, shows, episodes, pending } = result.added;
       scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados${pending ? `, y ${pending} sin ficha de TMDB` : ''}. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos.`;
-      if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Para revisar (${result.unknown.length}). Los que están «sin ficha de TMDB» ya se ven con su nombre de archivo: en la lista de abajo pulsa «Buscar en TMDB» y elige su ficha.`),
+      if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Para revisar (${result.unknown.length}). En «No identificadas», pulsa «Buscar en TMDB» y elige la ficha de cada título pendiente para publicarlo.`),
         el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
     } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; mixedScan.disabled = false; saveFolders.disabled = false; }
   } }, 'Leer carpetas de LuluStream');
@@ -1347,7 +1406,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } catch (error) { scanNote.textContent = error.message; } finally { moveButton.disabled = false; }
   } }, 'Cambiar los enlaces a luluvido.com');
 
-  // ---- A title TMDB did not recognise: search TMDB and choose its record; its links go with it ----
+  // ---- Identify a pending title or correct an existing TMDB record ----
   function openMatcher(sectionKey, item) {
     editor.hidden = false;
     const kind = item.kind === 'tv' ? 'tv' : 'movie';
@@ -1394,14 +1453,18 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
           openTitleEditor(sectionKey, next);
           return;
         }
-        const id = existing?.id || freeTmdbTitleId(current.sections, kind, r.id);
-        const next = keepArtwork(latest, await matchUnmatched(latest, r.id, existing, tmdbKey(), globalThis.fetch, id));
+        const memory = !existing && savedIdentity(kind, r.id);
+        const id = existing?.id || memory?.id || availableId(kind, r.id);
+        const source = memory && kind === 'tv' ? {
+          ...latest, episodeIds: memory.episodeIds, episodeTitles: { ...memory.episodeTitles, ...latest.episodeTitles }, skip: memory.skip,
+        } : latest;
+        const next = keepArtwork(latest, await matchUnmatched(source, r.id, existing, tmdbKey(), globalThis.fetch, id));
         const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id && x.id !== next.id)]));
         const where = existing ? sectionOf(existing.id) : sectionKey;
         sections[where] = [...sections[where], next].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
         await store(sections);
         say(`«${item.title}» es ahora «${itemTitle(next)}», con ${kind === 'tv' ? `sus ${item.episodes.length} capítulos` : 'su vídeo'}.`);
-        await openEditor(where, r.id, kind);
+        await openEditor(where, r.id, kind, next);
       } catch (error) { note.textContent = error.message; }
       finally { applying = false; }
     };
@@ -1464,8 +1527,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       el('div', { class: 'actions' }, save, del,
         el('button', { type: 'button', class: 'ghost', onclick: () => openMatcher(sectionKey, item) },
           unidentifiedItem(item) ? 'Buscar en TMDB' : 'Corregir ficha de TMDB'),
-        unidentifiedItem(item) ? null : el('button', { type: 'button', class: 'ghost',
-          onclick: () => openEditor(sectionKey, item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar enlaces y temporadas'),
+        unidentifiedItem(item) && item.kind !== 'tv' ? null : el('button', { type: 'button', class: 'ghost',
+          onclick: () => openEditor(sectionKey, unidentifiedItem(item) ? null : item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie', item) }, 'Editar enlaces y temporadas'),
         el('button', { type: 'button', class: 'ghost', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -1552,26 +1615,36 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     reviewNav.replaceChildren(...[{ page: '', label: 'Todas', count: total }, ...LIBRARY_SECTIONS.map((s) => ({ ...s, count: counts[s.key] }))].map((s) =>
       el('a', { href: reviewPath + (s.page ? '/' + s.page : ''), class: `btn ${unidentifiedSection === s.page ? '' : 'secondary'}`,
         'aria-current': unidentifiedSection === s.page ? 'page' : null }, `${s.label} · ${s.count}`)));
-    list.replaceChildren(...LIBRARY_SECTIONS.filter((s) => !unidentified || !unidentifiedSection || s.page === unidentifiedSection).flatMap((section) => {
-      const items = (current.sections[section.key] || []).filter((item) => !unidentified || unidentifiedItem(item));
+    const search = unidentified ? '' : norm(publishedQuery.value.trim());
+    const type = unidentified ? '' : publishedType.value;
+    list.replaceChildren(...LIBRARY_SECTIONS.filter(s => (!type || s.key === type)
+      && (!unidentified || !unidentifiedSection || s.page === unidentifiedSection)).flatMap((section) => {
+      const items = (current.sections[section.key] || []).filter(item => (unidentified ? unidentifiedItem(item) : !item.pendingIdentification)
+        && (!search || norm(`${itemTitle(item)} ${itemYear(item)}`).includes(search)));
+      if (search && !items.length) return [];
       return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item', 'data-library-id': item.id },
         el('div', { class: 'library-item-row' },
           item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
           el('span', { class: 'meta' }, el('b', {}, `${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}`),
             el('span', { class: 'note' }, `${unidentifiedItem(item) ? 'Sin ficha de TMDB · ' : ''}${item.kind === 'tv' ? `${new Set(item.episodes.map((e) => e.season)).size} temporadas · ${item.episodes.length} capítulos con enlace` : 'Con enlace'}`)),
-          el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
+          item.pendingIdentification ? null : el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
             title: item.featured ? 'Quitar de la portada' : 'Mostrar en la portada de inicio', onclick: (event) => toggleFeatured(section.key, item, event.currentTarget) },
             item.featured ? '★ En portada' : '☆ Destacar'),
-          el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
+          item.pendingIdentification ? null : el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
           unidentifiedItem(item)
             ? [el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar'), el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')]
             : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar')))) : [el('p', { class: 'note' }, unidentified ? 'No quedan títulos sin identificar en esta sección.' : 'Todavía no hay ninguno.')])];
     }));
+    if (search && !list.children.length) list.append(el('p', { class: 'note', role: 'status' }, 'No hay títulos publicados que coincidan.'));
   }
 
   (async () => {
     try {
-      settings = await readSettings();
+      const library = await fetchLibrary({ fresh: true });
+      const { importState, ...configuration } = await readSettings();
+      settings = configuration;
+      const { matches = {}, pending = {} } = JSON.parse(importState || '{}');
+      remembered = matches;
       if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       if (settings.vidara) vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       const savedVidara = (settings.sourceFolders || []).filter(source => source.provider === 'vidara');
@@ -1579,7 +1652,9 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       if (settings.drive) driveKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
       for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key && s.url).map(s=>s.url).join('\n');
       if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
-      current = await fetchLibrary({ fresh: true });
+      current = { ...library, sections: Object.fromEntries(LIBRARY_SECTIONS.map(({ key }) => [
+        key, [...(library.sections[key] || []), ...(pending[key] || [])],
+      ])) };
       drawList();
       // The top follows TMDB by itself: once a day, when the administrator opens this page.
       let last = '';
@@ -1611,7 +1686,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   });
   if (unidentified) return [el('div', { class: 'section-head' }, el('h2', {}, 'No identificadas'),
     el('a', { href: '#/admin/biblioteca', class: 'btn secondary' }, 'Volver a Pelis y series')),
-    el('p', { class: 'note' }, 'Elige un tipo y pulsa «Buscar en TMDB» en el título pendiente. Puedes buscar por nombre o pegar el enlace de su ficha. Los vídeos y capítulos se conservan al identificarlo.'),
+    el('p', { class: 'note' }, 'Elige un tipo y pulsa «Buscar en TMDB» en el título pendiente. Puedes buscar por nombre o pegar el enlace de su ficha. Al elegir la ficha se publican sus vídeos y capítulos.'),
     reviewNav, editor, status, list];
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('div', { class: 'actions' }, reviewLink),
@@ -1634,10 +1709,12 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     readVidara, vidaraNote, vidaraRows,
     el('div',{class:'actions'},saveFolders,mixedScan),folderNote,folderReport,
     el('h3', {}, 'Leer las carpetas de LuluStream'),
-    el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
+    el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Los títulos nuevos quedan en «No identificadas» hasta que elijas su ficha. Los títulos ya identificados conservan la ficha aunque cambien de proveedor.'),
     el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,
     el('h3', {}, 'Portada y Top 10 de películas, series y documentales'),
     el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en un título para que salga en Inicio junto a los eventos destacados. Los tops de películas, series y documentales siguen las tendencias de la semana y la popularidad de TMDB. Se actualizan una vez al día al abrir esta página.'),
     el('div', { class: 'actions' }, topButton), topNote,
-    el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
+    el('h3', {}, 'Títulos publicados'), publishedSearch,
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Añadir un título con TMDB'), searchForm, results),
+    editor, status, list];
 }

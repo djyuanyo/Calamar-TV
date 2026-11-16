@@ -204,18 +204,23 @@ export async function readLibrarySettings() {
 }
 export async function saveLibrarySettings(settings) {
   if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
-  await setDoc(librarySettings, settings);
+  await setDoc(librarySettings, settings, { merge: true });
 }
-/** Writes the parts and then the index that names them; parts of an older, longer library are removed. */
-export async function publishLibraryParts({ index, parts }) {
+/** Publish the index, catalog parts and private import state together. */
+export async function publishLibraryParts({ index, parts, importState, beforeUpdatedAt }) {
   if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
   const indexRef = doc(db, 'calamarLibrary', 'index');
-  const before = await getDocFromServer(indexRef).then((s) => s.exists() ? JSON.parse(s.data().json) : null).catch(() => null);
-  for (const [name, part] of Object.entries(parts)) await setDoc(doc(db, 'calamarLibrary', name), { json: JSON.stringify(part), updatedAt: serverTimestamp() });
-  await setDoc(indexRef, { json: JSON.stringify(index), updatedAt: serverTimestamp() });
-  for (const [section, count] of Object.entries(before?.sections || {})) {
-    for (let n = index.sections[section] ?? 0; n < count; n++) await deleteDoc(doc(db, 'calamarLibrary', `${section}-${n}`)).catch(() => {});
-  }
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(indexRef);
+    const before = snapshot.exists() ? JSON.parse(snapshot.data().json) : null;
+    if ((before?.updatedAt || '') !== beforeUpdatedAt) throw new Error('El catálogo ha cambiado. Recarga la página antes de guardar.');
+    for (const [name, part] of Object.entries(parts)) transaction.set(doc(db, 'calamarLibrary', name), { json: JSON.stringify(part), updatedAt: serverTimestamp() });
+    transaction.set(indexRef, { json: JSON.stringify(index), updatedAt: serverTimestamp() });
+    transaction.set(librarySettings, { importState }, { merge: true });
+    for (const [section, count] of Object.entries(before?.sections || {})) {
+      for (let n = index.sections[section] ?? 0; n < count; n++) transaction.delete(doc(db, 'calamarLibrary', `${section}-${n}`));
+    }
+  });
 }
 
 // ---- Audience ---------------------------------------------------------------------------------

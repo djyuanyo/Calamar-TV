@@ -510,9 +510,10 @@ try {
       : path.endsWith('/tv/4500/season/2') ? { episodes: [{ episode_number: 1, name: 'Vuelta' }] } : {};
     return route.fulfill({ json: body });
   });
+  await page.getByText('Añadir un título con TMDB', { exact: true }).click();
   await page.getByLabel('Sección', { exact: true }).first().selectOption('movies');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
-  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('details').filter({ has: page.getByText('Añadir un título con TMDB', { exact: true }) }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
   await page.getByLabel('Enlace del vídeo', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
@@ -526,8 +527,9 @@ try {
   // A series: the season picker, one link per episode; episodes without a link are left out.
   await page.getByLabel('Sección', { exact: true }).first().selectOption('series');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Paco');
-  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('details').filter({ has: page.getByText('Añadir un título con TMDB', { exact: true }) }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Los hombres de Paco' }).click();
+  await page.getByLabel('Título del capítulo 1', { exact: true }).fill('Piloto del catálogo');
   await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco1x01aaaa');
   await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
   await page.getByText(/^Temporada 1 guardada y publicada: 1 capítulo con enlace/).waitFor();
@@ -552,10 +554,24 @@ try {
   await page.getByText(/^Guardado para la temporada 2: intro de 0:10 a 1:00/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   const paco = parts.parts['series-0'].items.find((m) => m.id === 's4500');
-  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto', 'https://luluvido.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://luluvido.com/paco2x01bbbb']]);
+  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto del catálogo', 'https://luluvido.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://luluvido.com/paco2x01bbbb']]);
   assert.deepEqual(paco.skip, { intro: [30, 105], credits: 50, seasons: { 2: { intro: [10, 60], credits: 50 } } });
-  // Editing later shows the saved links.
+  // Published search is local and reopening the series shows its edited episode name.
+  assert.equal(paco.episodes[0].sourceName, 'Piloto');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Buscar títulos publicados' }).fill('páco');
+  assert.equal(await page.locator('.library-item').count(), 2);
+  assert.equal(await page.locator('.library-item', { hasText: 'Los hombres de Paco' }).count(), 2);
+  await page.getByLabel('Tipo de título').selectOption('movies');
+  await page.getByText('No hay títulos publicados que coincidan.', { exact: true }).waitFor();
+  await page.getByLabel('Tipo de título').selectOption('series');
+  await page.locator('[data-library-id="s4500"]').getByRole('button', { name: 'Editar', exact: true }).click();
+  await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
+  await page.getByLabel('Título del capítulo 1', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Título del capítulo 1', { exact: true }).inputValue(), 'Piloto del catálogo');
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByLabel('Tipo de título').selectOption('');
+  await page.getByRole('searchbox', { name: 'Buscar títulos publicados' }).fill('');
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
   await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
   assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
@@ -594,7 +610,9 @@ try {
   await page.getByText(/Clave de LuluStream guardada \(privada\)\. Carpetas: Películas, Series/).waitFor();
   await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
   await page.getByText(/^Hecho: 0 películas y documentales y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
-  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
+  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: pendiente de identificar en TMDB/);
+  assert.equal(await page.evaluate(() => window.__libraryParts.parts['movies-0'].items.some(item => item.title === 'Zzzz desconocida')), false);
+  assert.ok(await page.evaluate(() => JSON.parse(window.__librarySettings.importState).pending.movies.some(item => item.title === 'Zzzz desconocida')));
   // Mixed folders preserve the film already on LuluStream and add a missing episode from Drive.
   await page.getByLabel('Clave de Google Drive',{exact:true}).fill('AIza'+'x'.repeat(35));
   await page.getByRole('button',{name:'Guardar clave de Google Drive',exact:true}).click();
@@ -1158,7 +1176,8 @@ try {
   await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
   await vidaraPage.getByText(/2 archivos detectados \(1 sin reproducción disponible\)/).waitFor();
   await vidaraPage.getByText(/«Documentales».*Vidara HTTP 500/).waitFor();
-  await vidaraPage.waitForFunction(() => window.__libraryParts.parts['movies-0'].items.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
+  await vidaraPage.waitForFunction(() => JSON.parse(window.__librarySettings.importState || '{}').pending?.movies.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
+  assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('KILxn38HjQjsv')), false);
   assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
   await vidaraPage.locator('[data-library-id="m90001"]').getByRole('button', { name: 'Editar', exact: true }).click();
   await vidaraPage.getByRole('button', { name: 'Corregir ficha de TMDB', exact: true }).click();

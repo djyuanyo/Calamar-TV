@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { folderReference, driveFolder, scanFolders, DRIVE_ENDPOINT } from '../web/library-folders.js';
-import { libraryFromScan, scanLulu, matchUnmatched } from '../web/library-lulu.js';
+import { libraryFromScan, scanLulu, matchUnmatched, rememberFolderMatches } from '../web/library-lulu.js';
+import { playable, LIBRARY_SECTIONS } from '../web/library.js';
 import { webPlayback } from '../web/catalog.js';
 
 const key = 'AIza' + 'x'.repeat(35);
@@ -212,4 +213,66 @@ test('identifying a pending film or series retains folder ownership and spare co
   const matched = await matchUnmatched(series, 8, null, 'tmdb', tmdb);
   assert.deepEqual(matched.episodes[0].folderSources, series.episodes[0].folderSources);
   assert.deepEqual(matched.episodes[0].mirrors, series.episodes[0].mirrors);
+});
+
+
+test('new imports require a manual choice even when TMDB could suggest a match', async () => {
+  const films = [{ section: 'movies', title: 'El viaje', file: 'El viaje (2020).mp4', link: video('new') }];
+  const series = [{ section: 'series', title: 'Casi igual', folder: 'Casi igual',
+    episodes: [{ season: 1, episode: 1, file: '1x01.mp4', link: video('episode-new') }] }];
+  const scan = complete(films, series, [{ id: 'drive:movies', provider: 'drive', section: 'movies' }, { id: 'drive:series', provider: 'drive', section: 'series' }]);
+  const first = await libraryFromScan(scan, { movies: [], series: [] }, 'tmdb', { remembered: {}, skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(first.added.pending, 2);
+  assert.ok(first.sections.movies[0].pendingIdentification);
+  assert.ok(first.sections.series[0].pendingIdentification);
+  const again = await libraryFromScan(scan, first.sections, 'tmdb', { remembered: {}, skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(again.added.pending, 0);
+  assert.deepEqual(again.sections, first.sections);
+});
+
+test('a reviewed folder restores its TMDB record and progress ID after changing provider', async () => {
+  const driveMovie = { id: 'm-old', kind: 'movie', title: 'Título oficial', url: video('old-film'), fromFolder: true,
+    file: 'El viaje (2020).mp4', folder: 'El viaje (2020)', tmdb: { id: 51, title: 'Título oficial', year: 2020 } };
+  const driveShow = { id: 's-old', kind: 'tv', title: 'Serie oficial', folder: 'Serie original', tmdb: { id: 72, title: 'Serie oficial' },
+    episodeTitles: { '1x1': 'Mi título' }, episodes: [{ id: 'episodio-antiguo', season: 1, episode: 1, name: 'Mi título', url: video('old-episode'), fromFolder: true }] };
+  const before = { movies: [driveMovie], series: [driveShow] };
+  const sources = [{ id: 'drive:movies', provider: 'drive', section: 'movies' },
+    { id: 'drive:series', provider: 'drive', section: 'series' }, { id: 'lulu:movies', provider: 'lulu', section: 'movies' },
+    { id: 'lulu:series', provider: 'lulu', section: 'series' }];
+  const gone = await libraryFromScan(complete([], [], sources), before, 'tmdb', { remembered: {}, skipDuplicates: true, fetcher: noTmdb });
+  assert.deepEqual(gone.sections, { movies: [], series: [] });
+  const remembered = JSON.parse(JSON.stringify(rememberFolderMatches({}, before, gone.sections)));
+  const luluMovie = 'https://luluvido.com/lulufilm1234';
+  const luluEpisode = 'https://luluvido.com/luluepis1234';
+  const incoming = complete([
+    { section: 'movies', title: 'Otra codificación', file: 'Otra codificación.mkv', folder: 'El viaje (2020)', link: luluMovie },
+    { section: 'movies', title: 'El viaje', file: 'El viaje (2024).mp4', year: 2024, link: 'https://luluvido.com/remake000000' },
+  ], [{ section: 'series', title: 'Serie original', folder: 'Serie original',
+    episodes: [{ season: 1, episode: 1, file: '1x01.mp4', link: luluEpisode }] }], sources);
+  const paths = [];
+  const restored = await libraryFromScan(incoming, gone.sections, 'tmdb', { remembered, skipDuplicates: true, fetcher: async url => {
+    const path = new URL(url).pathname;
+    paths.push(path);
+    if (path.endsWith('/movie/51')) return json({ title: 'Título oficial', release_date: '2020-01-10' });
+    if (path.endsWith('/tv/72')) return json({ name: 'Serie oficial' });
+    if (path.endsWith('/tv/72/season/1')) return json({ episodes: [{ episode_number: 1, name: 'Nombre oficial' }] });
+    throw Error('Only confirmed TMDB IDs may be queried');
+  } });
+  const film = restored.sections.movies.find(item => item.id === driveMovie.id);
+  const show = restored.sections.series[0];
+  assert.equal(film.url, luluMovie);
+  assert.equal(film.tmdb.id, 51);
+  assert.equal(show.episodes[0].url, luluEpisode);
+  assert.equal(show.tmdb.id, 72);
+  assert.deepEqual(show.episodeTitles, driveShow.episodeTitles);
+  assert.equal(playable(LIBRARY_SECTIONS[0], film).progress.key, playable(LIBRARY_SECTIONS[0], driveMovie).progress.key);
+  assert.equal(playable(LIBRARY_SECTIONS[1], show, show.episodes[0]).progress.key,
+    playable(LIBRARY_SECTIONS[1], driveShow, driveShow.episodes[0]).progress.key);
+  assert.equal(restored.added.pending, 1, 'a remake with a different year still needs review');
+  assert.equal(paths.length, 3);
+
+  const inOneScan = await libraryFromScan(incoming, before, 'tmdb', { remembered, skipDuplicates: true, fetcher: noTmdb });
+  assert.equal(inOneScan.sections.movies.find(item => item.id === driveMovie.id).url, luluMovie);
+  assert.equal(inOneScan.sections.series[0].episodes[0].id, 'episodio-antiguo');
+  assert.equal(inOneScan.sections.series[0].episodes[0].url, luluEpisode);
 });

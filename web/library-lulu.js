@@ -5,7 +5,7 @@ import { keepArtwork } from './library-art.js';
 // The key lives only in the admin-only settings; when the browser cannot call the API directly
 // (CORS), the request goes through the hosting (calamar-lulu.php), which only relays the JSON.
 import { LULU_ENDPOINT } from './catalog.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, findTmdbTitle, freeTmdbTitleId } from './library-tmdb.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, findTmdbTitle, freeTmdbTitleId, defaultEpisodeId, episodeTitleKey } from './library-tmdb.js';
 import { videoKey as codeOf, managedByScan, reconcileScan } from './library-sync.js';
 
 // LuluStream moved to luluvido.com (lulustream.com stopped answering): the same API, tried there first.
@@ -156,7 +156,10 @@ export async function scanLulu(key, { fetcher, onFolder = () => {} } = {}) {
     if (section.section === 'movies') {
       const inside = [];
       for (const sub of content.folders) inside.push(...await videos(sub, bucket));
-      for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
+      const perFolder = new Map();
+      for (const f of inside) perFolder.set(f.folder, (perFolder.get(f.folder) || 0) + 1);
+      for (const f of [...content.files, ...inside]) films.push({ section: 'movies', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '',
+        ...(f.folder && perFolder.get(f.folder) === 1 ? { folder: f.folder } : {}) });
       continue;
     }
     if (section.section === 'documentaries') for (const f of content.files) films.push({ section: 'documentaries', ...cleanTitle(f.title), file: f.title, link: link(f.code), uploaded: f.uploaded || '' });
@@ -202,6 +205,67 @@ const namedItem = (sections, wanted, kind) => {
 };
 /** A video's file name as a key (title and year), the same in Drive and LuluStream for the same film. */
 export const fileKey = (name) => { const c = cleanTitle(name || ''), t = titleKey(c.title); return t ? t + (c.year || '') : ''; };
+const folderKey = (kind, section, name) => {
+  const key = fileKey(name);
+  return key ? `${section}:${kind}:${key}` : '';
+};
+const filmFolderKey = (section, name) => {
+  const key = fileKey(name);
+  return key ? `${section}:film-folder:${key}` : '';
+};
+function trustedFilmFolder(folder, item, file = item.file) {
+  if (!folder || /^(?:pel[ií]culas|pelis|movies|film[s]?|cine|documentales|documentaries|videos?)$/i.test(folder.trim())) return '';
+  const name = cleanTitle(folder);
+  const fileTitle = cleanTitle(file || '');
+  const folderTitle = titleKey(name.title);
+  return folderTitle && ((folderTitle === titleKey(fileTitle.title) && (!name.year || !fileTitle.year || name.year === fileTitle.year))
+    || (folderTitle === titleKey(item.tmdb?.title || item.title) && (!name.year || name.year === Number(item.tmdb?.year || item.year)))) ? folder : '';
+}
+const itemFolderKeys = (section, item) => {
+  const names = item.kind === 'tv' ? [item.folder] : [item.file];
+  return [...new Set([
+    ...names.map(name => folderKey(item.kind, section, name)),
+    ...(item.kind === 'movie' ? [...(item.files || []).map(key => `${section}:movie:${key}`), filmFolderKey(section, trustedFilmFolder(item.folder, item))] : []),
+  ].filter(Boolean))];
+};
+
+/** Remember reviewed source names even when all the videos of a title have been removed. */
+export function rememberFolderMatches(remembered, ...catalogues) {
+  const next = { ...remembered };
+  for (const sections of catalogues) for (const [section, items] of Object.entries(sections)) {
+    for (const item of items) {
+      const tmdbId = Number(item.tmdb?.id);
+      if (!(tmdbId > 0) || item.status === 'unmatched') continue;
+      const keys = [...new Set([...(next[item.id]?.keys || []), ...itemFolderKeys(section, item)])];
+      const title = titleKey(item.tmdb?.title || item.title);
+      const year = item.tmdb?.year || item.year;
+      const canonical = title && year ? `${section}:${item.kind}:${title}${year}` : '';
+      if (!keys.length && !canonical) continue;
+      const episodeIds = { ...next[item.id]?.episodeIds };
+      for (const e of item.episodes || []) {
+        const key = episodeTitleKey(e.season, e.episode);
+        if (e.id && e.id !== defaultEpisodeId(item.id, e.season, e.episode)) episodeIds[key] = e.id;
+        else delete episodeIds[key];
+      }
+      next[item.id] = {
+        tmdbId, kind: item.kind, section, keys, ...(canonical ? { canonical, year: Number(year) } : {}),
+        ...(Object.keys(episodeIds).length ? { episodeIds } : {}),
+        ...(item.episodeTitles ? { episodeTitles: item.episodeTitles } : {}),
+        ...(item.skip ? { skip: item.skip } : {}),
+      };
+    }
+  }
+  return next;
+}
+
+function folderMatches(remembered) {
+  const keys = new Map();
+  for (const [id, entry] of Object.entries(remembered)) for (const key of new Set([...entry.keys, entry.canonical].filter(Boolean))) {
+    keys.set(key, keys.has(key) ? null : { ...entry, id });
+  }
+  return keys;
+}
+
 const linksOf = (item) => [item.url, ...(item.mirrors || [])].filter(Boolean).map(codeOf);
 /**
  * A film with one more copy. Its own link found in a folder: the file name is remembered (to recognise
@@ -251,19 +315,25 @@ export async function seriesWithLinks(item, info, links, key, fetcher, id) {
 export async function matchUnmatched(item, tmdbId, existing, key, fetcher = globalThis.fetch, id) {
   if (item.kind !== 'tv') {
     const { info } = await tmdbDetails(tmdbId, 'movie', key, fetcher);
-    return { ...item, ...movieItem(info, item.url, existing?.id || id) };
+    const matched = { ...existing, ...item, ...movieItem(info, item.url, existing?.id || id), file: item.file || existing?.file || '' };
+    if (existing?.folder && !matched.folder) matched.folder = existing.folder;
+    delete matched.pendingIdentification;
+    return matched;
   }
   const { info } = await tmdbDetails(tmdbId, 'tv', key, fetcher);
-  const base = { ...item, ...existing, episodes: [...(existing?.episodes || []).filter(e => !item.episodes.some(old => old.season === e.season && old.episode === e.episode)), ...item.episodes] };
+  const base = { ...item, ...existing, episodeTitles: { ...item.episodeTitles, ...existing?.episodeTitles }, episodes: [...(existing?.episodes || []).filter(e => !item.episodes.some(old => old.season === e.season && old.episode === e.episode)), ...item.episodes] };
   const series = await seriesWithLinks(base, info, item.episodes.map((e) => ({ season: e.season, episode: e.episode, link: e.url })), key, fetcher, existing?.id || id);
-  return { ...series, ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}), folder: item.folder || existing?.folder || info.title };
+  const matched = { ...series, ...(Object.hasOwn(item, "trailerUrl") ? { trailerUrl: item.trailerUrl } : {}), folder: item.folder || existing?.folder || info.title };
+  delete matched.pendingIdentification;
+  return matched;
 }
 
 /**
  * Adds what the scan found to the library: films and series matched in TMDB replace the same title,
  * other seasons and the titles added by hand are kept. Returns { sections, added, unknown }.
  */
-export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {}, skipDuplicates = false } = {}) {
+export async function libraryFromScan(scan, current, key, { fetcher, onProgress = () => {}, skipDuplicates = false, remembered } = {}) {
+  const review = remembered !== undefined;
   const skipped = { films: 0, episodes: 0 };
   const sections = Object.fromEntries(Object.entries(current).map(([k, items]) => [k, [...items]]));
   // Adopt pre-provenance imports before collecting their spare copies.
@@ -284,7 +354,7 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   const drop = (id) => { for (const k of Object.keys(sections)) sections[k] = sections[k].filter((x) => x.id !== id); };
   // Titles already matched (by the scan or by hand) are recognised by their links or their folder.
   const matched = Object.entries(sections).flatMap(([section, items]) => items.filter((x) => x.tmdb?.id && x.status !== 'unmatched').map((x) => ({ section, item: x })));
-  const byLink = new Map(matched.flatMap(({ section, item }) => [item.url, ...(item.episodes || []).map((e) => e.url)].filter(Boolean).map((url) => [codeOf(url), { section, item }])));
+  const byLink = new Map(matched.flatMap(({ section, item }) => [...linksOf(item), ...(item.episodes || []).flatMap(linksOf)].map(code => [code, { section, item }])));
   const byFolder = new Map(matched.filter(({ item }) => item.kind === 'tv' && item.folder).map((m) => [plain(decodeHtml(m.item.folder)), m]));
   const unknown = [...scan.unknown];
   let films = 0, shows = 0, episodes = 0, pending = 0, done = 0;
@@ -292,25 +362,34 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   // The same film in Drive and in LuluStream is one title: the one already in the library (identified or not)
   // stays and the other copy is kept as a spare link, never offered again to be identified.
   const filmEntries = () => Object.entries(sections).flatMap(([section, items]) => items.filter((x) => x.kind !== 'tv').map((item) => ({ section, item })));
-  const keepCopy = (entry, file, link) => {
+  const keepCopy = (entry, file, link, folder) => {
     const list = sections[entry.section], at = list.indexOf(entry.item);
-    if (at >= 0) list[at] = withCopy(entry.item, file, link);
+    if (at < 0) return;
+    const next = withCopy(entry.item, file, link);
+    const verified = review && trustedFilmFolder(folder, next, file);
+    list[at] = verified ? { ...next, folder: verified } : next;
   };
   const copyOf = (f) => {
     const fk = fileKey(f.file), code = codeOf(f.link);
-    const hits = filmEntries().filter(({ item }) => linksOf(item).includes(code)
-      || (fk && ((item.files || []).includes(fk) || (item.status === 'unmatched' && fileKey(item.file) === fk))));
+    const hits = filmEntries().filter(({ section, item }) => linksOf(item).includes(code)
+      || (fk && (!review || (section === f.section && item.status === 'unmatched')) && ((item.files || []).includes(fk) || (item.status === 'unmatched' && fileKey(item.file) === fk))));
     return hits.find(({ item }) => item.tmdb?.id && item.status !== 'unmatched') || hits[0] || null;
   };
   // First the file names of the copies the library already plays, so their twins are recognised.
   if (skipDuplicates) for (const f of scan.films) {
     const entry = filmEntries().find(({ item }) => linksOf(item).includes(codeOf(f.link)));
-    if (entry) keepCopy(entry, f.file, f.link);
+    if (entry) keepCopy(entry, f.file, f.link, f.folder);
   }
+  const approved = review ? folderMatches(rememberFolderMatches(remembered, sections)) : null;
   for (const f of scan.films) {
     onProgress(++done, total, f.title);
     const known = byLink.get(codeOf(f.link));
-    const copy = skipDuplicates ? copyOf(f) || namedItem(sections, f, 'movie') : null;
+    const fileMatch = approved?.get(folderKey('movie', f.section, f.file));
+    const candidate = approved?.get(filmFolderKey(f.section, f.folder));
+    const folderMatch = candidate && (!f.year || !candidate.year || candidate.year === f.year) ? candidate : null;
+    const memory = fileMatch && folderMatch && fileMatch.id !== folderMatch.id ? null : fileMatch || folderMatch;
+    const copy = skipDuplicates ? (memory && filmEntries().find(({ item }) => item.id === memory.id && Number(item.tmdb?.id) === memory.tmdbId))
+      || copyOf(f) || (!review ? namedItem(sections, f, 'movie') : null) : null;
     if (copy) {
       // A pending duplicate left by an earlier import goes; its link stays as a spare of the title.
       for (const e of filmEntries()) {
@@ -320,26 +399,30 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
           keepCopy(filmEntries().find((x) => x.item.id === copy.item.id) || copy, e.item.file, e.item.url);
         }
       }
-      keepCopy(filmEntries().find((x) => x.item.id === copy.item.id) || copy, f.file, f.link);
+      keepCopy(filmEntries().find((x) => x.item.id === copy.item.id) || copy, f.file, f.link, f.folder);
       skipped.films++; continue;
     }
     // The day LuluStream received the video is the day it arrived (for «Recién llegada»).
     const arrived = (item) => (f.uploaded ? { ...item, addedAt: f.uploaded } : item);
     if (known && known.item.kind !== 'tv') { put(known.section, arrived({ ...known.item, url: f.link })); films++; continue; }
-    const match = await bestMatch(f.title, f.year, f.section === 'movies' ? 'movie' : 'any', key, fetcher);
+    const match = review ? memory && !find(memory.id) && { id: memory.tmdbId, kind: 'movie' }
+      : await bestMatch(f.title, f.year, f.section === 'movies' ? 'movie' : 'any', key, fetcher);
     if (!match || match.kind !== 'movie') {
-      put(f.section, arrived(unmatchedFilm(f))); pending++;
-      unknown.push(`${f.file}: añadida sin ficha de TMDB como «${f.title || f.file}»`);
+      const item = { ...unmatchedFilm(f), ...(review ? { pendingIdentification: true, ...(f.folder ? { folder: f.folder } : {}) } : {}) };
+      put(f.section, arrived(review && skipDuplicates ? withCopy(item, f.file, f.link) : item)); pending++;
+      unknown.push(`${f.file}: ${review ? 'pendiente de identificar en TMDB' : 'añadida sin ficha de TMDB'}`);
       continue;
     }
     const matchedTitle = findTmdbTitle(sections, 'movie', match.id);
     if (skipDuplicates && matchedTitle) {
-      keepCopy(filmEntries().find((x) => x.item.id === matchedTitle.id), f.file, f.link);
+      keepCopy(filmEntries().find((x) => x.item.id === matchedTitle.id), f.file, f.link, f.folder);
       skipped.films++; continue;
     }
     const { info } = await tmdbDetails(match.id, 'movie', key, fetcher);
     drop(unmatchedFilm(f).id);
-    put(f.section, arrived(movieItem(info, f.link, matchedTitle?.id || freeTmdbTitleId(sections, 'movie', info.id))));
+    const film = movieItem(info, f.link, matchedTitle?.id || memory?.id || freeTmdbTitleId(sections, 'movie', info.id, Object.keys(remembered || {})));
+    const folder = review && trustedFilmFolder(f.folder, film, f.file);
+    put(memory?.section || f.section, arrived({ ...film, file: f.file, ...(folder ? { folder } : {}) }));
     films++;
   }
   // Older callers without complete folder inventories retain the historical mirror handling.
@@ -358,17 +441,23 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
   }
   for (const s of scan.series) {
     onProgress(++done, total, s.title);
+    const nameKey = folderKey('tv', s.section, s.folder);
+    const memory = approved?.get(nameKey);
+    const live = memory && find(memory.id);
+    const waiting = review && sections[s.section]?.find(item => item.kind === 'tv' && item.status === 'unmatched' && nameKey
+      && folderKey('tv', s.section, item.folder) === nameKey);
     let known = s.episodes.map((e) => byLink.get(codeOf(e.link))).find((m) => m?.item.kind === 'tv')
-      || byFolder.get(plain(s.folder)) || (skipDuplicates ? namedItem(sections, s, 'tv') : null);
+      || (review ? (live && Number(live.tmdb?.id) === memory.tmdbId ? { section: memory.section, item: live } : (!memory || live) && waiting && { section: s.section, item: waiting })
+        : byFolder.get(plain(s.folder)) || (skipDuplicates ? namedItem(sections, s, 'tv') : null));
     if (skipDuplicates && known) {
       const latest = find(known.item.id) || known.item;
-      const item = { ...latest, episodes: latest.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
+      const item = { ...latest, folder: s.folder, episodes: latest.episodes.map(e => s.episodes.filter(f => f.season === e.season && f.episode === e.episode)
         .reduce((old, f) => withCopy(old, f.file, f.link), e)) };
       put(known.section, item); known = { ...known, item };
     }
     let info = known?.item.tmdb;
-    if (!info) {
-      const match = await bestMatch(s.title, s.year, 'tv', key, fetcher);
+    if (!info?.id) {
+      const match = review ? memory && !live && { id: memory.tmdbId } : await bestMatch(s.title, s.year, 'tv', key, fetcher);
       if (!match) {
         if (skipDuplicates && known) {
           const before = known.item;
@@ -381,8 +470,13 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
           }
           continue;
         }
-        put(s.section, unmatchedSeries(s)); pending++;
-        unknown.push(`${s.folder}: añadida sin ficha de TMDB (${s.episodes.length} capítulos)`);
+        const item = unmatchedSeries(s);
+        if (review) {
+          const base = item.id;
+          for (let n = 2; find(item.id); n++) item.id = `${base}-${n}`;
+        }
+        put(s.section, { ...item, ...(review ? { pendingIdentification: true } : {}) }); pending++;
+        unknown.push(`${s.folder}: ${review ? 'pendiente de identificar en TMDB' : 'añadida sin ficha de TMDB'} (${s.episodes.length} capítulos)`);
         continue;
       }
       info = (await tmdbDetails(match.id, 'tv', key, fetcher)).info;
@@ -402,8 +496,14 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
       return !duplicate;
     }) : s.episodes;
     if (skipDuplicates && !incoming.length) continue;
-    const linked = await seriesWithLinks(before, info, incoming, key, fetcher,
-      before?.tmdb?.id ? before.id : freeTmdbTitleId(sections, 'tv', info.id));
+    const recovered = !before && memory && !live ? {
+      id: memory.id, tmdb: info,
+      ...(memory.episodeIds ? { episodeIds: memory.episodeIds } : {}),
+      ...(memory.episodeTitles ? { episodeTitles: memory.episodeTitles } : {}),
+      ...(memory.skip ? { skip: memory.skip } : {}),
+    } : null;
+    const linked = await seriesWithLinks(before || recovered, info, incoming, key, fetcher,
+      before?.tmdb?.id ? before.id : recovered?.id || freeTmdbTitleId(sections, 'tv', info.id, Object.keys(remembered || {})));
     // Each episode arrived the day LuluStream received it (for «Nuevo episodio»).
     const uploads = new Map((skipDuplicates ? incoming : s.episodes).filter((e) => e.uploaded && codeOf(e.link)).map((e) => [codeOf(e.link), e.uploaded]));
     const item = linked && { ...linked, episodes: (linked.episodes || []).map(e => {
@@ -415,8 +515,9 @@ export async function libraryFromScan(scan, current, key, { fetcher, onProgress 
     // A series arrived with its first uploaded episode.
     const first = s.episodes.map((e) => e.uploaded).filter(Boolean).sort()[0];
     if (item?.episodes?.length) {
-      drop(unmatchedSeries(s).id);
-      put(known?.section || Object.entries(sections).find(([,items])=>items.some(x=>x.id===before?.id))?.[0] || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += incoming.length;
+      const unmatched = review ? waiting : find(unmatchedSeries(s).id);
+      if (unmatched?.status === 'unmatched') drop(unmatched.id);
+      put(known?.section || Object.entries(sections).find(([,items])=>items.some(x=>x.id===before?.id))?.[0] || memory?.section || s.section, { ...item, folder: s.folder, ...(first ? { addedAt: first } : {}) }); shows++; episodes += incoming.length;
     }
   }
   const reconciled = reconcileScan(sections, scan);

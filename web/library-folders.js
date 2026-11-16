@@ -105,7 +105,8 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     for (const child of data.folders) out.push(...await videos(child, depth + 1, next));
     return out;
   };
-  const film = (f, section) => films.push({ section, ...cleanTitle(f.title), file: f.title, link: f.link, uploaded: f.uploaded || '' });
+  const film = (f, section, single = false) => films.push({ section, ...cleanTitle(f.title), file: f.title, link: f.link, uploaded: f.uploaded || '',
+    ...(single && f.folder ? { folder: f.folder.split('/').pop().trim() } : {}) });
   const show = (name, files, section) => {
     const episodes = [];
     for (const f of files) {
@@ -145,14 +146,17 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     // An unavailable file still exists in Vidara and must not be reconciled as a deletion.
     const all = ref.provider === 'vidara' ? files.filter(f => !f.unavailable) : files;
     if (ref.provider === 'vidara') vidaraReport.push({ name: data.name, count: files.length, unavailable: files.length - all.length });
-    if (source.section === 'movies') { for (const f of all) film(f, source.section); continue; }
+    const perFolder = new Map();
+    for (const f of all) perFolder.set(f.folder, (perFolder.get(f.folder) || 0) + 1);
+    const addFilm = f => film(f, source.section, perFolder.get(f.folder) === 1);
+    if (source.section === 'movies') { for (const f of all) addFilm(f); continue; }
     if (ref.provider === 'vidara') {
       for (const file of all) {
         const marker = file.title.match(EPISODE_NAME);
         const seasonTitle = vidaraSeriesTitle(file.folder);
         const episode = (source.section === 'series' || marker || seasonTitle) && episodeOf(file.title, file.folder);
         if (!episode) {
-          if (source.section === 'documentaries') film(file, source.section);
+          if (source.section === 'documentaries') addFilm(file);
           else unknown.push(`${file.title}: indica el capítulo con 1x01 o S01E01.`);
           continue;
         }
@@ -174,11 +178,11 @@ export async function scanFolders(sources, settings, { fetcher = globalThis.fetc
     // or it has season folders: a film whose name starts with a number («11M (2022)») does not make it a series.
     const isShow = (source.section === 'documentaries' ? mostlyEpisodes(data.files, true) : data.files.some(f => episodeOf(f.title))) || data.folders.some(f => /^(?:temporada|season|T\s*\d)/i.test(f.name));
     if (isShow) { show(data.name, all, source.section); continue; }
-    if (source.section === 'documentaries') for (const f of data.files) film(f, source.section);
+    if (source.section === 'documentaries') for (const f of data.files) addFilm({ ...f, folder: data.name });
     else if (data.files.length) unknown.push(`${data.name}: coloca cada serie en su propia carpeta.`);
     for (const child of data.folders) {
       const content = await videos(child);
-      if (source.section === 'documentaries' && !mostlyEpisodes(content)) for (const f of content) film(f, source.section);
+      if (source.section === 'documentaries' && !mostlyEpisodes(content)) for (const f of content) addFilm(f);
       else show(child.name, content, source.section);
     }
   }

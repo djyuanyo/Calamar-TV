@@ -178,7 +178,26 @@ export function episodePremiereWindow(episode, today = madridDay()) {
 
 function scheduledEpisodes(episodes, season, today = madridDay()) {
   return episodes.filter(e => episodePremiereWindow(e, today))
-    .map(({ episode, aired, name, still }) => ({ season, episode, aired, name, still }));
+    .map(({ episode, aired, name, still, sourceName }) => ({ season, episode, aired, name: sourceName ?? name, still }));
+}
+
+export const episodeTitleKey = (season, episode) => `${season}x${episode}`;
+
+/** Publish the name used by web and Android while keeping the source name for restoring it. */
+export function applyEpisodeTitles(item) {
+  if (item.kind !== 'tv') return item;
+  const apply = episode => {
+    const { sourceName, ...entry } = episode;
+    const title = item.episodeTitles?.[episodeTitleKey(episode.season, episode.episode)];
+    if (title) return { ...entry, name: title, sourceName: sourceName ?? entry.name ?? '' };
+    return sourceName === undefined ? episode : { ...entry, name: sourceName };
+  };
+  const tmdb = item.tmdb;
+  return { ...item, episodes: (item.episodes || []).map(apply), ...(tmdb ? { tmdb: { ...tmdb,
+    ...(tmdb.upcoming ? { upcoming: tmdb.upcoming.map(apply) } : {}),
+    ...(tmdb.nextEpisode ? { nextEpisode: apply(tmdb.nextEpisode) } : {}),
+    ...(tmdb.lastEpisode ? { lastEpisode: apply(tmdb.lastEpisode) } : {}),
+  } } : {}) };
 }
 
 /** The YouTube key of the title's trailer in Spanish (Spain first, then any Spanish), or ''. */
@@ -249,9 +268,9 @@ export const findTmdbTitle = (sections, kind, id) => Object.values(sections).fla
   .find(item => item.kind === kind && item.status !== 'unmatched' && Number(item.tmdb?.id) === Number(id));
 
 /** Catalogue IDs are permanent even if their TMDB reference changes. */
-export function freeTmdbTitleId(sections, kind, id) {
+export function freeTmdbTitleId(sections, kind, id, reserved = []) {
   const base = `${kind === 'tv' ? 's' : 'm'}${id}`;
-  const occupied = new Set(Object.values(sections).flat().map(item => item.id));
+  const occupied = new Set([...Object.values(sections).flat().map(item => item.id), ...reserved]);
   let candidate = base;
   for (let n = 2; occupied.has(candidate); n++) candidate = `${base}-${n}`;
   return candidate;
@@ -268,7 +287,7 @@ export async function correctTmdbTitle(item, tmdbId, key, fetcher = globalThis.f
   const episodeData = new Map(await Promise.all(seasonNumbers.map(async season => [
     season, new Map((await seasonEpisodes(info.id, season, key, fetcher)).map(e => [e.episode, e])),
   ])));
-  next.episodes = saved.map(({ name, overview, still, runtime, aired, ...episode }) => ({
+  next.episodes = saved.map(({ name, sourceName, overview, still, runtime, aired, ...episode }) => ({
     name: '', overview: '', still: '', ...episode, ...episodeData.get(episode.season)?.get(episode.episode),
   }));
   return next;
@@ -278,13 +297,20 @@ export async function correctTmdbTitle(item, tmdbId, key, fetcher = globalThis.f
  * A series with the links of one season saved: episodes of other seasons are kept, episodes of this season
  * take the new links. Future episodes are saved separately as metadata, without a play link.
  */
+export const defaultEpisodeId = (id, season, episode) => `e${id.replace(/^s/, '')}x${season}x${episode}`;
+
 export function seriesWithSeason(existing, info, season, episodes, links, id = existing?.tmdb?.id ? existing.id : `s${info.id}`) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
   const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => {
     const url = String(links[e.episode]).trim();
-    const old = existing?.episodes?.find(saved => saved.season === season && saved.episode === e.episode && videoKey(saved.url) === videoKey(url));
-    const episodeId = existing?.tmdb?.id && old?.id || `e${id.replace(/^s/, '')}x${season}x${e.episode}`;
-    return { ...old, id: episodeId, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
+    const previous = existing?.episodes?.find(saved => saved.season === season && saved.episode === e.episode);
+    const old = previous && videoKey(previous.url) === videoKey(url) ? previous : null;
+    const episodeId = (existing?.tmdb?.id && existing.id === id && previous?.id)
+      || existing?.episodeIds?.[episodeTitleKey(season, e.episode)] || defaultEpisodeId(id, season, e.episode);
+    const saved = { ...old, id: episodeId, season, episode: e.episode, name: e.sourceName ?? e.name, overview: e.overview, still: e.still,
+      ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
+    delete saved.sourceName;
+    return saved;
   });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.

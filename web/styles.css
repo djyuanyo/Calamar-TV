@@ -924,6 +924,7 @@ label[hidden] { display: none; }
 .library-search-form .library-search-row { flex-wrap: wrap; }
 .library-search-form select { flex: 0 0 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
 .library-search-form input { flex: 1 1 220px; }
+.library-published-search input { min-width: 0; }
 .library-editor { display: grid; gap: 12px; margin: 14px 0; padding: 16px; border: 1px solid var(--accent); border-radius: 14px; background: var(--surface); }
 .library-editor[hidden] { display: none; }
 .library-editor-head { display: flex; gap: 14px; align-items: flex-start; }
@@ -936,6 +937,12 @@ label[hidden] { display: none; }
 .library-item-row { display: flex; align-items: center; gap: 12px; }
 .library-item-row img, .library-item-row .thumb { width: 40px; height: 60px; object-fit: cover; border-radius: 6px; flex: none; }
 .library-item-row .meta { display: grid; flex: 1; min-width: 0; }
+.library-episode-row label { display: grid; gap: 4px; font-size: .9rem; }
+@media (max-width: 600px) {
+  .library-item-row { flex-wrap: wrap; gap: 8px; }
+  .library-item-row .meta { flex-basis: calc(100% - 48px); }
+  .library-item-row .meta b { white-space: normal; }
+}
 .ghost.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 
 /* Signing in an app from a phone (tv-login.js). */
