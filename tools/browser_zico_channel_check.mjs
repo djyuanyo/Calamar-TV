@@ -36,6 +36,9 @@ try {
     requests.push(u.href);
     const headers={'access-control-allow-origin':'*'};
     if (u.hostname==='cdn.jsdelivr.net' && u.pathname.includes('/hls.js@')) return route.fulfill({contentType:'text/javascript',body:hls});
+    if (u.href==='https://bp.zicotv.cc/api/v1/events/116061') return route.fulfill({headers,json:{data:{sources:[
+      {source:'own',channel_id:56429,name:'[RAVEN] DAZN EVENTOS 17',player_url:'https://bp.zicotv.cc/api/player/56429',is_premium:false},
+    ]}}});
     if (u.href==='https://bp.zicotv.cc/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[
       {type:'direct',url:'https://ads.example/preroll.mp4'},
       {type:'iframe',url:'https://ads.example/player'},
@@ -47,7 +50,7 @@ try {
     if (u.hostname!=='calamarmenciano.com') return route.abort();
     if (u.searchParams.has('event')) return route.fulfill({headers,json:{data:{sources:[]}}});
     if (u.searchParams.has('page')) {
-      assert.ok(['https://bp.zicotv.cc/api/player/1','https://bp.zicotv.cc/channels/1'].includes(u.searchParams.get('page')));
+      assert.ok(['https://bp.zicotv.cc/api/player/1','https://bp.zicotv.cc/channels/1','https://bp.zicotv.cc/api/player/56429'].includes(u.searchParams.get('page')));
       return route.fulfill({headers,json:u.searchParams.has('list')?{items:[{id:'0123456789abcdef',name:'Prueba · Señal 1'}]}:{url:'calamar-player.php?seg=master&sig=ok'}});
     }
     if (u.searchParams.get('seg')==='master') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=ok\n#EXT-X-ENDLIST\n'});
@@ -104,6 +107,22 @@ try {
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
   await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
+  assert.equal(await page.locator('#player iframe').count(),0);
+  await page.locator('#player-close').click();
+  await page.goto(base+'/#/admin/editar-evento/zico-event-700');
+  await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');
+  await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
+  await page.waitForFunction(()=>window.__published?.events.find(event=>event.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/events/116061');
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').zicoManualStreams),['https://bp.zicotv.cc/events/116061']);
+  await page.goto(base+'/#/admin/evento');
+  await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
+  await page.getByText(/^Guardado\. Agenda de ZicoTV:/).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').streams),['https://bp.zicotv.cc/events/116061']);
+  await page.goto(base+'/#/directo');
+  await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
+  await page.waitForFunction(()=>{const video=document.querySelector('#video');return video?.videoWidth>0&&video.currentTime>.2;},null,{timeout:20000});
+  assert.ok(requests.includes('https://bp.zicotv.cc/api/v1/events/116061'));
+  assert.ok(requests.some(url=>new URL(url).searchParams.get('page')==='https://bp.zicotv.cc/api/player/56429'));
   assert.equal(await page.locator('#player iframe').count(),0);
   assert.deepEqual(errors,[]);
   await page.locator('#player-close').click();

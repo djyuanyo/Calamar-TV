@@ -87,9 +87,21 @@ function signalKey(address) {
 }
 function manualSignals(item, eventId = item?.zicoEventId) {
   const imported = new Set((item?.zicoStreams || []).map(signalKey));
+  const selected = new Set((item?.zicoManualStreams || []).map(signalKey));
   const previousEvent = eventId || (isZicoAgendaEvent(item) ? item.id.slice('zico-event-'.length) : '');
-  if (previousEvent) imported.add(`${ORIGIN}/api/v1/events/${previousEvent}`);
-  return (item?.streams || []).filter(url => !imported.has(signalKey(url)));
+  if (previousEvent && !Array.isArray(item?.zicoStreams)) imported.add(`${ORIGIN}/api/v1/events/${previousEvent}`);
+  return (item?.streams || []).filter(url => selected.has(signalKey(url)) || !imported.has(signalKey(url)));
+}
+
+/** Keep an administrator's replacement distinct from the feed's automatically selected sources. */
+export function editedZicoEventStreams(item, streams) {
+  if (!usesZicoAgenda(item)) return { ...item, streams };
+  const automatic = new Set((item.zicoStreams || []).map(signalKey));
+  const selected = new Set((item.zicoManualStreams || []).map(signalKey));
+  const zicoManualStreams = streams.filter(url => selected.has(signalKey(url)) || !automatic.has(signalKey(url)));
+  // Existing Android versions use zicoStreams to recognize event lookup URLs as playable.
+  const zicoStreams = streams.filter(url => automatic.has(signalKey(url)) || zicoEventApi(url));
+  return { ...item, streams, zicoStreams, zicoManualStreams };
 }
 
 const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis',
@@ -214,7 +226,9 @@ export function applyZicoAgenda(catalog, payload) {
     const old = previous.get(id);
     const page = `${ORIGIN}/events/${row.id}`;
     const channelLinks = zicoChannelSources(row);
-    const zicoStreams = channelLinks.length ? channelLinks : hasEventSource(row) ? [page] : [];
+    const manualStreams = manualSignals(old);
+    const selectedEvents = manualStreams.filter(url => zicoEventApi(url));
+    const zicoStreams = selectedEvents.length ? selectedEvents : channelLinks.length ? channelLinks : hasEventSource(row) ? [page] : [];
     const available = zicoStreams.length > 0;
     if (target || explicit.length || ranked.length) {
       if (target && available) {
@@ -230,7 +244,6 @@ export function applyZicoAgenda(catalog, payload) {
       if (!available) skipped++;
       continue;
     }
-    const manualStreams = manualSignals(old);
     const channel = channels.get(old?.channelId);
     if (!available && ![...manualStreams, ...(channel?.streams || [])].some(url => !zicoEventApi(url))) {
       skipped++;

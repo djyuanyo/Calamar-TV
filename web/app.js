@@ -823,8 +823,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
     if (c.event && resolved.length && resolved.every(source => source.unavailable)) {
-      state.custom = { ...state.custom, events: (state.custom.events || []).filter(event => event.id !== c.eventId) };
-      closePlayer();
+      playerStatus.textContent = 'Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.';
       return;
     }
     const sources = resolved.filter(source => !source.unavailable);

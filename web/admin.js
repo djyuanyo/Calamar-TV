@@ -13,7 +13,7 @@ import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCata
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
-import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent } from './zico-agenda.js';
+import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, editedZicoEventStreams } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 import { aceContentId, resolveAceStreams } from './acestream.js';
 import { vpsPanel } from './vps-panel.js';
@@ -723,7 +723,7 @@ function eventForm(existing, rerender, catalogState) {
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
       if (streams.some(aceContentId)) status.textContent = 'Preparando Ace Stream en IONOS…';
-      entry.streams = await publishableStreams(streams);
+      Object.assign(entry, editedZicoEventStreams(entry, await publishableStreams(streams)));
       if (fixtureImport) {
         // Only what differs from the import is kept, so the catalog stays small.
         const raw = data.fixtures.find((f) => f.id === existing.id);
