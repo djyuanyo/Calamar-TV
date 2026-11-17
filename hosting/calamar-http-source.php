@@ -56,7 +56,9 @@ function publicTarget($address, $resolver = null, $cloudflareIpv6 = false) {
         if (!publicIp($ip) && !($cloudflareIpv6 && publicCloudflareIp6($ip))) return null;
     }
     // Pin the validated IP so cURL cannot resolve the hostname to an internal address.
-    return array('host' => $host, 'port' => $port, 'ip' => $ips[0]);
+    $target = array('host' => $host, 'port' => $port, 'ip' => $ips[0]);
+    if ($cloudflareIpv6) $target['ips'] = array_values(array_unique($ips));
+    return $target;
 }
 function redirectTarget($base, $location) {
     if (preg_match('/[\r\n]/', $location)) return null;
