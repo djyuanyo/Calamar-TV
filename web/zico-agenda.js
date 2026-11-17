@@ -265,6 +265,9 @@ export function applyZicoAgenda(catalog, payload) {
       awayTeamId: awayTeamId === homeTeamId ? '' : awayTeamId,
       venue: old?.venue || clean(row.venue), status: row.status, imported: true,
       cover: old?.cover || '', streams, zicoStreams,
+      ...(selectedEvents.length ? { zicoManualStreams: [...new Set([
+        ...(old?.zicoManualStreams || []).filter(url => streams.includes(url)), ...selectedEvents,
+      ])] } : {}),
     });
     count++;
   }

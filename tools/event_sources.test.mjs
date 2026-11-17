@@ -92,6 +92,8 @@ test('a replacement saved before the fix is displayed and kept on the next impor
   assert.equal(events([], { ...catalog, events: [stale] }, now)[0].id, stale.id);
   const refreshed = applyZicoAgenda({ ...catalog, events: [stale] }, payload(row(116061, { sources: [ownSource] }))).data;
   assert.deepEqual(refreshed.events[0].streams, [selected]);
+  const refreshedAgain = applyZicoAgenda(refreshed, payload(row(116061, { sources: [ownSource] }))).data;
+  assert.deepEqual(refreshedAgain.events[0].streams, [selected]);
   const unchanged = editedZicoEventStreams({ ...stale, streams: [agendaChannel] }, [agendaChannel]);
   assert.deepEqual(unchanged.zicoManualStreams, []);
 });
