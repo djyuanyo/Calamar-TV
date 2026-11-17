@@ -29,7 +29,8 @@ test('an event keeps the Zico player and live links while dropping embedded play
 });
 test('manual event expands while existing sources and selection origin are preserved', async () => {
   const result = await expandEventSources(['https://example.com/live.m3u8', page], {fetcher:async (url, options) => {
-    assert.equal(url, zicoEventApi(page)); assert.equal(options.credentials, 'omit');
+    assert.equal(new URL(url).hostname, 'video.calamarmenciano.com');
+    assert.equal(new URL(url).searchParams.get('event'), page); assert.equal(options.credentials, 'omit');
     return {ok:true,json:async()=>data};
   }});
   assert.equal(result.length, 2); assert.equal(result[1].url, player); assert.equal(result[1].origin, page);
@@ -40,10 +41,12 @@ test('an empty source list is distinct from a temporary failure and leaves fallb
   const result = await expandEventSources([page, player], {fetcher:async()=>empty});
   assert.deepEqual(result, [{url:page, unavailable:true}, {url:player}]);
   assert.match((await expandEventSources([page], {fetcher:async()=>down}))[0].error, /503/);
-  const premium = await expandEventSources([page], {preferHosted:true,
-    fetcher:async url => url.startsWith('https://calamarmenciano.com/') ? down : empty});
-  assert.ok(premium[0].error);
-  assert.equal(premium[0].unavailable, undefined);
+  const attempted = [];
+  const failed = await expandEventSources([page], {fetcher:async url => {
+    attempted.push(new URL(url).hostname); return down;
+  }});
+  assert.ok(failed[0].error);
+  assert.deepEqual(attempted, ['video.calamarmenciano.com']);
 });
 
 const now = Date.parse('2026-11-04T19:00:00Z');
@@ -79,7 +82,8 @@ test('replacing an imported source with an event page stays visible and survives
   assert.equal(restored.streams.includes(selected), false);
   const player = 'https://bp.zicotv.cc/api/player/56429';
   const expanded = await expandEventSources(replaced.streams, { fetcher: async url => {
-    assert.equal(url, 'https://bp.zicotv.cc/api/v1/events/116061');
+    assert.equal(new URL(url).hostname, 'video.calamarmenciano.com');
+    assert.equal(new URL(url).searchParams.get('event'), 'https://bp.zicotv.cc/events/116061');
     return { ok: true, json: async () => ({ data: { sources: [{ source: 'own', channel_id: 56429, player_url: player, is_premium: false }] } }) };
   } });
   assert.deepEqual(expanded.map(source => source.url), [player]);
@@ -212,11 +216,12 @@ test('refresh replaces the old imported websites while keeping separately added 
   assert.deepEqual(updated.zicoStreams, [agendaChannel]);
 });
 
-test('managed agenda events prefer hosting and keep public and catalog fallbacks', async () => {
-  const result = await expandEventSources([page, player], { preferHosted: true, fetcher: async url => ({
-    ok: true, json: async () => url.startsWith('https://calamarmenciano.com/')
-      ? { data: { sources: [{ name: 'Premium', player_url: agendaPlayer }] } }
-      : data,
+test('event playback keeps VPS player choices and existing catalog alternatives', async () => {
+  const result = await expandEventSources([page, player], { fetcher: async () => ({
+    ok: true, json: async () => { return { data: { sources: [
+      { name: 'Premium', player_url: agendaPlayer },
+      { name: 'Direct', url: 'https://zicotv.cc/example.m3u8' },
+    ] } }; },
   }) });
   assert.deepEqual(result.map(source => source.url), [agendaPlayer, player]);
   assert.equal(result[0].origin, page);

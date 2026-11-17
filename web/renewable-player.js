@@ -1,8 +1,7 @@
-import { streamExpiry, renewablePage, PLAYER_ENDPOINT, PLAYER_ALTERNATE_ENDPOINT, playerEndpoint } from './catalog.js';
+import { streamExpiry, renewablePage, playerEndpoint } from './catalog.js';
 import { hostedRequest, hostedUrl, expandHostedSources } from './hosted-sources.js';
 import { autoplay } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
-import { zicoChannelPlayer } from './zico-channel.js';
 import { hlsContinuity } from './hls-continuity.js';
 
 /** Read JSON data, never execute scripts from the provider. Locked sources stay locked. */
@@ -51,24 +50,22 @@ export function hostedPage(address) {
   return null;
 }
 
-/** Use the 2.20.67 device route, with signed hosting as an independent fallback. */
+/** Resolve and renew Zico channels through the VPS. */
 export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null,
-  fetcher = globalThis.fetch, timers = globalThis, now = Date.now, preferDirect = true }) {
+  fetcher = globalThis.fetch, timers = globalThis, now = Date.now }) {
   const original = hostedPage(page);
   let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, engine = null;
-  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false, continuity = null;
-  const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
-  selected.searchParams.set('cast', '1');
-  const automatic = !selected.searchParams.has('src') && !selected.searchParams.has('source_id');
-  let alternateHosting = selected.hostname === 'www.calamarmenciano.com';
-  deviceRoute = preferDirect && automatic;
+  let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, continuity = null;
+  const selection = original && !renewablePage(page) ? new URL(page).searchParams : new URLSearchParams();
+  const legacy = selection.get('src');
+  const id = selection.get('source_id') || (/^[0-9]{1,2}$/.test(legacy || '') ? 'legacy-' + legacy : null);
+  const endpoint = new URL(hostedRequest(original || '', id));
+  const automatic = !id;
   const clearRefresh = () => { timers.clearTimeout(refreshTimer); refreshTimer = null; };
   const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
-  const retry = (networkFailure = false) => {
+  const retry = () => {
     if (stopped || recovering) return;
-    if (!request && networkFailure && !deviceRoute && !alternateHosting) alternateHosting = true;
-    else if (!request && automatic && networkFailure) deviceRoute = !deviceRoute;
     failures++; recovering = true;
     onStatus('Probando otra señal disponible…');
     // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
@@ -84,8 +81,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
         xhrSetup(xhr, uri) { const next = session.resolve(uri); if (next !== uri) xhr.open('GET', next, true); },
         manifestLoadingTimeOut: 30000, levelLoadingTimeOut: 30000, fragLoadingTimeOut: 45000 });
       instance.on(Hls.Events.ERROR, (_event, data) => {
-        const networkFailure = data.response?.code === 0 || (!data.response?.code && data.type === 'networkError');
-        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry(networkFailure);
+        if (!stopped && engine === instance && (data.fatal || [401, 403].includes(data.response?.code))) retry();
       });
       for (const name of ['MANIFEST_LOADED', 'LEVEL_LOADED', 'FRAG_LOADED']) if (Hls.Events[name])
         instance.on(Hls.Events[name], () => { if (engine === instance) watch.download(); });
@@ -97,39 +93,16 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   async function refresh() {
     if (stopped || request) return;
     clearRefresh();
-    const usingDevice = deviceRoute;
     const controller = request = new AbortController();
-    const timeout = timers.setTimeout(() => controller.abort(), deviceRoute ? 15000 : 35000);
+    const timeout = timers.setTimeout(() => controller.abort(), 35000);
     try {
       if (!original) throw Error('Enlace de canal no válido.');
-      const target = new URL(selected);
-      if (alternateHosting) target.hostname = new URL(PLAYER_ALTERNATE_ENDPOINT).hostname;
+      const target = new URL(endpoint);
       if (automatic && failures) target.searchParams.set('intento', String(Math.min(9, failures)));
-      let url;
-      if (deviceRoute && automatic) {
-        const player = zicoChannelPlayer(original) || original;
-        const response = await fetcher(player, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
-        if (!response.ok) throw Error(`Proveedor HTTP ${response.status}`);
-        const sources = pageSources(await response.text(), response.url || player).filter(url => !streamExpiry(url) || streamExpiry(url) > now());
-        if (!sources.length) throw Error('No hay señales públicas disponibles.');
-        let index = sources.findIndex(url => address && new URL(url).host === new URL(address).host);
-        if (recovering && index >= 0) index = (index + 1) % sources.length;
-        url = sources[Math.max(0, index)];
-      } else {
-        let response;
-        try { response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', signal: controller.signal }); }
-        catch (error) {
-          // A network failure is different from a rejected or invalid hosting response.
-          if (!stopped && (error instanceof TypeError || error.name === 'AbortError')) {
-            if (!alternateHosting) alternateHosting = true;
-            else if (automatic) deviceRoute = true;
-          }
-          throw error;
-        }
-        const data = await response.json();
-        if (!response.ok) throw Error(data.error || `Hosting HTTP ${response.status}`);
-        url = hostedUrl(data.url, target.href);
-      }
+      const response = await fetcher(target.href, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || `VPS HTTP ${response.status}`);
+      const url = hostedUrl(data.url, target.href);
       if (stopped || controller.signal.aborted) return;
       if (!loaded || recovering) install(url);
       else if (url !== address) {
@@ -145,9 +118,9 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
       }
       if (stopped) return;
       recovering = false;
-      // Both routes receive fresh provider tokens; renew on expiry and on playback errors.
-      let upstream = deviceRoute ? url : '';
-      if (!deviceRoute) try {
+      // Renew on expiry and on playback errors.
+      let upstream = '';
+      try {
         const code = new URL(url).searchParams.get('seg').replaceAll('-', '+').replaceAll('_', '/');
         upstream = atob(code.padEnd(Math.ceil(code.length / 4) * 4, '='));
       } catch { /* Unknown token: periodic renewal. */ }
@@ -155,10 +128,9 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     } catch (error) {
       if (stopped) return;
       if (loaded && !recovering) { schedule(15000); return; }
-      if (usingDevice) deviceRoute = false;
       failures++;
       const delay = failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4));
-      onStatus(deviceRoute ? 'El hosting no responde. Probando la conexión directa…' : 'No se pudo conectar con la señal. Reintentando…');
+      onStatus('No se pudo conectar con la señal en el VPS. Reintentando…');
       schedule(delay);
     } finally {
       timers.clearTimeout(timeout);
@@ -169,7 +141,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
     if (stopped) return;
     failures = 0; onStatus('');
     // Populate the optional selector after playback, so metadata never delays the first picture.
-    if (!onSources || menuStarted || deviceRoute) return;
+    if (!onSources || menuStarted) return;
     menuStarted = true; menu = new AbortController();
     const mine = menu; menuTimer = timers.setTimeout(() => mine.abort(), 15000);
     void expandHostedSources([original], { fetcher, signal: mine.signal }).then(options => {

@@ -738,7 +738,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       return;
     }
     final String requestedPage = pageUrl;
-    if (zicoPage()) hostingPlayback = true;
+    if (zicoPage()) {
+      hostingPlayback = true;
+      hostingEndpoint = HostingPlayback.ZICO_ENDPOINT;
+    }
     lastReport = reportHeader();
     final boolean throughHosting = hostingPlayback;
     final String requestedHosting = hostingEndpoint;
@@ -773,34 +776,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               return;
             }
             if (eventApi != null) {
-              PlayerDocument.Result hosted = null;
-              List<VideoResolver.Source> players = java.util.Collections.emptyList();
-              if (throughHosting) {
-                try {
-                  hosted = HostingPlayback.event(requestedPage, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
-                  players = VideoResolver.eventPlayers(hosted.html);
-                } catch (java.io.IOException | org.json.JSONException unavailable) {
-                  // A public source may still be available without the hosting.
-                }
-              }
-              if (players.isEmpty()) {
-                PlayerDocument.Result event;
-                try {
-                  event = PlayerDocument.fetch(eventApi, pageTransport.pageFactory(true),
-                      NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true));
-                } catch (java.io.IOException blocked) {
-                  if (blocked instanceof PlayerDocument.HttpFailure) throw blocked;
-                  event = PlayerDocument.fetch(eventApi, ChromiumNetwork.get(this));
-                  chromiumNetwork = true;
-                }
-                players = VideoResolver.eventPlayers(event.html);
-              }
-              if (players.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
-              final String eventHosting = hosted == null ? requestedHosting : HostingPlayback.endpoint(hosted.url);
-              final List<VideoResolver.Source> eventPlayers = players;
+              PlayerDocument.Result hosted = HostingPlayback.event(requestedPage, NetworkTransport.get(DnsProvider.SYSTEM));
+              List<VideoResolver.Source> eventPlayers = VideoResolver.eventPlayers(hosted.html);
+              eventPlayers.removeIf(source -> !VideoResolver.renewablePage(source.url));
+              if (eventPlayers.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
                 if (!active || request != generation) return;
-                hostingEndpoint = eventHosting;
+                hostingEndpoint = HostingPlayback.ZICO_ENDPOINT;
                 int at = Math.max(0, channelPages.indexOf(requestedPage));
                 channelPages.remove(requestedPage);
                 for (VideoResolver.Source source : eventPlayers) {
@@ -1425,7 +1407,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (!administrator()) return;
     List<String> addresses = new ArrayList<>();
     if (zicoPage()) addresses.add(VideoResolver.eventApi(pageUrl) != null
-        ? Library.PLAYER_ENDPOINT + "?event=" + Uri.encode(pageUrl) : HostingPlayback.request(pageUrl));
+        ? HostingPlayback.ZICO_ENDPOINT + "?event=" + Uri.encode(pageUrl) : HostingPlayback.request(pageUrl));
     addresses.addAll(channelPages);
     if (pageUrl != null && !addresses.contains(pageUrl)) addresses.add(pageUrl);
     if (directUrl != null) addresses.add(directUrl);

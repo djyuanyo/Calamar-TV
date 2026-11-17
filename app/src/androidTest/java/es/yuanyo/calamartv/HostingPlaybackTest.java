@@ -97,7 +97,7 @@ public class HostingPlaybackTest {
   @Test public void channelDetailLinkUsesNativeHostedVideoAndRenews() throws Exception { playback(false, true, false, false, false, "https://bp.zicotv.cc/channels/4"); }
   @Test public void livePlaylistRenewalPreservesDecoderAndUsesTheNewSignature() throws Exception { playback(false,true,false,false,false,"https://bp.zicotv.cc/api/player/4",true); }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
-  @Test public void rootConnectionFailureKeepsNativeVideoAndRenewalsOnWww() throws Exception { playback(false, true, false, true, false); }
+  @Test public void zicoVideoUsesVpsEvenWhenHostingIsUnreachable() throws Exception { playback(false, true, false, true, false); }
   @Test public void slowHostedListsAndFragmentsRenderBeforeTheHostedDeadline() throws Exception { playback(false, false, false, false, true); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception { playback(remote, menuAvailable, legacyMenu, false, false); }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow) throws Exception {
@@ -108,7 +108,7 @@ public class HostingPlaybackTest {
   }
   private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry, boolean continuous) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
-        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
+        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("video.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
     HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
     Buffer video = new Buffer();
@@ -176,7 +176,7 @@ public class HostingPlaybackTest {
         assertPlays(scenario, slow ? 55000 : 30000);
         if (slow) assertEquals("Slow valid media must not restart lookup", 2, renewals.get());
         if (rootUnavailable) scenario.onActivity(activity -> {
-          try {Field endpoint=NativePlayerActivity.class.getDeclaredField("hostingEndpoint"); endpoint.setAccessible(true); assertEquals(HostingPlayback.ALTERNATE_ENDPOINT,endpoint.get(activity));}
+          try {Field endpoint=NativePlayerActivity.class.getDeclaredField("hostingEndpoint"); endpoint.setAccessible(true); assertEquals(HostingPlayback.ZICO_ENDPOINT,endpoint.get(activity));}
           catch(ReflectiveOperationException error) {throw new AssertionError(error);}
         });
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);

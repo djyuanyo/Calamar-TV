@@ -14,6 +14,7 @@ import java.util.List;
 final class HostingPlayback {
   private HostingPlayback() {}
   static final String AUTOMATIC = "0000000000000000";
+  static final String ZICO_ENDPOINT = "https://video.calamarmenciano.com/calamar-player.php";
   static final String ALTERNATE_ENDPOINT = "https://www.calamarmenciano.com/calamar-player.php";
   private static final java.util.regex.Pattern RFAF = java.util.regex.Pattern.compile(
       "https://cdnlive\\.codev8\\.net/rfaf20live/smil:channel11\\.smil/(?:playlist|chunklist_b1500000)\\.m3u8");
@@ -71,7 +72,7 @@ final class HostingPlayback {
   static boolean isRelay(String address) {
     try {
       URI uri = URI.create(address), endpoint = URI.create(Library.PLAYER_ENDPOINT);
-      return endpoint.getScheme().equals(uri.getScheme()) && (endpoint.getHost().equals(uri.getHost()) || "www.calamarmenciano.com".equals(uri.getHost()))
+      return endpoint.getScheme().equals(uri.getScheme()) && (endpoint.getHost().equals(uri.getHost()) || "www.calamarmenciano.com".equals(uri.getHost()) || "video.calamarmenciano.com".equals(uri.getHost()))
           && endpoint.getPort() == uri.getPort() && endpoint.getPath().equals(uri.getPath())
           && uri.getUserInfo() == null;
     } catch (Exception invalid) { return false; }
@@ -83,14 +84,18 @@ final class HostingPlayback {
 
   static String endpoint(String address) throws IOException {
     if (!isRelay(address)) throw new IOException("Dirección del hosting no válida");
-    return "www.calamarmenciano.com".equals(URI.create(address).getHost()) ? ALTERNATE_ENDPOINT : Library.PLAYER_ENDPOINT;
+    String host = URI.create(address).getHost();
+    if ("video.calamarmenciano.com".equals(host)) return ZICO_ENDPOINT;
+    return "www.calamarmenciano.com".equals(host) ? ALTERNATE_ENDPOINT : Library.PLAYER_ENDPOINT;
   }
 
   static String signedUrl(String json, String base) throws IOException {
     try {
-      String address = URI.create(endpoint(base)).resolve(new JSONObject(json).getString("url")).toString();
+      String endpoint = endpoint(base);
+      String address = URI.create(endpoint).resolve(new JSONObject(json).getString("url")).toString();
       URI uri = URI.create(address);
-      if (!isRelay(address) || uri.getRawQuery() == null
+      if (!isRelay(address) || (ZICO_ENDPOINT.equals(endpoint) && !ZICO_ENDPOINT.equals(endpoint(address)))
+          || uri.getRawQuery() == null
           || !uri.getRawQuery().contains("seg=") || !uri.getRawQuery().contains("sig="))
         throw new IOException("El hosting devolvió una dirección de vídeo no válida");
       return address;
@@ -115,13 +120,16 @@ final class HostingPlayback {
     boolean automatic = id.isEmpty() || AUTOMATIC.equals(id);
     String selection = automatic ? (attempt > 0 ? "&intento=" + Math.min(9, attempt) : "")
         : id.startsWith("legacy-") ? "&src=" + id.substring(7) : "&source_id=" + id;
-    String address = endpoint(base) + request(page).substring(Library.PLAYER_ENDPOINT.length()) + selection;
+    String relay = endpoint(base);
+    if (VideoResolver.renewablePage(page)) relay = ZICO_ENDPOINT;
+    else if (ZICO_ENDPOINT.equals(relay)) relay = Library.PLAYER_ENDPOINT;
+    String address = relay + "?" + URI.create(request(page)).getRawQuery() + selection;
     PlayerDocument.Result response = fetchHosted(address, connections, 60000);
     return signedUrl(response.html, response.url);
   }
 
-  static PlayerDocument.Result event(String page, String base, PlayerDocument.ConnectionFactory connections) throws IOException {
-    return fetchHosted(endpoint(base) + "?event=" + java.net.URLEncoder.encode(page, "UTF-8"), connections, 60000);
+  static PlayerDocument.Result event(String page, PlayerDocument.ConnectionFactory connections) throws IOException {
+    return fetchHosted(ZICO_ENDPOINT + "?event=" + java.net.URLEncoder.encode(page, "UTF-8"), connections, 60000);
   }
 
   private static PlayerDocument.Result fetchHosted(String address, PlayerDocument.ConnectionFactory connections, int timeout) throws IOException {

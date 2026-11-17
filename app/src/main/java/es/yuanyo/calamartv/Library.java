@@ -1167,7 +1167,8 @@ final class Library {
 
   static String playerRelay(String page) {
     try {
-      return PLAYER_ENDPOINT + "?page=" + java.net.URLEncoder.encode(page.trim(), "UTF-8").replace("+", "%20") + "&hls=1";
+      String endpoint = VideoResolver.renewablePage(page) ? HostingPlayback.ZICO_ENDPOINT : PLAYER_ENDPOINT;
+      return endpoint + "?page=" + java.net.URLEncoder.encode(page.trim(), "UTF-8").replace("+", "%20") + "&hls=1";
     } catch (java.io.UnsupportedEncodingException impossible) {
       throw new IllegalStateException(impossible);
     }

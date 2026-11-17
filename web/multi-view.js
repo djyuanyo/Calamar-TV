@@ -5,7 +5,6 @@ import { sourceOptions } from './player-sources.js';
 import { mountTs } from './ts-player.js';
 import { mountRenewable } from './renewable-player.js';
 import { expandEventSources, zicoEventApi } from './event-sources.js';
-import { usesZicoAgenda } from './zico-agenda.js';
 import { playbackTimer } from './sleep-timer.js';
 
 export const MULTI_MAX = 4;
@@ -53,7 +52,7 @@ export function playTile(video, channel, onStatus) {
     video.onerror = () => { if (current()) tryNext(); };
     if (source.how.renewable) {
       video.onplaying = video.onerror = null;
-      stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
+      stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
         onAttach: (instance) => { hls = instance; },
         onStatus: (message) => { if (current()) onStatus(message); },
         onFallback: () => { if (current()) tryNext(); },
@@ -78,7 +77,7 @@ export function playTile(video, channel, onStatus) {
     let streams = channel.streams;
     if (streams.some(zicoEventApi)) {
       onStatus('Consultando fuentes del evento…'); lookupTimer = setTimeout(() => lookup.abort(), 15000);
-      const resolved = await expandEventSources(streams, { signal: lookup.signal, preferHosted: usesZicoAgenda(channel) });
+      const resolved = await expandEventSources(streams, { signal: lookup.signal });
       clearTimeout(lookupTimer); if (stopped) return;
       streams = resolved.filter(s => !s.error && !s.unavailable).map(s => s.url);
     }

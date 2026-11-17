@@ -5,7 +5,7 @@ const page = 'https://zicotv.cc/api/player/6';
 const ids = ['0123456789abcdef', 'fedcba9876543210'];
 test('expands every signal into a named hosting choice without exposing provider names', async () => {
   const signals = await expandHostedSources([page], { fallbackName:'LaLiga', fetcher: async url => {
-    assert.equal(new URL(url).hostname, 'calamarmenciano.com');
+    assert.equal(new URL(url).hostname, 'video.calamarmenciano.com');
     assert.equal(new URL(url).searchParams.get('list'), '1');
     return {ok:true,json:async()=>({name:'Liga de Campeones',items:ids.map((id,i)=>({id,name:`Liga de Campeones · Señal ${i+1}`}))})};
   }});
@@ -13,7 +13,7 @@ test('expands every signal into a named hosting choice without exposing provider
   assert.deepEqual(signals.map(s=>s.name), ['Liga de Campeones · Señal 1','Liga de Campeones · Señal 2']);
   for (let i=0;i<2;i++) {
     const u=new URL(signals[i].url);
-    assert.equal(u.hostname,'calamarmenciano.com');
+    assert.equal(u.hostname,'video.calamarmenciano.com');
     assert.equal(u.searchParams.get('source_id'),ids[i]);
     assert.equal(u.searchParams.get('page'),page);
   }
@@ -44,4 +44,10 @@ test('relative signed lists resolve on the effective owned endpoint',()=>{
     'https://www.calamarmenciano.com.evil.test/calamar-player.php?seg=a&sig=b',
     'https://user@www.calamarmenciano.com/calamar-player.php?seg=a&sig=b',
     'https://www.calamarmenciano.com:444/calamar-player.php?seg=a&sig=b']) assert.throws(()=>hostedUrl(url));
+});
+
+test('a VPS playback response cannot switch back to the hosting', () => {
+  const base = 'https://video.calamarmenciano.com/calamar-player.php';
+  assert.equal(hostedUrl('calamar-player.php?seg=a&sig=b', base), base + '?seg=a&sig=b');
+  assert.throws(() => hostedUrl('https://calamarmenciano.com/calamar-player.php?seg=a&sig=b', base));
 });

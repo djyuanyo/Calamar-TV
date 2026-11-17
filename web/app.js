@@ -6,7 +6,6 @@ import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
@@ -818,7 +817,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
-    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal, preferHosted: usesZicoAgenda(c) });
+    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal });
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
@@ -946,7 +945,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     return;
   }
   if (source.how.renewable) {
-    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
+    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
       onSources: options => {
         if (generation !== playbackGeneration || c.vod) return;
         const page = hostedPage(source.url), first = c.streams.findIndex(url => hostedPage(url) === page);

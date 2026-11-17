@@ -47,7 +47,7 @@ try {
     if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
     if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
     if (u.hostname==='bp.zicotv.cc') return route.abort(); // Simulate the operator blocking direct player requests.
-    if (u.hostname!=='calamarmenciano.com') return route.abort();
+    if (u.hostname!=='video.calamarmenciano.com') return route.abort();
     if (u.searchParams.has('event')) return route.fulfill({headers,json:{data:{sources:[]}}});
     if (u.searchParams.has('page')) {
       assert.ok(['https://bp.zicotv.cc/api/player/1','https://bp.zicotv.cc/channels/1','https://bp.zicotv.cc/api/player/56429'].includes(u.searchParams.get('page')));

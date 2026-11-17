@@ -1,4 +1,4 @@
-import { PLAYER_ENDPOINT, playerEndpoint, renewablePage, playerPageRelay } from './catalog.js';
+import { PLAYER_ENDPOINT, ZICO_PLAYER_ENDPOINT, playerEndpoint, renewablePage, playerPageRelay } from './catalog.js';
 
 export function signalName(value, fallback = 'Canal') {
   const clean = String(value || '').replace(/https?:\/\/\S+|(?:[a-z0-9-]+\.)+(?:com|cc|net|org)\b\S*/gi, '')
@@ -15,9 +15,10 @@ export function hostedRequest(page, id) {
 }
 
 export function hostedUrl(value, base = PLAYER_ENDPOINT) {
-  if (!playerEndpoint(base)) throw Error('Dirección del hosting no válida.');
+  const endpoint = playerEndpoint(base);
+  if (!endpoint) throw Error('Dirección del reproductor no válida.');
   const u = new URL(value, base);
-  if (!playerEndpoint(u.href)
+  if (!playerEndpoint(u.href) || (endpoint === ZICO_PLAYER_ENDPOINT && playerEndpoint(u.href) !== endpoint)
       || !u.searchParams.has('seg') || !u.searchParams.has('sig')) throw Error('La señal no devolvió una lista válida.');
   return u.href;
 }

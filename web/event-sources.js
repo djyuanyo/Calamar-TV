@@ -1,4 +1,4 @@
-import { renewablePage, zicoHost } from './zico-channel.js';
+import { renewablePage, zicoHost, ZICO_PLAYER_ENDPOINT } from './zico-channel.js';
 
 /** Zico event pages are not embeddable; the public CORS API exposes their player URLs. */
 export function zicoEventApi(address) {
@@ -33,38 +33,20 @@ export function eventPlayerSources(data) {
   return [...found.values()];
 }
 
-const HOSTED_EVENTS = 'https://calamarmenciano.com/calamar-player.php?event=';
-async function hostedEventSources(event, fetcher, signal) {
-  try {
-    const timeout = AbortSignal.timeout(5500);
-    const response = await fetcher(HOSTED_EVENTS + encodeURIComponent(event), { credentials: 'omit', cache: 'no-store',
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    return Array.isArray(payload?.data?.sources) ? eventPlayerSources(payload) : null;
-  } catch { return null; }
-}
-
-export async function expandEventSources(streams, { fetcher = globalThis.fetch, signal, preferHosted = false } = {}) {
+export async function expandEventSources(streams, { fetcher = globalThis.fetch, signal } = {}) {
   const rows = await Promise.all(streams.map(async url => {
-    const api = zicoEventApi(url);
-    if (!api) return [{ url }];
+    if (!zicoEventApi(url)) return [{ url }];
     try {
-      const hosted = preferHosted ? hostedEventSources(url, fetcher, signal) : [];
-      const direct = (async () => {
-        const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
-        if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);
-        const payload = await response.json();
-        if (!Array.isArray(payload?.data?.sources)) throw Error('No se pudieron consultar las fuentes de este evento.');
-        return eventPlayerSources(payload);
-      })();
-      const [preferred, publicSources] = await Promise.allSettled([hosted, direct]);
-      const sources = [...(preferred.value || []), ...(publicSources.value || [])];
-      if (!sources.length) {
-        if (publicSources.status === 'fulfilled' && preferred.value !== null) return [{ url, unavailable: true }];
-        throw publicSources.reason || Error('No se pudieron consultar las fuentes de este evento.');
-      }
-      return sources.map(source => ({ ...source, origin: url }));
+      const timeout = AbortSignal.timeout(35000);
+      const response = await fetcher(ZICO_PLAYER_ENDPOINT + '?event=' + encodeURIComponent(url), {
+        credentials: 'omit', cache: 'no-store', redirect: 'error',
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
+      if (!response.ok) throw Error(`El VPS responde HTTP ${response.status} al consultar las fuentes.`);
+      const payload = await response.json();
+      if (!Array.isArray(payload?.data?.sources)) throw Error('No se pudieron consultar las fuentes de este evento.');
+      const sources = eventPlayerSources(payload).filter(source => renewablePage(source.url));
+      return sources.length ? sources.map(source => ({ ...source, origin: url })) : [{ url, unavailable: true }];
     } catch (error) {
       return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];
     }

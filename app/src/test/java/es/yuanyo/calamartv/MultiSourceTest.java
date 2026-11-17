@@ -13,10 +13,10 @@ public class MultiSourceTest {
       PlayerDocument.ConnectionFactory hosting=url->{hosts.add(url.getHost());if(url.getHost().equals("calamarmenciano.com"))throw new UnknownHostException("root reset");return new PlayerHttpConnection(server.url(url.getFile()).url(),client);};
       PlayerDocument.ConnectionFactory device=url->{throw new AssertionError("A Zico tile must not contact its provider: "+url.getHost());};
       MultiSource.Result result=MultiSource.resolve("https://zicotv.cc/api/player/1",Library.PLAYER_ENDPOINT,"fedcba9876543210",0,hosting,device);
-      assertTrue(result.hosted()); assertTrue(result.renewable()); assertEquals("www.calamarmenciano.com",URI.create(result.url).getHost());
+      assertTrue(result.hosted()); assertTrue(result.renewable()); assertEquals("video.calamarmenciano.com",URI.create(result.url).getHost());
       assertEquals("fedcba9876543210",server.takeRequest().getRequestUrl().queryParameter("source_id"));
       MultiSource.Result renewed=MultiSource.resolve(result.page,HostingPlayback.endpoint(result.url),"fedcba9876543210",1,hosting,device);
-      assertNotEquals(result.url,renewed.url); assertEquals(3,hosts.size()); assertEquals("www.calamarmenciano.com",hosts.get(2));
+      assertNotEquals(result.url,renewed.url); assertEquals(Arrays.asList("video.calamarmenciano.com", "video.calamarmenciano.com"), hosts);
       assertEquals("fedcba9876543210",server.takeRequest().getRequestUrl().queryParameter("source_id"));
     }
   }

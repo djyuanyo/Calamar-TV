@@ -30,8 +30,9 @@ final class MultiSource {
       PlayerDocument.ConnectionFactory hosting, PlayerDocument.ConnectionFactory device, int depth) throws Exception {
     if (depth > 2) throw new IOException("Las fuentes del evento no contienen vídeo compatible");
     if (VideoResolver.eventApi(page) != null) {
-      PlayerDocument.Result event = HostingPlayback.event(page, endpoint, hosting);
+      PlayerDocument.Result event = HostingPlayback.event(page, hosting);
       List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
+      players.removeIf(source -> !VideoResolver.renewablePage(source.url));
       if (players.isEmpty()) throw new IOException("El evento todavía no publica fuentes disponibles");
       Exception last = null;
       for (VideoResolver.Source source : players) try {

@@ -85,7 +85,7 @@ public class HostingPlaybackTest {
       OkHttpClient client = new OkHttpClient();
       PlayerDocument.ConnectionFactory network = url -> new PlayerHttpConnection(server.url(url.getFile()).url(), client);
       String page = "https://zicotv.cc/api/player/4";
-      assertTrue(HostingPlayback.resolve(page, network).startsWith(Library.PLAYER_ENDPOINT + "?seg="));
+      assertTrue(HostingPlayback.resolve(page, network).startsWith(HostingPlayback.ZICO_ENDPOINT + "?seg="));
       okhttp3.mockwebserver.RecordedRequest request = server.takeRequest();
       assertEquals(page, request.getRequestUrl().queryParameter("page"));
       assertEquals("1", request.getRequestUrl().queryParameter("cast"));
@@ -105,7 +105,7 @@ public class HostingPlaybackTest {
         if ("calamarmenciano.com".equals(url.getHost())) throw new java.net.SocketException("Connection reset");
         return new PlayerHttpConnection(server.url(url.getFile()).url(), client);
       };
-      String result = HostingPlayback.resolve("https://zicotv.cc/api/player/6", "fedcba9876543210", 2, network);
+      String result = HostingPlayback.resolve("https://example.com/player", "fedcba9876543210", 2, network);
       assertEquals(java.util.Arrays.asList("calamarmenciano.com", "www.calamarmenciano.com"), hosts);
       assertTrue(result.startsWith(HostingPlayback.ALTERNATE_ENDPOINT + "?seg="));
       assertEquals("fedcba9876543210", server.takeRequest().getRequestUrl().queryParameter("source_id"));

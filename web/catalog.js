@@ -1,8 +1,8 @@
 import { madridDay } from './audience.js';
 import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
-import { renewablePage, zicoChannelPlayer, zicoHost } from './zico-channel.js';
-export { renewablePage } from './zico-channel.js';
+import { renewablePage, zicoChannelPlayer, zicoHost, ZICO_PLAYER_ENDPOINT } from './zico-channel.js';
+export { renewablePage, ZICO_PLAYER_ENDPOINT } from './zico-channel.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
@@ -237,15 +237,18 @@ export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
  */
 export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
 export const PLAYER_ALTERNATE_ENDPOINT = 'https://www.calamarmenciano.com/calamar-player.php';
+export function playerEndpointFor(page) {
+  return renewablePage(page) ? ZICO_PLAYER_ENDPOINT : PLAYER_ENDPOINT;
+}
 export function playerEndpoint(address) {
   try {
     const u = new URL(address);
     return u.protocol === 'https:' && !u.username && !u.password && !u.port
-      && ['calamarmenciano.com','www.calamarmenciano.com'].includes(u.hostname) && u.pathname === '/calamar-player.php'
+      && ['calamarmenciano.com', 'www.calamarmenciano.com', 'video.calamarmenciano.com'].includes(u.hostname) && u.pathname === '/calamar-player.php'
       ? u.origin + u.pathname : null;
   } catch { return null; }
 }
-export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
+export const playerPageRelay = (url) => `${playerEndpointFor(url)}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
 
 /** The published RFAF source authorizes the hosting to serve its playlist and segments. */
 export function rfafHostedAddress(url) {

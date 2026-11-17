@@ -1,3 +1,5 @@
+export const ZICO_PLAYER_ENDPOINT = 'https://video.calamarmenciano.com/calamar-player.php';
+
 export function zicoHost(host) {
   return host === 'zicotv.cc' || host.endsWith('.zicotv.cc');
 }

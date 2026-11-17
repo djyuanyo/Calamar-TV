@@ -35,13 +35,13 @@ function fixture(fetcher, NativeHls = true, options = {}) {
   const timers = { setTimeout(fn, delay) { jobs.set(++id, { fn, at: clock + delay }); return id; }, clearTimeout(key) { jobs.delete(key); } };
   const network = (url, opts) => new URL(url).searchParams.has('seg') || new URL(url).pathname.endsWith('.m3u8')
     ? Promise.resolve({ok:true,text:async()=> '#EXTM3U\n#EXT-X-TARGETDURATION:8\n#EXTINF:8,\nvideo.ts\n'}) : fetcher(url, opts);
-  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher:network, timers, now: () => clock, preferDirect: false,
+  const stop = mountRenewable({ page, video, Hls: NativeHls ? Hls : null, fetcher:network, timers, now: () => clock,
     onStatus: s => statuses.push(s), onFallback: () => fallbacks.push(true), ...options });
   return { stop, engines, video, listeners, statuses, fallbacks, jobs,
     emit(name) { for (const listener of listeners.get(name) || []) listener(); },
     async tick(ms) { clock += ms; for (const [key, job] of [...jobs]) if (job.at <= clock && jobs.has(key)) { jobs.delete(key); job.fn(); } await flush(); } };
 }
-const signed = upstream => 'https://calamarmenciano.com/calamar-player.php?seg=' + Buffer.from(upstream).toString('base64url') + '&p=page&sig=signature&l=1';
+const signed = upstream => 'https://video.calamarmenciano.com/calamar-player.php?seg=' + Buffer.from(upstream).toString('base64url') + '&p=page&sig=signature&l=1';
 const response = upstream => ({ ok: true, json: async () => ({ url: signed(upstream) }) });
 
 test('only HTTPS public player endpoints resolve; direct video and other hosts do not', () => {
@@ -66,7 +66,7 @@ test('starts immediately through hosting and renews the signed video before its 
   let calls = 0;
   const f = fixture(async (url, opts) => {
     const u = new URL(url);
-    assert.equal(u.hostname, 'calamarmenciano.com'); assert.equal(u.searchParams.get('page'), page);
+    assert.equal(u.hostname, 'video.calamarmenciano.com'); assert.equal(u.searchParams.get('page'), page);
     assert.equal(u.searchParams.get('cast'), '1'); assert.equal(opts.cache, 'no-store');
     return response(media(++calls === 1 ? 1793040120 : 1793041320));
   });
@@ -86,7 +86,7 @@ test('a media error promptly retries automatic selection and coalesces concurren
   await flush(); f.engines[0].emitError(); f.engines[0].emitError();
   await f.tick(250); assert.equal(calls.length, 2); assert.equal(calls[1].searchParams.get('intento'), '1');
   assert.equal(f.engines[1].url, signed(media(1793041200, 'cdn3')));
-  assert.ok(calls.every(u => u.hostname === 'calamarmenciano.com')); f.stop();
+  assert.ok(calls.every(u => u.hostname === 'video.calamarmenciano.com')); f.stop();
 });
 
 test('native HLS allows slow hosting startup and retries a real 30-second stall', async () => {
@@ -111,7 +111,7 @@ test('closing a channel aborts resolution and ignores a late response', async ()
 test('invalid or unsigned relay destinations are rejected without contacting the provider', async () => {
   for (const url of ['https://cdn.example/live.m3u8', 'https://calamarmenciano.com.evil.test/calamar-player.php?seg=x&sig=y', '/other.php?seg=x&sig=y']) {
     const f = fixture(async request => {
-      assert.equal(new URL(request).hostname, 'calamarmenciano.com');
+      assert.equal(new URL(request).hostname, 'video.calamarmenciano.com');
       return { ok: true, json: async () => ({ url }) };
     });
     await flush(); assert.equal(f.engines.length, 0); assert.equal(f.fallbacks.length, 0); f.stop();
@@ -159,52 +159,6 @@ test('an explicitly chosen hosted signal is preserved on renewal and error retry
 });
 
 
-test('2.20.67 direct lookup starts without contacting the hosting and renews its token', async () => {
-  const calls = [];
-  const f = fixture(async (url, options) => {
-    calls.push(url); assert.equal(url, page); assert.equal(options.credentials, 'omit');
-    return {ok:true, url:page, text:async()=>document(media(calls.length === 1 ? 1793040120 : 1793041320))};
-  }, true, {preferDirect:true});
-  await flush(); assert.equal(f.engines[0].url, media(1793040120));
-  await f.tick(90000); assert.equal(f.engines.length,1);
-  const xhr={open(method,url){this.url=url;}};f.engines[0].config.xhrSetup(xhr,media(1793040120));
-  assert.equal(xhr.url,media(1793041320));
-  assert.equal(calls.length, 2); f.stop();
-});
-
-test('a blocked provider falls back to signed hosting without replacing our player', async () => {
-  const calls = [];
-  const f = fixture(async url => {
-    calls.push(url);
-    if (url === page) throw new TypeError('Failed to fetch');
-    return response(media(1793041200));
-  }, true, {preferDirect:true});
-  await flush(); await f.tick(250);
-  assert.equal(calls[0], page); assert.equal(new URL(calls[1]).hostname, 'calamarmenciano.com');
-  assert.equal(f.engines[0].url, signed(media(1793041200))); assert.equal(f.fallbacks.length, 0); f.stop();
-});
-
-test('an unreachable hosting falls back to the public provider with fresh renewal', async () => {
-  let direct = 0;
-  const f = fixture(async url => {
-    if (url !== page) throw new TypeError('Failed to fetch');
-    direct++; return {ok:true,url:page,text:async()=>document(media(direct === 1 ? 1793040120 : 1793041320))};
-  });
-  await flush(); await f.tick(250); assert.equal(f.engines.length, 0);
-  await f.tick(250); assert.equal(f.engines[0].url, media(1793040120));
-  await f.tick(90000); assert.equal(f.engines.length,1); f.stop();
-});
-
-test('direct lookup never plays locked sources or expired tokens', async () => {
-  const f = fixture(async url => {
-    if (url !== page) return response(media(1793041200));
-    return {ok:true,url:page,text:async()=>`var ZT_SOURCES = ${JSON.stringify([{url:media(1793041200),locked:true},{url:media(1793039999)}])};`};
-  }, true, {preferDirect:true});
-  await flush(); assert.equal(f.engines.length, 0); await f.tick(250);
-  assert.equal(f.engines[0].url, signed(media(1793041200))); f.stop();
-});
-
-
 test('slow master and fragment progress restart the startup deadline', async () => {
   let calls = 0;
   const f = fixture(async () => { calls++; return response(media(1793041200)); });
@@ -237,30 +191,30 @@ test('watchdog ignores background time, user pause, and downloads without playba
   t.mock.timers.tick(30000); assert.equal(stalls, 1);
 });
 
-test('a failed hosting hostname uses its own www alias and preserves manual selection on renewal', async () => {
+test('a failed VPS lookup retries the same origin and preserves the legacy manual selection', async () => {
   const calls = [];
-  const chosen = 'https://calamarmenciano.com/calamar-player.php?page=' + encodeURIComponent(page) + '&source_id=0123456789abcdef';
+  const chosen = 'https://www.calamarmenciano.com/calamar-player.php?page=' + encodeURIComponent(page) + '&source_id=0123456789abcdef';
   const f = fixture(async url => {
     const u = new URL(url); calls.push(u);
+    assert.equal(u.hostname, 'video.calamarmenciano.com');
     assert.equal(u.searchParams.get('source_id'), '0123456789abcdef');
     assert.equal(u.searchParams.get('page'), page);
-    if (u.hostname === 'calamarmenciano.com') throw new TypeError('network reset');
-    assert.equal(u.hostname, 'www.calamarmenciano.com');
-    return {ok:true,json:async()=>({url:'calamar-player.php?seg='+Buffer.from(media(1793040120)).toString('base64url')+'&sig=ok'})};
+    if (calls.length === 1) throw new TypeError('network reset');
+    return response(media(1793040120));
   }, true, {page:chosen});
   await flush(); await f.tick(250);
-  assert.equal(new URL(f.engines[0].url).hostname,'www.calamarmenciano.com');
-  await f.tick(90000); assert.equal(calls.length,3);
-  assert.equal(calls[2].hostname,'www.calamarmenciano.com'); assert.equal(f.fallbacks.length,0); f.stop();
+  assert.equal(new URL(f.engines[0].url).hostname, 'video.calamarmenciano.com');
+  await f.tick(90000); assert.equal(calls.length, 3);
+  assert.equal(f.fallbacks.length, 0); f.stop();
 });
 
-test('a media network reset tries the owned www relay before the direct provider', async () => {
+test('a media network reset retries the VPS rather than contacting the hosting or provider', async () => {
   const calls = [];
   const f = fixture(async url => {
-    const u = new URL(url); calls.push(u);
+    calls.push(new URL(url).hostname);
     return {ok:true,json:async()=>({url:'calamar-player.php?seg=playlist&sig=ok'})};
   });
   await flush(); f.engines[0].emitError(0); await f.tick(250);
-  assert.deepEqual(calls.map(u=>u.hostname), ['calamarmenciano.com','www.calamarmenciano.com']);
-  assert.equal(new URL(f.engines[1].url).hostname,'www.calamarmenciano.com'); f.stop();
+  assert.deepEqual(calls, ['video.calamarmenciano.com', 'video.calamarmenciano.com']);
+  assert.equal(new URL(f.engines[1].url).hostname, 'video.calamarmenciano.com'); f.stop();
 });
