@@ -101,14 +101,27 @@ function playerContainsZicoToken($value, $token) {
     }
     return false;
 }
-function playerOpenPage($page, $token, $get = 'playerGet') {
+function playerOpenPage($page, $token, $get = 'playerGet', $post = 'playerPost') {
     $clean = playerZicoPage($page);
     $query = parse_url($page, PHP_URL_QUERY);
     if ($clean !== '' && preg_match('#^/channels/[0-9]+/?$#D', parse_url($page, PHP_URL_PATH) ?: '')) $query = null;
     if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
     if ($token === '') return $get($clean, '');
-    // The documented credential only goes to this exact player host. Its URL is never returned or used as a Referer.
-    [$status, $body] = $get($clean . '?token=' . rawurlencode($token), 'https://calamarmenciano.com/', 3145728, 1);
+    // Server-side grants also work for tokens restricted to signed links. The API key stays in this header.
+    [$grantStatus, $grantBody] = $post('https://bp.zicotv.cc/api/v1/player-url', '',
+        ['channel' => (int)basename(parse_url($clean, PHP_URL_PATH)), 'ttl' => 300], ['Authorization: Bearer ' . $token]);
+    // A public player may remain available when the configured token has expired. Its own access checks still apply.
+    if (in_array($grantStatus, [401, 403], true)) return $get($clean, '');
+    if ($grantStatus !== 200 || !is_string($grantBody))
+        throw new RuntimeException('ZicoTV no ha podido autorizar el reproductor (HTTP ' . (int)$grantStatus . ').');
+    $grant = json_decode($grantBody, true);
+    $signed = is_array($grant) ? ($grant['url'] ?? null) : null;
+    if (!is_string($signed) || strlen($signed) > 16384 || preg_match('/[\r\n]/', $signed)
+        || playerZicoPage($signed) !== $clean || parse_url($signed, PHP_URL_HOST) !== 'bp.zicotv.cc'
+        || !preg_match('/^st=[^&\s#]{16,8192}$/D', parse_url($signed, PHP_URL_QUERY) ?: '')
+        || playerContainsZicoToken($signed, $token))
+        throw new RuntimeException('ZicoTV ha devuelto un enlace firmado no válido para este canal.');
+    [$status, $body] = $get($signed, '', 3145728, 1);
     return [$status, $body, $clean];
 }
 
@@ -181,7 +194,7 @@ function playerZicoCurrent($page, $token, $force = false, $get = 'playerGet', $p
     $cache = playerZicoCacheFile($page, $token);
     $saved = $cache !== '' && is_file($cache) ? json_decode((string)@file_get_contents($cache), true) : null;
     if (!$force && is_array($saved) && ($saved['until'] ?? 0) > time() && is_array($saved['sources'] ?? null)) return $saved;
-    [$status, $html, $final] = playerOpenPage($page, $token, $get);
+    [$status, $html, $final] = playerOpenPage($page, $token, $get, $post);
     if ($status !== 200 || !is_string($html)) throw new RuntimeException('La página de ZicoTV no responde (HTTP ' . (int)$status . ').');
     $current = playerZicoRenewSources($html, $final, $post);
     $renewal = $current !== null;
@@ -466,8 +479,8 @@ function playerGet($url, $page, $limit = 3145728, $maxHops = 5) {
     return array(0, null, $url);
 }
 /** A provider-issued same-player renewal URL; redirects and JavaScript are never executed. */
-function playerPost($url, $page, $data) {
-    $ch = playerCurl($url, $page, 15, ['Content-Type: application/json', 'Accept: application/json']);
+function playerPost($url, $page, $data, $headers = []) {
+    $ch = playerCurl($url, $page, 15, array_merge(['Content-Type: application/json', 'Accept: application/json'], $headers));
     if ($ch === null) return [0, null];
     $body = '';
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($data), CURLOPT_ENCODING => '',

@@ -115,7 +115,8 @@ class PlayerRelayTest(unittest.TestCase):
             $get=function($url,$page,$limit=0,$hops=0)use(&$getCalls){{$getCalls++;return [200,
                 'var ZT_SOURCES=[]; var ZT_RENEW={{"url":"/api/player/4/renew?expires=1794427569&signature={'a'*64}","ttl":1200}};',
                 'https://bp.zicotv.cc/api/player/4'];}};
-            $post=function()use(&$postCalls){{$postCalls++;return [200,json_encode(['ttl'=>1200,'sources'=>[
+            $post=function($url)use(&$postCalls){{if(str_ends_with($url,'/player-url'))return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test'])];
+                $postCalls++;return [200,json_encode(['ttl'=>1200,'sources'=>[
                 ['url'=>'https://cdn6.zicotv.cc/liga/index.m3u8?token=fresh-'.$postCalls,'label'=>'CDN 6']]])];}};
             $a=playerZicoCurrent('https://bp.zicotv.cc/api/player/4','private-test-token',false,$get,$post);
             playerZicoRememberSource('https://bp.zicotv.cc/api/player/4','private-test-token',$a['sources'][0]['url']);
@@ -150,22 +151,64 @@ class PlayerRelayTest(unittest.TestCase):
         $get = function($url,$referer,$limit=0,$hops=0) use (&$requests) {
             $requests[] = [$url,$referer]; return [200,"video",$url];
         };
-        $premium = playerOpenPage($page,"private-test-token",$get);
+        $grantCalls = [];
+        $post = function($url,$referer,$body,$headers) use (&$grantCalls) {
+            $grantCalls[] = [$url,$referer,$body,$headers];
+            return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/1?st=signed-player-grant-for-test'])];
+        };
+        $premium = playerOpenPage($page,"private-test-token",$get,$post);
         $public = playerOpenPage($page,"",$get);
         $catalog = [$page => true];
-        echo json_encode([$requests,$premium,$public,
+        echo json_encode([$requests,$premium,$public,$grantCalls,
             playerAllowedPage("https://bp.zicotv.cc/api/player/1",$catalog),
             playerAllowedPage("https://bp.zicotv.cc/channels/1",["https://bp.zicotv.cc/api/player/1"=>true]),
             playerAllowedPage("https://bp.zicotv.cc/api/player/2",$catalog,function(){return [404,""];}),
             playerZicoPage("https://evil.test/channels/1"),
             playerZicoPage("https://u:p@bp.zicotv.cc/channels/1")]);
         '''
-        requests, premium, public, allowed, reverse, wrong_id, bad_host, credentials = json.loads(php(code))
-        self.assertEqual(requests, [["https://bp.zicotv.cc/api/player/1?token=private-test-token", "https://calamarmenciano.com/"],
+        requests, premium, public, grant_calls, allowed, reverse, wrong_id, bad_host, credentials = json.loads(php(code))
+        self.assertEqual(requests, [["https://bp.zicotv.cc/api/player/1?st=signed-player-grant-for-test", ""],
                                     ["https://bp.zicotv.cc/api/player/1", ""]])
+        self.assertEqual(grant_calls, [["https://bp.zicotv.cc/api/v1/player-url", "", {"channel": 1, "ttl": 300},
+                                       ["Authorization: Bearer private-test-token"]]])
         self.assertEqual(premium[2], "https://bp.zicotv.cc/api/player/1")
         self.assertNotIn("private-test-token", json.dumps(premium))
         self.assertEqual([allowed, reverse, wrong_id, bad_host, credentials], [True, True, False, '', ''])
+
+    def test_signed_player_grants_cannot_redirect_to_another_channel_or_expose_the_token(self):
+        for address in [
+            'https://evil.example/api/player/4?st=signed-player-grant-for-test',
+            'https://bp.zicotv.cc/api/player/5?st=signed-player-grant-for-test',
+            'https://user:pass@bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test',
+            'https://bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test&token=private-test-token',
+            'https://bp.zicotv.cc/api/player/4?st=private-test-token',
+            'https://bp.zicotv.cc/api/player/4?token=private-test-token',
+        ]:
+            with self.subTest(address=address):
+                result = json.loads(php(f'''
+                    $getCalls = 0; $rejected = false;
+                    try {{playerOpenPage('https://bp.zicotv.cc/api/player/4','private-test-token',
+                        function()use(&$getCalls){{$getCalls++;return [200,'body',''];}},
+                        function(){{return [200,json_encode(['url'=>{json.dumps(address)}])];}});
+                    }} catch(RuntimeException $e){{$rejected=true;}}
+                    echo json_encode([$getCalls,$rejected]);
+                '''))
+                self.assertEqual(result, [0, True])
+
+    def test_rejected_api_tokens_use_the_normal_public_player_and_still_enforce_its_access_checks(self):
+        for status in [401, 403]:
+            result = json.loads(php(f'''
+                $requests=[];
+                $public=playerOpenPage('https://bp.zicotv.cc/api/player/4','private-test-token',
+                    function($url,$referer)use(&$requests){{$requests[]=[$url,$referer];
+                        return [200,'var ZT_PREMIUM_GATE = true; var ZT_RENEW = {{"url":"/api/player/4/renew"}};',$url];}},
+                    function(){{return [{status},'rejected token'];}});
+                $blocked=false;$postCalled=false;
+                try {{playerZicoRenewSources($public[1],$public[2],function()use(&$postCalled){{$postCalled=true;}});}}
+                catch(RuntimeException $e){{$blocked=true;}}
+                echo json_encode([$requests,$blocked,$postCalled]);
+            '''))
+            self.assertEqual(result, [[['https://bp.zicotv.cc/api/player/4', '']], True, False])
 
     def test_shared_host_without_curl_multi_exec_uses_bounded_safe_fallback(self):
         requests = []
@@ -301,19 +344,24 @@ class PlayerRelayTest(unittest.TestCase):
         $tampered = playerZicoSignedSource(str_replace("player/22", "player/23", $page), $catalog, playerSecret());
         $other = playerZicoSignedSource($page, [], playerSecret());
         $request = [];
+        $grantCalls = [];
         $result = playerOpenPage($page, $token, function($url,$referer,$limit,$hops) use (&$request) {{
             $request = [$url,$referer,$hops];
             return [200,"body",$url];
+        }}, function($url,$referer,$body,$headers) use (&$grantCalls) {{
+            $grantCalls = [$url,$referer,$body,$headers];
+            return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/22?st=signed-player-grant-for-test'])];
         }});
-        echo json_encode([$sources,$proof,$tampered,$other,$request,$result,
+        echo json_encode([$sources,$proof,$tampered,$other,$request,$result,$grantCalls,
             playerZicoEventSources($data,$event,$catalog,playerSecret(),"")]);
         '''
-        sources, proof, tampered, other, request, result, public = json.loads(php(code))
+        sources, proof, tampered, other, request, result, grant_calls, public = json.loads(php(code))
         self.assertEqual(len(sources), 1)
         self.assertNotIn('token=', sources[0]['player_url'])
         self.assertEqual([proof, tampered, other], [True, False, False])
-        self.assertEqual(request, ['https://bp.zicotv.cc/api/player/22?token=test-token-with%2Bprivate%2Fchars',
-                                   'https://calamarmenciano.com/', 1])
+        self.assertEqual(request, ['https://bp.zicotv.cc/api/player/22?st=signed-player-grant-for-test', '', 1])
+        self.assertEqual(grant_calls, ['https://bp.zicotv.cc/api/v1/player-url', '', {"channel": 22, "ttl": 300},
+                                      ['Authorization: Bearer test-token-with+private/chars']])
         self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
         self.assertEqual(public, [])
 
