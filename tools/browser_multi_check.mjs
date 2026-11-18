@@ -28,7 +28,7 @@ try{
   await page.route('**/*',async route=>{
     const u=new URL(route.request().url());if(u.origin===base)return route.continue();
     if(u.hostname==='zicotv.cc')return route.abort('connectionreset');
-    assert.equal(u.hostname,'calamarmenciano.com');const headers={'access-control-allow-origin':'*'};
+    assert.equal(u.hostname,'video.calamarmenciano.com');const headers={'access-control-allow-origin':'*'};
     if(u.searchParams.has('page')){lookups.push(u.searchParams.get('page'));return route.fulfill({headers,contentType:'application/json',body:JSON.stringify({url:'calamar-player.php?seg=media&sig=ok&id='+new URL(u.searchParams.get('page')).pathname.split('/').pop()})});}
     if(u.searchParams.get('seg')==='media')return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n'+Array.from({length:8},(_,i)=>(i?'#EXT-X-DISCONTINUITY\n':'')+'#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=ok&n='+i+'\n').join('')+'#EXT-X-ENDLIST\n'});
     return route.fulfill({headers,contentType:'video/mp2t',body:segment});
