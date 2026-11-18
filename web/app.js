@@ -769,6 +769,15 @@ const sleepTimer = playbackTimer(player.querySelector('.player-toolbar'), () => 
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 let stopRenewable = null, sourceLookup = null, stopStallWatch = null;
+let fullscreenOnFrameTap = false;
+const frameWake = document.getElementById('player-frame-wake');
+frameWake.addEventListener('click', (event) => {
+  if (fullscreenOnFrameTap && !controls.isFullscreen()) controls.enterFullscreen();
+  fullscreenOnFrameTap = false;
+  controls.wake();
+  if (event.detail === 0) document.getElementById('player-close').focus();
+});
+
 function stop() {
   if (!casting) watching?.privateViewing.watching(false);
   playbackGeneration++;
@@ -787,7 +796,7 @@ function stop() {
   // A picture muted only because the browser blocked the sound gets it back on the next start (autoplay.js).
   if (video.dataset.autoMuted) { soundChosen(video); video.muted = false; }
   document.getElementById('player-frame')?.remove();
-  player.classList.remove('framed');
+  player.classList.remove('framed', 'frame-touch');
 }
 
 /**
@@ -927,8 +936,9 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
   const showFrame = (address = source.how.address || source.url, referrerPolicy = null) => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
+    const zico = zicoPlayerIframe(address);
     // Pilot popup blocking on M+ LaLiga before enabling it for other ZicoTV channels.
-    const zicoPopupTrial = zicoPlayerIframe(address)?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
+    const zicoPopupTrial = zico?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
     const sandbox = zicoPopupTrial ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null;
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: address, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',
@@ -938,7 +948,12 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     }, { once: true });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
+    player.classList.toggle('frame-touch', !!zico);
     controls.attach(null);
+    if (zico) {
+      controls.hide();
+      frameWake.focus({preventScroll: true});
+    }
     playerStatus.replaceChildren(...(source.how.youtube
       ? [el('a', { href: source.how.youtube, target: '_blank', rel: 'noopener' }, 'Abrir en YouTube')]
       : []));
@@ -1183,7 +1198,12 @@ function open(c, fromRoute = false) {
   document.getElementById('player-close').focus();
   // On a direct link the player already fills the window; browsers need a tap to hide their own bars.
   const withMatch = showMatchCenter(c);
-  if (!fromRoute && !withMatch && !c.pending && !controls.isFullscreen()) controls.enterFullscreen();
+  fullscreenOnFrameTap = !withMatch && !c.pending && !controls.isFullscreen();
+  if (fullscreenOnFrameTap && !fromRoute) {
+    controls.enterFullscreen().then(() => {
+      if (current === c && controls.isFullscreen()) fullscreenOnFrameTap = false;
+    });
+  }
   // What the profile watches feeds «Recomendado para ti».
   if (c.vod && c.progress?.page) rememberWatched(c.progress.page, c.progress.item);
   // Viewers and visits are counted per channel and event; films and episodes are not.
