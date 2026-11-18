@@ -46,7 +46,7 @@ public class ResolvedPlaybackTest {
   private void playback(boolean rejectFirst, boolean manualDirect, boolean eventPage) throws Exception {
     String fixtureHost = eventPage ? "bp.zicotv.cc" : "player.example";
     HeldCertificate certificate = new HeldCertificate.Builder().commonName(fixtureHost)
-        .addSubjectAlternativeName(fixtureHost).addSubjectAlternativeName("calamarmenciano.com").build();
+        .addSubjectAlternativeName(fixtureHost).addSubjectAlternativeName("video.calamarmenciano.com").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(certificate).build();
     HandshakeCertificates clientTls = new HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate()).build();
     Buffer video = new Buffer();
@@ -66,14 +66,15 @@ public class ResolvedPlaybackTest {
       String eventSources = "{\"data\":{\"sources\":["
           + "{\"name\":\"Publicidad\",\"url\":\"" + origin + "preroll.mp4\"},"
           + "{\"name\":\"Reproductor externo\",\"url\":\"" + origin + "external\"},"
-          + "{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}";
+          + "{\"name\":\"Canal del evento\",\"player_url\":\"https://bp.zicotv.cc/api/player/28\"}]}}";
       server.setDispatcher(new Dispatcher() {
         @Override public MockResponse dispatch(RecordedRequest request) {
           String path = request.getPath();
           if (!manualDirect && !eventPage && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
           if (path.startsWith("/preroll.mp4") || path.startsWith("/external")) requestedAd.set(true);
-          if (path.startsWith("/calamar-player.php?event=") || path.startsWith("/api/v1/events/98019"))
+          if (path.startsWith("/calamar-player.php?event="))
             return new MockResponse().setHeader("Content-Type", "application/json").setBody(eventSources);
+          if (eventPage && !path.startsWith("/calamar-player.php?")) return new MockResponse().setResponseCode(404);
           if (path.startsWith("/calamar-player.php?page=")) {
             if (path.contains("&list=1")) return new MockResponse().setBody("{\"name\":\"Canal del evento\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"Canal del evento\"}]}");
             pages.incrementAndGet(); return new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=manifest&sig=ok\"}");
@@ -110,7 +111,7 @@ public class ResolvedPlaybackTest {
       clientField.set(network, local);
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.SYSTEM);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", origin + (eventPage ? "events/98019" : "api/player/28")).putExtra("title", "Prueba de canal resuelto");
+          .putExtra("page_url", eventPage ? "https://bp.zicotv.cc/events/98019" : origin + "api/player/28").putExtra("title", "Prueba de canal resuelto");
       if (manualDirect) intent.putStringArrayListExtra("channel_streams", new java.util.ArrayList<>(
           java.util.Arrays.asList(origin + "api/player/28", origin + "live.m3u8?token=direct")));
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
