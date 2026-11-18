@@ -139,7 +139,7 @@ try {
   assert.ok(page.url().endsWith('#/evento/local-vs-visitante'));
   assert.equal(await page.locator('#player-title').textContent(), 'Local vs visitante');
   // An event without a match link opens in full screen, with no match data.
-  assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'player');
   assert.equal(await page.locator('#match-center').isHidden(), true);
   assert.ok(requests.includes('https://example.com/one.mp4'));
   // Sharing an event uses its preview page (cover and name in WhatsApp).
@@ -1022,6 +1022,9 @@ try {
   });
   await page.goto(base + '/?zico=1#/canal/canal-zico');
   await expectZicoFrame(1);
+  assert.equal(await page.locator('#player-close').isVisible(), false);
+  await page.locator('#player-frame-wake').click();
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'player');
   assert.equal(await page.locator('#player-close').isVisible(), true);
   assert.equal(premiumZicoRequests, 1);
   await page.locator('#player-close').click();
@@ -1038,10 +1041,12 @@ try {
   });
   await page.goto(base + '/?event-zico=1#/evento/evento-zico-manual');
   await expectZicoFrame(22);
+  await page.locator('#player-frame-wake').click();
   assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Canal A','Canal B']);
   await page.getByLabel('Cambiar fuente').selectOption('1');
   await expectZicoFrame(23);
   assert.equal(await page.locator('#player-source-select').inputValue(), '1');
+  await page.locator('#player-frame-wake').click();
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
@@ -1052,6 +1057,7 @@ try {
   eventReady = true;
   await page.goto(base + '/?event-zico=3#/evento/evento-zico-manual');
   await expectZicoFrame(22);
+  await page.locator('#player-frame-wake').click();
   await page.locator('#player-close').click();
   // A player link from the provider can carry its short-lived signature.
   await page.evaluate(() => {
@@ -1061,6 +1067,7 @@ try {
   });
   await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
   await expectZicoFrame(4, '?st=example');
+  await page.locator('#player-frame-wake').click();
   await page.locator('#player-close').click();
   // Dailymotion is shown in the video screen with the original provider configuration.
   const dmPage = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';

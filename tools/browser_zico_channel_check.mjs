@@ -41,7 +41,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 let browser;
 try {
   browser = await chromium.launch({headless:true,...(process.env.CALAMAR_CHROME_CHANNEL?{channel:process.env.CALAMAR_CHROME_CHANNEL}:{})});
-  const page = await browser.newPage({viewport:{width:390,height:844}}), requests=[],errors=[];
+  const page = await browser.newPage({viewport:{width:390,height:844},hasTouch:true}), requests=[],errors=[];
   // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
   await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
   let premiumConfigured = true;
@@ -76,7 +76,13 @@ try {
       return route.fulfill({headers,status:403});
     return route.abort();
   });
+  const wakeArea = page.locator('#player-frame-wake');
+  const closePlayer = async () => {
+    if (await wakeArea.isVisible()) await wakeArea.tap();
+    await page.locator('#player-close').click();
+  };
   const blockedPopupAndPlaying = async frame => {
+    if (await wakeArea.isVisible()) await wakeArea.tap();
     const inside = frame.contentFrame();
     await inside.getByRole('button', {name:'Play',exact:true}).click();
     await inside.getByText('Ventana bloqueada',{exact:true}).waitFor();
@@ -102,11 +108,17 @@ try {
   await page.goto(base+'/#/canales');
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
   await embedded(4);
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'player');
+  assert.equal(await page.locator('#player-share').isVisible(),false);
+  await wakeArea.tap();
+  assert.equal(await page.locator('#player-share').isVisible(),true);
+  await page.clock.runFor(3500);
+  assert.equal(await page.locator('#player-share').isVisible(),false);
   await blockedPopupAndPlaying(page.locator('#player iframe'));
   assert.equal(requests.some(u=>u.includes('/channels/')||u.includes('/premium')),false);
   assert.deepEqual(errors,[]);
   console.log('PASS: admin channel page -> saved player id -> channel card -> official iframe');
-  await page.locator('#player-close').click();
+  await closePlayer();
   premiumConfigured = false;
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
   await page.getByText('Falta configurar ZicoTV Premium en el panel.').waitFor();
@@ -115,7 +127,7 @@ try {
   await page.locator('#player iframe').waitFor();
   assert.equal(await page.locator('#player iframe').getAttribute('src'),'https://bp.zicotv.cc/api/player/4');
   await blockedPopupAndPlaying(page.locator('#player iframe'));
-  await page.locator('#player-close').click();
+  await closePlayer();
   premiumConfigured = true;
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   let ownChannel = true;
@@ -152,7 +164,7 @@ try {
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
   await embedded(1);
-  await page.locator('#player-close').click();
+  await closePlayer();
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
   await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');
   await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
@@ -167,7 +179,7 @@ try {
   await embedded(56429);
   assert.ok(requests.includes('https://bp.zicotv.cc/api/v1/events/116061'));
   assert.deepEqual(errors,[]);
-  await page.locator('#player-close').click();
+  await closePlayer();
   await page.locator('.event-card').filter({hasText:'Partido solo externo'}).click();
   await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
   assert.equal(await page.locator('#player iframe').count(),0);

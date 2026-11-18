@@ -73,6 +73,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     pip: $('ctl-pip'),
     full: $('ctl-full'),
     center: $('ctl-center'),
+    frameWake: $('player-frame-wake'),
     chrome: root.querySelectorAll('.player-top, .player-bottom, .player-status'),
   };
   let hls = null;
@@ -95,7 +96,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     els.play.replaceChildren(icon(paused ? 'play' : 'pause'));
     els.play.setAttribute('aria-label', paused ? 'Reproducir' : 'Pausar');
     root.classList.toggle('is-paused', paused);
-    wake();
+    if (!root.classList.contains('frame-touch')) wake();
   };
   els.play.addEventListener('click', toggle);
   els.center.addEventListener('click', (e) => {
@@ -356,7 +357,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     els.full.setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Pantalla completa');
     els.full.setAttribute('aria-pressed', String(on));
     root.classList.toggle('is-fullscreen', on);
-    wake();
+    if (!root.classList.contains('frame-touch') || !root.classList.contains('idle')) wake();
   };
   els.full.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', showFullscreen);
@@ -364,8 +365,12 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   showFullscreen();
 
   // ---- Showing and hiding the controls ----
+  function hide() {
+    clearTimeout(idleTimer);
+    root.classList.add('idle');
+  }
   function hideNow() {
-    if (video.paused || !menusClosed()) return;
+    if ((video.paused && !root.classList.contains('frame-touch')) || !menusClosed()) return;
     // Keep the controls while someone uses them: keyboard focus inside them, or a real mouse over them.
     // (A touch screen leaves :hover stuck on the last thing tapped, and the focus given to the Back
     // button when the player opens is not a reason to keep them on screen.)
@@ -374,7 +379,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     const keyboardInside = keyboardUser && !!active && [...els.chrome].some((n) => n.contains(active));
     const hovering = !touch.matches && [...els.chrome].some((n) => n.matches(':hover'));
     if (keyboardInside || hovering) return;
-    root.classList.add('idle');
+    hide();
   }
   function wake() {
     root.classList.remove('idle');
@@ -386,7 +391,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
   let keyboardUser = false;
   let wasIdleAtPress = false;
   // Only the video wakes the controls: scrolling or tapping the match data under it does not.
-  const outside = (e) => !!e.target.closest?.('.match-center');
+  const outside = (e) => e.target === els.frameWake || !!e.target.closest?.('.match-center');
   root.addEventListener('pointermove', (e) => { if (!outside(e)) wake(); });
   root.addEventListener('pointerdown', (e) => {
     if (outside(e)) return;
@@ -483,6 +488,7 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
       closeMenu();
       els.quality.hidden = true;
       els.tracks.hidden = true;
+      clearTimeout(idleTimer);
       root.classList.remove('is-buffering', 'idle');
       refreshTime();
     },
@@ -491,5 +497,6 @@ export function initControls({ root, video, onClose, canClose = () => true, onDe
     leaveFullscreen,
     isFullscreen: () => !!fullscreenElement(),
     wake,
+    hide,
   };
 }
