@@ -32,7 +32,7 @@ final class MultiSource {
     if (VideoResolver.eventApi(page) != null) {
       PlayerDocument.Result event = HostingPlayback.event(page, hosting);
       List<VideoResolver.Source> players = VideoResolver.eventPlayers(event.html);
-      players.removeIf(source -> !VideoResolver.renewablePage(source.url));
+      players.removeIf(source -> AppSources.zico(source.url) && !VideoResolver.renewablePage(source.url));
       if (players.isEmpty()) throw new IOException("El evento todavía no publica fuentes disponibles");
       Exception last = null;
       for (VideoResolver.Source source : players) try {

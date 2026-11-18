@@ -261,23 +261,38 @@ function playerZicoFreshPlaylist($url, $page, $force = false, $lookup = 'playerZ
 }
 function playerZicoEventSources($data, $event, $catalog, $secret, $token) {
     $sources = [];
+    $external = [];
     foreach (($data['data']['sources'] ?? []) as $source) {
         if (!is_array($source)) continue;
         $url = $source['player_url'] ?? $source['url'] ?? '';
         $clean = playerZicoPage($url);
-        if ($clean === '') continue;
-        if ((!empty($source['is_premium']) || !empty($source['locked'])) && ($token === '' || ($source['source'] ?? '') !== 'own')) continue;
+        $restricted = !empty($source['is_premium']) || !empty($source['locked']);
+        $name = (string)($source['name'] ?? 'Fuente del evento');
+        if (playerContainsZicoToken($name, $token)) $name = 'Fuente del evento';
+        if ($clean === '') {
+            // External live feeds remain with their own provider. This route never relays their video.
+            if ($restricted || !is_string($url) || strlen($url) > 2048 || preg_match('/[\r\n]/', $url)
+                || playerContainsZicoToken($url, $token)) continue;
+            $parts = parse_url($url);
+            $host = strtolower($parts['host'] ?? '');
+            parse_str($parts['query'] ?? '', $parameters);
+            if (($parts['scheme'] ?? '') !== 'https' || !preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/D', $host)
+                || $host === 'zicotv.cc' || substr($host, -strlen('.zicotv.cc')) === '.zicotv.cc'
+                || isset($parts['user']) || isset($parts['pass']) || array_key_exists('token', $parameters)
+                || !preg_match('/\.(?:m3u8|ts)$/iD', $parts['path'] ?? '')) continue;
+            $external[$url] = ['name' => $name, 'url' => $url];
+            continue;
+        }
+        if ($restricted && ($token === '' || ($source['source'] ?? '') !== 'own')) continue;
         if ($token === '' && !empty(parse_url($url, PHP_URL_QUERY))) continue;
         if ($event === 'https://bp.zicotv.cc/events/' . basename($event) && !isset($catalog[$clean])) {
             $clean .= '?ct_event=' . basename($event) . '&ct_sig=' . playerZicoProof($clean, $event, $secret);
         } elseif (!isset($catalog[$clean]) && $token === '') {
             $clean = $url;
         }
-        $name = (string)($source['name'] ?? 'Fuente del evento');
-        if (playerContainsZicoToken($name, $token)) $name = 'Fuente del evento';
         $sources[$clean] = ['name' => $name, 'player_url' => $clean];
     }
-    return array_values($sources);
+    return array_values($sources + $external);
 }
 
 function playerB64($text) { return rtrim(strtr(base64_encode($text), '+/', '-_'), '='); }

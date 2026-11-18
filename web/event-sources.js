@@ -45,7 +45,7 @@ export async function expandEventSources(streams, { fetcher = globalThis.fetch, 
       if (!response.ok) throw Error(`El VPS responde HTTP ${response.status} al consultar las fuentes.`);
       const payload = await response.json();
       if (!Array.isArray(payload?.data?.sources)) throw Error('No se pudieron consultar las fuentes de este evento.');
-      const sources = eventPlayerSources(payload).filter(source => renewablePage(source.url));
+      const sources = eventPlayerSources(payload).filter(source => renewablePage(source.url) || !zicoHost(new URL(source.url).hostname));
       return sources.length ? sources.map(source => ({ ...source, origin: url })) : [{ url, unavailable: true }];
     } catch (error) {
       return [{ url, error: signal?.aborted ? 'La consulta de fuentes se ha cancelado o ha tardado demasiado.' : error.message || 'No se pudieron consultar las fuentes de Zico TV.' }];

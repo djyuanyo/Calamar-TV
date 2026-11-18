@@ -778,7 +778,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (eventApi != null) {
               PlayerDocument.Result hosted = HostingPlayback.event(requestedPage, NetworkTransport.get(DnsProvider.SYSTEM));
               List<VideoResolver.Source> eventPlayers = VideoResolver.eventPlayers(hosted.html);
-              eventPlayers.removeIf(source -> !VideoResolver.renewablePage(source.url));
+              eventPlayers.removeIf(source -> AppSources.zico(source.url) && !VideoResolver.renewablePage(source.url));
               if (eventPlayers.isEmpty()) throw new java.io.IOException("El evento todavía no publica fuentes disponibles");
               handler.post(() -> {
                 if (!active || request != generation) return;

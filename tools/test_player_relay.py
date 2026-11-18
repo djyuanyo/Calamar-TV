@@ -365,6 +365,27 @@ class PlayerRelayTest(unittest.TestCase):
         self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
         self.assertEqual(public, [])
 
+    def test_event_lists_owned_players_before_public_external_live_feeds(self):
+        event = 'https://bp.zicotv.cc/events/98019'
+        external = 'https://media.example.org/live.m3u8'
+        data = {'data': {'sources': [
+            {'url': external, 'name': 'Emisión externa'},
+            {'url': 'https://bp.zicotv.cc/api/player/22', 'source': 'own'},
+            {'url': 'https://media.example.org/blocked.ts', 'locked': True},
+            {'url': 'https://media.example.org/ad.mp4'},
+            {'url': 'https://media.example.org/protected.m3u8?token=private-token'},
+            {'url': 'https://cdn.zicotv.cc/live.m3u8'},
+        ]}}
+        code = f'''
+        $data = json_decode({json.dumps(json.dumps(data))}, true);
+        $event = {json.dumps(event)};
+        echo json_encode(playerZicoEventSources($data, $event, [$event => true], playerSecret(), ""));
+        '''
+        sources = json.loads(php(code))
+        self.assertEqual(len(sources), 2)
+        self.assertIn('/api/player/22?', sources[0]['player_url'])
+        self.assertEqual(sources[1], {'name': 'Emisión externa', 'url': external})
+
     def test_zico_credentials_can_only_be_saved_outside_document_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             public = pathlib.Path(tmp, 'public')
