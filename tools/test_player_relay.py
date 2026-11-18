@@ -386,6 +386,26 @@ class PlayerRelayTest(unittest.TestCase):
         '''))
         self.assertEqual(result, [False, False, True, True, ['https://bp.zicotv.cc/api/v1/events/7']])
 
+    def test_zico_embed_token_mode_uses_saved_token_only_for_catalog_channels(self):
+        page = 'https://bp.zicotv.cc/api/player/4'
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            token_file = root / 'calamar-zico-config.php'
+            token_file.write_text("<?php return 'sample-token+with/slash';")
+            (root / 'calamar-player-catalog.json').write_text(json.dumps({
+                'channels': [{'streams': ['https://zicotv.cc/channels/4']}],
+            }))
+            env = {**os.environ, 'CALAMAR_ZICO_CONFIG': str(token_file), 'CALAMAR_PLAYER_SECRET': SECRET}
+            def embed(address):
+                code = f'require {json.dumps(PHP)}; playerZicoEmbed({json.dumps(address)}, "", "token", playerSecret());'
+                return json.loads(subprocess.check_output(['php', '-d', f'sys_temp_dir={directory}', '-r', code], text=True, env=env))
+            self.assertEqual(embed(page), {
+                'zicoEmbed': 1, 'mode': 'token', 'url': page + '?token=sample-token%2Bwith%2Fslash',
+            })
+            self.assertEqual(embed('https://bp.zicotv.cc/api/player/5'), {
+                'zicoEmbed': 1, 'error': 'Este canal de ZicoTV no está disponible en el catálogo.',
+            })
+
     def test_zico_credentials_can_only_be_saved_outside_document_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             public = pathlib.Path(tmp, 'public')

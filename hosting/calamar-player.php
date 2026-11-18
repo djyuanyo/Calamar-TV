@@ -462,15 +462,18 @@ function playerZicoEmbedAllowed($page, $event, $catalog, $secret, $get = null) {
         && playerAllowedPage($clean, [$event => true], $get);
 }
 
-function playerZicoEmbed($page, $event, $secret) {
+function playerZicoEmbed($page, $event, $mode, $secret) {
     $info = ['zicoEmbed' => 1];
     $clean = playerZicoPage($page);
-    if ($clean === '' || strlen($page) > 2048 || !is_string($event) || strlen($event) > 128)
+    if ($clean === '' || strlen($page) > 2048 || !is_string($event) || strlen($event) > 128
+        || !in_array($mode, ['signed', 'token'], true))
         playerAnswer($info + ['error' => 'Canal de ZicoTV no válido.'], 400);
     $token = playerZicoToken();
     if ($token === '') playerAnswer($info + ['error' => 'Falta configurar ZicoTV Premium en el panel.'], 409);
     if (!playerZicoEmbedAllowed($page, $event, playerCatalogStreams(), $secret))
         playerAnswer($info + ['error' => 'Este canal de ZicoTV no está disponible en el catálogo.'], 403);
+    if ($mode === 'token')
+        playerAnswer($info + ['mode' => 'token', 'url' => $clean . '?token=' . rawurlencode($token)]);
     try { [$status, $signed] = playerZicoGrant($clean, $token); }
     catch (RuntimeException $error) { playerAnswer($info + ['error' => $error->getMessage()], 502); }
     if ($signed === null) playerAnswer($info + ['error' => 'ZicoTV rechazó la solicitud de firma desde el hosting (HTTP ' . $status . ').'], 502);
@@ -666,10 +669,16 @@ function playerMain() {
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
     if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET, POST, OPTIONS'); header('Access-Control-Allow-Headers: Range, Content-Type, Authorization'); http_response_code(204); exit; }
     if (isset($_GET['zico_config'])) playerZicoConfig($method);
+    if (isset($_GET['zico_embed']) && ($_GET['zico_mode'] ?? '') === 'token') {
+        if ($method !== 'POST') playerAnswer(['zicoEmbed' => 1, 'error' => 'Método no permitido.'], 405);
+        if ($origin === '') playerAnswer(['zicoEmbed' => 1, 'error' => 'Falta el origen del reproductor.'], 403);
+        playerZicoEmbed($_GET['zico_embed'], $_GET['zico_event'] ?? '', 'token', playerSecret());
+    }
     if ($method !== 'GET') playerAnswer(array('error' => 'Método no permitido.'), 405);
     $secret = playerSecret();
 
-    if (isset($_GET['zico_embed'])) playerZicoEmbed($_GET['zico_embed'], $_GET['zico_event'] ?? '', $secret);
+    if (isset($_GET['zico_embed']))
+        playerZicoEmbed($_GET['zico_embed'], $_GET['zico_event'] ?? '', $_GET['zico_mode'] ?? 'signed', $secret);
 
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {

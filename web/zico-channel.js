@@ -38,7 +38,7 @@ export function zicoPlayerIframe(address) {
   } catch { return null; }
 }
 
-export async function signedZicoIframe(page, endpoint, { event, signal, fetcher = globalThis.fetch } = {}) {
+export async function premiumZicoIframe(page, endpoint, { event, signal, fetcher = globalThis.fetch } = {}) {
   const player = zicoPlayerIframe(page);
   if (!player) throw Error('Canal de ZicoTV no válido.');
   if (new URL(player).searchParams.has('st')) return player;
@@ -46,17 +46,18 @@ export async function signedZicoIframe(page, endpoint, { event, signal, fetcher 
   const originalQuery = new URL(page).search;
   const proof = /^\?ct_event=\d{1,16}&ct_sig=[a-f0-9]{32}$/.test(originalQuery) ? originalQuery : '';
   request.searchParams.set('zico_embed', player + proof);
+  request.searchParams.set('zico_mode', 'token');
   if (event) request.searchParams.set('zico_event', event);
   const response = await fetcher(request.href, {
-    cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
+    method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
   });
   const data = await response.json().catch(() => null);
-  if (data?.zicoEmbed !== 1) throw Error('El hosting no devolvió un enlace firmado de ZicoTV.');
-  if (!response.ok) throw Error(data.error || 'No se pudo pedir el enlace firmado de ZicoTV.');
-  const prefix = player + '?st=';
-  if (typeof data.url !== 'string' || !data.url.startsWith(prefix)
-      || !/^[^&#\s]{1,8192}$/.test(data.url.slice(prefix.length))) {
-    throw Error('ZicoTV devolvió una firma no válida para este canal.');
+  if (data?.zicoEmbed !== 1) throw Error('El hosting no devolvió un enlace Premium de ZicoTV.');
+  if (!response.ok) throw Error(data.error || 'No se pudo pedir el enlace Premium de ZicoTV.');
+  const prefix = player + '?token=';
+  if (data.mode !== 'token' || typeof data.url !== 'string' || !data.url.startsWith(prefix)
+      || !/^(?:[A-Za-z0-9_.~-]|%[0-9A-Fa-f]{2}){16,512}$/.test(data.url.slice(prefix.length))) {
+    throw Error('El hosting devolvió un enlace Premium no válido para este canal.');
   }
   return data.url;
 }

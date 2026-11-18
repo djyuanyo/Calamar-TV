@@ -6,7 +6,7 @@ import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { signedZicoIframe, zicoPlayerIframe } from './zico-channel.js';
+import { premiumZicoIframe, zicoPlayerIframe } from './zico-channel.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
@@ -949,16 +949,16 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   }
   const zicoFrame = zicoPlayerIframe(source.url);
   if (zicoFrame) {
-    playerStatus.textContent = 'Solicitando enlace firmado de ZicoTV…';
+    playerStatus.textContent = 'Preparando el reproductor Premium de ZicoTV…';
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 23000);
     try {
-      const signed = await signedZicoIframe(source.url, PLAYER_ENDPOINT, { event: c.sourceEvents?.[source.url], signal: lookup.signal });
-      if (generation === playbackGeneration) showFrame(signed, 'origin');
+      const address = await premiumZicoIframe(source.url, PLAYER_ENDPOINT, { event: c.sourceEvents?.[source.url], signal: lookup.signal });
+      if (generation === playbackGeneration) showFrame(address, 'origin');
     } catch (error) {
       if (generation === playbackGeneration) playerStatus.replaceChildren(
-        lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace firmado.'
-          : error.message || 'No se pudo pedir el enlace firmado de ZicoTV.',
+        lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
+          : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
         ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
         ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
       );

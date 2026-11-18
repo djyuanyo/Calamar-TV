@@ -597,7 +597,7 @@ function zicoTokenPanel() {
     show(result); save.disabled = false;
   }).catch(error => { status.textContent = explain(error); });
   return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
-    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'El hosting lo usa para pedir enlaces firmados a ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y es visible en la URL del reproductor de ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
 }
 
 function eventForm(existing, rerender, catalogState) {

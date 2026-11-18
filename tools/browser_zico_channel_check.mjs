@@ -29,7 +29,7 @@ try {
   const page = await browser.newPage({viewport:{width:390,height:844}}), requests=[],errors=[];
   // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
   await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
-  let signingAllowed = true;
+  let premiumConfigured = true;
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=> {
     const u = new URL(route.request().url());
@@ -50,10 +50,12 @@ try {
     if (u.hostname==='bp.zicotv.cc' && ['/api/player/1','/api/player/56429'].includes(u.pathname))
       return route.fulfill({contentType:'text/html',body:'<p>Reproductor oficial de prueba</p>'});
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('zico_embed')) {
-      if (!signingAllowed) return route.fulfill({headers,status:502,json:{zicoEmbed:1,error:'ZicoTV rechazó la firma desde el hosting (HTTP 403).'}});
+      assert.equal(route.request().method(),'POST');
+      assert.equal(u.searchParams.get('zico_mode'),'token');
+      if (!premiumConfigured) return route.fulfill({headers,status:409,json:{zicoEmbed:1,error:'Falta configurar ZicoTV Premium en el panel.'}});
       const player = u.searchParams.get('zico_embed');
       if (player.endsWith('/56429')) assert.equal(u.searchParams.get('zico_event'),'https://bp.zicotv.cc/events/116061');
-      return route.fulfill({headers,json:{zicoEmbed:1,url:player+'?st=temporary-signature-test'}});
+      return route.fulfill({headers,json:{zicoEmbed:1,mode:'token',url:player+'?token=sample-embed-token-test'}});
     }
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('event'))
       return route.fulfill({headers,status:403});
@@ -62,7 +64,7 @@ try {
   const embedded = async channel => {
     const frame = page.locator('#player iframe');
     await frame.waitFor();
-    assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}?st=temporary-signature-test`);
+    assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}?token=sample-embed-token-test`);
     assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
     assert.ok((await frame.getAttribute('allow')).includes('fullscreen'));
     await frame.contentFrame().getByText('Reproductor oficial de prueba').waitFor();
@@ -81,15 +83,15 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: admin channel page -> saved player id -> channel card -> official iframe');
   await page.locator('#player-close').click();
-  signingAllowed = false;
+  premiumConfigured = false;
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
-  await page.getByText('ZicoTV rechazó la firma desde el hosting (HTTP 403).').waitFor();
+  await page.getByText('Falta configurar ZicoTV Premium en el panel.').waitFor();
   assert.equal(await page.locator('#player iframe').count(),0);
   await page.getByRole('button',{name:'Ver con publicidad'}).click();
   await page.locator('#player iframe').waitFor();
   assert.equal(await page.locator('#player iframe').getAttribute('src'),'https://bp.zicotv.cc/api/player/1');
   await page.locator('#player-close').click();
-  signingAllowed = true;
+  premiumConfigured = true;
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   let ownChannel = true;
   await page.route('https://bp.zicotv.cc/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
