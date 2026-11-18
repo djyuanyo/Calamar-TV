@@ -27,7 +27,9 @@ function playerSecret() {
     return $secret;
 }
 function playerZicoConfigPath() {
-    return getenv('CALAMAR_ZICO_CONFIG') ?: dirname(__DIR__) . '/calamar-zico-config.php';
+    $root = dirname(__DIR__);
+    $private = $root . '/zico-private/calamar-zico-config.php';
+    return getenv('CALAMAR_ZICO_CONFIG') ?: (is_file($private) ? $private : $root . '/calamar-zico-config.php');
 }
 function playerZicoTokenValid($token) {
     return is_string($token) && preg_match('/^[!-~]{16,512}$/D', $token);
@@ -101,17 +103,12 @@ function playerContainsZicoToken($value, $token) {
     }
     return false;
 }
-function playerOpenPage($page, $token, $get = 'playerGet', $post = 'playerPost') {
-    $clean = playerZicoPage($page);
-    $query = parse_url($page, PHP_URL_QUERY);
-    if ($clean !== '' && preg_match('#^/channels/[0-9]+/?$#D', parse_url($page, PHP_URL_PATH) ?: '')) $query = null;
-    if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
-    if ($token === '') return $get($clean, '');
+function playerZicoGrant($clean, $token, $post = 'playerPost') {
     // Server-side grants also work for tokens restricted to signed links. The API key stays in this header.
+    $form = http_build_query(['channel' => basename(parse_url($clean, PHP_URL_PATH)), 'ttl' => 300], '', '&');
     [$grantStatus, $grantBody] = $post('https://bp.zicotv.cc/api/v1/player-url', '',
-        ['channel' => (int)basename(parse_url($clean, PHP_URL_PATH)), 'ttl' => 300], ['Authorization: Bearer ' . $token]);
-    // A public player may remain available when the configured token has expired. Its own access checks still apply.
-    if (in_array($grantStatus, [401, 403], true)) return $get($clean, '');
+        $form, ['Authorization: Bearer ' . $token]);
+    if (in_array($grantStatus, [401, 403], true)) return [(int)$grantStatus, null];
     if ($grantStatus !== 200 || !is_string($grantBody))
         throw new RuntimeException('ZicoTV no ha podido autorizar el reproductor (HTTP ' . (int)$grantStatus . ').');
     $grant = json_decode($grantBody, true);
@@ -121,6 +118,17 @@ function playerOpenPage($page, $token, $get = 'playerGet', $post = 'playerPost')
         || !preg_match('/^st=[^&\s#]{16,8192}$/D', parse_url($signed, PHP_URL_QUERY) ?: '')
         || playerContainsZicoToken($signed, $token))
         throw new RuntimeException('ZicoTV ha devuelto un enlace firmado no válido para este canal.');
+    return [200, $signed];
+}
+
+function playerOpenPage($page, $token, $get = 'playerGet', $post = 'playerPost') {
+    $clean = playerZicoPage($page);
+    $query = parse_url($page, PHP_URL_QUERY);
+    if ($clean !== '' && preg_match('#^/channels/[0-9]+/?$#D', parse_url($page, PHP_URL_PATH) ?: '')) $query = null;
+    if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
+    if ($token === '') return $get($clean, '');
+    [, $signed] = playerZicoGrant($clean, $token, $post);
+    if ($signed === null) return $get($clean, '');
     [$status, $body] = $get($signed, '', 3145728, 1);
     return [$status, $body, $clean];
 }
@@ -433,11 +441,40 @@ function playerAllowedPage($page, $catalogStreams, $get = null) {
         list($status, $body) = $get ? $get($api) : playerGet($api, '');
         if ($status !== 200 || !is_string($body)) continue;
         $json = json_decode($body, true);
-        foreach (($json['data']['sources'] ?? array()) as $source)
-            if (is_array($source) && empty($source['is_premium']) && empty($source['locked'])
-                && ($source['player_url'] ?? $source['url'] ?? '') === $page) return true;
+        foreach (($json['data']['sources'] ?? array()) as $source) {
+            if (!is_array($source) || !empty($source['is_premium']) || !empty($source['locked'])) continue;
+            $address = $source['player_url'] ?? $source['url'] ?? '';
+            if ($address === $page || ($channel !== '' && playerZicoPage($address) === $channel)) return true;
+        }
     }
     return false;
+}
+
+/** Check a saved channel or just the event from which the browser picked a source. */
+function playerZicoEmbedAllowed($page, $event, $catalog, $secret, $get = null) {
+    $clean = playerZicoPage($page);
+    if ($clean === '') return false;
+    if (playerZicoSignedSource($page, $catalog, $secret)) return true;
+    foreach ($catalog as $saved => $_)
+        if (playerZicoPage($saved) === $clean) return true;
+    return isset($catalog[$event])
+        && preg_match('#^https://(?:bp\.)?zicotv\.cc/events/[0-9]{1,16}/?$#D', $event)
+        && playerAllowedPage($clean, [$event => true], $get);
+}
+
+function playerZicoEmbed($page, $event, $secret) {
+    $info = ['zicoEmbed' => 1];
+    $clean = playerZicoPage($page);
+    if ($clean === '' || strlen($page) > 2048 || !is_string($event) || strlen($event) > 128)
+        playerAnswer($info + ['error' => 'Canal de ZicoTV no válido.'], 400);
+    $token = playerZicoToken();
+    if ($token === '') playerAnswer($info + ['error' => 'Falta configurar ZicoTV Premium en el panel.'], 409);
+    if (!playerZicoEmbedAllowed($page, $event, playerCatalogStreams(), $secret))
+        playerAnswer($info + ['error' => 'Este canal de ZicoTV no está disponible en el catálogo.'], 403);
+    try { [$status, $signed] = playerZicoGrant($clean, $token); }
+    catch (RuntimeException $error) { playerAnswer($info + ['error' => $error->getMessage()], 502); }
+    if ($signed === null) playerAnswer($info + ['error' => 'ZicoTV rechazó la solicitud de firma desde el hosting (HTTP ' . $status . ').'], 502);
+    playerAnswer($info + ['url' => $signed]);
 }
 
 /** cURL for an address on a public server only (never the hosting's own network), as a browser on that page. */
@@ -448,7 +485,7 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     $zico = $host === 'zicotv.cc' || substr($host, -strlen('.zicotv.cc')) === '.zicotv.cc';
     $target = publicTarget($url, null, $zico);
     if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
-    $headers = array('Accept: */*');
+    $headers = array();
     if ($page !== '') {
         $p = parse_url($page);
         $headers[] = 'Referer: ' . $page;
@@ -480,10 +517,12 @@ function playerGet($url, $page, $limit = 3145728, $maxHops = 5) {
 }
 /** A provider-issued same-player renewal URL; redirects and JavaScript are never executed. */
 function playerPost($url, $page, $data, $headers = []) {
-    $ch = playerCurl($url, $page, 15, array_merge(['Content-Type: application/json', 'Accept: application/json'], $headers));
+    $form = is_string($data);
+    $contentType = $form ? 'application/x-www-form-urlencoded' : 'application/json';
+    $ch = playerCurl($url, $page, 15, array_merge(['Content-Type: ' . $contentType, 'Accept: application/json'], $headers));
     if ($ch === null) return [0, null];
     $body = '';
-    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($data), CURLOPT_ENCODING => '',
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $form ? $data : json_encode($data), CURLOPT_ENCODING => '',
         CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$body) {
             if (strlen($body) + strlen($chunk) > 262144) return 0;
             $body .= $chunk; return strlen($chunk);
@@ -619,7 +658,7 @@ function playerMain() {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowed = array('https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com');
     // Signed addresses are handed out by this file: Chromecast plays them from its own origin.
-    if (isset($_GET['seg'])) header('Access-Control-Allow-Origin: *');
+    if (isset($_GET['seg']) && !isset($_GET['zico_embed'])) header('Access-Control-Allow-Origin: *');
     elseif ($origin !== '' && !in_array($origin, $allowed, true)) playerAnswer(array('error' => 'Origen no permitido.'), 403);
     elseif ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
     if ($origin !== '') { header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
@@ -629,6 +668,8 @@ function playerMain() {
     if (isset($_GET['zico_config'])) playerZicoConfig($method);
     if ($method !== 'GET') playerAnswer(array('error' => 'Método no permitido.'), 405);
     $secret = playerSecret();
+
+    if (isset($_GET['zico_embed'])) playerZicoEmbed($_GET['zico_embed'], $_GET['zico_event'] ?? '', $secret);
 
     // A list or piece handed out by this file: relayed only with its signature.
     if (isset($_GET['seg'])) {

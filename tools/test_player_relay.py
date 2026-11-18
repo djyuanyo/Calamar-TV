@@ -169,7 +169,7 @@ class PlayerRelayTest(unittest.TestCase):
         requests, premium, public, grant_calls, allowed, reverse, wrong_id, bad_host, credentials = json.loads(php(code))
         self.assertEqual(requests, [["https://bp.zicotv.cc/api/player/1?st=signed-player-grant-for-test", ""],
                                     ["https://bp.zicotv.cc/api/player/1", ""]])
-        self.assertEqual(grant_calls, [["https://bp.zicotv.cc/api/v1/player-url", "", {"channel": 1, "ttl": 300},
+        self.assertEqual(grant_calls, [["https://bp.zicotv.cc/api/v1/player-url", "", "channel=1&ttl=300",
                                        ["Authorization: Bearer private-test-token"]]])
         self.assertEqual(premium[2], "https://bp.zicotv.cc/api/player/1")
         self.assertNotIn("private-test-token", json.dumps(premium))
@@ -360,10 +360,31 @@ class PlayerRelayTest(unittest.TestCase):
         self.assertNotIn('token=', sources[0]['player_url'])
         self.assertEqual([proof, tampered, other], [True, False, False])
         self.assertEqual(request, ['https://bp.zicotv.cc/api/player/22?st=signed-player-grant-for-test', '', 1])
-        self.assertEqual(grant_calls, ['https://bp.zicotv.cc/api/v1/player-url', '', {"channel": 22, "ttl": 300},
+        self.assertEqual(grant_calls, ['https://bp.zicotv.cc/api/v1/player-url', '', "channel=22&ttl=300",
                                       ['Authorization: Bearer test-token-with+private/chars']])
         self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
         self.assertEqual(public, [])
+
+    def test_zico_embed_checks_only_the_requested_catalog_event(self):
+        result = json.loads(php('''
+            $event = 'https://bp.zicotv.cc/events/7';
+            $page = 'https://bp.zicotv.cc/api/player/4';
+            $catalog = [$event => true, 'https://bp.zicotv.cc/events/8' => true,
+                'https://zicotv.cc/channels/5' => true];
+            $requests = [];
+            $lookup = function($url) use (&$requests) {
+                $requests[] = $url;
+                return [200, json_encode(['data'=>['sources'=>[['url'=>'https://zicotv.cc/channels/4']]]])];
+            };
+            echo json_encode([
+                playerZicoEmbedAllowed($page, '', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed($page, 'https://bp.zicotv.cc/events/9', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed('https://bp.zicotv.cc/api/player/5', '', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed($page, $event, $catalog, playerSecret(), $lookup),
+                $requests
+            ]);
+        '''))
+        self.assertEqual(result, [False, False, True, True, ['https://bp.zicotv.cc/api/v1/events/7']])
 
     def test_zico_credentials_can_only_be_saved_outside_document_root(self):
         with tempfile.TemporaryDirectory() as tmp:

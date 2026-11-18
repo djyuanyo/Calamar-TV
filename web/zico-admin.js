@@ -1,4 +1,6 @@
-const ZICO_ADMIN_ENDPOINT = 'https://video.calamarmenciano.com/calamar-zico-admin.php';
+import { PLAYER_ENDPOINT } from './catalog.js';
+
+const ZICO_ADMIN_ENDPOINT = PLAYER_ENDPOINT + '?zico_config=1';
 
 async function zicoConfig(body, idToken) {
   const headers = { Authorization: 'Bearer ' + idToken };
@@ -9,7 +11,7 @@ async function zicoConfig(body, idToken) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const result = await response.json().catch(() => null);
-  if (result?.zicoConfig !== 1) throw Error('No se pudo acceder a la configuración de ZicoTV en IONOS.');
+  if (result?.zicoConfig !== 1) throw Error('No se pudo acceder a la configuración de ZicoTV en el hosting.');
   if (!response.ok) throw Error(result.error || 'No se pudo guardar el token de ZicoTV.');
   return result;
 }

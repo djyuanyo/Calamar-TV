@@ -997,15 +997,18 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // A Zico channel opens its official frame while the hosted player is unavailable.
-  let hostedZicoRequests = 0;
+  // A Zico channel opens its official frame using only a short-lived URL from the hosting.
+  let signedZicoRequests = 0;
   await page.route('https://calamarmenciano.com/calamar-player.php?*', route => {
-    hostedZicoRequests++;
-    return route.fulfill({status:403});
+    const url = new URL(route.request().url());
+    const player = url.searchParams.get('zico_embed');
+    if (!player) return route.fulfill({status:403});
+    signedZicoRequests++;
+    return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{zicoEmbed:1,url:player+'?st=temporary-signature-test'}});
   });
   await page.route('https://bp.zicotv.cc/api/player/*', route =>
     route.fulfill({ contentType: 'text/html', body: '<p>Reproductor Zico de prueba</p>' }));
-  const expectZicoFrame = async (channel, query = '') => {
+  const expectZicoFrame = async (channel, query = '?st=temporary-signature-test') => {
     const frame = page.locator(`#player-frame[src="https://bp.zicotv.cc/api/player/${channel}${query}"]`);
     await frame.contentFrame().getByText('Reproductor Zico de prueba').waitFor();
     assert.equal(await frame.getAttribute('referrerpolicy'), 'origin');
@@ -1019,7 +1022,7 @@ try {
   await page.goto(base + '/?zico=1#/canal/canal-zico');
   await expectZicoFrame(1);
   assert.equal(await page.locator('#player-close').isVisible(), true);
-  assert.equal(hostedZicoRequests, 0);
+  assert.equal(signedZicoRequests, 1);
   await page.locator('#player-close').click();
   // Event page URLs expand into named public players, never an iframe of /events/.
   let eventReady = true;
