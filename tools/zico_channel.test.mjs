@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zicoChannelPlayer, zicoPlayerIframe } from '../web/zico-channel.js';
+import { premiumZicoIframe, zicoChannelPlayer, zicoPlayerIframe } from '../web/zico-channel.js';
 import { merge, webPlayback } from '../web/catalog.js';
 import { expandHostedSources } from '../web/hosted-sources.js';
 
@@ -36,6 +36,24 @@ test('saved channel pages enter the catalog as renewable players with duplicate 
   const channels = merge({channels:[]}, {channels:[{id:'mine', name:'Mi canal', streams:[
     'https://bp.zicotv.cc/channels/1', 'https://bp.zicotv.cc/api/player/1']} ]});
   assert.deepEqual(channels[0].streams, ['https://bp.zicotv.cc/api/player/1']);
+});
+
+test('premium iframe accepts a single token from the hosting for the selected channel', async () => {
+  const endpoint = 'https://calamarmenciano.com/calamar-player.php';
+  const player = 'https://bp.zicotv.cc/api/player/4';
+  const valid = player + '?token=sample-token%2Bwith%2Fslash';
+  const fetcher = url => async (request, options) => {
+    const target = new URL(request);
+    assert.equal(target.origin + target.pathname, endpoint);
+    assert.equal(target.searchParams.get('zico_embed'), player);
+    assert.equal(target.searchParams.get('zico_mode'), 'token');
+    assert.equal(options.method, 'POST');
+    return Response.json({ zicoEmbed: 1, mode: 'token', url });
+  };
+  assert.equal(await premiumZicoIframe(player + '?token=from-catalog', endpoint, { fetcher: fetcher(valid) }), valid);
+  for (const url of [valid.replace('/4?', '/5?'), valid.replace('bp.zicotv.cc', 'example.com'), valid + '&other=1']) {
+    await assert.rejects(premiumZicoIframe(player, endpoint, { fetcher: fetcher(url) }), /enlace Premium no válido/);
+  }
 });
 
 test('raw event channel pages retain selectable hosted signals and origin for renewal', async () => {

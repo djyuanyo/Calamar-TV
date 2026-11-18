@@ -574,14 +574,14 @@ function zicoAgendaPanel(rerender, state) {
 
 function zicoTokenPanel() {
   const input = el('input', { type: 'password', autocomplete: 'new-password', maxlength: '512', required: true });
-  const status = el('p', { class: 'note', role: 'status' }, 'Comprobando la conexión con IONOS…');
+  const status = el('p', { class: 'note', role: 'status' }, 'Comprobando la configuración de ZicoTV en el hosting…');
   const save = el('button', { type: 'submit', class: 'btn secondary', disabled: true }, 'Guardar token Premium');
   const remove = el('button', { type: 'button', class: 'ghost', hidden: true, onclick: () => {
     if (confirm('¿Quitar el token Premium de ZicoTV?')) update('');
   } }, 'Quitar token');
   const show = result => {
     remove.hidden = !result.configured;
-    status.textContent = result.configured ? 'Token Premium guardado en IONOS.' : 'Puedes guardar el token de tu perfil de ZicoTV.';
+    status.textContent = result.configured ? 'Token Premium guardado en el hosting.' : 'Puedes guardar el token de tu perfil de ZicoTV.';
   };
   async function update(token) {
     save.disabled = remove.disabled = true;
@@ -597,7 +597,7 @@ function zicoTokenPanel() {
     show(result); save.disabled = false;
   }).catch(error => { status.textContent = explain(error); });
   return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
-    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el VPS de IONOS y se usa al abrir los canales de ZicoTV desde el VPS.'), el('div', { class: 'actions' }, save, remove), status);
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y es visible en la URL del reproductor de ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
 }
 
 function eventForm(existing, rerender, catalogState) {

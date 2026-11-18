@@ -6,14 +6,14 @@ import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { zicoPlayerIframe } from './zico-channel.js';
+import { premiumZicoIframe, zicoPlayerIframe } from './zico-channel.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -830,6 +830,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     const sources = resolved.filter(source => !source.unavailable);
     c = { ...c, streams: sources.map(s => s.url), eventSourcesExpanded: true,
       sourceNames: Object.fromEntries(sources.map(s => [s.url, s.name])),
+      sourceEvents: Object.fromEntries(sources.filter(s => s.origin).map(s => [s.url, s.origin])),
       sourceErrors: Object.fromEntries(sources.filter(s => s.error).map(s => [s.url, s.error])),
       originalStreams: c.streams };
     const chosen = sources.findIndex(s => !s.error && (s.url === requested || s.origin === requested));
@@ -947,7 +948,26 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     return;
   }
   const zicoFrame = zicoPlayerIframe(source.url);
-  if (zicoFrame) { showFrame(zicoFrame, 'origin'); return; }
+  if (zicoFrame) {
+    playerStatus.textContent = 'Preparando el reproductor Premium de ZicoTV…';
+    const lookup = sourceLookup = new AbortController();
+    const timeout = setTimeout(() => lookup.abort(), 23000);
+    try {
+      const address = await premiumZicoIframe(source.url, PLAYER_ENDPOINT, { event: c.sourceEvents?.[source.url], signal: lookup.signal });
+      if (generation === playbackGeneration) showFrame(address, 'origin');
+    } catch (error) {
+      if (generation === playbackGeneration) playerStatus.replaceChildren(
+        lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
+          : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
+        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
+        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
+      );
+    } finally {
+      clearTimeout(timeout);
+      if (sourceLookup === lookup) sourceLookup = null;
+    }
+    return;
+  }
   if (source.how.renewable) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
       onSources: options => {
