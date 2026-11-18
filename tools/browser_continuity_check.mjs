@@ -1,4 +1,5 @@
 import {fakeFirebase} from './browser_fixture.mjs';
+import {hostedRequest} from '../web/hosted-sources.js';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.CALAMAR_PLAYWRIGHT||'playwright');
 const hls=await readFile(process.env.CALAMAR_HLS||require.resolve('hls.js/dist/hls.min.js'));
 const video=await readFile('app/src/androidTest/assets/live.ts'),root=resolve('web');
-const fixture={channels:[{id:'continuous',name:'Continuidad',group:'Deportes',streams:['https://bp.zicotv.cc/api/player/1']}],events:[],leagues:[],teams:[],featured:[],hidden:[]};
+const fixture={channels:[{id:'continuous',name:'Continuidad',group:'Deportes',streams:[hostedRequest('https://bp.zicotv.cc/api/player/1')]}],events:[],leagues:[],teams:[],featured:[],hidden:[]};
 const server=createServer(async(req,res)=>{
   const path=new URL(req.url,'http://localhost').pathname;
   if(path==='/firebase.js'){res.setHeader('Content-Type','text/javascript');res.end(fakeFirebase(fixture));return;}
@@ -28,7 +29,7 @@ try{
     window.setTimeout=(callback,delay,...args)=>later(callback,delay===300000&&new Error().stack.includes('renewable-player.js')&&renewals++===0?1500:delay,...args);
     window.__engines=0;window.__destroyed=0;
   });
-  // The Zico route now prefers the hosting; direct playback is exercised by browser_hosting_check.
+  // Exercise an explicit HLS relay link; direct playback is covered by browser_hosting_check.
   for(const hosted of [true]){
     let generation=0,freshMedia=0;const errors=[];
     await page.unroute('**/*');

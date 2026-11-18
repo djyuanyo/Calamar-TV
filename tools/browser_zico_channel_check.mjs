@@ -1,4 +1,4 @@
-// Paste a channel page in the real admin, save it, then open its card in our own player.
+// Paste a channel page in the real admin, save it, then open the provider iframe from its card.
 import { fakeFirebase } from './browser_fixture.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -46,17 +46,21 @@ try {
     ]}}});
     if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
     if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
-    if (u.hostname==='bp.zicotv.cc') return route.abort(); // Simulate the operator blocking direct player requests.
-    if (u.hostname!=='calamarmenciano.com') return route.abort();
-    if (u.searchParams.has('event')) return route.fulfill({headers,json:{data:{sources:[]}}});
-    if (u.searchParams.has('page')) {
-      assert.ok(['https://bp.zicotv.cc/api/player/1','https://bp.zicotv.cc/channels/1','https://bp.zicotv.cc/api/player/56429'].includes(u.searchParams.get('page')));
-      return route.fulfill({headers,json:u.searchParams.has('list')?{items:[{id:'0123456789abcdef',name:'Prueba · Señal 1'}]}:{url:'calamar-player.php?seg=master&sig=ok'}});
-    }
-    if (u.searchParams.get('seg')==='master') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=ok\n#EXT-X-ENDLIST\n'});
-    if (u.searchParams.get('seg')==='video') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
+    if (u.hostname==='bp.zicotv.cc' && ['/api/player/1','/api/player/56429'].includes(u.pathname))
+      return route.fulfill({contentType:'text/html',body:'<p>Reproductor oficial de prueba</p>'});
+    if (u.hostname==='calamarmenciano.com' && u.searchParams.has('event'))
+      return route.fulfill({headers,status:403});
     return route.abort();
   });
+  const embedded = async channel => {
+    const frame = page.locator('#player iframe');
+    await frame.waitFor();
+    assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}`);
+    assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
+    assert.ok((await frame.getAttribute('allow')).includes('fullscreen'));
+    await frame.contentFrame().getByText('Reproductor oficial de prueba').waitFor();
+    assert.equal(requests.some(url=>new URL(url).searchParams.has('page')),false);
+  };
   await page.goto(base+'/#/admin/nuevo');
   await page.getByLabel('Nombre',{exact:true}).fill('Prueba Zico');
   await page.getByLabel('Enlaces',{exact:true}).fill('https://bp.zicotv.cc/channels/1');
@@ -65,12 +69,10 @@ try {
   assert.deepEqual(await page.evaluate(()=>window.__published.channels[0].streams),['https://bp.zicotv.cc/api/player/1']);
   await page.goto(base+'/#/canales');
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
-  await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
-  assert.equal(await page.locator('#player iframe').count(),0);
+  await embedded(1);
   assert.equal(requests.some(u=>u.includes('/channels/')||u.includes('/premium')),false);
-  assert.ok(requests.some(u=>u.includes('seg=video')));
   assert.deepEqual(errors,[]);
-  console.log('PASS: admin channel page -> saved player id -> channel card -> native HLS video in own web player');
+  console.log('PASS: admin channel page -> saved player id -> channel card -> official iframe');
   await page.locator('#player-close').click();
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   let ownChannel = true;
@@ -106,8 +108,7 @@ try {
   assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://bp.zicotv.cc/channels/1']);
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
-  await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
-  assert.equal(await page.locator('#player iframe').count(),0);
+  await embedded(1);
   await page.locator('#player-close').click();
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
   await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');
@@ -120,10 +121,8 @@ try {
   assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').streams),['https://bp.zicotv.cc/events/116061']);
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
-  await page.waitForFunction(()=>{const video=document.querySelector('#video');return video?.videoWidth>0&&video.currentTime>.2;},null,{timeout:20000});
+  await embedded(56429);
   assert.ok(requests.includes('https://bp.zicotv.cc/api/v1/events/116061'));
-  assert.ok(requests.some(url=>new URL(url).searchParams.get('page')==='https://bp.zicotv.cc/api/player/56429'));
-  assert.equal(await page.locator('#player iframe').count(),0);
   assert.deepEqual(errors,[]);
   await page.locator('#player-close').click();
   await page.locator('.event-card').filter({hasText:'Partido solo externo'}).click();
@@ -131,5 +130,5 @@ try {
   assert.equal(await page.locator('#player iframe').count(),0);
   assert.ok(requests.includes('https://cdn.example/fallback.m3u8'));
   assert.equal(requests.some(url=>new URL(url).hostname==='ads.example'),false);
-  console.log('PASS: import -> edit keeps /channels/ -> refresh switches channel/event without duplicates -> both play in our player');
+  console.log('PASS: Zico channels and events mount the official iframe; direct HLS keeps our player');
 } finally {await browser?.close();await new Promise(ok=>server.close(ok));}

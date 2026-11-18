@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zicoChannelPlayer } from '../web/zico-channel.js';
+import { zicoChannelPlayer, zicoPlayerIframe } from '../web/zico-channel.js';
 import { merge, webPlayback } from '../web/catalog.js';
 import { expandHostedSources } from '../web/hosted-sources.js';
 
@@ -14,6 +14,22 @@ test('channel pages resolve only their own id through the documented player', ()
     'https://u:p@bp.zicotv.cc/channels/1', 'https://bp.zicotv.cc:444/channels/1',
     'https://bp.zicotv.cc/channels/1/more', 'https://bp.zicotv.cc/channels/a', 'https://bp.zicotv.cc/events/1'])
     assert.equal(zicoChannelPlayer(url), null);
+});
+
+test('Zico frames use the official player and retain only the short-lived signature', () => {
+  const player = 'https://bp.zicotv.cc/api/player/4';
+  assert.equal(zicoPlayerIframe('https://zicotv.cc/channels/4?from=events'), player);
+  assert.equal(zicoPlayerIframe('https://zicotv.cc/api/player/4/?token=private#video'), player);
+  assert.equal(zicoPlayerIframe(player + '?st=signed&token=private'), player + '?st=signed');
+  for (const address of [
+    'https://bp.zicotv.cc.evil.test/api/player/4',
+    'https://cdn.zicotv.cc/api/player/4',
+    'http://bp.zicotv.cc/api/player/4',
+    'https://bp.zicotv.cc:8443/api/player/4',
+    'https://user:pass@bp.zicotv.cc/api/player/4',
+    'https://bp.zicotv.cc/events/4',
+    'https://cdn.zicotv.cc/live/index.m3u8',
+  ]) assert.equal(zicoPlayerIframe(address), null);
 });
 
 test('saved channel pages enter the catalog as renewable players with duplicate links collapsed', () => {

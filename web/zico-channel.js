@@ -21,3 +21,19 @@ export function zicoChannelPlayer(address) {
       ? `https://bp.zicotv.cc/api/player/${match[1]}` : null;
   } catch { return null; }
 }
+
+/** Public embed or an official short-lived link, without forwarding an API token. */
+export function zicoPlayerIframe(address) {
+  const channel = zicoChannelPlayer(address);
+  if (channel) return channel;
+  try {
+    const u = new URL(address);
+    const player = /^\/api\/player\/([0-9]{1,16})\/?$/.exec(u.pathname);
+    if (u.protocol !== 'https:' || u.username || u.password || u.port || !player
+      || !['zicotv.cc', 'bp.zicotv.cc'].includes(u.hostname)) return null;
+    const embed = new URL(`https://bp.zicotv.cc/api/player/${player[1]}`);
+    const signature = u.searchParams.get('st');
+    if (signature) embed.searchParams.set('st', signature);
+    return embed.href;
+  } catch { return null; }
+}

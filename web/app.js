@@ -6,6 +6,7 @@ import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
+import { zicoPlayerIframe } from './zico-channel.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
@@ -923,11 +924,11 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     }
   };
   playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
-  const showFrame = () => {
+  const showFrame = (address = source.how.address || source.url, referrerPolicy = null) => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
-    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
+    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: address, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',
-      referrerpolicy: source.how.youtube ? 'strict-origin-when-cross-origin' : null });
+      referrerpolicy: referrerPolicy || (source.how.youtube ? 'strict-origin-when-cross-origin' : null) });
     frame.addEventListener('load', () => {
       if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
     }, { once: true });
@@ -945,6 +946,8 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     } }, '↻ Consultar de nuevo'));
     return;
   }
+  const zicoFrame = zicoPlayerIframe(source.url);
+  if (zicoFrame) { showFrame(zicoFrame, 'origin'); return; }
   if (source.how.renewable) {
     stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
       onSources: options => {
