@@ -10,6 +10,21 @@ const {chromium} = require(process.env.CALAMAR_PLAYWRIGHT || 'playwright');
 const root = resolve('web'), fixture = {channels:[],featured:[],hidden:[],events:[],leagues:[],teams:[]};
 const hls = await readFile(process.env.CALAMAR_HLS || require.resolve('hls.js/dist/hls.min.js'));
 const segment = await readFile('app/src/androidTest/assets/live.ts');
+const testPlayer = `<p>Reproductor oficial de prueba</p>
+  <button>Play</button><output></output><video muted playsinline></video>
+  <script>
+    document.querySelector('button').onclick = async () => {
+      const popup = window.open('https://ads.example/popup', '_blank');
+      document.querySelector('output').textContent = popup ? 'Ventana abierta' : 'Ventana bloqueada';
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      const video = document.querySelector('video');
+      video.onplaying = () => { video.dataset.playing = 'true'; };
+      video.srcObject = canvas.captureStream(20);
+      setInterval(() => context.fillRect(0, 0, canvas.width, canvas.height), 50);
+      await video.play();
+    };
+  </script>`;
 const server = createServer(async (req,res) => {
   const path = new URL(req.url,'http://localhost').pathname;
   if (path === '/firebase.js') {res.setHeader('Content-Type','text/javascript');res.end(fakeFirebase(fixture));return;}
@@ -47,8 +62,8 @@ try {
     ]}}});
     if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
     if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
-    if (u.hostname==='bp.zicotv.cc' && ['/api/player/1','/api/player/56429'].includes(u.pathname))
-      return route.fulfill({contentType:'text/html',body:'<p>Reproductor oficial de prueba</p>'});
+    if (u.hostname==='bp.zicotv.cc' && ['/api/player/1','/api/player/4','/api/player/56429'].includes(u.pathname))
+      return route.fulfill({contentType:'text/html',body:testPlayer});
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('zico_embed')) {
       assert.equal(route.request().method(),'POST');
       assert.equal(u.searchParams.get('zico_mode'),'token');
@@ -61,24 +76,33 @@ try {
       return route.fulfill({headers,status:403});
     return route.abort();
   });
+  const blockedPopupAndPlaying = async frame => {
+    const inside = frame.contentFrame();
+    await inside.getByRole('button', {name:'Play',exact:true}).click();
+    await inside.getByText('Ventana bloqueada',{exact:true}).waitFor();
+    await inside.locator('video[data-playing="true"]').waitFor({timeout:5000});
+    assert.equal(page.context().pages().length, 1);
+  };
   const embedded = async channel => {
     const frame = page.locator('#player iframe');
     await frame.waitFor();
     assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}?token=sample-embed-token-test`);
     assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
+    assert.equal(await frame.getAttribute('sandbox'), channel === 4 ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null);
     assert.ok((await frame.getAttribute('allow')).includes('fullscreen'));
     await frame.contentFrame().getByText('Reproductor oficial de prueba').waitFor();
     assert.equal(requests.some(url=>new URL(url).searchParams.has('page')),false);
   };
   await page.goto(base+'/#/admin/nuevo');
   await page.getByLabel('Nombre',{exact:true}).fill('Prueba Zico');
-  await page.getByLabel('Enlaces',{exact:true}).fill('https://bp.zicotv.cc/channels/1');
+  await page.getByLabel('Enlaces',{exact:true}).fill('https://bp.zicotv.cc/channels/4');
   await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
   await page.waitForFunction(()=>window.__published?.channels.length===1);
-  assert.deepEqual(await page.evaluate(()=>window.__published.channels[0].streams),['https://bp.zicotv.cc/api/player/1']);
+  assert.deepEqual(await page.evaluate(()=>window.__published.channels[0].streams),['https://bp.zicotv.cc/api/player/4']);
   await page.goto(base+'/#/canales');
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
-  await embedded(1);
+  await embedded(4);
+  await blockedPopupAndPlaying(page.locator('#player iframe'));
   assert.equal(requests.some(u=>u.includes('/channels/')||u.includes('/premium')),false);
   assert.deepEqual(errors,[]);
   console.log('PASS: admin channel page -> saved player id -> channel card -> official iframe');
@@ -89,7 +113,8 @@ try {
   assert.equal(await page.locator('#player iframe').count(),0);
   await page.getByRole('button',{name:'Ver con publicidad'}).click();
   await page.locator('#player iframe').waitFor();
-  assert.equal(await page.locator('#player iframe').getAttribute('src'),'https://bp.zicotv.cc/api/player/1');
+  assert.equal(await page.locator('#player iframe').getAttribute('src'),'https://bp.zicotv.cc/api/player/4');
+  await blockedPopupAndPlaying(page.locator('#player iframe'));
   await page.locator('#player-close').click();
   premiumConfigured = true;
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());

@@ -927,9 +927,12 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
   const showFrame = (address = source.how.address || source.url, referrerPolicy = null) => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
+    // Pilot popup blocking on M+ LaLiga before enabling it for other ZicoTV channels.
+    const zicoPopupTrial = zicoPlayerIframe(address)?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
+    const sandbox = zicoPopupTrial ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null;
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: address, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',
-      referrerpolicy: referrerPolicy || (source.how.youtube ? 'strict-origin-when-cross-origin' : null) });
+      referrerpolicy: referrerPolicy || (source.how.youtube ? 'strict-origin-when-cross-origin' : null), sandbox });
     frame.addEventListener('load', () => {
       if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
     }, { once: true });
