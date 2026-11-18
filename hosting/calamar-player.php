@@ -27,7 +27,9 @@ function playerSecret() {
     return $secret;
 }
 function playerZicoConfigPath() {
-    return getenv('CALAMAR_ZICO_CONFIG') ?: dirname(__DIR__) . '/calamar-zico-config.php';
+    $root = dirname(__DIR__);
+    $private = $root . '/zico-private';
+    return getenv('CALAMAR_ZICO_CONFIG') ?: (is_dir($private) ? $private : $root) . '/calamar-zico-config.php';
 }
 function playerZicoTokenValid($token) {
     return is_string($token) && preg_match('/^[!-~]{16,512}$/D', $token);
@@ -53,10 +55,10 @@ function playerSaveZicoToken($token) {
         return true;
     } finally { if (is_file($temp)) @unlink($temp); }
 }
-function playerZicoConfig($method) {
+function playerZicoConfig($method, $requireAdminForStatus = false) {
     $answer = ['zicoConfig' => 1];
-    if ($method === 'GET') playerAnswer($answer + ['configured' => playerZicoToken() !== '']);
-    if ($method !== 'POST') playerAnswer($answer + ['error' => 'Método no permitido.'], 405);
+    if ($method === 'GET' && !$requireAdminForStatus) playerAnswer($answer + ['configured' => playerZicoToken() !== '']);
+    if ($method !== 'GET' && $method !== 'POST') playerAnswer($answer + ['error' => 'Método no permitido.'], 405);
     $images = __DIR__ . '/calamar-images.php';
     if (!is_file($images)) playerAnswer($answer + ['error' => 'Falta calamar-images.php en el hosting.'], 503);
     require_once $images;
@@ -65,11 +67,12 @@ function playerZicoConfig($method) {
         $admin = preg_match('/^Bearer ([A-Za-z0-9_.-]{1,8192})$/D', $header, $auth) && imageAdministrator($auth[1]);
     } catch (Throwable $error) { playerAnswer($answer + ['error' => 'No se pudo verificar la sesión de Google.'], 502); }
     if (!$admin) playerAnswer($answer + ['error' => 'Entra con la cuenta administradora de Google.'], 401);
+    if ($method === 'GET') playerAnswer($answer + ['configured' => playerZicoToken() !== '']);
     $raw = file_get_contents('php://input', false, null, 0, 4097);
     $data = is_string($raw) && strlen($raw) <= 4096 ? json_decode($raw, true) : null;
     $token = $data['token'] ?? null;
     if ($token !== '' && !playerZicoTokenValid($token)) playerAnswer($answer + ['error' => 'El token tiene un formato no válido.'], 400);
-    if (!playerSaveZicoToken($token)) playerAnswer($answer + ['error' => 'El hosting no pudo guardar el token fuera de la carpeta pública.'], 503);
+    if (!playerSaveZicoToken($token)) playerAnswer($answer + ['error' => 'El servidor no pudo guardar el token fuera de la carpeta pública.'], 503);
     playerAnswer($answer + ['configured' => $token !== '']);
 }
 
@@ -632,16 +635,17 @@ function playerMain() {
     header('X-Robots-Tag: noindex, nofollow');
     header('Referrer-Policy: no-referrer');
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $zicoAdmin = defined('CALAMAR_ZICO_ADMIN_ENTRY') && CALAMAR_ZICO_ADMIN_ENTRY;
     $allowed = array('https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com');
     // Signed addresses are handed out by this file: Chromecast plays them from its own origin.
-    if (isset($_GET['seg'])) header('Access-Control-Allow-Origin: *');
+    if (!$zicoAdmin && isset($_GET['seg'])) header('Access-Control-Allow-Origin: *');
     elseif ($origin !== '' && !in_array($origin, $allowed, true)) playerAnswer(array('error' => 'Origen no permitido.'), 403);
     elseif ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
     if ($origin !== '') { header('Vary: Origin'); header('Access-Control-Expose-Headers: Content-Length, Content-Range'); }
     if (!function_exists('curl_init')) playerAnswer(array('error' => 'cURL no disponible.'), 502);
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
     if ($method === 'OPTIONS') { header('Access-Control-Allow-Methods: GET, POST, OPTIONS'); header('Access-Control-Allow-Headers: Range, Content-Type, Authorization'); http_response_code(204); exit; }
-    if (isset($_GET['zico_config'])) playerZicoConfig($method);
+    if ($zicoAdmin || isset($_GET['zico_config'])) playerZicoConfig($method, $zicoAdmin);
     if ($method !== 'GET') playerAnswer(array('error' => 'Método no permitido.'), 405);
     $secret = playerSecret();
 

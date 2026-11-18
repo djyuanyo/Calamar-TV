@@ -428,6 +428,28 @@ class PlayerRelayTest(unittest.TestCase):
                     urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-player.php?page=x',
                                                                   headers={'Origin': 'https://evil.example'}), timeout=5)
                 self.assertEqual(other.exception.code, 403)
+                # Token administration is scoped to the verified Google administrator and an allowed origin.
+                admin_url = f'http://127.0.0.1:{port}/calamar-zico-admin.php'
+                origin = 'https://djyuanyo.github.io'
+                with urllib.request.urlopen(urllib.request.Request(admin_url, method='OPTIONS', headers={
+                    'Origin': origin, 'Access-Control-Request-Method': 'POST',
+                    'Access-Control-Request-Headers': 'authorization,content-type',
+                }), timeout=5) as preflight:
+                    self.assertEqual(preflight.status, 204)
+                    self.assertEqual(preflight.headers['Access-Control-Allow-Origin'], origin)
+                    self.assertIn('Authorization', preflight.headers['Access-Control-Allow-Headers'])
+                for body in (None, b'{"token":"fake-token-from-unauthenticated-request"}'):
+                    request = urllib.request.Request(admin_url, data=body, headers={'Origin': origin})
+                    with self.assertRaises(urllib.error.HTTPError) as no_admin:
+                        urllib.request.urlopen(request, timeout=5)
+                    self.assertEqual(no_admin.exception.code, 401)
+                    self.assertNotIn('configured', json.load(no_admin.exception))
+                # A segment query on the admin entry point never gets the media relay's wildcard CORS.
+                request = urllib.request.Request(admin_url + '?seg=value', headers={'Origin': 'https://evil.example'})
+                with self.assertRaises(urllib.error.HTTPError) as foreign_admin:
+                    urllib.request.urlopen(request, timeout=5)
+                self.assertEqual(foreign_admin.exception.code, 403)
+                self.assertIsNone(foreign_admin.exception.headers['Access-Control-Allow-Origin'])
                 # Chromecast asks for signed addresses from its own origin: allowed, but only with a valid signature.
                 with self.assertRaises(urllib.error.HTTPError) as cast:
                     urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}/calamar-player.php?seg={bad}&p=&sig=00000000000000000000000000000000&l=1',
