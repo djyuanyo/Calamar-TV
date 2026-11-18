@@ -998,9 +998,17 @@ try {
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
   // Failed lookup stays in our player and retries; it must never switch to an iframe.
-  let hostedReady = false, tokenVersion = 0;
-  await page.route('https://calamarmenciano.com/calamar-player.php?*', route => {
+  let hostedReady = false, eventReady = true, tokenVersion = 0;
+  const zicoRelay = 'https://video.calamarmenciano.com/calamar-player.php';
+  await page.route(zicoRelay + '?*', route => {
     const request = new URL(route.request().url()), page = request.searchParams.get('page');
+    if (request.searchParams.has('event')) {
+      assert.equal(request.searchParams.get('event'), 'https://bp.zicotv.cc/events/98019');
+      return route.fulfill({ json: { data: { sources: eventReady ? [
+        { name: 'Canal A', player_url: 'https://bp.zicotv.cc/api/player/22' },
+        { name: 'Canal B', player_url: 'https://bp.zicotv.cc/api/player/23' },
+      ] : [] } } });
+    }
     const channel = page ? new URL(page).pathname.split('/').pop() : '';
     if (!hostedReady && channel === '1') return route.fulfill({status:502,json:{error:'Ninguna fuente responde'}});
     const signature = channel === '1' ? `fresh${++tokenVersion}` : `event-${channel}`;
@@ -1019,21 +1027,15 @@ try {
   assert.equal(await page.locator('#player-close').isVisible(), true);
   assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
   await page.locator('#player-close').click();
-  // If the public provider cannot be reached, playback falls back to the signed hosting route.
+  // Once the VPS responds, the same player opens the signed stream.
   hostedReady = true;
 
   await page.goto(base + '/?zico=2#/canal/canal-zico');
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
   assert.equal(await page.locator('#player-frame').count(), 0);
-  assert.ok((await page.evaluate(() => window.__hlsSources)).every(url => new URL(url).hostname === 'calamarmenciano.com'));
+  assert.ok((await page.evaluate(() => window.__hlsSources)).every(url => new URL(url).hostname === 'video.calamarmenciano.com'));
   await page.locator('#player-close').click();
-  // Event page URLs expand into named public players, never an iframe of /events/.
-  let eventReady = true;
-  await page.route('https://bp.zicotv.cc/api/v1/events/98019', route => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ data: { sources: eventReady ? [
-    {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
-    {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'}
-  ] : [] } }) }));
-  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'var ZT_SOURCES = ' + JSON.stringify([{url:`https://cdn.example/event-${route.request().url().split('/').pop()}.m3u8`}]) + ';' }));
+  // Event page URLs expand into named players through the VPS.
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.events.push({id:'manual-zico',name:'Evento Zico Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
@@ -1057,8 +1059,9 @@ try {
   await page.goto(base + '/?event-zico=3#/evento/evento-zico-manual');
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
   await page.locator('#player-close').click();
-  // The 2.20.67 direct route keeps playing even when our hosting domain cannot be reached.
+  // Playback and media stay on the VPS even when both alternate domains are unreachable.
   await page.route('https://calamarmenciano.com/calamar-player.php?*', route => route.abort());
+  await page.route('https://bp.zicotv.cc/**', route => route.abort());
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4'];
@@ -1066,7 +1069,7 @@ try {
   });
   await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
   await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-4')));
-  assert.ok((await page.evaluate(() => window.__hlsSources)).some(url => new URL(url).hostname === 'cdn.example'));
+  assert.ok((await page.evaluate(() => window.__hlsSources)).every(url => new URL(url).hostname === 'video.calamarmenciano.com'));
   assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
   // Dailymotion is shown in the video screen with the original provider configuration.

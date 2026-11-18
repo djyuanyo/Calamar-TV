@@ -84,7 +84,7 @@ public class MultiPlaybackTest {
     catalog.put("teams",new JSONArray().put(new JSONObject().put("id","home-fixture").put("name","Águilas").put("logo",pixel)).put(new JSONObject().put("id","away-fixture").put("name","Betis").put("logo",pixel)));
     for(int i=0;i<names.length;i++)events.put(new JSONObject().put("id","multi-fixture-"+i).put("name",names[i]).put("cover",pixel).put("leagueId","league-fixture").put("homeTeamId","home-fixture").put("awayTeamId","away-fixture").put("streams",new JSONArray().put("https://zicotv.cc/api/player/"+(i+2))));
     catalog.put("events",events);SharedCatalog.validate(catalog);SharedCatalog.cache(context,catalog);
-    HeldCertificate cert=new HeldCertificate.Builder().commonName("calamarmenciano.com").addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").build();
+    HeldCertificate cert=new HeldCertificate.Builder().commonName("video.calamarmenciano.com").addSubjectAlternativeName("video.calamarmenciano.com").build();
     HandshakeCertificates serverTls=new HandshakeCertificates.Builder().heldCertificate(cert).build(),tls=new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
     Buffer video=new Buffer();try(InputStream in=instrumentation.getContext().getAssets().open("live.ts")){byte[] block=new byte[8192];for(int n;(n=in.read(block))!=-1;)video.write(block,0,n);}
     AtomicInteger provider=new AtomicInteger(),lookups=new AtomicInteger();
@@ -98,7 +98,7 @@ public class MultiPlaybackTest {
         provider.incrementAndGet();return new MockResponse().setResponseCode(404);
       }});
       OkHttpClient local=new OkHttpClient.Builder().readTimeout(20,java.util.concurrent.TimeUnit.SECONDS).sslSocketFactory(tls.sslSocketFactory(),tls.trustManager())
-          .dns(host->{if(host.equals("calamarmenciano.com"))throw new UnknownHostException("Root unavailable");return Collections.singletonList(InetAddress.getByName("127.0.0.1"));})
+          .dns(host->{if(!host.equals("video.calamarmenciano.com"))throw new UnknownHostException("Only the VPS is available in this test");return Collections.singletonList(InetAddress.getByName("127.0.0.1"));})
           .addInterceptor(chain->{if(chain.request().url().host().endsWith("zicotv.cc"))provider.incrementAndGet();return chain.proceed(chain.request().newBuilder().url(chain.request().url().newBuilder().port(server.getPort()).build()).build());}).build();
       clientField.set(network,local);NetworkTransport.select(context,DnsProvider.SYSTEM);
       AtomicReference<Intent> launch=new AtomicReference<>();
