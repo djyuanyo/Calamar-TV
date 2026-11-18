@@ -1199,7 +1199,7 @@ function open(c, fromRoute = false) {
   // On a direct link the player already fills the window; browsers need a tap to hide their own bars.
   const withMatch = showMatchCenter(c);
   fullscreenOnFrameTap = !withMatch && !c.pending && !controls.isFullscreen();
-  if (fullscreenOnFrameTap && (!fromRoute || navigator.userActivation?.isActive)) {
+  if (fullscreenOnFrameTap && !fromRoute) {
     controls.enterFullscreen().then(() => {
       if (current === c && controls.isFullscreen()) fullscreenOnFrameTap = false;
     });
