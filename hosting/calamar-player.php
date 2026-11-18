@@ -111,8 +111,9 @@ function playerOpenPage($page, $token, $get = 'playerGet', $post = 'playerPost')
     if ($clean === '' || ($query !== null && !preg_match('/^ct_event=[0-9]+&ct_sig=[a-f0-9]{32}$/D', $query))) return $get($page, '');
     if ($token === '') return $get($clean, '');
     // Server-side grants also work for tokens restricted to signed links. The API key stays in this header.
+    $form = http_build_query(['channel' => basename(parse_url($clean, PHP_URL_PATH)), 'ttl' => 300], '', '&');
     [$grantStatus, $grantBody] = $post('https://bp.zicotv.cc/api/v1/player-url', '',
-        ['channel' => (int)basename(parse_url($clean, PHP_URL_PATH)), 'ttl' => 300], ['Authorization: Bearer ' . $token]);
+        $form, ['Authorization: Bearer ' . $token]);
     // A public player may remain available when the configured token has expired. Its own access checks still apply.
     if (in_array($grantStatus, [401, 403], true)) return $get($clean, '');
     if ($grantStatus !== 200 || !is_string($grantBody))
@@ -465,7 +466,7 @@ function playerCurl($url, $page, $timeout, $extra = array()) {
     $zico = $host === 'zicotv.cc' || substr($host, -strlen('.zicotv.cc')) === '.zicotv.cc';
     $target = publicTarget($url, null, $zico);
     if ($target === null || strtolower(parse_url($url, PHP_URL_SCHEME) ?: '') !== 'https') return null;
-    $headers = array('Accept: */*');
+    $headers = array();
     if ($page !== '') {
         $p = parse_url($page);
         $headers[] = 'Referer: ' . $page;
@@ -498,10 +499,12 @@ function playerGet($url, $page, $limit = 3145728, $maxHops = 5) {
 }
 /** A provider-issued same-player renewal URL; redirects and JavaScript are never executed. */
 function playerPost($url, $page, $data, $headers = []) {
-    $ch = playerCurl($url, $page, 15, array_merge(['Content-Type: application/json', 'Accept: application/json'], $headers));
+    $form = is_string($data);
+    $contentType = $form ? 'application/x-www-form-urlencoded' : 'application/json';
+    $ch = playerCurl($url, $page, 15, array_merge(['Content-Type: ' . $contentType, 'Accept: application/json'], $headers));
     if ($ch === null) return [0, null];
     $body = '';
-    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($data), CURLOPT_ENCODING => '',
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $form ? $data : json_encode($data), CURLOPT_ENCODING => '',
         CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$body) {
             if (strlen($body) + strlen($chunk) > 262144) return 0;
             $body .= $chunk; return strlen($chunk);
