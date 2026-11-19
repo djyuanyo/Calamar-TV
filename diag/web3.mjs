@@ -1,0 +1,32 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+const out = { events: [], pages: [] };
+const doc = await (await fetch('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarCatalog/custom')).json();
+const catalog = JSON.parse(doc.fields.json.stringValue);
+const everything = [...(catalog.events || []), ...(catalog.fixtures || [])];
+out.all = everything.map((e) => ({ id: e.id, name: e.name, keys: Object.keys(e).filter((k) => /match|start|date|time/i.test(k)).map((k) => k + '=' + String(e[k]).slice(0, 60)) }));
+const events = everything.filter((e) => e.matchUrl || e.matchId);
+for (const e of events) out.events.push({ id: e.id, name: e.name, matchId: e.matchId, startAt: e.startAt, matchUrl: e.matchUrl });
+const now = Date.now();
+const pick = events.filter((e) => Math.abs(Date.parse(e.startAt || e.start || e.date || 0) - now) < 4 * 3600e3).slice(0, 3); out.sample = events.slice(-2);
+const browser = await chromium.launch();
+for (const e of pick.length ? pick : events.slice(-2)) {
+  const page = await browser.newPage({ viewport: { width: 420, height: 1600 } });
+  const log = [];
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') log.push(m.type() + ': ' + m.text().slice(0, 300)); });
+  page.on('pageerror', (err) => log.push('pageerror: ' + String(err.stack || err).slice(0, 600)));
+  page.on('requestfailed', (r) => log.push('failed: ' + r.url().slice(0, 150) + ' ' + r.failure()?.errorText));
+  page.on('response', (r) => { if (/espn|calamar-votes|polymarket|lineups/.test(r.url())) log.push('resp ' + r.status() + ' ' + r.url().slice(0, 150)); });
+  await page.goto('https://djyuanyo.github.io/Calamar-TV/#/evento/' + encodeURIComponent(e.id), { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(15000);
+  const panel = await page.$eval('#match-panel, .match-panel, [class*="match"]', (n) => n.innerText.slice(0, 1500)).catch(() => 'sin panel');
+  await page.screenshot({ path: `diag/web3-${e.id}-general.png` });
+  await page.click('#mc-tab-stats').catch((x) => log.push('no stats tab ' + x.message.slice(0, 100)));
+  await page.waitForTimeout(3000);
+  const stats = await page.$eval('#mc-panel', (n) => n.innerText.slice(0, 1500)).catch(() => 'sin mc-panel');
+  await page.screenshot({ path: `diag/web3-${e.id}-stats.png` });
+  out.pages.push({ id: e.id, name: e.name, panel, stats, log });
+  await page.close();
+}
+await browser.close();
+fs.writeFileSync('diag/host3.json', JSON.stringify(out, null, 1));
