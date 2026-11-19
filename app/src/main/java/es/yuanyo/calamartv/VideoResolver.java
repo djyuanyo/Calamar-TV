@@ -50,7 +50,8 @@ public final class VideoResolver {
       URI u = URI.create(address);
       String host = u.getHost();
       if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null || host == null
-          || !(host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))) return null;
+          || !(host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc")
+              || (ProviderPlayers.ZICO_EMBED_HOST.equalsIgnoreCase(host) && u.getPort() == -1))) return null;
       Matcher match = Pattern.compile("/(?:api/v1/)?events/([0-9]+)/?").matcher(u.getPath());
       return match.matches() ? "https://" + u.getRawAuthority() + "/api/v1/events/" + match.group(1) : null;
     } catch (Exception invalid) { return null; }
@@ -81,7 +82,7 @@ public final class VideoResolver {
       if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null) return;
       if (u.getQuery() != null && Pattern.compile("(?:^|&)token(?:=|&|$)").matcher(u.getQuery()).find()) return;
       // Do not send third-party embeds or finite video clips to the live player.
-      if (!renewablePage(url) && (u.getPath() == null || !u.getPath().matches("(?i).*\\.(m3u8|ts)$"))) return;
+      if (ProviderPlayers.zicoFramePage(url) == null && !renewablePage(url) && (u.getPath() == null || !u.getPath().matches("(?i).*\\.(m3u8|ts)$"))) return;
       for (Source source : out) if (source.url.equals(url)) return;
       String name = entry.optString("name");
       if (name.isEmpty()) name = parent.optString("name");

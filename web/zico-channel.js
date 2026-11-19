@@ -1,3 +1,15 @@
+export const ZICO_EMBED_ORIGIN = 'https://zicotv.gcorecdn.com';
+
+/** Stable public iframe URL. Only a numeric channel ID crosses into the embed. */
+export function zicoPublicIframe(address) {
+  try {
+    const u = new URL(address);
+    const match = /^\/(?:api\/player|channels)\/([1-9][0-9]{0,15})\/?$/.exec(u.pathname);
+    return u.origin === ZICO_EMBED_ORIGIN && !u.username && !u.password && match
+      ? ZICO_EMBED_ORIGIN + '/api/player/' + match[1] : null;
+  } catch { return null; }
+}
+
 export function zicoHost(host) {
   return host === 'zicotv.cc' || host.endsWith('.zicotv.cc');
 }

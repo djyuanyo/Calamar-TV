@@ -55,14 +55,14 @@ try {
     if (u.href==='https://bp.zicotv.cc/api/v1/events/116061') return route.fulfill({headers,json:{data:{sources:[
       {source:'own',channel_id:56429,name:'[RAVEN] DAZN EVENTOS 17',player_url:'https://bp.zicotv.cc/api/player/56429',is_premium:false},
     ]}}});
-    if (u.href==='https://bp.zicotv.cc/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[
+    if (u.href==='https://zicotv.gcorecdn.com/api/v1/events/701') return route.fulfill({headers,json:{data:{sources:[
       {type:'direct',url:'https://ads.example/preroll.mp4'},
       {type:'iframe',url:'https://ads.example/player'},
       {type:'direct',url:'https://cdn.example/fallback.m3u8'},
     ]}}});
     if (u.hostname==='cdn.example' && u.pathname==='/fallback.m3u8') return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
     if (u.hostname==='cdn.example' && u.pathname==='/video.ts') return route.fulfill({headers,contentType:'video/mp2t',body:segment});
-    if (u.hostname==='bp.zicotv.cc' && ['/api/player/1','/api/player/4','/api/player/56429'].includes(u.pathname))
+    if (['bp.zicotv.cc', 'zicotv.gcorecdn.com'].includes(u.hostname) && ['/api/player/1','/api/player/4','/api/player/56429'].includes(u.pathname))
       return route.fulfill({contentType:'text/html',body:testPlayer});
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('zico_embed')) {
       assert.equal(route.request().method(),'POST');
@@ -76,9 +76,11 @@ try {
       return route.fulfill({headers,status:403});
     return route.abort();
   });
-  const blockedPopupAndPlaying = async frame => {
+  const blockedPopupAndPlaying = async (frame, keyboard = false) => {
     const inside = frame.contentFrame();
-    await inside.getByRole('button', {name:'Play',exact:true}).click();
+    const play = inside.getByRole('button', {name:'Play',exact:true});
+    if (keyboard) await play.press('Enter');
+    else await play.click();
     await inside.getByText('Ventana bloqueada',{exact:true}).waitFor();
     await inside.locator('video[data-playing="true"]').waitFor({timeout:5000});
     assert.equal(page.context().pages().length, 1);
@@ -119,9 +121,9 @@ try {
   premiumConfigured = true;
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   let ownChannel = true;
-  await page.route('https://bp.zicotv.cc/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
+  await page.route('https://zicotv.gcorecdn.com/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
     {id:700,title:'Partido con canal propio',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
-      ...(ownChannel ? [{source:'own',channel_id:1,url:'https://bp.zicotv.cc/api/player/1'}] : []),
+      ...(ownChannel ? [{source:'own',channel_id:1,url:'https://zicotv.gcorecdn.com/api/player/1'}] : []),
       {source:'manual',type:'iframe',url:'https://example.com/other-player'},
     ]},
     {id:701,title:'Partido solo externo',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
@@ -133,25 +135,29 @@ try {
   await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
   await page.waitForFunction(()=>window.__published?.events.some(e=>e.id==='zico-event-700'));
   assert.deepEqual(await page.evaluate(()=>window.__published.events.map(e=>[e.id,e.streams])),
-    [['zico-event-700',['https://bp.zicotv.cc/channels/1']],['zico-event-701',['https://bp.zicotv.cc/events/701']]]);
-  // Saving the event form must preserve /channels/, rather than silently converting it back to /api/player/.
+    [['zico-event-700',['https://zicotv.gcorecdn.com/api/player/1']],['zico-event-701',['https://zicotv.gcorecdn.com/events/701']]]);
+  // Editing a match keeps the imported public iframe address.
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
-  assert.equal(await page.getByLabel('Enlaces adicionales del evento',{exact:true}).inputValue(),'https://bp.zicotv.cc/channels/1');
+  assert.equal(await page.getByLabel('Enlaces adicionales del evento',{exact:true}).inputValue(),'https://zicotv.gcorecdn.com/api/player/1');
   await page.getByLabel('Nombre del evento',{exact:true}).fill('Partido editado con canal');
   await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
   await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.name==='Partido editado con canal');
-  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://bp.zicotv.cc/channels/1']);
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://zicotv.gcorecdn.com/api/player/1']);
   await page.goto(base+'/#/admin/evento');
   ownChannel = false;
   await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
-  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/events/700');
+  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://zicotv.gcorecdn.com/events/700');
   ownChannel = true;
   await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
-  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/channels/1');
-  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://bp.zicotv.cc/channels/1']);
+  await page.waitForFunction(()=>window.__published?.events.find(e=>e.id==='zico-event-700')?.streams[0]==='https://zicotv.gcorecdn.com/api/player/1');
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams),['https://zicotv.gcorecdn.com/api/player/1']);
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
-  await embedded(1);
+  const importedFrame = page.locator('#player iframe');
+  await importedFrame.waitFor();
+  assert.equal(await importedFrame.getAttribute('src'), 'https://zicotv.gcorecdn.com/api/player/1');
+  assert.equal(await importedFrame.getAttribute('sandbox'), 'allow-scripts allow-same-origin allow-forms allow-presentation');
+  await blockedPopupAndPlaying(importedFrame, true);
   await page.locator('#player-close').click();
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
   await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');

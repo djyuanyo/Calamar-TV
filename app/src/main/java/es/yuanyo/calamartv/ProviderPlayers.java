@@ -56,5 +56,16 @@ final class ProviderPlayers {
         && address.substring(VIDARA_PLAYBACK.length()).matches("[A-Za-z0-9]{8,24}&hls=1");
   }
 
+  static final String ZICO_EMBED_HOST = "zicotv.gcorecdn.com";
+  private static final Pattern ZICO_CHANNEL = Pattern.compile("/(?:api/player|channels)/([1-9][0-9]{0,15})/?");
+
+  /** The wrapper on our own web origin embeds only the public player for this channel ID. */
+  static String zicoFramePage(String address) {
+    URI uri = https(address);
+    if (uri == null || !ZICO_EMBED_HOST.equalsIgnoreCase(uri.getHost())) return null;
+    Matcher channel = ZICO_CHANNEL.matcher(uri.getRawPath());
+    return channel.matches() ? SportsCatalog.WEB + "zico-player.html#" + channel.group(1) : null;
+  }
+
   static String embed(String address) { return dailymotion(address); }
 }

@@ -6,7 +6,7 @@ import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
 import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { premiumZicoIframe, zicoPlayerIframe } from './zico-channel.js';
+import { premiumZicoIframe, zicoPlayerIframe, zicoPublicIframe } from './zico-channel.js';
 import { usesZicoAgenda } from './zico-agenda.js';
 import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
@@ -928,7 +928,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   const showFrame = (address = source.how.address || source.url, referrerPolicy = null) => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
     // Pilot popup blocking on M+ LaLiga before enabling it for other ZicoTV channels.
-    const zicoPopupTrial = zicoPlayerIframe(address)?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
+    const zicoPopupTrial = !!zicoPublicIframe(address) || zicoPlayerIframe(address)?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
     const sandbox = zicoPopupTrial ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null;
     const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: address, title: c.name,
       allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',

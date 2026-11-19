@@ -1,11 +1,11 @@
-import { renewablePage, zicoHost } from './zico-channel.js';
+import { renewablePage, zicoHost, zicoPublicIframe, ZICO_EMBED_ORIGIN } from './zico-channel.js';
 
 /** Zico event pages are not embeddable; the public CORS API exposes their player URLs. */
 export function zicoEventApi(address) {
   try {
     const u = new URL(address);
     const match = /^\/(?:api\/v1\/)?events\/(\d+)\/?$/.exec(u.pathname);
-    if (u.protocol !== 'https:' || u.username || u.password || !match || !zicoHost(u.hostname)) return null;
+    if (u.protocol !== 'https:' || u.username || u.password || !match || (!zicoHost(u.hostname) && u.origin !== ZICO_EMBED_ORIGIN)) return null;
     return `${u.origin}/api/v1/events/${match[1]}`;
   } catch { return null; }
 }
@@ -15,7 +15,7 @@ function zicoEventSignal(address) {
   try {
     const u = new URL(address);
     if (u.protocol !== 'https:' || u.username || u.password || u.searchParams.has('token')) return null;
-    return renewablePage(u.href) || /\.(m3u8|ts)$/i.test(u.pathname) ? u : null;
+    return zicoPublicIframe(u.href) || renewablePage(u.href) || /\.(m3u8|ts)$/i.test(u.pathname) ? u : null;
   } catch { return null; }
 }
 
@@ -50,7 +50,7 @@ export async function expandEventSources(streams, { fetcher = globalThis.fetch, 
     const api = zicoEventApi(url);
     if (!api) return [{ url }];
     try {
-      const hosted = preferHosted ? hostedEventSources(url, fetcher, signal) : [];
+      const hosted = preferHosted && new URL(api).origin !== ZICO_EMBED_ORIGIN ? hostedEventSources(url, fetcher, signal) : [];
       const direct = (async () => {
         const response = await fetcher(api, { credentials: 'omit', cache: 'no-store', signal });
         if (!response.ok) throw Error(`Zico TV responde HTTP ${response.status}.`);

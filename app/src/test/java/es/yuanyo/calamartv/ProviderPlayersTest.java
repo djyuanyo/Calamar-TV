@@ -6,6 +6,16 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProviderPlayersTest {
+  @Test public void publicZicoEmbedIsLimitedToChannelIds() {
+    String host = "https://zicotv.gcorecdn.com";
+    String page = SportsCatalog.WEB + "zico-player.html#4";
+    assertEquals(page, ProviderPlayers.zicoFramePage(host + "/api/player/4"));
+    assertEquals(page, ProviderPlayers.zicoFramePage(host + "/channels/4"));
+    for (String address : new String[]{host + "/events/4", host + "/live.m3u8",
+        host + ".example/api/player/4", host + ":444/api/player/4", host + "/api/player/4/more"})
+      assertNull(ProviderPlayers.zicoFramePage(address));
+  }
+
   @Test public void normalizesOnlyKnownPlayerLinks() {
     String daily = "https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W";
     assertEquals(daily, ProviderPlayers.embed(daily));
