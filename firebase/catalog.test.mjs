@@ -265,3 +265,22 @@ test('the administrator can read profile favourites without editing them or read
   await assertFails(setDoc(doc(admin(), path), data));
   await assertFails(getDoc(doc(admin(), 'calamarUsers/viewer/progress/main')));
 });
+
+test('IPTV lists: the hosting reads one by its password, only the administrator manages them', async () => {
+  const guest = env.unauthenticatedContext().firestore();
+  const member = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const path = 'calamarIptvLists/AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+  const list = { uid: 'viewer', expires: new Date('2030-01-01T00:00:00Z'), updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(admin(), path), list));
+  await assertSucceeds(setDoc(doc(admin(), path), { ...list, expires: null }));
+  await assertFails(setDoc(doc(admin(), path), { ...list, expires: 'mañana' }));
+  await assertFails(setDoc(doc(admin(), path), { ...list, extra: 1 }));
+  await assertFails(setDoc(doc(admin(), 'calamarIptvLists/corta'), list));
+  await assertSucceeds(getDoc(doc(guest, path)));
+  await assertFails(getDocs(collection(guest, 'calamarIptvLists')));
+  await assertFails(getDocs(query(collection(member, 'calamarIptvLists'), where('uid', '==', 'viewer'))));
+  await assertSucceeds(getDocs(query(collection(admin(), 'calamarIptvLists'), where('uid', '==', 'viewer'))));
+  await assertFails(setDoc(doc(member, path), list));
+  await assertFails(deleteDoc(doc(member, path)));
+  await assertSucceeds(deleteDoc(doc(admin(), path)));
+});

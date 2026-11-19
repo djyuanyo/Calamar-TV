@@ -2,6 +2,7 @@ import { mergeUserDirectory, findUsers } from './access-policy.js';
 import { madridDay } from './audience.js';
 import { fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { viewerDevice } from './user-playback.js';
+import { iptvSection } from './iptv-lists.js';
 
 const asDate = value => {
   const date = value?.toDate?.() || (value?.seconds ? new Date(value.seconds * 1000) : value ? new Date(value) : null);
@@ -233,6 +234,7 @@ function userDetails(el, service, state, uid) {
         el('dl', { class: 'user-facts' }, details.flatMap(([label, value]) =>
           [el('dt', {}, label), el('dd', {}, value)])),
         reminderAction(el, service, user, verification), accessAction(el, service, user)),
+      iptvSection(el, service, user),
       favorites, historyPanel(el, service, uid));
   }).catch(error => panel.replaceChildren(el('p', { class: 'error' }, service.explain(error))));
   return panel;
