@@ -276,6 +276,8 @@ test('IPTV lists: the hosting reads one by its password, only the administrator 
   await assertFails(setDoc(doc(admin(), path), { ...list, expires: 'mañana' }));
   await assertFails(setDoc(doc(admin(), path), { ...list, extra: 1 }));
   await assertFails(setDoc(doc(admin(), 'calamarIptvLists/corta'), list));
+  await assertSucceeds(setDoc(doc(admin(), 'calamarIptvLists/abcd2345xy'), list));
+  await assertSucceeds(getDoc(doc(guest, 'calamarIptvLists/abcd2345xy')));
   await assertSucceeds(getDoc(doc(guest, path)));
   await assertFails(getDocs(collection(guest, 'calamarIptvLists')));
   await assertFails(getDocs(query(collection(member, 'calamarIptvLists'), where('uid', '==', 'viewer'))));

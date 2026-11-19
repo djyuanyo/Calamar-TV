@@ -143,7 +143,7 @@ function iptvLibrary(&$folders) {
     if (!$index) return 0;
     $labels = array('movies' => 'Películas', 'series' => 'Series', 'documentaries' => 'Documentales');
     $today = (new DateTime('now', new DateTimeZone('Europe/Madrid')))->format('Y-m-d');
-    $count = 0;
+    $count = 0; $library = array();
     foreach ($labels as $section => $label) {
         $parts = (int)($index['sections'][$section] ?? 0);
         for ($n = 0; $n < $parts; $n++) {
@@ -159,27 +159,35 @@ function iptvLibrary(&$folders) {
                     usort($episodes, function ($a, $b) {
                         return array((int)($a['season'] ?? 0), (int)($a['episode'] ?? 0)) <=> array((int)($b['season'] ?? 0), (int)($b['episode'] ?? 0));
                     });
-                    $stations = array();
+                    $seasons = array();
                     foreach ($episodes as $e) {
                         if (!empty($e['aired']) && (string)$e['aired'] > $today) continue;
                         $address = iptvAddress($e['url'] ?? '', false);
                         if ($address === null) continue;
-                        $short = sprintf('T%d E%02d', (int)($e['season'] ?? 0), (int)($e['episode'] ?? 0));
-                        if (!empty($e['name'])) $short .= ' - ' . $e['name'];
-                        $stations[] = array('name' => $short, 'full' => $title . ' ' . $short, 'image' => $poster, 'url' => $address, 'id' => '');
+                        $season = (int)($e['season'] ?? 0); $number = (int)($e['episode'] ?? 0);
+                        $full = sprintf('%s T%d E%02d', $title, $season, $number);
+                        if (!empty($e['name'])) $full .= ' - ' . $e['name'];
+                        $seasons[$season][] = array('name' => 'Capítulo ' . $number, 'full' => $full, 'image' => $poster, 'url' => $address, 'id' => '');
                     }
-                    if (!$stations) continue;
-                    $folder = &iptvFolder($folders, $label);
+                    if (!$seasons) continue;
+                    // The series is a folder with its poster; with several seasons, one folder per season inside.
+                    $folder = &iptvFolder($library, $label);
                     $series = &iptvFolder($folder['groups'], $year !== '' ? "$title ($year)" : $title);
                     $series['image'] = $poster;
-                    array_push($series['stations'], ...$stations);
+                    foreach ($seasons as $season => $stations) {
+                        if (count($seasons) === 1) { array_push($series['stations'], ...$stations); continue; }
+                        $inner = &iptvFolder($series['groups'], 'Temporada ' . $season);
+                        $inner['image'] = $poster;
+                        array_push($inner['stations'], ...$stations);
+                        unset($inner);
+                    }
                     unset($folder, $series);
-                    $count += count($stations);
+                    foreach ($seasons as $stations) $count += count($stations);
                 } else {
                     $address = iptvAddress($item['url'] ?? '', false);
                     if ($address === null) continue;
                     $name = $year !== '' ? "$title ($year)" : $title;
-                    $folder = &iptvFolder($folders, $label);
+                    $folder = &iptvFolder($library, $label);
                     $folder['stations'][] = array('name' => $name, 'full' => $name, 'image' => $poster, 'url' => $address, 'id' => '');
                     unset($folder);
                     $count++;
@@ -187,9 +195,18 @@ function iptvLibrary(&$folders) {
             }
         }
     }
-    foreach ($labels as $label) if (isset($folders[$label])) {
-        ksort($folders[$label]['groups'], SORT_NATURAL | SORT_FLAG_CASE);
-        usort($folders[$label]['stations'], function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
+    foreach ($labels as $label) if (isset($library[$label])) {
+        ksort($library[$label]['groups'], SORT_NATURAL | SORT_FLAG_CASE);
+        usort($library[$label]['stations'], function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
+    }
+    // A channel category with the same name («Series») keeps its own folder: «Series (canales)».
+    foreach ($library as $label => $folder) {
+        if (isset($folders[$label])) {
+            $renamed = array();
+            foreach ($folders as $name => $value) $renamed[$name === $label ? $label . ' (canales)' : $name] = $value;
+            $folders = $renamed;
+        }
+        $folders[$label] = $folder;
     }
     return $count;
 }
@@ -197,9 +214,28 @@ function iptvLibrary(&$folders) {
 /** Icons of the folders, chosen in Administración → Lista IPTV (calamarIptv/settings). */
 function iptvIcons(&$folders) {
     $settings = iptvDocument('calamarIptv/settings');
-    foreach ((array)($settings['icons'] ?? array()) as $name => $url) {
+    $icons = (array)($settings['icons'] ?? array());
+    foreach ($icons as $name => $url) {
         if (isset($folders[$name]) && iptvImage($url) !== '') $folders[$name]['image'] = $url;
     }
+    return iptvImage($icons['Canales'] ?? '');
+}
+
+/**
+ * WisePlay: the channel categories inside one «Canales» folder, before Películas, Series and
+ * Documentales (a category renamed «Series (canales)» shows as «Series» in there).
+ */
+function iptvChannelsFolder($folders, $icon) {
+    $library = array('Películas', 'Series', 'Documentales');
+    $channels = array('stations' => array(), 'groups' => array(), 'image' => $icon);
+    $out = array();
+    foreach ($folders as $name => $folder) {
+        if (in_array($name, $library, true)) continue;
+        $channels['groups'][preg_replace('/ \(canales\)$/u', '', (string)$name)] = $folder;
+    }
+    if ($channels['groups']) $out['Canales'] = $channels;
+    foreach ($library as $name) if (isset($folders[$name])) $out[$name] = $folders[$name];
+    return $out;
 }
 
 /** M3U: one level of folders, so every episode of «Series» is in «Series» with its series in the name. */
@@ -216,7 +252,11 @@ function iptvM3u($folders) {
     };
     foreach ($folders as $name => $folder) {
         foreach ($folder['stations'] as $station) $line($station, $name, $folder['image']);
-        foreach ($folder['groups'] as $inner) foreach ($inner['stations'] as $station) $line($station, $name, $folder['image']);
+        $walk = function ($inner) use (&$walk, $line, $name, $folder) {
+            foreach ($inner['stations'] as $station) $line($station, $name, $folder['image']);
+            foreach ($inner['groups'] as $deeper) $walk($deeper);
+        };
+        foreach ($folder['groups'] as $inner) $walk($inner);
     }
     return $out;
 }
@@ -232,7 +272,7 @@ function iptvWisePlay($folders, $info) {
             // A folder holds folders or stations, not both: the loose ones go in folders of their own,
             // first (channels of a category with the same name, single documentaries…).
             $loose = array();
-            foreach ($folder['stations'] as $s) $loose[$s['id'] !== '' ? 'Canales' : ($name === 'Documentales' ? 'Películas documentales' : 'Títulos')][] = $s;
+            foreach ($folder['stations'] as $s) $loose[$name === 'Documentales' ? 'Películas documentales' : ($name === 'Series' ? 'Series sin capítulos' : 'Títulos')][] = $s;
             foreach (array_reverse($loose, true) as $title => $stations)
                 array_unshift($out['groups'], $node($title, array('stations' => $stations, 'groups' => array(), 'image' => '')));
         } else {
@@ -255,7 +295,7 @@ function iptvWisePlay($folders, $info) {
  * expiry date (none: it always works). Returns null when it does not exist or has expired.
  */
 function iptvUserList($token) {
-    if (!preg_match('/^[A-Za-z0-9]{32}$/D', $token)) return 'missing';
+    if (!preg_match('/^[A-Za-z0-9]{10,32}$/D', $token)) return 'missing';
     $body = iptvGet('https://firestore.googleapis.com/v1/projects/' . IPTV_PROJECT . '/databases/(default)/documents/calamarIptvLists/'
         . $token . '?key=' . IPTV_API_KEY);
     if ($body === null) return 'missing';
@@ -285,7 +325,8 @@ try {
     $folders = array();
     $channels = iptvChannels($folders, $custom, $tdt);
     $videos = (empty($_GET['solo']) || $_GET['solo'] !== 'canales') ? iptvLibrary($folders) : 0;
-    try { iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
+    $channelsIcon = '';
+    try { $channelsIcon = iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
 } catch (Throwable $error) {
     iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
 }
@@ -296,7 +337,7 @@ header('X-Robots-Tag: noindex');
 if (($_GET['formato'] ?? '') === 'wiseplay') {
     header('Content-Type: application/json; charset=utf-8');
     header('Content-Disposition: inline; filename="calamar-tv.w3u"');
-    echo json_encode(iptvWisePlay($folders, $info), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    echo json_encode(iptvWisePlay(iptvChannelsFolder($folders, $channelsIcon), $info), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
 header('Content-Type: audio/x-mpegurl; charset=utf-8');
