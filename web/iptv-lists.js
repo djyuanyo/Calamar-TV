@@ -56,14 +56,19 @@ export function iptvSection(el, service, user) {
     try { await navigator.clipboard.writeText(link.value); note.textContent = 'Enlace copiado.'; }
     catch { link.select(); note.textContent = 'Selecciona el enlace y cópialo.'; }
   });
+  const wiseplay = button('Copiar enlace WisePlay', async () => {
+    const address = `${link.value}&formato=wiseplay`;
+    try { await navigator.clipboard.writeText(address); note.textContent = 'Enlace para WisePlay copiado (con carpetas e iconos).'; }
+    catch { note.textContent = address; }
+  });
   const remove = button('Borrar lista', () => {
     if (!window.confirm('El enlace dejará de funcionar. ¿Borrar la lista IPTV?')) return;
     busy('Borrando…', async () => { await service.deleteIptvList(user.uid); list = null; date.value = ''; });
   });
-  const buttons = [create, save, clear, copy, remove];
+  const buttons = [create, save, clear, copy, wiseplay, remove];
   const draw = () => {
     link.value = list ? iptvLink(list.token) : '';
-    link.hidden = copy.hidden = save.hidden = remove.hidden = !list;
+    link.hidden = copy.hidden = wiseplay.hidden = save.hidden = remove.hidden = !list;
     create.textContent = list ? 'Nueva contraseña' : 'Crear lista';
     note.textContent = iptvState(list);
   };
@@ -79,5 +84,83 @@ export function iptvSection(el, service, user) {
     el('p', { class: 'note' }, 'Enlace para WisePlay y apps IPTV con los canales, películas, series y documentales. Se actualiza sola.'),
     link,
     el('label', { class: 'iptv-date' }, el('span', {}, 'Último día que funciona (vacío: sin caducidad)'), el('span', {}, date, clear)),
-    el('div', { class: 'actions' }, create, save, copy, remove), note);
+    el('div', { class: 'actions' }, create, save, copy, wiseplay, remove), note);
+}
+
+export const LIBRARY_FOLDERS = ['Películas', 'Series', 'Documentales'];
+
+/** The folders of the list: the channel categories (as the web shows them), then films, series and documentaries. */
+export function iptvFolders(channels = []) {
+  const groups = [];
+  for (const c of channels) if (c?.playable !== false && c?.group && !groups.includes(c.group)) groups.push(c.group);
+  return [...groups.filter(g => !LIBRARY_FOLDERS.includes(g)), ...LIBRARY_FOLDERS];
+}
+
+/** Only https icons of known folders are kept. */
+export function cleanIcons(icons, folders) {
+  const out = {};
+  for (const name of folders) {
+    const url = String(icons?.[name] || '').trim();
+    if (/^https:\/\/\S+$/.test(url)) out[name] = url;
+  }
+  return out;
+}
+
+/** Administración → Lista IPTV: the icon of each folder of the list. */
+export function iptvAdmin(el, service, state) {
+  const status = el('p', { class: 'note', role: 'status' }, 'Cargando iconos…');
+  const rows = el('div', { class: 'iptv-icons' });
+  const folders = iptvFolders(state.channels);
+  const inputs = new Map();
+  const save = el('button', { class: 'btn', type: 'button', disabled: true }, 'Guardar iconos');
+  const row = (name, url) => {
+    const preview = el('img', { class: url ? 'iptv-icon-preview' : 'iptv-icon-preview empty', alt: '', src: url || null });
+    const input = el('input', { type: 'url', placeholder: 'https://…', value: url || '', 'aria-label': `Icono de ${name}` });
+    const show = () => { const ok = /^https:\/\/\S+$/.test(input.value.trim()); preview.classList.toggle('empty', !ok); if (ok) preview.src = input.value.trim(); };
+    input.addEventListener('input', show);
+    const file = el('input', { type: 'file', accept: 'image/*', hidden: true });
+    file.addEventListener('change', async () => {
+      const chosen = file.files?.[0];
+      file.value = '';
+      if (!chosen) return;
+      status.textContent = `Subiendo el icono de ${name}…`;
+      try {
+        const { coverFromFile } = await import('./image-file.js');
+        input.value = await service.uploadIptvIcon(await coverFromFile(chosen, [256, 192, 128]));
+        show();
+        status.textContent = 'Icono subido. Pulsa «Guardar iconos».';
+      } catch (error) { status.textContent = service.explain(error); }
+    });
+    inputs.set(name, input);
+    return el('div', { class: 'iptv-icon-row' }, preview,
+      el('b', {}, name), input,
+      el('button', { class: 'btn secondary', type: 'button', onclick: () => file.click() }, 'Subir imagen'), file,
+      el('button', { class: 'ghost', type: 'button', onclick: () => { input.value = ''; show(); } }, 'Quitar'));
+  };
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    status.textContent = 'Guardando…';
+    try {
+      // Icons of folders not shown now (a category without channels today) are kept.
+      const icons = { ...(settings.icons || {}) };
+      for (const name of folders) delete icons[name];
+      Object.assign(icons, cleanIcons(Object.fromEntries([...inputs].map(([name, input]) => [name, input.value])), folders));
+      settings = { ...settings, icons };
+      await service.saveIptvSettings(settings);
+      status.textContent = 'Guardado. Las listas los muestran la próxima vez que la app las actualice.';
+    } catch (error) { status.textContent = service.explain(error); }
+    finally { save.disabled = false; }
+  });
+  let settings = {};
+  Promise.resolve().then(() => service.readIptvSettings()).then(found => {
+    settings = found && typeof found === 'object' ? found : {};
+    rows.replaceChildren(...folders.map(name => row(name, settings.icons?.[name])));
+    status.textContent = '';
+    save.disabled = false;
+  }).catch(error => { status.textContent = service.explain(error); });
+  return [el('section', { class: 'users-page iptv-admin' },
+    el('a', { class: 'ghost user-back', href: '#/admin' }, '‹ Administración'),
+    el('h1', {}, 'Lista IPTV'),
+    el('p', { class: 'note' }, 'Icono de cada carpeta de la lista: las categorías de canales, Películas, Series y Documentales. Se ven en WisePlay con el enlace en su formato (&formato=wiseplay); las apps que leen «group-logo» también los muestran en la lista M3U.'),
+    rows, el('div', { class: 'actions' }, save), status)];
 }

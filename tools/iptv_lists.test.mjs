@@ -22,3 +22,11 @@ test('the state says whether the list works', () => {
   assert.match(iptvState({ expires: new Date(now + 1000) }, now), /activa hasta/);
   assert.match(iptvState({ expires: new Date(now - 1000) }, now), /caducada/);
 });
+
+import { iptvFolders, cleanIcons } from '../web/iptv-lists.js';
+test('the icon folders are the channel categories, then films, series and documentaries', () => {
+  const channels = [{ group: 'Deportes' }, { group: 'Generalistas' }, { group: 'Deportes' }, { group: 'Series' }, { group: 'Web', playable: false }];
+  assert.deepEqual(iptvFolders(channels), ['Deportes', 'Generalistas', 'Películas', 'Series', 'Documentales']);
+  assert.deepEqual(cleanIcons({ Deportes: ' https://x.example/d.png ', Series: 'http://inseguro/s.png', Otra: 'https://x/o.png' }, ['Deportes', 'Series']),
+    { Deportes: 'https://x.example/d.png' });
+});

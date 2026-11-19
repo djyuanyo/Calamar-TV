@@ -1534,3 +1534,9 @@ body.gate-open { overflow: hidden; }
 .iptv-date { display: grid; gap: 6px; margin: 8px 0 12px; font-size: 14px; color: var(--muted); }
 .iptv-date > span:last-child { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .iptv-date input { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; color-scheme: dark; }
+.iptv-icons { display: grid; gap: 10px; margin: 16px 0; }
+.iptv-icon-row { display: grid; grid-template-columns: 48px minmax(120px, 180px) minmax(160px, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface); }
+.iptv-icon-row input[type=url] { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; min-width: 0; }
+.iptv-icon-preview { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.06); }
+.iptv-icon-preview.empty { visibility: hidden; }
+@media (max-width: 700px) { .iptv-icon-row { grid-template-columns: 48px 1fr; } .iptv-icon-row input[type=url] { grid-column: 1 / -1; } }
