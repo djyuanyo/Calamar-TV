@@ -76,9 +76,11 @@ try {
       return route.fulfill({headers,status:403});
     return route.abort();
   });
-  const blockedPopupAndPlaying = async frame => {
+  const blockedPopupAndPlaying = async (frame, keyboard = false) => {
     const inside = frame.contentFrame();
-    await inside.getByRole('button', {name:'Play',exact:true}).click();
+    const play = inside.getByRole('button', {name:'Play',exact:true});
+    if (keyboard) await play.press('Enter');
+    else await play.click();
     await inside.getByText('Ventana bloqueada',{exact:true}).waitFor();
     await inside.locator('video[data-playing="true"]').waitFor({timeout:5000});
     assert.equal(page.context().pages().length, 1);
@@ -154,7 +156,8 @@ try {
   const importedFrame = page.locator('#player iframe');
   await importedFrame.waitFor();
   assert.equal(await importedFrame.getAttribute('src'), 'https://zicotv.gcorecdn.com/api/player/1');
-  await blockedPopupAndPlaying(importedFrame);
+  assert.equal(await importedFrame.getAttribute('sandbox'), 'allow-scripts allow-same-origin allow-forms allow-presentation');
+  await blockedPopupAndPlaying(importedFrame, true);
   await page.locator('#player-close').click();
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
   await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');
