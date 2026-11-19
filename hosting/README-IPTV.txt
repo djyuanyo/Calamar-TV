@@ -31,8 +31,9 @@ Carpetas: las categorías de los canales, «Películas», «Series» y «Documen
   capítulos («Serie T1 E01 - título»), igual en «Documentales».
 - Formato WisePlay (el enlace corto, o &formato=wiseplay): dentro de «Series» una carpeta por serie
   con su portada y, dentro, «Capítulo 1», «Capítulo 2»… (con varias temporadas, una carpeta por
-  temporada). Igual en «Documentales». Una categoría de canales llamada «Series» sale aparte como
-  «Series (canales)».
+  temporada). Igual en «Documentales». Los canales van todos dentro de la carpeta «Canales», cada
+  categoría en su carpeta (en la lista M3U, sin subcarpetas, la categoría «Series» de canales sale como
+  «Series (canales)»).
 
 ICONOS DE LAS CARPETAS
 Administración → «Lista IPTV»: pega el enlace de una imagen o pulsa «Subir imagen» en cada categoría,

@@ -103,7 +103,7 @@ export function iptvFolders(channels = []) {
   const groups = [];
   for (const c of channels) if (c?.playable !== false && c?.group && !groups.includes(c.group)) groups.push(c.group);
   // A channel category called like a library folder keeps its own folder («Series (canales)»), as in the hosting.
-  return [...groups.map(g => (LIBRARY_FOLDERS.includes(g) ? `${g} (canales)` : g)), ...LIBRARY_FOLDERS];
+  return ['Canales', ...groups.map(g => (LIBRARY_FOLDERS.includes(g) ? `${g} (canales)` : g)), ...LIBRARY_FOLDERS];
 }
 
 /** Only https icons of known folders are kept. */
@@ -171,6 +171,6 @@ export function iptvAdmin(el, service, state) {
   return [el('section', { class: 'users-page iptv-admin' },
     el('a', { class: 'ghost user-back', href: '#/admin' }, '‹ Administración'),
     el('h1', {}, 'Lista IPTV'),
-    el('p', { class: 'note' }, 'Icono de cada carpeta de la lista: las categorías de canales, Películas, Series y Documentales. Se ven en WisePlay con el enlace en su formato (&formato=wiseplay); las apps que leen «group-logo» también los muestran en la lista M3U.'),
+    el('p', { class: 'note' }, 'Icono de cada carpeta de la lista: «Canales» y cada categoría de canales que hay dentro, Películas, Series y Documentales. Se ven en WisePlay con el enlace en su formato (&formato=wiseplay); las apps que leen «group-logo» también los muestran en la lista M3U.'),
     rows, el('div', { class: 'actions' }, save), status)];
 }

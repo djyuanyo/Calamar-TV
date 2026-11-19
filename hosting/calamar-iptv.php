@@ -214,9 +214,28 @@ function iptvLibrary(&$folders) {
 /** Icons of the folders, chosen in Administración → Lista IPTV (calamarIptv/settings). */
 function iptvIcons(&$folders) {
     $settings = iptvDocument('calamarIptv/settings');
-    foreach ((array)($settings['icons'] ?? array()) as $name => $url) {
+    $icons = (array)($settings['icons'] ?? array());
+    foreach ($icons as $name => $url) {
         if (isset($folders[$name]) && iptvImage($url) !== '') $folders[$name]['image'] = $url;
     }
+    return iptvImage($icons['Canales'] ?? '');
+}
+
+/**
+ * WisePlay: the channel categories inside one «Canales» folder, before Películas, Series and
+ * Documentales (a category renamed «Series (canales)» shows as «Series» in there).
+ */
+function iptvChannelsFolder($folders, $icon) {
+    $library = array('Películas', 'Series', 'Documentales');
+    $channels = array('stations' => array(), 'groups' => array(), 'image' => $icon);
+    $out = array();
+    foreach ($folders as $name => $folder) {
+        if (in_array($name, $library, true)) continue;
+        $channels['groups'][preg_replace('/ \(canales\)$/u', '', (string)$name)] = $folder;
+    }
+    if ($channels['groups']) $out['Canales'] = $channels;
+    foreach ($library as $name) if (isset($folders[$name])) $out[$name] = $folders[$name];
+    return $out;
 }
 
 /** M3U: one level of folders, so every episode of «Series» is in «Series» with its series in the name. */
@@ -306,7 +325,8 @@ try {
     $folders = array();
     $channels = iptvChannels($folders, $custom, $tdt);
     $videos = (empty($_GET['solo']) || $_GET['solo'] !== 'canales') ? iptvLibrary($folders) : 0;
-    try { iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
+    $channelsIcon = '';
+    try { $channelsIcon = iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
 } catch (Throwable $error) {
     iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
 }
@@ -317,7 +337,7 @@ header('X-Robots-Tag: noindex');
 if (($_GET['formato'] ?? '') === 'wiseplay') {
     header('Content-Type: application/json; charset=utf-8');
     header('Content-Disposition: inline; filename="calamar-tv.w3u"');
-    echo json_encode(iptvWisePlay($folders, $info), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    echo json_encode(iptvWisePlay(iptvChannelsFolder($folders, $channelsIcon), $info), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
 header('Content-Type: audio/x-mpegurl; charset=utf-8');

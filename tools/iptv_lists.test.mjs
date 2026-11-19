@@ -26,7 +26,7 @@ test('the state says whether the list works', () => {
 import { iptvFolders, cleanIcons } from '../web/iptv-lists.js';
 test('the icon folders are the channel categories, then films, series and documentaries', () => {
   const channels = [{ group: 'Deportes' }, { group: 'Generalistas' }, { group: 'Deportes' }, { group: 'Series' }, { group: 'Web', playable: false }];
-  assert.deepEqual(iptvFolders(channels), ['Deportes', 'Generalistas', 'Series (canales)', 'Películas', 'Series', 'Documentales']);
+  assert.deepEqual(iptvFolders(channels), ['Canales', 'Deportes', 'Generalistas', 'Series (canales)', 'Películas', 'Series', 'Documentales']);
   assert.deepEqual(cleanIcons({ Deportes: ' https://x.example/d.png ', Series: 'http://inseguro/s.png', Otra: 'https://x/o.png' }, ['Deportes', 'Series']),
     { Deportes: 'https://x.example/d.png' });
 });
