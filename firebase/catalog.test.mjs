@@ -284,3 +284,16 @@ test('IPTV lists: the hosting reads one by its password, only the administrator 
   await assertFails(deleteDoc(doc(member, path)));
   await assertSucceeds(deleteDoc(doc(admin(), path)));
 });
+
+test('IPTV folder icons: public to read, only the administrator saves them', async () => {
+  const guest = env.unauthenticatedContext().firestore();
+  const member = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const path = 'calamarIptv/settings';
+  const data = { json: '{"icons":{"Series":"https://example.com/s.png"}}', updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(admin(), path), data));
+  await assertSucceeds(getDoc(doc(guest, path)));
+  await assertFails(setDoc(doc(member, path), data));
+  await assertFails(setDoc(doc(admin(), path), { ...data, extra: true }));
+  await assertFails(getDocs(collection(guest, 'calamarIptv')));
+  await assertFails(deleteDoc(doc(admin(), path)));
+});

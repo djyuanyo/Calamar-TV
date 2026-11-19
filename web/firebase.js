@@ -438,6 +438,23 @@ export async function deleteIptvList(uid) {
   await Promise.all(found.docs.map(d => deleteDoc(d.ref)));
 }
 
+const iptvSettingsDoc = () => doc(db, 'calamarIptv', 'settings');
+/** Icons of the IPTV list's folders: { icons: { «Deportes»: url, «Series»: url… } }. */
+export async function readIptvSettings() {
+  requireAdministrator();
+  const s = await getDocFromServer(iptvSettingsDoc());
+  try { return s.exists() ? JSON.parse(s.data().json) : { icons: {} }; } catch { return { icons: {} }; }
+}
+export async function saveIptvSettings(settings) {
+  requireAdministrator();
+  await setDoc(iptvSettingsDoc(), { json: JSON.stringify(settings), updatedAt: serverTimestamp() });
+}
+/** An icon chosen from a file goes to GitHub like the catalog's images; its address is kept. */
+export async function uploadIptvIcon(image) {
+  requireAdministrator();
+  return (await imageRequest({ action: 'upload', image }, await auth.currentUser.getIdToken())).url;
+}
+
 function requireAdministrator() {
   if (!administrator()) throw Error('Entra con la cuenta de administración.');
 }

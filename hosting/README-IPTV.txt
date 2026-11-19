@@ -20,8 +20,16 @@ Hace falta haber publicado las reglas nuevas de Firestore (firebase/firestore.ru
 La lista se genera de nuevo cada vez que la app la carga o la actualiza: los canales, películas, series
 y documentales que cambies en Administración salen solos, sin subir nada más.
 
-Grupos: las categorías de los canales, «Películas», «Documentales» y una carpeta por serie
-(«Series · Nombre»).
+Carpetas: las categorías de los canales, «Películas», «Series» y «Documentales».
+- Enlace normal (M3U, vale para cualquier app IPTV): una sola carpeta «Series» con todos los
+  capítulos («Serie T1 E01 - título»), igual en «Documentales».
+- Formato WisePlay: añade &formato=wiseplay al final del enlace. Dentro de «Series» sale una carpeta
+  por serie con sus capítulos, y cada carpeta lleva su icono.
+
+ICONOS DE LAS CARPETAS
+Administración → «Lista IPTV»: pega el enlace de una imagen o pulsa «Subir imagen» en cada categoría,
+Películas, Series y Documentales, y «Guardar iconos». Se ven en el formato WisePlay; en la lista
+M3U solo en las apps que leen «group-logo». Las imágenes subidas van a GitHub como las del catálogo.
 
 Importante:
 - No compartas el enlace: algunos canales llevan el usuario y la contraseña del proveedor IPTV, y quien

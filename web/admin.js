@@ -1,4 +1,5 @@
 import { usersAdmin } from './users-admin.js';
+import { iptvAdmin } from './iptv-lists.js';
 import { mergeUserDirectory } from './access-policy.js';
 import { zicoChannelPlayer } from './zico-channel.js';
 import { viewerDevice } from './user-playback.js';
@@ -481,6 +482,7 @@ export async function render(state) {
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
   const userRoute = location.hash.match(/^#\/admin\/usuarios(?:\/([a-zA-Z0-9_-]{1,128}))?\/?$/);
   if (userRoute) return usersAdmin(el, userService, state, userRoute[1]);
+  if (/^#\/admin\/iptv\/?$/.test(location.hash)) return iptvAdmin(el, userService, state);
   const section = location.hash === '#/admin/servidor' ? 'vps' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
@@ -494,7 +496,7 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca'], ['iptv','Lista IPTV','#/admin/iptv']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'iptv' ? el('b', {}, '📺') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
       ...(section === 'vps' ? [vpsPanel(el, () => auth.currentUser.getIdToken())] : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,

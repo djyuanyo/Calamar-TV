@@ -199,6 +199,13 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow delete: if administrator();
     }
+    // Icons of the IPTV list's folders (channel categories, Películas, Series, Documentales), read by
+    // the hosting without signing in.
+    match /calamarIptv/settings {
+      allow get: if true;
+      allow create, update: if administrator() && jsonDoc(20000);
+      allow delete, list: if false;
+    }
     // Authenticated viewing never puts account identifiers in public audience counters.
     function viewer(uid) {
       return owner(uid) && request.auth.token.firebase.sign_in_provider != 'anonymous';
