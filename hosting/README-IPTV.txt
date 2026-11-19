@@ -20,6 +20,10 @@ En Administración → Usuarios → Editar (un usuario) → «Lista IPTV»:
 - Pon el último día que funciona (vacío: sin caducidad) y «Guardar caducidad». Al pasar ese día, su
   app IPTV ve «Esta lista de Calamar TV ha caducado».
 - «Nueva contraseña» cambia el enlace (el anterior deja de funcionar) y «Borrar lista» lo anula.
+- Cada vídeo de la lista de un usuario pasa por tu hosting, que comprueba la lista al darle a
+  reproducir: al llegar la fecha y hora de caducidad (o si la borras o cambias la contraseña) deja de
+  reproducir aunque la tenga importada. La primera vez se crea calamar-iptv-secret.php una carpeta por
+  encima de la web: no lo borres (si lo borras, las listas importadas necesitan actualizarse).
 - Bloquear o eliminar la cuenta no borra su lista: bórrala también si quieres cortarle el acceso.
 Hace falta haber publicado las reglas nuevas de Firestore (firebase/firestore.rules).
 

@@ -262,7 +262,7 @@ function iptvM3u($folders) {
 }
 
 /** WisePlay's own format (w3u): folders with their icon, and a folder per series inside «Series». */
-function iptvWisePlay($folders, $info) {
+function iptvWisePlay($folders, $info, $self = '') {
     $node = function ($name, $folder) use (&$node) {
         $out = array('name' => (string)$name);
         if ($folder['image'] !== '') $out['image'] = $folder['image'];
@@ -286,6 +286,8 @@ function iptvWisePlay($folders, $info) {
         return $out;
     };
     $list = array('name' => 'Calamar TV', 'author' => 'Calamar TV', 'info' => $info, 'groups' => array());
+    // The address WisePlay reads the list from again to update it.
+    if ($self !== '') $list['url'] = $self;
     foreach ($folders as $name => $folder) $list['groups'][] = $node($name, $folder);
     return $list;
 }
@@ -305,11 +307,51 @@ function iptvUserList($token) {
     return is_array($doc) && isset($doc['fields']['uid']) ? 'ok' : 'missing';
 }
 
+/** Key that signs each video address of a user's list (kept out of the web folder, made once). */
+function iptvSecret() {
+    $path = dirname(__DIR__) . '/calamar-iptv-secret.php';
+    $saved = is_file($path) ? @include $path : null;
+    if (is_string($saved) && strlen($saved) >= 32) return $saved;
+    $secret = bin2hex(random_bytes(32));
+    if (@file_put_contents($path, '<?php return ' . var_export($secret, true) . ";\n", LOCK_EX) === false)
+        throw new RuntimeException('No se pudo guardar la clave de las listas.');
+    @chmod($path, 0600);
+    return $secret;
+}
+function iptvB64($text) { return rtrim(strtr(base64_encode($text), '+/', '-_'), '='); }
+function iptvSign($token, $url, $secret) { return substr(hash_hmac('sha256', $token . '|' . $url, $secret), 0, 24); }
+
+/**
+ * In a user's list each video goes through this file (…/i/?código&p=…): every time it is played the
+ * list is checked again, so once its date arrives an imported list stops playing, then it is sent on.
+ */
+function iptvWrap(&$folder, $token, $secret) {
+    foreach ($folder['stations'] as &$station) {
+        $station['url'] = IPTV_HOSTING . '/i/?' . $token . '&p=' . iptvB64($station['url']) . '.' . iptvSign($token, $station['url'], $secret);
+    }
+    unset($station);
+    foreach ($folder['groups'] as &$inner) iptvWrap($inner, $token, $secret);
+    unset($inner);
+}
+
+$userToken = null;
 if (isset($_GET['lista']) && is_string($_GET['lista'])) {
     try { $state = iptvUserList($_GET['lista']); }
     catch (Throwable $error) { iptvFail(502, 'No se pudo comprobar la lista. Vuelve a intentarlo en unos minutos.'); }
     if ($state === 'expired') iptvFail(403, 'Esta lista de Calamar TV ha caducado. Contacta con el administrador.');
     if ($state !== 'ok') { usleep(500000); iptvFail(403, 'Lista no válida.'); }
+    $userToken = $_GET['lista'];
+    // Playing one video of the list: still valid (checked above), so on to the video itself.
+    if (isset($_GET['p']) && is_string($_GET['p'])) {
+        $dot = strrpos($_GET['p'], '.');
+        $url = $dot === false ? false : base64_decode(strtr(substr($_GET['p'], 0, $dot), '-_', '+/'), true);
+        try { $secret = iptvSecret(); } catch (Throwable $error) { iptvFail(503, $error->getMessage()); }
+        if (!is_string($url) || !preg_match('#^https?://#i', $url) || !hash_equals(iptvSign($userToken, $url, $secret), substr($_GET['p'], $dot + 1)))
+            iptvFail(403, 'Enlace de vídeo no válido.');
+        header('Cache-Control: no-store');
+        header('Location: ' . $url, true, 302);
+        exit;
+    }
 } else {
     // The administrator's own list, with the key of calamar-iptv-key.php.
     $key = iptvKey();
@@ -327,6 +369,11 @@ try {
     $videos = (empty($_GET['solo']) || $_GET['solo'] !== 'canales') ? iptvLibrary($folders) : 0;
     $channelsIcon = '';
     try { $channelsIcon = iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
+    if ($userToken !== null) {
+        $secret = iptvSecret();
+        foreach ($folders as &$folder) iptvWrap($folder, $userToken, $secret);
+        unset($folder);
+    }
 } catch (Throwable $error) {
     iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
 }
@@ -336,8 +383,8 @@ header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex');
 if (($_GET['formato'] ?? '') === 'wiseplay') {
     header('Content-Type: application/json; charset=utf-8');
-    header('Content-Disposition: inline; filename="calamar-tv.w3u"');
-    echo json_encode(iptvWisePlay(iptvChannelsFolder($folders, $channelsIcon), $info), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $self = $userToken !== null ? IPTV_HOSTING . '/i/?' . $userToken : IPTV_HOSTING . (string)($_SERVER['REQUEST_URI'] ?? '');
+    echo json_encode(iptvWisePlay(iptvChannelsFolder($folders, $channelsIcon), $info, $self), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
 header('Content-Type: audio/x-mpegurl; charset=utf-8');
