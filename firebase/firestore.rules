@@ -189,9 +189,9 @@ service cloud.firestore {
     // Private IPTV lists (hosting/calamar-iptv.php): the random id is the list's password. The hosting
     // reads one by its id without signing in; only the administrator lists, creates or removes them.
     match /calamarIptvLists/{token} {
-      allow get: if token.matches('^[A-Za-z0-9]{32}$');
+      allow get: if token.matches('^[A-Za-z0-9]{10,32}$');
       allow list: if administrator();
-      allow create, update: if administrator() && token.matches('^[A-Za-z0-9]{32}$')
+      allow create, update: if administrator() && token.matches('^[A-Za-z0-9]{10,32}$')
         && request.resource.data.keys().hasAll(['uid', 'expires', 'updatedAt'])
         && request.resource.data.keys().hasOnly(['uid', 'expires', 'updatedAt'])
         && request.resource.data.uid is string && request.resource.data.uid.size() <= 128

@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { iptvPassword, iptvLink, madridEndOfDay, madridDate, iptvState } from '../web/iptv-lists.js';
 
-test('passwords are 32 random letters and digits, as the rules and the hosting expect', () => {
+test('codes are 10 easy letters and digits, as the rules and the hosting expect', () => {
   const a = iptvPassword(), b = iptvPassword();
-  assert.match(a, /^[A-Za-z0-9]{32}$/);
+  assert.match(a, /^[a-hjkmnp-z2-9]{10}$/);
   assert.notEqual(a, b);
-  assert.equal(iptvLink(a), `https://calamarmenciano.com/calamar-iptv.php?lista=${a}`);
+  assert.equal(iptvLink(a), `https://calamarmenciano.com/i/?${a}`);
 });
 
 test('the chosen day is the last one the list works, in Spanish time', () => {
@@ -26,7 +26,7 @@ test('the state says whether the list works', () => {
 import { iptvFolders, cleanIcons } from '../web/iptv-lists.js';
 test('the icon folders are the channel categories, then films, series and documentaries', () => {
   const channels = [{ group: 'Deportes' }, { group: 'Generalistas' }, { group: 'Deportes' }, { group: 'Series' }, { group: 'Web', playable: false }];
-  assert.deepEqual(iptvFolders(channels), ['Deportes', 'Generalistas', 'Películas', 'Series', 'Documentales']);
+  assert.deepEqual(iptvFolders(channels), ['Deportes', 'Generalistas', 'Series (canales)', 'Películas', 'Series', 'Documentales']);
   assert.deepEqual(cleanIcons({ Deportes: ' https://x.example/d.png ', Series: 'http://inseguro/s.png', Otra: 'https://x/o.png' }, ['Deportes', 'Series']),
     { Deportes: 'https://x.example/d.png' });
 });

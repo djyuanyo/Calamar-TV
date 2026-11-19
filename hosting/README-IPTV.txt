@@ -8,6 +8,12 @@ LISTA IPTV DE CALAMAR TV (WisePlay, TiviMate, IPTV Smarters, VLC…)
    Solo canales (sin películas ni series):
       https://calamarmenciano.com/calamar-iptv.php?clave=TU_CLAVE&solo=canales
 
+ENLACE CORTO (para escribirlo con el mando)
+Cada usuario tiene un código de 10 letras y números en minúsculas, sin letras que se confundan:
+      https://calamarmenciano.com/i/?CODIGO        WisePlay: carpetas, una por serie con su portada
+      https://calamarmenciano.com/i/?CODIGO&m3u    otras apps IPTV (M3U)
+Sube la carpeta «i» (con su index.php dentro) junto a calamar-iptv.php.
+
 LISTAS DE CADA USUARIO
 En Administración → Usuarios → Editar (un usuario) → «Lista IPTV»:
 - «Crear lista» le crea un enlace con una contraseña aleatoria: cópialo y dáselo.
@@ -23,8 +29,10 @@ y documentales que cambies en Administración salen solos, sin subir nada más.
 Carpetas: las categorías de los canales, «Películas», «Series» y «Documentales».
 - Enlace normal (M3U, vale para cualquier app IPTV): una sola carpeta «Series» con todos los
   capítulos («Serie T1 E01 - título»), igual en «Documentales».
-- Formato WisePlay: añade &formato=wiseplay al final del enlace. Dentro de «Series» sale una carpeta
-  por serie con sus capítulos, y cada carpeta lleva su icono.
+- Formato WisePlay (el enlace corto, o &formato=wiseplay): dentro de «Series» una carpeta por serie
+  con su portada y, dentro, «Capítulo 1», «Capítulo 2»… (con varias temporadas, una carpeta por
+  temporada). Igual en «Documentales». Una categoría de canales llamada «Series» sale aparte como
+  «Series (canales)».
 
 ICONOS DE LAS CARPETAS
 Administración → «Lista IPTV»: pega el enlace de una imagen o pulsa «Subir imagen» en cada categoría,
