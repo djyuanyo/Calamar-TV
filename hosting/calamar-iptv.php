@@ -80,7 +80,9 @@ function iptvAddress($value, $pages) {
         if ($path === '/calamar-drive.php') {
             parse_str($u['query'] ?? '', $q);
             if (empty($q['id']) || empty($q['v'])) return null;
-            return IPTV_HOSTING . '/calamar-drive.php?' . http_build_query(array('id' => $q['id'], 'v' => $q['v'], 'hls' => '1'));
+            // The video itself (with seeking), not the web's HLS conversion: IPTV apps play MKV, MP4 and
+            // any audio, and the conversion (ffmpeg on the hosting, two at a time) is slow for them.
+            return IPTV_HOSTING . '/calamar-drive.php?' . http_build_query(array('id' => $q['id'], 'v' => $q['v']));
         }
         return $url;
     }

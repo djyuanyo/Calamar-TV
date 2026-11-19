@@ -12,20 +12,23 @@ export function iptvPassword(random = n => crypto.getRandomValues(new Uint8Array
 
 export const iptvLink = token => `${IPTV_ENDPOINT}?lista=${token}`;
 
-/** The chosen day (yyyy-mm-dd) is the last one the list works: it ends at 23:59:59 in Spain. */
-export function madridEndOfDay(day) {
-  const guess = new Date(`${day}T23:59:59Z`);
+/** The moment the list stops working: the chosen day and hour in Spain (without an hour, at the end of that day). */
+export function madridMoment(day, time = '') {
+  const guess = new Date(`${day}T${/^\d{2}:\d{2}$/.test(time) ? time + ':00' : '23:59:59'}Z`);
   const at = zone => new Date(guess.toLocaleString('en-US', { timeZone: zone }));
   return new Date(guess.getTime() - (at('Europe/Madrid') - at('UTC')));
 }
 
+export const madridEndOfDay = day => madridMoment(day);
+export const madridTime = date => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
 export const madridDate = date => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 
 export function iptvState(list, now = Date.now()) {
   if (!list) return 'Esta cuenta no tiene lista IPTV.';
   if (!list.expires) return 'Lista activa, sin fecha de caducidad.';
   const day = list.expires.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'long' });
-  return list.expires.getTime() <= now ? `Lista caducada el ${day}: ya no funciona.` : `Lista activa hasta el ${day} (incluido).`;
+  const hour = madridTime(list.expires);
+  return list.expires.getTime() <= now ? `Lista caducada el ${day} a las ${hour}: ya no funciona.` : `Lista activa hasta el ${day} a las ${hour} (hora de España).`;
 }
 
 /** The «Lista IPTV» section of a user's page. */
@@ -33,9 +36,10 @@ export function iptvSection(el, service, user) {
   const note = el('p', { class: 'note', role: 'status' }, 'Cargando lista IPTV…');
   const link = el('input', { type: 'text', readonly: true, 'aria-label': 'Enlace de la lista IPTV', class: 'iptv-link' });
   const date = el('input', { type: 'date', 'aria-label': 'Último día que funciona la lista' });
+  const time = el('input', { type: 'time', step: '60', 'aria-label': 'Hora a la que deja de funcionar' });
   const button = (text, click) => el('button', { class: 'btn secondary', type: 'button', onclick: click }, text);
   let list = null;
-  const expiry = () => (date.value ? madridEndOfDay(date.value) : null);
+  const expiry = () => (date.value ? madridMoment(date.value, time.value) : null);
   const busy = async (text, action) => {
     for (const b of buttons) b.disabled = true;
     note.textContent = text;
@@ -51,7 +55,7 @@ export function iptvSection(el, service, user) {
   const save = button('Guardar caducidad', () => busy('Guardando…', async () => {
     list = await service.saveIptvExpiry(list.token, user.uid, expiry());
   }));
-  const clear = button('Sin fecha', () => { date.value = ''; });
+  const clear = button('Sin fecha', () => { date.value = ''; time.value = ''; });
   const copy = button('Copiar enlace', async () => {
     try { await navigator.clipboard.writeText(link.value); note.textContent = 'Enlace copiado.'; }
     catch { link.select(); note.textContent = 'Selecciona el enlace y cópialo.'; }
@@ -63,7 +67,7 @@ export function iptvSection(el, service, user) {
   });
   const remove = button('Borrar lista', () => {
     if (!window.confirm('El enlace dejará de funcionar. ¿Borrar la lista IPTV?')) return;
-    busy('Borrando…', async () => { await service.deleteIptvList(user.uid); list = null; date.value = ''; });
+    busy('Borrando…', async () => { await service.deleteIptvList(user.uid); list = null; date.value = ''; time.value = ''; });
   });
   const buttons = [create, save, clear, copy, wiseplay, remove];
   const draw = () => {
@@ -75,7 +79,7 @@ export function iptvSection(el, service, user) {
   for (const b of buttons) b.disabled = true;
   Promise.resolve().then(() => service.readIptvList(user.uid)).then(found => {
     list = found;
-    if (list?.expires) date.value = madridDate(list.expires);
+    if (list?.expires) { date.value = madridDate(list.expires); time.value = madridTime(list.expires); }
     draw();
     for (const b of buttons) b.disabled = false;
   }).catch(error => { note.textContent = service.explain(error); });
@@ -83,7 +87,7 @@ export function iptvSection(el, service, user) {
     el('h2', {}, 'Lista IPTV'),
     el('p', { class: 'note' }, 'Enlace para WisePlay y apps IPTV con los canales, películas, series y documentales. Se actualiza sola.'),
     link,
-    el('label', { class: 'iptv-date' }, el('span', {}, 'Último día que funciona (vacío: sin caducidad)'), el('span', {}, date, clear)),
+    el('label', { class: 'iptv-date' }, el('span', {}, 'Caduca el día y a la hora (de España); sin hora, al acabar el día. Vacío: sin caducidad'), el('span', {}, date, time, clear)),
     el('div', { class: 'actions' }, create, save, copy, wiseplay, remove), note);
 }
 

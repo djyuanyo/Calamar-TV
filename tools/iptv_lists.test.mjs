@@ -30,3 +30,12 @@ test('the icon folders are the channel categories, then films, series and docume
   assert.deepEqual(cleanIcons({ Deportes: ' https://x.example/d.png ', Series: 'http://inseguro/s.png', Otra: 'https://x/o.png' }, ['Deportes', 'Series']),
     { Deportes: 'https://x.example/d.png' });
 });
+
+import { madridMoment, madridTime } from '../web/iptv-lists.js';
+test('a list can expire at a chosen hour, in Spanish time', () => {
+  assert.equal(madridMoment('2026-12-31', '18:30').toISOString(), '2026-12-31T17:30:00.000Z');
+  assert.equal(madridMoment('2026-07-15', '00:05').toISOString(), '2026-07-14T22:05:00.000Z');
+  assert.equal(madridMoment('2026-12-31', '').toISOString(), '2026-12-31T22:59:59.000Z');
+  assert.equal(madridTime(madridMoment('2026-12-31', '18:30')), '18:30');
+  assert.match(iptvState({ expires: madridMoment('2030-01-02', '09:15') }, Date.parse('2026-11-19T12:00:00Z')), /a las 09:15/);
+});
