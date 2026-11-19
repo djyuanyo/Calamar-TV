@@ -4,7 +4,6 @@ import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js'
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf, viewingSummary } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { REMINDER_ENDPOINT, verificationCode, verificationDraft } from './verification-reminder.js';
-import { accountLimits, overLimit } from './screen-limit.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
@@ -294,31 +293,6 @@ export async function saveWebAccess(value) {
 export const watchUserAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarUserAccess', uid), { includeMetadataChanges: true }, s => {
   if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(s.exists() && s.data().blocked === true);
 }, failed);
-// Expiry date and simultaneous screens of each account (calamarUserLimits; none set: one screen, no expiry).
-export const watchUserLimits = (uid, next, failed) => onSnapshot(doc(db, 'calamarUserLimits', uid), { includeMetadataChanges: true }, s => {
-  if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(accountLimits(s.exists() ? s.data() : null));
-}, failed);
-export async function readUserLimits(uid) {
-  requireAdministrator();
-  const s = await getDocFromServer(doc(db, 'calamarUserLimits', uid));
-  return accountLimits(s.exists() ? s.data() : null);
-}
-export async function saveUserLimits(uid, { expires, screens }) {
-  requireAdministrator();
-  await setDoc(doc(db, 'calamarUserLimits', uid), { expires: expires || null, screens, updatedAt: serverTimestamp() });
-}
-/** True when the account already plays on as many other screens as it may (the administrator never is). */
-export async function screenLimitReached(screen) {
-  const user = auth.currentUser;
-  if (!user || user.isAnonymous || administrator(user)) return false;
-  try {
-    const [limits, live] = await Promise.all([
-      getDocFromServer(doc(db, 'calamarUserLimits', user.uid)),
-      getDocs(query(collection(db, 'calamarLiveViewers'), where('uid', '==', user.uid))),
-    ]);
-    return overLimit(live.docs.map(d => ({ ...d.data(), id: d.id })), screen, limits.exists() ? limits.data() : null);
-  } catch { return false; } // Without connection (or rules not yet published) playback goes on.
-}
 export async function recordMember() {
   const user = auth.currentUser; if (!user || user.isAnonymous) return;
   const token = await user.getIdTokenResult();
@@ -421,8 +395,7 @@ export async function showViewing({ uid, id, ...details }, first) {
   const live = { ...details, uid, updatedAt: serverTimestamp() };
   if (first) {
     const batch = writeBatch(db);
-    const { screen, ...history } = details;
-    batch.set(viewingDoc(uid, id), { ...history, startedAt: serverTimestamp() });
+    batch.set(viewingDoc(uid, id), { ...details, startedAt: serverTimestamp() });
     batch.set(liveViewerDoc(id), live);
     await batch.commit();
   } else await setDoc(liveViewerDoc(id), live);

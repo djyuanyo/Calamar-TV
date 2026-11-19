@@ -2,7 +2,6 @@ import { mergeUserDirectory, findUsers } from './access-policy.js';
 import { madridDay } from './audience.js';
 import { fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { viewerDevice } from './user-playback.js';
-import { DEFAULT_SCREENS, MAX_SCREENS, describeExpiry, expiredAt } from './screen-limit.js';
 
 const asDate = value => {
   const date = value?.toDate?.() || (value?.seconds ? new Date(value.seconds * 1000) : value ? new Date(value) : null);
@@ -123,49 +122,6 @@ function accessAction(el, service, user) {
   return el('div', { class: 'user-access-actions' }, status, action, remove, note);
 }
 
-// Until when the account may watch (no date: always) and how many screens may play at once.
-function limitsAction(el, service, user) {
-  const note = el('p', { class: 'note', role: 'status' }, 'Cargando límites…');
-  const date = el('input', { type: 'date', 'aria-label': 'Fecha de caducidad' });
-  const screens = el('input', { type: 'number', min: '1', max: String(MAX_SCREENS), step: '1', value: String(DEFAULT_SCREENS), 'aria-label': 'Pantallas a la vez' });
-  const clear = button(el, 'Sin fecha', () => { date.value = ''; });
-  const save = button(el, 'Guardar límites', async () => {
-    const count = Number(screens.value);
-    if (!Number.isInteger(count) || count < 1 || count > MAX_SCREENS) { note.textContent = `Elige entre 1 y ${MAX_SCREENS} pantallas.`; return; }
-    // The chosen day is the last one with access: it ends at 23:59:59 in Spain.
-    const expires = date.value ? madridEndOfDay(date.value) : null;
-    save.disabled = true;
-    note.textContent = 'Guardando…';
-    try {
-      await service.saveUserLimits(user.uid, { expires, screens: count });
-      note.textContent = describe({ expires, screens: count });
-    } catch (error) { note.textContent = service.explain(error); }
-    finally { save.disabled = false; }
-  });
-  save.classList.remove('secondary');
-  const describe = limits => `${expiredAt(limits) ? 'Caducado' : 'Acceso hasta'}: ${describeExpiry(limits)} · ${limits.screens} ${limits.screens === 1 ? 'pantalla' : 'pantallas'} a la vez.`;
-  save.disabled = true;
-  Promise.resolve().then(() => service.readUserLimits(user.uid)).then(limits => {
-    if (limits.expires) date.value = madridDay(limits.expires);
-    screens.value = String(limits.screens);
-    note.textContent = describe(limits);
-    save.disabled = false;
-  }).catch(error => { note.textContent = service.explain(error); });
-  return el('section', { class: 'user-surface user-limits' },
-    el('h2', {}, 'Caducidad y pantallas'),
-    el('div', { class: 'user-limit-fields' },
-      el('label', {}, el('span', {}, 'Último día con acceso'), el('span', { class: 'user-limit-date' }, date, clear)),
-      el('label', {}, el('span', {}, 'Pantallas a la vez'), screens)),
-    el('div', { class: 'actions' }, save), note);
-}
-// The end of a day (yyyy-mm-dd) in Madrid, whatever the administrator's own time zone.
-function madridEndOfDay(day) {
-  const guess = new Date(`${day}T23:59:59Z`);
-  const shown = new Date(guess.toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
-  const utc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
-  return new Date(guess.getTime() - (shown - utc));
-}
-
 function favoriteLists(el, profile, names) {
   const favorites = Object.keys(profile.data?.favorites || {});
   const saved = Object.values(profile.data?.list || {}).filter(item => typeof item?.item === 'string');
@@ -277,7 +233,6 @@ function userDetails(el, service, state, uid) {
         el('dl', { class: 'user-facts' }, details.flatMap(([label, value]) =>
           [el('dt', {}, label), el('dd', {}, value)])),
         reminderAction(el, service, user, verification), accessAction(el, service, user)),
-      user.uid === service.auth.currentUser?.uid ? null : limitsAction(el, service, user),
       favorites, historyPanel(el, service, uid));
   }).catch(error => panel.replaceChildren(el('p', { class: 'error' }, service.explain(error))));
   return panel;

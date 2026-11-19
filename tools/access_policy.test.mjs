@@ -56,24 +56,3 @@ test('deleted users disappear from the directory even when their old profile exi
   const access = [{ uid: 'deleted', blocked: true, deleted: true }, { uid: 'blocked', blocked: true }];
   assert.deepEqual(mergeUserDirectory(members, profiles, access).map(user => user.uid), ['blocked']);
 });
-
-test('an expired account waits at its own notice; the administrator never expires', () => {
-  assert.equal(accessDecision({ ...base, user: { uid: 'u' }, expired: true }), 'expired');
-  assert.equal(accessDecision({ ...base, user: { uid: 'u' }, blocked: true, expired: true }), 'blocked');
-  assert.equal(accessDecision({ ...base, user: { uid: 'admin' }, administrator: true, expired: true }), 'allowed');
-});
-
-test('controller closes access once the expiry date set by the administrator arrives', async () => {
-  let authNext, policyNext, limitsNext; const blocked = new Map();
-  const f = { ready: Promise.resolve(), currentUser: () => null, administrator: () => false, recordMember: async () => {},
-    watchAuth: cb => { authNext = cb; return () => {}; }, watchWebAccess: cb => { policyNext = cb; return () => {}; },
-    watchUserAccess: (uid, cb) => { blocked.set(uid, cb); return () => {}; }, watchUserLimits: (uid, cb) => { limitsNext = cb; return () => {}; } };
-  const control = createWebAccess(async () => f, () => {}); control.start(); await flush();
-  policyNext({ requireLogin: true }); authNext({ uid: 'a' }); blocked.get('a')(false);
-  assert.equal(control.current().decision, 'allowed');
-  limitsNext({ expires: new Date(Date.now() - 1000), screens: 1 });
-  assert.equal(control.current().decision, 'expired');
-  limitsNext({ expires: null, screens: 2 });
-  assert.equal(control.current().decision, 'allowed');
-  control.stop();
-});
