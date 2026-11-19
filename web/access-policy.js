@@ -9,6 +9,7 @@ export function accessDecision(s) {
   if (!registeredAccount(s.user)) return s.policy.requireLogin ? 'login' : 'allowed';
   if (!s.blockReady) return 'loading';
   if (s.blocked) return 'blocked';
+  if (s.expired) return 'expired';
   return 'allowed';
 }
 export function mergeUserDirectory(members, profiles, access) {

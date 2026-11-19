@@ -1,6 +1,7 @@
 import { eventSport, eventSportTabs } from './event-sports.js';
 import { loadEpisodeHistory, saveEpisodeHistory, mergeEpisodeHistory, recordEpisode } from './episode-history.js';
 import { viewingSession } from './user-playback.js';
+import { LIMIT_MESSAGE, describeExpiry } from './screen-limit.js';
 import { createWebAccess } from './web-access.js';
 import { eventCover as drawEventCover } from './event-art.js';
 import { isSamsungTizen, updateAppDownload } from './app-links.js';
@@ -20,7 +21,7 @@ import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
-import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
+import { openMulti, closeMulti, multiOpen, multiPlayable, MULTI_MAX } from './multi-view.js';
 import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
@@ -672,7 +673,7 @@ function showMulti(arg) {
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
   openMulti(items, {
-    track: item => viewingSession(shared, item, undefined, true),
+    track: item => viewingSession(shared, item, undefined, true, multiLimitReached),
     onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
     onChange: selected => { multiPicks = selected.map(multiKey); history.replaceState(null, '', `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`); },
     onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
@@ -733,7 +734,7 @@ document.getElementById('ctl-multi').addEventListener('click', () => {
     hidePlayer(); inlineMulti = { hash: origin };
     openMulti([first, event], {
       sleepDeadline,
-      track: item => viewingSession(shared, item, undefined, true),
+      track: item => viewingSession(shared, item, undefined, true, multiLimitReached),
       onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
       onClose: (selected, deadline) => {
         const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
@@ -1110,7 +1111,7 @@ function startAudience(c, visit = true) {
   if (watching?.key === playbackKey) return;
   stopAudience();
   const id = sessionId();
-  const session = { key: playbackKey, id, livePlayer: !c.vod, timers: [], privateViewing: viewingSession(shared, c, id, c.vod) };
+  const session = { key: playbackKey, id, livePlayer: !c.vod, timers: [], privateViewing: viewingSession(shared, c, id, c.vod, () => screenLimitReached(session)) };
   watching = session;
   if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
@@ -1129,6 +1130,18 @@ function startAudience(c, visit = true) {
       : c.event ? [visitKey('event', c.eventId), visitKey('channel', c.channelId)] : [visitKey('channel', c.id)];
     shared().then(async (f) => { for (const key of keys) await f.recordVisit(day, key); }).catch(() => {});
   }
+}
+// Another screen of the account already uses the simultaneous playbacks it has: this one stops.
+function screenLimitReached(session) {
+  if (watching !== session) return;
+  stop();
+  stopAudience();
+  playerStatus.textContent = LIMIT_MESSAGE;
+}
+function multiLimitReached() {
+  if (!multiOpen()) return;
+  document.querySelector('.multi .multi-bar > button')?.click();
+  setTimeout(() => window.alert(LIMIT_MESSAGE), 0);
 }
 function stopAudience() {
   if (!watching) return;
@@ -1625,6 +1638,7 @@ async function route() {
         try { const f = await shared(); if (ticket !== routeVersion) return; view.replaceChildren(...signIn(el, f, route)); }
         catch { view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el inicio de sesión. Recarga para volver a intentarlo.')); }
       } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
+      else if (admission.decision === 'expired') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Tu acceso ha caducado'), el('p', {}, `Tu cuenta podía ver Calamar TV hasta el ${describeExpiry(admission.limits)}. Contacta con el administrador para renovarla.`), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
       else if (admission.decision === 'error') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'No se pudo comprobar el acceso'), el('p', {}, 'Comprueba la conexión y vuelve a intentarlo.'), el('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, 'Reintentar'), el('a', { class: 'ghost', href: '#/cuenta' }, 'Iniciar sesión')));
       else view.replaceChildren();
       return;

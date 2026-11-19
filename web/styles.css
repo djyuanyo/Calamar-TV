@@ -1529,3 +1529,8 @@ body.gate-open { overflow: hidden; }
 .account-profiles summary { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 24px; }
 .account-profiles summary::after { content: '▾'; font-size: 16px; }
 .account-dashboard .section-head h2 { font-size: clamp(19px, 3vw, 24px); }
+.user-limit-fields { display: flex; flex-wrap: wrap; gap: 14px 24px; margin: 8px 0 12px; }
+.user-limit-fields label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.user-limit-date { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.user-limit-fields input { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; color-scheme: dark; }
+.user-limit-fields input[type=number] { width: 90px; }

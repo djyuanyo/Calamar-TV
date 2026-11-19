@@ -186,6 +186,20 @@ service cloud.firestore {
           : !accountDeleted(uid));
       allow delete: if administrator() && uid != request.auth.uid && !accountDeleted(uid);
     }
+    // Expiry date and simultaneous screens the administrator gives each account (no date: no
+    // expiry; no number: one screen). Separate from calamarUserAccess, which keeps the block.
+    match /calamarUserLimits/{uid} {
+      allow get: if verifiedAccount(uid) || administrator();
+      allow list: if administrator();
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasAll(['expires', 'screens', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['expires', 'screens', 'updatedAt'])
+        && (request.resource.data.expires == null || request.resource.data.expires is timestamp)
+        && request.resource.data.screens is int
+        && request.resource.data.screens >= 1 && request.resource.data.screens <= 10
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if administrator();
+    }
     // Authenticated viewing never puts account identifiers in public audience counters.
     function viewer(uid) {
       return owner(uid) && request.auth.token.firebase.sign_in_provider != 'anonymous';
@@ -199,11 +213,14 @@ service cloud.firestore {
     function validLiveViewer(id) {
       let p = request.resource.data;
       return id.matches('^[A-Za-z0-9]{20,40}$')
-        && p.keys().hasOnly(['uid', 'target', 'title', 'profile', 'device', 'updatedAt'])
+        && p.keys().hasOnly(['uid', 'target', 'title', 'profile', 'device', 'screen', 'updatedAt'])
+        && (!('screen' in p) || (p.screen is string && p.screen.matches('^[A-Za-z0-9]{8,40}$')))
         && viewer(p.uid) && viewingFields(p) && p.updatedAt == request.time;
     }
     match /calamarLiveViewers/{id} {
       allow read: if administrator();
+      // Each account counts its own screens playing (the query asks for its uid).
+      allow list: if viewer(resource.data.uid);
       allow create: if validLiveViewer(id);
       allow update: if validLiveViewer(id) && request.resource.data.uid == resource.data.uid;
       allow delete: if viewer(resource.data.uid) || administrator();

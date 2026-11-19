@@ -265,3 +265,33 @@ test('the administrator can read profile favourites without editing them or read
   await assertFails(setDoc(doc(admin(), path), data));
   await assertFails(getDoc(doc(admin(), 'calamarUsers/viewer/progress/main')));
 });
+
+test('the administrator sets expiry and screens; the account only reads its own', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const path = 'calamarUserLimits/viewer';
+  const limits = { expires: new Date('2030-01-01T00:00:00Z'), screens: 2, updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(admin(), path), limits));
+  await assertSucceeds(setDoc(doc(admin(), path), { ...limits, expires: null }));
+  await assertFails(setDoc(doc(admin(), path), { ...limits, screens: 0 }));
+  await assertFails(setDoc(doc(admin(), path), { ...limits, screens: 11 }));
+  await assertFails(setDoc(doc(admin(), path), { ...limits, expires: 'mañana' }));
+  await assertFails(setDoc(doc(admin(), path), { ...limits, blocked: true }));
+  await assertSucceeds(getDoc(doc(owner, path)));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(owner, path), { ...limits, screens: 10 }));
+  await assertFails(getDocs(collection(owner, 'calamarUserLimits')));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarUserLimits')));
+});
+
+test('an account lists only its own screens playing, each with its screen id', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const data = { uid: 'viewer', target: 'c:la-1', title: 'La 1', profile: 'Principal', device: 'web', screen: 'tab0123456789', updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(owner, 'calamarLiveViewers/ABCDEF0123456789ABCDEF0123'), data));
+  await assertFails(setDoc(doc(owner, 'calamarLiveViewers/ABCDEF0123456789ABCDEF0124'), { ...data, screen: 'no vale' }));
+  const mine = query(collection(owner, 'calamarLiveViewers'), where('uid', '==', 'viewer'));
+  assert.equal((await assertSucceeds(getDocs(mine))).size, 1);
+  await assertFails(getDocs(collection(owner, 'calamarLiveViewers')));
+  await assertFails(getDocs(query(collection(other, 'calamarLiveViewers'), where('uid', '==', 'viewer'))));
+});
