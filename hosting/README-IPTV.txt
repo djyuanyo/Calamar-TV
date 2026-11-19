@@ -8,6 +8,15 @@ LISTA IPTV DE CALAMAR TV (WisePlay, TiviMate, IPTV Smarters, VLC…)
    Solo canales (sin películas ni series):
       https://calamarmenciano.com/calamar-iptv.php?clave=TU_CLAVE&solo=canales
 
+LISTAS DE CADA USUARIO
+En Administración → Usuarios → Editar (un usuario) → «Lista IPTV»:
+- «Crear lista» le crea un enlace con una contraseña aleatoria: cópialo y dáselo.
+- Pon el último día que funciona (vacío: sin caducidad) y «Guardar caducidad». Al pasar ese día, su
+  app IPTV ve «Esta lista de Calamar TV ha caducado».
+- «Nueva contraseña» cambia el enlace (el anterior deja de funcionar) y «Borrar lista» lo anula.
+- Bloquear o eliminar la cuenta no borra su lista: bórrala también si quieres cortarle el acceso.
+Hace falta haber publicado las reglas nuevas de Firestore (firebase/firestore.rules).
+
 La lista se genera de nuevo cada vez que la app la carga o la actualiza: los canales, películas, series
 y documentales que cambies en Administración salen solos, sin subir nada más.
 

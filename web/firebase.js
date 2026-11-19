@@ -409,6 +409,35 @@ export async function hideViewing({ uid, id }, finished) {
   ] : [])]);
 }
 
+// ---- Private IPTV list of each account (web/iptv-lists.js) ------------------------------------
+const iptvLists = () => collection(db, 'calamarIptvLists');
+const iptvList = s => ({ token: s.id, uid: s.data().uid, expires: s.data().expires?.toDate?.() || null });
+export async function readIptvList(uid) {
+  requireAdministrator();
+  const found = await getDocs(query(iptvLists(), where('uid', '==', uid)));
+  return found.empty ? null : iptvList(found.docs[0]);
+}
+/** A new password: the account's earlier list stops working at once. */
+export async function createIptvList(uid, token, expires) {
+  requireAdministrator();
+  const before = await getDocs(query(iptvLists(), where('uid', '==', uid)));
+  const batch = writeBatch(db);
+  for (const old of before.docs) batch.delete(old.ref);
+  batch.set(doc(iptvLists(), token), { uid, expires: expires || null, updatedAt: serverTimestamp() });
+  await batch.commit();
+  return { token, uid, expires: expires || null };
+}
+export async function saveIptvExpiry(token, uid, expires) {
+  requireAdministrator();
+  await setDoc(doc(iptvLists(), token), { uid, expires: expires || null, updatedAt: serverTimestamp() });
+  return { token, uid, expires: expires || null };
+}
+export async function deleteIptvList(uid) {
+  requireAdministrator();
+  const found = await getDocs(query(iptvLists(), where('uid', '==', uid)));
+  await Promise.all(found.docs.map(d => deleteDoc(d.ref)));
+}
+
 function requireAdministrator() {
   if (!administrator()) throw Error('Entra con la cuenta de administración.');
 }

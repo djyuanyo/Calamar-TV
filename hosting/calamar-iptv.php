@@ -1,6 +1,7 @@
 <?php
 // Calamar TV as an IPTV list (M3U) for WisePlay, TiviMate, IPTV Smarters, VLC…
-//   https://calamarmenciano.com/calamar-iptv.php?clave=TU_CLAVE
+//   https://calamarmenciano.com/calamar-iptv.php?clave=TU_CLAVE    (yours, key in calamar-iptv-key.php)
+//   https://calamarmenciano.com/calamar-iptv.php?lista=…           (a user's, made in Administración → Usuarios)
 // The list is made again each time the app asks for it, from the published catalog: the channels
 // (yours and the TDT list), films, series and documentaries. Whatever you change in Administración
 // appears on the next refresh of the app, with nothing to upload.
@@ -170,10 +171,33 @@ function iptvLibrary(&$out) {
     return $count;
 }
 
-$key = iptvKey();
-if (strlen($key) < 16 || $key === 'CAMBIA_ESTA_CLAVE_POR_UNA_LARGA') iptvFail(503, 'Falta la clave de la lista: edita calamar-iptv-key.php (mira README-IPTV.txt).');
-$given = isset($_GET['clave']) && is_string($_GET['clave']) ? $_GET['clave'] : '';
-if (!hash_equals($key, $given)) { usleep(500000); iptvFail(403, 'Clave no válida.'); }
+/**
+ * A user's list (?lista=…), made in Administración → Usuarios: calamarIptvLists/<password>, with its
+ * expiry date (none: it always works). Returns null when it does not exist or has expired.
+ */
+function iptvUserList($token) {
+    if (!preg_match('/^[A-Za-z0-9]{32}$/D', $token)) return 'missing';
+    $body = iptvGet('https://firestore.googleapis.com/v1/projects/' . IPTV_PROJECT . '/databases/(default)/documents/calamarIptvLists/'
+        . $token . '?key=' . IPTV_API_KEY);
+    if ($body === null) return 'missing';
+    $doc = json_decode($body, true);
+    $expires = $doc['fields']['expires']['timestampValue'] ?? null;
+    if (is_string($expires) && strtotime($expires) !== false && strtotime($expires) <= time()) return 'expired';
+    return is_array($doc) && isset($doc['fields']['uid']) ? 'ok' : 'missing';
+}
+
+if (isset($_GET['lista']) && is_string($_GET['lista'])) {
+    try { $state = iptvUserList($_GET['lista']); }
+    catch (Throwable $error) { iptvFail(502, 'No se pudo comprobar la lista. Vuelve a intentarlo en unos minutos.'); }
+    if ($state === 'expired') iptvFail(403, 'Esta lista de Calamar TV ha caducado. Contacta con el administrador.');
+    if ($state !== 'ok') { usleep(500000); iptvFail(403, 'Lista no válida.'); }
+} else {
+    // The administrator's own list, with the key of calamar-iptv-key.php.
+    $key = iptvKey();
+    if (strlen($key) < 16 || $key === 'CAMBIA_ESTA_CLAVE_POR_UNA_LARGA') iptvFail(503, 'Falta la clave de la lista: edita calamar-iptv-key.php (mira README-IPTV.txt).');
+    $given = isset($_GET['clave']) && is_string($_GET['clave']) ? $_GET['clave'] : '';
+    if (!hash_equals($key, $given)) { usleep(500000); iptvFail(403, 'Clave no válida.'); }
+}
 
 try {
     $custom = iptvDocument('calamarCatalog/custom');
