@@ -31,6 +31,42 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
+  @Test public void importedIframeAndDirectSourceUseDifferentPlayers() throws Exception {
+    String embed = "https://zicotv.gcorecdn.com/api/player/4";
+    String direct = "https://example.invalid/live.m3u8";
+    Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
+        .putExtra("page_url", embed).putExtra("title", "Evento con dos señales")
+        .putStringArrayListExtra("channel_streams", new java.util.ArrayList<>(java.util.Arrays.asList(embed, direct)));
+    Field browser = NativePlayerActivity.class.getDeclaredField("browser");
+    Field player = NativePlayerActivity.class.getDeclaredField("player");
+    Field button = NativePlayerActivity.class.getDeclaredField("sourceButton");
+    browser.setAccessible(true);
+    player.setAccessible(true);
+    button.setAccessible(true);
+    try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
+      AtomicBoolean opened = new AtomicBoolean();
+      long deadline = SystemClock.elapsedRealtime() + 10000;
+      while (!opened.get() && SystemClock.elapsedRealtime() < deadline) {
+        scenario.onActivity(activity -> {
+          try {
+            if (browser.get(activity) == null) return;
+            assertNull(player.get(activity));
+            opened.set(((android.widget.Button) button.get(activity)).performClick());
+          } catch (IllegalAccessException failure) { throw new AssertionError(failure); }
+        });
+        if (!opened.get()) SystemClock.sleep(100);
+      }
+      assertTrue("The public iframe should open without a hosting lookup", opened.get());
+      onView(withText("Evento con dos señales · Señal 1")).inRoot(isDialog()).perform(click());
+      scenario.onActivity(activity -> {
+        try {
+          assertNull("Switching source must destroy the iframe", browser.get(activity));
+          assertNotNull("The direct HLS source must use Media3", player.get(activity));
+        } catch (IllegalAccessException failure) { throw new AssertionError(failure); }
+      });
+    }
+  }
+
   @Test public void hostingFailureNeverContactsProviderOrOpensWebPlayer() throws Exception {
     NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
     Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);

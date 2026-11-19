@@ -52,8 +52,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private boolean castPlayback;
   private Button sourceButton;
   private Button youtubeLink;
-  private View youtubeFullscreen;
-  private WebChromeClient.CustomViewCallback youtubeFullscreenCallback;
+  private View webFullscreen;
+  private WebChromeClient.CustomViewCallback webFullscreenCallback;
   private SleepTimer sleepTimer;
   private static final int MULTI_PLAYER = 12;
   private final Handler handler = new Handler(Looper.getMainLooper());
@@ -247,7 +247,6 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       directUrls.removeIf(UserChannels::isPage);
     }
     // A channel whose first link is a page starts with that page; its direct links wait their turn.
-    if (pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
     boolean startWithPage = everything != null && pageUrl != null;
     directUrl = startWithPage || directUrls.isEmpty() ? null : directUrls.get(0);
     if (directUrl == null && pageUrl == null && !channelPages.isEmpty()) pageUrl = channelPages.get(0);
@@ -707,6 +706,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playDirect();
       return;
     }
+    if (ProviderPlayers.zicoFramePage(pageUrl) != null) {
+      openWeb();
+      return;
+    }
     if (AppSources.zico(pageUrl) && !zicoPage() && !VideoResolver.isMedia(pageUrl)) {
       problem("Usa el enlace de canal o evento de Zico TV.");
       return;
@@ -775,7 +778,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
             if (eventApi != null) {
               PlayerDocument.Result hosted = null;
               List<VideoResolver.Source> players = java.util.Collections.emptyList();
-              if (throughHosting) {
+              if (throughHosting && !ProviderPlayers.ZICO_EMBED_HOST.equalsIgnoreCase(Uri.parse(requestedPage).getHost())) {
                 try {
                   hosted = HostingPlayback.event(requestedPage, requestedHosting, NetworkTransport.get(DnsProvider.SYSTEM));
                   players = VideoResolver.eventPlayers(hosted.html);
@@ -1472,7 +1475,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       actions.add(() -> selectChannelAddress(address, false));
     }
     for (String address : pages) {
-      if (AppSources.zico(address) && address.equals(pageUrl)) continue;
+      if (zicoPage() && AppSources.zico(address) && address.equals(pageUrl)) continue;
       if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
       names.add(HostingPlayback.label(eventSourceNames.get(address), HostingPlayback.label(title, "Canal") + " · Señal " + (++number)));
       actions.add(() -> selectChannelAddress(address, true));
@@ -1563,11 +1566,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   private void openWeb() {
     if (!active) return;
-    if (AppSources.zico(pageUrl) || AppSources.zico(documentUrl)) {
+    final String zicoFrame = ProviderPlayers.zicoFramePage(pageUrl);
+    if (zicoFrame == null && (AppSources.zico(pageUrl) || AppSources.zico(documentUrl))) {
       problem("No hay una señal de Zico TV disponible. Prueba otra fuente.");
       return;
     }
-    setFullscreen(false); // The web page has no controller, so the panel must be there.
+    if (zicoFrame == null) setFullscreen(false);
     ++generation;
     resolving = false;
     diagnosing = false;
@@ -1576,11 +1580,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     releasePlayer();
     clearWeb();
     webMode = true;
+    if (zicoFrame != null) {
+      hostingPlayback = false;
+      sources.clear();
+      setFullscreen(matchCenter == null);
+    }
     playerView.setVisibility(View.GONE);
     browser = new WebView(this);
     final int browserGeneration = generation;
     final String youtube = Library.Media.youtubeEmbed(pageUrl);
-    final String embed = youtube == null ? ProviderPlayers.embed(pageUrl) : youtube;
+    final String providerPage = zicoFrame != null ? zicoFrame : ProviderPlayers.embed(pageUrl);
+    final String embed = youtube != null ? youtube : providerPage;
     browser.getSettings().setJavaScriptEnabled(true);
     if (embed != null) browser.getSettings().setMediaPlaybackRequiresUserGesture(false);
     browser.getSettings().setDomStorageEnabled(true);
@@ -1591,6 +1601,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         new PlaybackWebClient() {
           @Override
           public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            if (zicoFrame != null) return !zicoFrame.equals(url);
             if (youtube != null) {
               Uri candidate = Uri.parse(url);
               Uri player = Uri.parse(youtube);
@@ -1608,8 +1619,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
           @Override
           public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
-            if (youtube != null && request.isForMainFrame() && active && browser == view && generation == browserGeneration)
-              problem("No se pudo cargar el reproductor de YouTube.");
+            if ((youtube != null || zicoFrame != null) && request.isForMainFrame() && active && browser == view && generation == browserGeneration)
+              problem(zicoFrame != null ? "No se pudo cargar el reproductor de ZicoTV." : "No se pudo cargar el reproductor de YouTube.");
           }
 
           @Override
@@ -1644,26 +1655,36 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 });
           }
         });
-    stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
+    stage.addView(browser, 0, new FrameLayout.LayoutParams(-1, -1));
+    if (zicoFrame != null && fullscreen) {
+      panel.setVisibility(View.GONE);
+      browser.setOnTouchListener((view, event) -> {
+        if (event.getAction() == android.view.MotionEvent.ACTION_UP && fullscreen) {
+          panel.setVisibility(View.VISIBLE);
+          handler.removeCallbacks(hideWebPanel);
+          handler.postDelayed(hideWebPanel, 4000);
+        }
+        return false;
+      });
+    }
     status.setText(embed == null ? "Modo web · Pulsa ▶ para detectar el vídeo." : "Abriendo reproductor…");
-    if (youtube == null) browser.loadUrl(embed == null ? pageUrl : embed);
-    else {
-      youtubeLink.setVisibility(View.VISIBLE);
+    if (youtube != null || zicoFrame != null) {
+      if (youtube != null) youtubeLink.setVisibility(View.VISIBLE);
       browser.setWebChromeClient(new WebChromeClient() {
         @Override public void onShowCustomView(View view, CustomViewCallback callback) {
-          if (!active || youtubeFullscreen != null) { callback.onCustomViewHidden(); return; }
-          youtubeFullscreen = view;
-          youtubeFullscreenCallback = callback;
+          if (!active || webFullscreen != null) { callback.onCustomViewHidden(); return; }
+          webFullscreen = view;
+          webFullscreenCallback = callback;
           setFullscreen(true);
           stage.addView(view, new FrameLayout.LayoutParams(-1, -1));
           view.requestFocus();
         }
 
-        @Override public void onHideCustomView() { closeYouTubeFullscreen(); }
+        @Override public void onHideCustomView() { closeWebFullscreen(); }
       });
-      // The embedded player needs the identity of its host in the HTTP Referer.
-      browser.loadUrl(youtube, java.util.Collections.singletonMap("Referer", "https://es.yuanyo.calamartv/"));
     }
+    if (youtube != null) browser.loadUrl(youtube, java.util.Collections.singletonMap("Referer", "https://es.yuanyo.calamartv/"));
+    else browser.loadUrl(embed == null ? pageUrl : embed);
     browser.requestFocus();
   }
 
@@ -1676,12 +1697,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
   }
 
-  private void closeYouTubeFullscreen() {
-    if (youtubeFullscreen == null) return;
-    stage.removeView(youtubeFullscreen);
-    youtubeFullscreen = null;
-    WebChromeClient.CustomViewCallback callback = youtubeFullscreenCallback;
-    youtubeFullscreenCallback = null;
+  private void closeWebFullscreen() {
+    if (webFullscreen == null) return;
+    stage.removeView(webFullscreen);
+    webFullscreen = null;
+    WebChromeClient.CustomViewCallback callback = webFullscreenCallback;
+    webFullscreenCallback = null;
     setFullscreen(false);
     callback.onCustomViewHidden();
     if (browser != null) browser.requestFocus();
@@ -1689,7 +1710,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override @SuppressWarnings("deprecation")
   public void onBackPressed() {
-    if (youtubeFullscreen != null) closeYouTubeFullscreen();
+    if (webFullscreen != null) closeWebFullscreen();
     else super.onBackPressed();
   }
 
@@ -1781,8 +1802,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     }
   }
 
+  private final Runnable hideWebPanel = () -> {
+    if (webMode && fullscreen && !panel.hasFocus()) panel.setVisibility(View.GONE);
+  };
+
   private void clearWeb() {
-    closeYouTubeFullscreen();
+    handler.removeCallbacks(hideWebPanel);
+    closeWebFullscreen();
     if (youtubeLink != null) youtubeLink.setVisibility(View.GONE);
     if (browser != null) {
       browser.stopLoading();

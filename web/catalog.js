@@ -1,7 +1,7 @@
 import { madridDay } from './audience.js';
 import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
-import { renewablePage, zicoChannelPlayer, zicoHost } from './zico-channel.js';
+import { renewablePage, zicoChannelPlayer, zicoHost, zicoPublicIframe } from './zico-channel.js';
 export { renewablePage } from './zico-channel.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
@@ -307,6 +307,8 @@ export function webPlayback(url, { pages = false } = {}) {
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  const iframe = pages && zicoPublicIframe(url);
+  if (iframe) return { ok: true, kind: 'frame', page: true, address: iframe };
   if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
   if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
   if (pages && zicoHost(u.hostname)) return { ok: false, reason: 'Usa el enlace de canal o evento de Zico TV' };
