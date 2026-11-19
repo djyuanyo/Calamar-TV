@@ -5,6 +5,16 @@ import org.json.*;
 import org.junit.Test;
 
 public class LibraryTest {
+  @Test public void readsTheTitleLogoSeparatelyFromPlatformLogos() throws Exception {
+    JSONObject title = new JSONObject();
+    assertEquals("", new Library.Item(title).titleLogo);
+    title.put("tmdb", new JSONObject().put("titleLogo", "https://image.tmdb.org/t/p/w500/title.png")
+        .put("logos", new JSONObject().put("Plataforma", "https://image.tmdb.org/t/p/w92/platform.png")));
+    Library.Item item = new Library.Item(title);
+    assertEquals("https://image.tmdb.org/t/p/w500/title.png", item.titleLogo);
+    assertEquals("https://image.tmdb.org/t/p/w92/platform.png", item.logos.get("Plataforma"));
+  }
+
   @Test public void manualTrailerOverridesAndEmptyUsesImage() throws Exception {
     JSONObject title = new JSONObject().put("tmdb", new JSONObject().put("trailer", "abcdefghijk"));
     assertEquals("abcdefghijk", new Library.Item(title).trailer);
@@ -13,6 +23,20 @@ public class LibraryTest {
     title.put("trailerUrl", "");
     assertEquals("", new Library.Item(title).trailer);
     assertEquals("", Library.youtubeTrailer("https://youtube.com.evil.test/watch?v=abcdefghijk"));
+  }
+
+  @Test public void acceptsYouTubeVideosAsCatalogueSources() throws Exception {
+    String watch = "https://www.youtube.com/watch?v=12345678901&list=PLExample";
+    String embed = "https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0";
+    for (String url : Arrays.asList(watch, "https://youtu.be/12345678901?si=test",
+        "https://m.youtube.com/shorts/12345678901", "https://www.youtube.com/live/12345678901", embed)) {
+      assertTrue(Library.Media.allowed(url));
+      assertEquals(embed, Library.Media.youtubeEmbed(url));
+    }
+    assertFalse(Library.Media.allowed("https://youtube.com.evil.test/watch?v=12345678901"));
+    assertFalse(Library.Media.allowed("https://www.youtube.com/playlist?list=PLExample"));
+    assertFalse(Library.Media.allowed("12345678901"));
+    assertEquals(watch, new Library.Item(new JSONObject().put("url", watch)).entry("movies", null).getString("url"));
   }
 
   private static final String JSON = "{\"sections\":{"
@@ -32,7 +56,6 @@ public class LibraryTest {
     assertEquals("2009 · 162 min · ★ 7,6 (32.000)", avatar.facts());
     assertEquals("Sam Worthington", avatar.cast.get(0)[0]);
     assertTrue(data.items("documentaries").isEmpty());
-    assertEquals("TMDB", data.attribution);
   }
 
   @Test public void groupsEpisodesBySeasonInOrder() throws Exception {
@@ -121,6 +144,31 @@ public class LibraryTest {
     assertEquals("movies", data.sectionOf(top.get(0)));
     assertEquals("m5", data.find("movies", "m5").id);
     assertNull(data.find("series", "m5"));
+  }
+
+  @Test public void documentariesHaveTheSameTopOnHomeAndTheirSection() throws Exception {
+    JSONArray documentaries = new JSONArray();
+    String url = "https://calamarmenciano.com/documentary.mp4";
+    assertTrue(Library.Media.allowed(url));
+    for (int i = 1; i <= 12; i++) {
+      JSONObject documentary = new JSONObject().put("id", "d" + i).put("tmdb", new JSONObject().put("id", i).put("votes", i));
+      if (i % 2 == 0) {
+        JSONObject episode = new JSONObject().put("id", "e1").put("season", 1).put("episode", 1).put("url", url);
+        documentary.put("kind", "tv").put("episodes", new JSONArray().put(episode));
+      } else documentary.put("kind", "movie").put("url", url);
+      documentaries.put(documentary);
+    }
+    Library.Data data = new Library.Data(new JSONObject().put("sections", new JSONObject().put("documentaries", documentaries)));
+    List<Library.Item> top = data.top("documentaries");
+    assertEquals(10, top.size());
+    assertEquals("d12", top.get(0).id);
+    List<Library.Row> rows = Library.browseRows("documentaries", data.items("documentaries"), new HashSet<>(), "", 0);
+    Library.Row row = rows.stream().filter(r -> r.key.equals("top")).findFirst().get();
+    assertEquals("Top 10 de documentales", row.title);
+    assertEquals(top, row.items);
+    documentaries.getJSONObject(0).put("trend", 1);
+    Library.Data ranked = new Library.Data(new JSONObject().put("sections", new JSONObject().put("documentaries", documentaries)));
+    assertEquals("d1", ranked.top("documentaries").get(0).id);
   }
 
   @Test public void visibilityIsAnOptionalBoolean() throws Exception {
@@ -353,5 +401,67 @@ public class LibraryTest {
     List<String> labels = new ArrayList<>();
     for (String[] slide : Library.gateSlides(data, 12)) labels.add(slide[0] + " · " + slide[2]);
     assertEquals(Arrays.asList("Peli 1 · N.º 1 en películas hoy", "Serie 1 · N.º 1 en series hoy", "Peli 2 · N.º 2 en películas hoy", "Serie 2 · N.º 2 en series hoy"), labels);
+  }
+
+  @Test public void syncsEpisodeHistoryWithTheWebAndOpensTheMostRecentSeason() throws Exception {
+    assertEquals("eh02fb12f26b07e1a2c6", EpisodeHistory.documentId("p123", "documentales", "s42"));
+    Library.Item item = new Library.Data(new JSONObject(JSON)).items("series").get(0);
+    JSONObject first = new JSONObject().put("recent", new JSONObject().put("episode", "e1").put("at", 90))
+        .put("watched", new JSONObject().put("e1", 90));
+    JSONObject second = new JSONObject().put("recent", new JSONObject().put("episode", "e3").put("at", 30))
+        .put("watched", new JSONObject().put("e3", 30));
+    JSONObject history = EpisodeHistory.merge(first, second);
+    assertEquals(90L, EpisodeHistory.watchedAt(history, "e1"));
+    assertEquals(30L, EpisodeHistory.watchedAt(history, "e3"));
+    assertEquals(10, Library.defaultSeason(item, new JSONObject(), history));
+    assertEquals("e2", Library.resumeEpisode(item, new JSONObject(), history).id);
+    JSONObject newer = new JSONObject().put("e3", new JSONObject().put("at", 100));
+    assertEquals(1, Library.defaultSeason(item, newer, history));
+  }
+
+  @Test public void listsDatedPremieresWithoutStartingThem() throws Exception {
+    JSONObject metadata = new JSONObject().put("season", 2).put("episode", 1)
+        .put("name", "Estreno").put("aired", "2099-11-12");
+    JSONObject uploaded = new JSONObject().put("season", 1).put("episode", 1).put("id", "e1")
+        .put("url", "https://calamarmenciano.com/S/0.mkv");
+    Library.Item item = new Library.Item(new JSONObject().put("id", "spaco").put("kind", "tv")
+        .put("episodes", new JSONArray().put(uploaded)).put("tmdb", new JSONObject().put("nextEpisode", metadata)));
+    Library.Episode premiere = item.seasons().get(2).get(0);
+    assertTrue(premiere.upcoming());
+    assertEquals("Temporada 2 el 12 de noviembre de 2099", item.premiereNotice("2099-11-11"));
+    assertEquals(1, Library.defaultSeason(item, new JSONObject(), new JSONObject()));
+    assertFalse(item.seasons("2099-11-12").get(2).get(0).available());
+    assertEquals("Estrenado Ayer", item.seasons("2099-11-13").get(2).get(0).premiereLabel("2099-11-13"));
+    assertFalse(item.seasons("2099-11-14").containsKey(2));
+    assertEquals("Estreno el 12 de noviembre de 2099", premiere.premiereLabel("2099-11-11"));
+    assertNull(item.next(item.episode("e1")));
+    assertEquals("e1", Library.resumeEpisode(item, new JSONObject()).id);
+    JSONObject regular = new JSONObject().put("season", 1).put("episode", 2).put("aired", "2099-11-12");
+    JSONObject seasonDate = new JSONObject().put("season", 2).put("aired", "2099-11-14");
+    JSONObject tmdb = new JSONObject().put("nextEpisode", regular);
+    JSONObject series = new JSONObject().put("kind", "tv").put("tmdb", tmdb);
+    assertEquals("Próximo estreno · T1:E2 · Estreno el 12 de noviembre de 2099",
+        new Library.Item(series).premiereNotice("2099-11-11"));
+    assertEquals("Estreno Hoy · T1:E2", new Library.Item(series).premiereNotice("2099-11-12"));
+    tmdb.remove("nextEpisode");
+    tmdb.put("lastEpisode", regular);
+    JSONObject linked = new JSONObject().put("season", 1).put("episode", 2).put("id", "e2")
+        .put("url", "https://calamarmenciano.com/S/2.mkv");
+    series.put("episodes", new JSONArray().put(linked));
+    assertEquals("Estrenado Hoy · T1:E2", new Library.Item(series).premiereNotice("2099-11-12"));
+    tmdb.put("seasonPremieres", new JSONArray().put(seasonDate));
+    assertEquals("Temporada 2 el 14 de noviembre de 2099", new Library.Item(series).premiereNotice("2099-11-11"));
+    assertTrue(new Library.Item(series).premiereNotice("2099-11-15").isEmpty());
+  }
+
+  @Test public void premiereLabelsUseMadridDaysAcrossYearBoundaries() throws Exception {
+    String today = Library.madridDay(SportsCatalog.instant("2026-12-31T23:30:00Z"));
+    assertEquals("2027-01-01", today);
+    JSONObject data = new JSONObject().put("id", "pending").put("aired", today);
+    assertEquals("Estreno Hoy", new Library.Episode(data).premiereLabel(today));
+    data.put("url", "https://calamarmenciano.com/S/2.mkv");
+    assertEquals("Estrenado Hoy", new Library.Episode(data).premiereLabel(today));
+    assertEquals("Estrenado Ayer", new Library.Episode(data, "2026-12-31").premiereLabel(today));
+    assertEquals("", new Library.Episode(data, "2026-12-30").premiereLabel(today));
   }
 }

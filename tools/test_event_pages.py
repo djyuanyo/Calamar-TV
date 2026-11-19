@@ -111,6 +111,21 @@ class SharePreviewTest(unittest.TestCase):
         self.assertEqual(python, web)
         self.assertEqual([x[1] for x in python], ['la-1', 'la-1-2', 'solo-web'])
 
+    def test_manual_match_cover_keeps_registered_team_crests(self):
+        import io
+        import sys
+        from PIL import Image
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import share_images
+        images = share_images.Images(opener=lambda url: png({'cover': (10, 10, 10, 255),
+            'home': (0, 150, 70, 255), 'away': (200, 20, 40, 255)}[url.rsplit('/', 1)[-1]]))
+        event = {'cover': 'https://img.example/cover', 'homeTeamId': 'h', 'awayTeamId': 'a'}
+        catalog = {'teams': [{'id': 'h', 'logo': 'https://img.example/home'}, {'id': 'a', 'logo': 'https://img.example/away'}]}
+        with Image.open(io.BytesIO(pages.event_preview(event, catalog, images))) as rendered:
+            self.assertGreater(rendered.getpixel((270, 315))[1], 120)
+            self.assertGreater(rendered.getpixel((930, 315))[0], 170)
+            self.assertLess(max(rendered.getpixel((50, 50))), 25)
+
     def test_every_page_gets_its_card_as_preview_image(self):
         import sys
         from PIL import Image
@@ -137,9 +152,14 @@ class SharePreviewTest(unittest.TestCase):
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/canal/la-1"', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             self.assertIn('Deportes · En directo en Calamar TV', (root / 'canal/la-1/index.html').read_text(encoding='utf-8'))
             # Each league has its own page to share: its logo large in the middle, opening #/liga/<slug>.
+            live = (root / 'directo/index.html').read_text(encoding='utf-8')
+            self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/directo"', live)
+            self.assertIn('content="https://djyuanyo.github.io/Calamar-TV/directo/"', live)
+            self.assertIn('Eventos En Directo', live)
+            self.assertTrue((root / 'directo/vista.jpg').is_file())
             league = (root / 'liga/laliga/index.html').read_text(encoding='utf-8')
             self.assertIn('url=https://djyuanyo.github.io/Calamar-TV/#/liga/laliga"', league)
-            self.assertIn('Todos los partidos de LaLiga con canal, en Calamar TV', league)
+            self.assertIn('Los partidos de LaLiga con enlace de esta semana, en Calamar TV', league)
             with Image.open(root / 'liga/laliga/vista.jpg') as opened:
                 self.assertGreater(min(opened.convert('RGB').getpixel((600, 315))), 200)
             # The background that does not answer is left out; each image is read once.

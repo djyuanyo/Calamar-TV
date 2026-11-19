@@ -1,3 +1,9 @@
+import { usersAdmin } from './users-admin.js';
+import { mergeUserDirectory } from './access-policy.js';
+import { zicoChannelPlayer } from './zico-channel.js';
+import { viewerDevice } from './user-playback.js';
+import * as userService from './firebase.js';
+import { coverFromFile } from './image-file.js';
 import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
@@ -6,7 +12,11 @@ import { validCover, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
+import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
+import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, editedZicoEventStreams } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
+import { aceContentId, resolveAceStreams } from './acestream.js';
+import { vpsPanel } from './vps-panel.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
 // reads their calendars from ESPN again and publishes the weeks that come in, in a single save.
@@ -31,7 +41,8 @@ async function refreshCalendars(rerender) {
     try { localStorage.setItem(CALENDARS_KEY, String(Date.now())); } catch {}
     notice = `Guardado. Calendarios actualizados: ${seasons.length} competiciones con sus próximas 5 semanas.`;
   } catch (error) { notice = `No se pudieron actualizar los calendarios: ${explain(error)}`; }
-  if (location.hash.startsWith('#/admin')) rerender();
+  // Calendar changes do not affect the channel list. Keep a channel draft on screen.
+  if (location.hash.startsWith('#/admin/') && !location.hash.startsWith('#/admin/editar/')) rerender();
 }
 
 let saving = false;
@@ -73,32 +84,58 @@ function slug(text) {
 
 function validStreams(text) {
   const out = [];
-  for (const line of text.split(/\s+/)) {
+  const inputs = text.split(/\r?\n/).flatMap(line => /^acestream:/i.test(line.trim()) ? [line.trim()] : line.split(/\s+/));
+  for (const line of inputs) {
     if (!line) continue;
+    if (aceContentId(line)) {
+      out.push(line);
+      continue;
+    }
     let url;
     try {
       url = new URL(line);
     } catch {
       throw new Error(`Enlace no válido: ${line}`);
     }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Solo se admiten enlaces http(s): ${line}`);
-    if (!out.includes(url.href)) out.push(url.href);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Usa un enlace HTTP, HTTPS o Ace Stream válido: ${line}`);
+    const source = zicoChannelPlayer(url.href) || url.href;
+    if (!out.includes(source)) out.push(source);
   }
   if (!out.length) throw new Error('Añade al menos un enlace');
   return out;
 }
 
+function publishableStreams(links) {
+  return resolveAceStreams(links, async () => {
+    if (!administrator()) throw new Error('Entra con la cuenta de administración de Google.');
+    return auth.currentUser.getIdToken();
+  });
+}
+
 /** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
-function allCategories(state) {
-  const list = categoryList(file.data);
-  const used = [...merge(state.tdt || { channels: [] }, null).map((c) => c.category), ...file.data.channels.map((c) => c.group || OWN_GROUP)];
+function allCategories(state, data = file.data) {
+  const list = categoryList(data);
+  const used = [...merge(state.tdt || { channels: [] }, null).map((c) => c.category), ...data.channels.map((c) => c.group || OWN_GROUP)];
   for (const g of used) if (!list.some((c) => c.id === g || c.name === g)) list.push({ id: g, name: g, color: defaultColor(g) });
   return list;
 }
 
+async function saveChannel(change, retryConflict) {
+  if (!file) await loadFile();
+  file.data = change(file.data);
+  try {
+    await saveFile();
+  } catch (error) {
+    // saveFile has reloaded the catalog. Reapply a new channel once over concurrent changes.
+    if (!retryConflict || error.code !== 'catalog-conflict' || !file) throw error;
+    file.data = change(file.data);
+    await saveFile();
+  }
+}
+
 const NEW_GROUP = '\u0000nueva';
 function channelForm(existing, rerender, state) {
-  const data = file.data;
+  let draftId = existing?.id;
   const name = el('input', { required: true, value: existing ? existing.name : '' });
   // Pick an existing category or write a new one.
   const categories = allCategories(state);
@@ -110,44 +147,90 @@ function channelForm(existing, rerender, state) {
   groupNewField.hidden = groupSelect.value !== NEW_GROUP;
   groupSelect.addEventListener('change', () => { groupNewField.hidden = groupSelect.value !== NEW_GROUP; if (!groupNewField.hidden) groupNew.focus(); });
   const group = { get value() { return groupSelect.value === NEW_GROUP ? groupNew.value : groupSelect.value; } };
-  const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: existing ? existing.logo || '' : '' });
+  let selectedLogo = existing?.logo || '', imageRevision = 0, preparingLogo = false, submitting = false;
+  const logo = el('input', { type: 'url', placeholder: 'https://…/logo.png', value: selectedLogo.startsWith('https://') ? selectedLogo : '' });
+  const preview = el('img', { class: 'channel-logo-preview', alt: 'Vista previa del logo del canal', hidden: true });
+  const updatePreview = () => { preview.hidden = !validCover(selectedLogo); if (!preview.hidden) preview.src = selectedLogo; else preview.removeAttribute('src'); };
+  const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
   const streams = el('textarea', { required: true, placeholder: 'https://servidor/canal/index.m3u8', spellcheck: 'false' }, existing ? (existing.streams || []).join('\n') : '');
-  const star = el('input', { type: 'checkbox', checked: existing ? data.featured.includes(existing.id) : false });
+  const star = el('input', { type: 'checkbox', checked: existing ? file.data.featured.includes(existing.id) : false });
   const status = el('p', { class: 'note', 'aria-live': 'polite' });
+  const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
+    const image = upload.files?.[0]; if (!image) return;
+    const request = ++imageRevision; preparingLogo = true; submit.disabled = true;
+    status.className = 'note'; status.textContent = 'Preparando imagen…';
+    try {
+      const prepared = await coverFromFile(image, [512, 384, 256, 192]);
+      if (request !== imageRevision) return;
+      selectedLogo = prepared; logo.value = ''; updatePreview(); status.textContent = 'Imagen preparada.';
+    } catch (error) {
+      if (request === imageRevision) { status.textContent = error.message; status.className = 'error'; }
+    } finally {
+      if (request === imageRevision) { preparingLogo = false; submit.disabled = submitting; }
+    }
+  } });
+  logo.addEventListener('input', () => {
+    imageRevision++; preparingLogo = false; submit.disabled = submitting; upload.value = '';
+    selectedLogo = logo.value.trim(); updatePreview(); status.textContent = ''; status.className = 'note';
+  });
+  const clearLogo = el('button', { class: 'ghost', type: 'button', onclick: () => {
+    logo.value = ''; logo.dispatchEvent(new Event('input'));
+  } }, 'Quitar imagen');
+  updatePreview();
   return el(
     'form',
     {
       class: 'form',
       onsubmit: async (e) => {
         e.preventDefault();
-        if (saving) return;
+        if (preparingLogo || submitting) return;
+        if (saving) {
+          status.textContent = 'Hay otra publicación en curso. Tu canal sigue en el formulario; vuelve a pulsar Guardar.';
+          return;
+        }
+        submitting = true;
         try {
+          if (selectedLogo && !validCover(selectedLogo)) throw new Error('El logo debe ser una imagen o un enlace HTTPS válido.');
+          draftId ||= `mio-${slug(name.value)}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
           const channel = {
-            id: existing ? existing.id : `mio-${slug(name.value)}-${Date.now().toString(36)}`,
+            id: draftId,
             name: name.value.trim(),
             group: group.value.trim(),
-            logo: logo.value.trim().startsWith('https://') ? logo.value.trim() : '',
+            logo: selectedLogo,
             streams: validStreams(streams.value),
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
           if (!channel.group) throw new Error('Escribe el nombre de la nueva categoría.');
-          if (groupSelect.value === NEW_GROUP) {
-            // A name already in use joins that category; a new one is added at the end with its colour.
-            const same = categories.find((c) => c.name.toLocaleLowerCase('es') === channel.group.toLocaleLowerCase('es'));
-            if (same) channel.group = same.id;
-            else data.categories = [...categories, { id: channel.group, name: channel.group, color: defaultColor(channel.group) }];
-          }
-          if (existing) data.channels[data.channels.findIndex((c) => c.id === existing.id)] = channel;
-          else data.channels.push(channel);
-          data.featured = data.featured.filter((id) => id !== channel.id);
-          if (star.checked) data.featured.unshift(channel.id);
+          const newGroup = groupSelect.value === NEW_GROUP;
+          const highlighted = star.checked;
+          status.className = 'note';
+          submit.disabled = true;
+          status.textContent = channel.streams.some(aceContentId) ? 'Preparando Ace Stream en IONOS…' : 'Guardando…';
+          channel.streams = await publishableStreams(channel.streams);
           status.textContent = 'Guardando…';
-          await saveFile(`admin: ${existing ? 'editar' : 'añadir'} ${channel.name}`);
+          await saveChannel(data => {
+            const next = { ...data };
+            const previous = data.channels.find(c => c.id === channel.id);
+            if (existing && !previous) throw new Error('El canal ya no está en el catálogo. Recarga la lista de canales.');
+            const entry = { ...previous, ...channel };
+            if (newGroup) {
+              const options = allCategories(state, data);
+              const same = options.find(c => c.name.toLocaleLowerCase('es') === entry.group.toLocaleLowerCase('es'));
+              if (same) entry.group = same.id;
+              else next.categories = [...options, { id: entry.group, name: entry.group, color: defaultColor(entry.group) }];
+            }
+            next.channels = previous ? data.channels.map(c => c.id === entry.id ? entry : c) : [...data.channels, entry];
+            next.featured = data.featured.filter(id => id !== entry.id);
+            if (highlighted) next.featured.unshift(entry.id);
+            return next;
+          }, !existing);
           rerender();
         } catch (err) {
           status.textContent = explain(err);
           status.className = 'error';
-
+        } finally {
+          submitting = false;
+          submit.disabled = preparingLogo;
         }
       },
     },
@@ -155,10 +238,12 @@ function channelForm(existing, rerender, state) {
     field('Nombre', name, 'Por ejemplo «Canal Menciana».'),
     field('Categoría', groupSelect, 'Elige una de la lista o «Nueva categoría» para escribirla.'),
     groupNewField,
-    field('Logo (opcional)', logo),
-    field('Enlaces', streams, 'Uno por línea. La web reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI solo se ven en la app. La app también admite páginas de reproductor. Si hay varios, se prueban en orden.'),
+    field('Logo (opcional)', logo, 'Pega un enlace HTTPS o sube una imagen desde tu dispositivo.'),
+    field('Subir imagen del canal', upload, 'La imagen se adapta automáticamente y conserva la transparencia.'),
+    preview, clearLogo,
+    field('Enlaces', streams, 'Uno por línea. Los enlaces Ace Stream se convierten automáticamente a HLS al guardar. La web también reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI y algunas páginas de reproductor se ven en la app. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
-    el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
+    el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
   );
 }
@@ -394,7 +479,9 @@ export async function render(state) {
   const editing = decodeURIComponent(location.hash).match(/^#\/admin\/editar\/(.+)$/);
   const reviewRoute = decodeURIComponent(location.hash).match(/^#\/admin\/biblioteca\/no-identificadas(?:\/(peliculas|series|documentales))?\/?$/);
   const existing = editing ? file.data.channels.find((c) => c.id === editing[1]) : null;
-  const section = location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const userRoute = location.hash.match(/^#\/admin\/usuarios(?:\/([a-zA-Z0-9_-]{1,128}))?\/?$/);
+  if (userRoute) return usersAdmin(el, userService, state, userRoute[1]);
+  const section = location.hash === '#/admin/servidor' ? 'vps' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
   const shown = notice;
   notice = '';
   return [
@@ -407,14 +494,16 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'library' ? libraryAdmin(el, {
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
+      ...(section === 'vps' ? [vpsPanel(el, () => auth.currentUser.getIdToken())] : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.
         setVisible: async (on) => { if (saving) throw new Error('Espera a que termine la publicación.'); file.data.libraryVisible = on; await saveFile(); state.custom = file.data; },
         field, readSettings: readLibrarySettings, saveSettings: saveLibrarySettings, publish: publishLibraryParts,
       }).concat(reviewRoute ? [] : platformsPanel(rerender, state)) : section === 'stats' ? statsPanel(state) : section === 'leagues' || section === 'teams' ? entityPanel(section, rerender) : section === 'events' ? [
+        eventRoute[1] ? null : zicoAgendaPanel(rerender, state),
+        eventRoute[1] ? null : zicoTokenPanel(),
         eventForm(eventRoute[1] ? findEvent(eventRoute[1]) : null, rerender, state),
         el('div', { class: 'section-head' }, el('h2', {}, 'Eventos publicados')), eventList(rerender, state)
       ] : [channelForm(existing, rerender, state), el('div', { class: 'section-head' }, el('h2', {}, 'Canales creados')), ownList(rerender), ...categoriesPanel(state, rerender), ...tdtTools(state, rerender)]),
@@ -443,32 +532,6 @@ export function hasTransparency(rgba) {
   return false;
 }
 
-async function coverFromFile(file, sides = [960, 720, 512, 384]) {
-  if (!file || !file.type.startsWith('image/')) throw new Error('Elige una imagen.');
-  if (file.size > 15 * 1024 * 1024) throw new Error('La imagen supera los 15 MB.');
-  const bitmap = await createImageBitmap(file);
-  try {
-    // An image with transparent parts (a PNG or WebP logo) keeps them: as PNG, or WebP if PNG is too big,
-    // smaller each time; JPEG, which has no transparency and turned them black, only for opaque images.
-    for (const side of sides) {
-      const canvas = document.createElement('canvas');
-      const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      const context = canvas.getContext('2d');
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      const transparent = file.type !== 'image/jpeg' && hasTransparency(context.getImageData(0, 0, canvas.width, canvas.height).data);
-      const tries = transparent ? [['image/png'], ['image/webp', .85], ['image/webp', .65]] : [['image/jpeg', .8], ['image/jpeg', .65], ['image/jpeg', .5], ['image/jpeg', .35]];
-      for (const [type, quality] of tries) {
-        const data = canvas.toDataURL(type, quality);
-        // A browser without WebP output answers with PNG: still transparent.
-        if (data.length <= 130000 && data.startsWith('data:image/' + type.slice(6))) return data;
-        if (data.length <= 130000 && transparent && data.startsWith('data:image/png')) return data;
-      }
-    }
-    throw new Error('La imagen es demasiado compleja. Usa una más pequeña o un enlace HTTPS.');
-  } finally { bitmap.close(); }
-}
 
 /** An event, or an imported match shown as one (`imported`), by its id. */
 function findEvent(id) {
@@ -478,10 +541,70 @@ function findEvent(id) {
   return fixture ? fixtureEvent(fixture, file.data) : null;
 }
 
+function zicoAgendaPanel(rerender, state) {
+  const status = el('p', { class: 'note', role: 'status' });
+  const button = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    if (saving || button.disabled) return;
+    button.disabled = true;
+    status.textContent = 'Consultando la agenda de ZicoTV…';
+    try {
+      const payload = await fetchZicoAgenda();
+      if (!button.isConnected || !file || saving) return;
+      const { data, count, skipped, linked } = applyZicoAgenda(file.data, payload);
+      data.channels = syncTdtCopies(data, state.tdt);
+      validateCatalog(data, { checkSize: false });
+      if (JSON.stringify(data) !== JSON.stringify(file.data)) {
+        file.data = data;
+        status.textContent = 'Publicando la agenda…';
+        await saveFile();
+      }
+      if (!button.isConnected) return;
+      notice = `Guardado. Agenda de ZicoTV: ${linked} partidos enlazados, ${count} eventos independientes y ${skipped} sin señal.`;
+      rerender();
+    } catch (error) {
+      status.textContent = explain(error);
+      status.className = 'error';
+    } finally {
+      button.disabled = false;
+    }
+  } }, 'Importar / actualizar agenda de ZicoTV');
+  return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
+    el('p', { class: 'note' }, 'Guarda el enlace del reproductor de ZicoTV para cada canal propio. Si solo hay fuentes de evento, guarda el enlace del evento. Actualizar sustituye los enlaces importados anteriores y mantiene tus enlaces manuales.'), button, status);
+}
+
+function zicoTokenPanel() {
+  const input = el('input', { type: 'password', autocomplete: 'new-password', maxlength: '512', required: true });
+  const status = el('p', { class: 'note', role: 'status' }, 'Comprobando la configuración de ZicoTV en el hosting…');
+  const save = el('button', { type: 'submit', class: 'btn secondary', disabled: true }, 'Guardar token Premium');
+  const remove = el('button', { type: 'button', class: 'ghost', hidden: true, onclick: () => {
+    if (confirm('¿Quitar el token Premium de ZicoTV?')) update('');
+  } }, 'Quitar token');
+  const show = result => {
+    remove.hidden = !result.configured;
+    status.textContent = result.configured ? 'Token Premium guardado en el hosting.' : 'Puedes guardar el token de tu perfil de ZicoTV.';
+  };
+  async function update(token) {
+    save.disabled = remove.disabled = true;
+    status.textContent = 'Actualizando el token…';
+    try {
+      const result = await saveZicoToken(token, await auth.currentUser.getIdToken());
+      input.value = '';
+      show(result);
+    } catch (error) { status.textContent = explain(error); }
+    finally { save.disabled = remove.disabled = false; }
+  }
+  auth.currentUser.getIdToken().then(zicoTokenStatus).then(result => {
+    show(result); save.disabled = false;
+  }).catch(error => { status.textContent = explain(error); });
+  return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y es visible en la URL del reproductor de ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
+}
+
 function eventForm(existing, rerender, catalogState) {
   const data = file.data;
   // Imported matches may have no cover (the league's background and crests) and no channel yet.
   const imported = !!existing?.imported;
+  const fixtureImport = imported && !isZicoAgendaEvent(existing);
   const name = el('input', { required: true, value: existing?.name || '', placeholder: 'Local vs visitante' });
   const league = selectField(data.leagues, existing?.leagueId, 'Sin liga');
   const home = selectField(data.teams, existing?.homeTeamId, 'Seleccionar local');
@@ -556,6 +679,8 @@ function eventForm(existing, rerender, catalogState) {
     catch (error) { status.textContent = error.message; }
   } });
   const links = el('textarea', { rows: 4, placeholder: 'https://… (un enlace por línea)' }, (existing?.streams || []).join('\n'));
+  const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
+  let submitting = false;
   let selected = existing?.channelId || '';
   const chosen = el('p', { class: 'note' });
   const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales y los de TDT' });
@@ -578,7 +703,9 @@ function eventForm(existing, rerender, catalogState) {
   };
   query.addEventListener('input', draw); draw();
   return el('form', { class: 'form', onsubmit: async (event) => {
-    event.preventDefault(); if (saving) return;
+    event.preventDefault(); if (saving || submitting) return;
+    submitting = true;
+    submit.disabled = true;
     try {
       if (!name.value.trim()) throw new Error('Escribe el nombre del evento.');
       if (!(imported && !selectedCover) && !validCover(selectedCover)) throw new Error('Añade una portada o un enlace de imagen HTTPS.');
@@ -592,7 +719,9 @@ function eventForm(existing, rerender, catalogState) {
           : existing?.matchUrl === link && existing.startAt === entry.startAt && existing.matchId ? existing : await checkMatch();
         Object.assign(entry, { matchUrl: link, matchId: resolved.matchId, matchDate: resolved.matchDate });
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
-      if (imported) {
+      if (streams.some(aceContentId)) status.textContent = 'Preparando Ace Stream en IONOS…';
+      Object.assign(entry, editedZicoEventStreams(entry, await publishableStreams(streams)));
+      if (fixtureImport) {
         // Only what differs from the import is kept, so the catalog stays small.
         const raw = data.fixtures.find((f) => f.id === existing.id);
         const fixture = { ...raw, ...entry };
@@ -619,8 +748,9 @@ function eventForm(existing, rerender, catalogState) {
       data.events = updated; data.channels = channels;
       status.textContent = 'Publicando…'; await saveFile(); rerender();
     } catch (error) { status.textContent = explain(error); status.className = 'error'; }
-  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Enlaces adicionales del evento', links, 'Un enlace por línea. Se añaden a las fuentes del canal, o puedes usarlos sin seleccionar canal. Zico TV solo se muestra en la web. La reproducción depende del proveedor.'), field('Buscar canal (opcional si añades enlaces)', query), chosen, options,
-  el('div', { class: 'actions' }, el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar'), existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
+    finally { submitting = false; submit.disabled = false; }
+  } }, el('h2', {}, existing ? 'Editar evento' : 'Crear evento'), field('Nombre del evento', name), el('div', { class: 'event-fields' }, field('Liga', league), field('Fecha y hora', start, 'Horario de Madrid (España), con cambio de hora automático.'), field('Equipo local', home), field('Equipo visitante', away), field('Temporada', season), field('Jornada o fase', round), field('Estado', state), field('Lugar', venue)), field('Descripción', description), field('Enlace del partido en Google (opcional)', matchLink, 'Pega el enlace de Compartir de Google del partido. Se reconoce por el propio enlace, aunque el nombre, los equipos o la fecha del evento no coincidan. Marcador, estadísticas y alineaciones: ESPN; solo partidos de su cobertura.'), el('div', { class: 'actions' }, matchCheck, matchPick), matchPreview, pickList, el('label', { class: 'actions' }, star, 'Destacar en portada'), field(imported ? 'Foto de portada (opcional)' : 'Foto de portada', upload, imported ? 'Sin portada se usa el fondo de la liga con los escudos de los dos equipos.' : 'La imagen ocupa toda la carátula. Se comprime y se guarda en GitHub al publicar.'), field('O pega el enlace HTTPS de la portada', cover), preview, field('Enlaces adicionales del evento', links, 'Un enlace por línea, incluidos enlaces Ace Stream. Se añaden a las fuentes del canal, o puedes usarlos sin seleccionar canal. Los canales importados de ZicoTV se abren con el reproductor del proveedor. La reproducción depende del proveedor.'), field('Buscar canal (opcional si añades enlaces)', query), chosen, options,
+  el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin/evento' }, 'Cancelar edición') : null), status);
 }
 
 
@@ -776,7 +906,7 @@ function platformsPanel(rerender, state) {
     const saved = Array.isArray(data.platforms) ? data.platforms : [];
     const names = [...saved.map((p) => p.name).filter((n) => counts.has(n)), ...[...counts.keys()].filter((n) => !saved.some((p) => p.name === n)).sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b, 'es'))];
     for (const name of names) row({ ...(saved.find((p) => p.name === name) || { name }), count: counts.get(name), tmdbLogo: logos.get(name) || '' });
-    status.textContent = names.length ? '' : 'Todavía no hay plataformas: se rellenan desde TMDB con «Actualizar el top y las plataformas con TMDB».';
+    status.textContent = names.length ? '' : 'Todavía no hay plataformas. Se rellenan desde Pelis y series → «Actualizar top, plataformas y logos con TMDB».';
   }).catch((error) => { status.textContent = error.message; status.className = 'error'; });
   return [el('section', { class: 'league-order' },
     el('div', { class: 'section-head' }, el('h2', {}, 'Plataformas')),
@@ -938,28 +1068,35 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 const statsView = { mode: 'day', day: '', month: '', year: '', only: null };
 
 /** Names for every channel and event, including TDT channels that are hidden from the public. */
-function statsNames(state) {
-  const names = new Map();
+function statsCatalog(state) {
+  const names = new Map(), targets = new Map(), channelEvents = new Map();
+  const add = (kind, id, label) => {
+    const key = visitKey(kind, id), target = `${key[0]}:${id}`;
+    names.set(key, label); names.set(target, label); targets.set(key, target);
+  };
   for (const c of [...merge(state.tdt || { channels: [] }, null), ...file.data.channels]) {
-    names.set(visitKey('channel', c.id), c.name); names.set(`c:${c.id}`, c.name);
+    add('channel', c.id, c.name);
   }
   // Manual events and imported matches («Levante - Athletic» rather than partido-401874993).
   for (const e of [...file.data.events, ...(file.data.fixtures || []).map((f) => fixtureEvent(f, file.data))]) {
     const label = `${e.name}${e.startAt ? ` · ${eventMeta({ startAt: e.startAt }, null)}` : ''}`;
-    names.set(visitKey('event', e.id), label); names.set(`e:${e.id}`, label);
+    add('event', e.id, label);
+    if (e.channelId) {
+      const key = visitKey('channel', e.channelId);
+      if (!channelEvents.has(key)) channelEvents.set(key, []);
+      channelEvents.get(key).push(`e:${e.id}`);
+    }
   }
-  return names;
+  return { names, targets, channelEvents, add };
 }
 /** Films, series and documentaries by their statistics keys (l:<id> live, l_<id> visits), with their section. */
-async function libraryNames(names) {
+async function libraryNames(add) {
   try {
     const library = await fetchLibrary();
     for (const section of LIBRARY_SECTIONS) for (const item of library.sections?.[section.key] || []) {
-      const label = `${itemTitle(item)} · ${section.label}`;
-      names.set(`l:${item.id}`, label); names.set(visitKey('library', item.id), label);
+      add('library', item.id, `${itemTitle(item)} · ${section.label}`);
     }
   } catch {}
-  return names;
 }
 
 const plural = (n, one, many) => `${n.toLocaleString('es-ES')} ${n === 1 ? one : many}`;
@@ -972,10 +1109,43 @@ function liveTile() {
   return value;
 }
 
+function viewingDialog(findPeople, showGraph) {
+  const title = el('h2', { id: 'stats-viewers-title' });
+  const body = el('div', { class: 'stats-viewers-results', 'aria-live': 'polite' });
+  const graph = el('button', { type: 'button', class: 'ghost' }, 'Ver evolución');
+  const close = el('button', { type: 'button', class: 'btn secondary', autofocus: '' }, 'Cerrar');
+  const dialog = el('dialog', { class: 'stats-viewers-dialog', 'aria-labelledby': 'stats-viewers-title' },
+    title, el('p', { class: 'note' }, 'Cuentas con reproducción registrada en el periodo seleccionado.'), body,
+    el('div', { class: 'actions' }, graph, close));
+  close.addEventListener('click', () => dialog.close());
+  const format = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Madrid' });
+  let request = 0;
+  const open = async (key, name, from, to) => {
+    const mine = ++request;
+    title.textContent = name;
+    body.replaceChildren(el('p', { role: 'status', class: 'note' }, 'Cargando usuarios…'));
+    graph.onclick = () => { dialog.close(); showGraph(key); };
+    dialog.showModal();
+    try {
+      const people = await findPeople(key, from, to);
+      if (mine !== request || !dialog.open) return;
+      body.replaceChildren(el('p', { class: 'note' },
+        people.length ? plural(people.length, 'usuario', 'usuarios') : 'No hay usuarios identificados en este periodo.'));
+      if (people.length) body.append(el('ul', { class: 'stats-viewer-names' }, people.map(person =>
+        el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
+          el('small', {}, [plural(person.count, 'reproducción', 'reproducciones'), format.format(person.at),
+            viewerDevice(person.latest.device), person.latest.profile !== person.name ? person.latest.profile : ''].filter(Boolean).join(' · '))))));
+    } catch (error) {
+      if (mine === request && dialog.open) body.replaceChildren(el('p', { class: 'error' }, `No se pudo leer el historial: ${explain(error)}`));
+    }
+  };
+  return { dialog, open };
+}
+
 function statsPanel(state) {
-  const names = statsNames(state);
+  const { names, targets, channelEvents, add } = statsCatalog(state);
   // The library's titles arrive a moment later; the live lists and the visits are drawn again with them.
-  libraryNames(names).then(() => { if (liveBody.isConnected) { drawLive(); load(); } });
+  libraryNames(add).then(() => { if (liveBody.isConnected) { drawLive(); load(); } });
   const today = madridDay();
   statsView.day ||= today; statsView.month ||= today.slice(0, 7); statsView.year ||= today.slice(0, 4);
 
@@ -985,16 +1155,59 @@ function statsPanel(state) {
   const updated = el('span', { class: 'note' });
   const drawLive = async () => {
     try {
-      const counts = liveCounts(await audience());
+      const [docs, viewersResult] = await Promise.all([
+        audience(), userService.readLiveViewers().then(rows => ({ rows })).catch(() => ({ rows: [], unavailable: true })),
+      ]);
+      const counts = liveCounts(docs);
+      const named = new Map();
+      for (const row of viewersResult.rows) {
+        if (!named.has(row.target)) named.set(row.target, []);
+        named.get(row.target).push(row);
+      }
+      for (const [target, rows] of named) counts.set(target, Math.max(counts.get(target) || 0, rows.length));
       const lists = { c: [], e: [], l: [] };
-      for (const [target, viewers] of counts) lists[target[0]]?.push({ name: names.get(target) || target.slice(2), viewers });
+      for (const [target, viewers] of counts) {
+        const people = named.get(target) || [];
+        lists[target[0]]?.push({ target, name: names.get(target) || people[0]?.title || target.slice(2), viewers, people });
+      }
       liveTotal.textContent = [...counts.values()].reduce((a, b) => a + b, 0).toLocaleString('es-ES');
       updated.textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+      const viewer = (person, title, sessions) => {
+        const subtitle = sessions.map(session => [
+          session.profile !== person.name ? session.profile : '',
+          viewerDevice(session.device), session.title !== title ? session.title : '',
+        ].filter(Boolean).join(' · ')).filter(Boolean);
+        return el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
+          el('small', {}, [...new Set(subtitle)].join(' / ')));
+      };
+      const open = new Set([...liveBody.querySelectorAll('details[open]')].map(item => item.dataset.target));
+      const focused = liveBody.contains(document.activeElement) ? document.activeElement.closest('details') : null;
+      const focusedLink = focused && document.activeElement.getAttribute('href');
+      const rank = item => {
+        const label = [el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))];
+        const accounts = new Map();
+        for (const person of item.people) {
+          if (!accounts.has(person.uid)) accounts.set(person.uid, []);
+          accounts.get(person.uid).push(person);
+        }
+        return el('li', { class: 'stats-watching' },
+          el('details', { class: 'stats-disclosure', 'data-target': item.target, ...(open.has(item.target) ? { open: '' } : {}) },
+            el('summary', {}, label),
+            accounts.size ? el('ul', { class: 'stats-viewer-names' }, [...accounts.values()].map(sessions => viewer(sessions[0], item.name, sessions)))
+              : el('p', { class: 'note' }, viewersResult.unavailable ? 'No se pudieron cargar los nombres.' : 'No hay usuarios identificados en este momento.')));
+      };
       const column = (title, list, empty) => el('div', { class: 'stats-card' }, el('h3', {}, title),
-        list.length ? el('ol', { class: 'stats-rank' }, list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es'))
-          .map((item) => el('li', {}, el('span', {}, item.name), el('b', {}, plural(item.viewers, 'persona', 'personas'))))) : el('p', { class: 'note' }, empty));
+        list.length ? el('ol', { class: 'stats-rank' },
+          list.sort((a, b) => b.viewers - a.viewers || a.name.localeCompare(b.name, 'es')).map(rank))
+          : el('p', { class: 'note' }, empty));
       liveBody.replaceChildren(column('Canales', lists.c, 'Nadie está viendo canales ahora.'), column('Eventos', lists.e, 'Nadie está viendo eventos ahora.'),
-        column('Pelis y series', lists.l, 'Nadie está viendo pelis ni series ahora.'));
+        column('Películas, series y documentales', lists.l, 'Nadie está viendo títulos ahora.'),
+        viewersResult.unavailable ? el('p', { class: 'note' }, 'Los nombres de los espectadores no están disponibles en este momento.') : null);
+      if (focused) {
+        const replacement = [...liveBody.querySelectorAll('details')].find(item => item.dataset.target === focused.dataset.target);
+        const next = focusedLink && [...(replacement?.querySelectorAll('a') || [])].find(link => link.getAttribute('href') === focusedLink);
+        (next || replacement?.querySelector('summary'))?.focus({ preventScroll: true });
+      }
     } catch (error) { liveBody.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer los espectadores: ${explain(error)}`)); }
   };
   // Stops by itself once the panel leaves the page; a redrawn panel starts its own timer.
@@ -1004,6 +1217,21 @@ function statsPanel(state) {
 
   // History: one document per Madrid day with one counter per channel and event.
   const history = el('div', { class: 'stats-history' }, el('p', { class: 'note' }, 'Cargando visitas…'));
+  let directory, report = null;
+  const viewers = viewingDialog(async (key, from, to) => {
+    directory ||= userService.readUserDirectory().then(({ members, profiles, access }) => mergeUserDirectory(members, profiles, access))
+      .catch(error => { directory = null; throw error; });
+    const target = targets.get(key) || `${key[0]}:${key.slice(2)}`;
+    return userService.readContentViewers(await directory, [...new Set([target, ...(channelEvents.get(key) || [])])], from, to);
+  }, key => {
+    statsView.only = key;
+    drawReport();
+    history.querySelector('.stats-chart-card')?.scrollIntoView({ block: 'nearest' });
+  });
+  const drawReport = () => {
+    if (report) history.replaceChildren(...visitReport(report.days, names, report.from, report.to, viewers.open,
+      () => { statsView.only = null; drawReport(); }));
+  };
   const modes = [['day', 'Día'], ['month', 'Mes'], ['year', 'Año'], ['all', 'Por años']];
   const modeButtons = el('div', { class: 'chips', role: 'group', 'aria-label': 'Periodo' }, modes.map(([mode, label]) =>
     el('button', { class: 'chip', type: 'button', 'aria-pressed': String(statsView.mode === mode), onclick: () => { statsView.mode = mode; statsView.only = null; redraw(); } }, label)));
@@ -1027,10 +1255,11 @@ function statsPanel(state) {
     const [from, to] = mode === 'day' ? [shiftDay(statsView.day, -29), statsView.day]
       : mode === 'month' ? [`${statsView.month}-01`, `${statsView.month}-31`]
       : mode === 'year' ? [`${statsView.year}-01-01`, `${statsView.year}-12-31`] : ['2000-01-01', '2999-12-31'];
+    report = null;
     history.replaceChildren(el('p', { class: 'note' }, 'Cargando visitas…'));
     try {
       const days = await visits(from, to);
-      if (mine === request) history.replaceChildren(...visitReport(days, names, from, to));
+      if (mine === request) { report = { days, from, to }; drawReport(); }
     } catch (error) { if (mine === request) history.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer las visitas: ${explain(error)}`)); }
   };
   redraw();
@@ -1041,11 +1270,11 @@ function statsPanel(state) {
     el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
     el('p', { class: 'note' }, 'Cada vez que alguien abre un canal, un evento, una película o una serie cuenta como una visita; la visita a un evento también suma a su canal, y todos los capítulos de una serie suman a la serie (días según el horario de Madrid).'),
     el('div', { class: 'stats-controls' }, modeButtons, picker),
-    history,
+    history, viewers.dialog,
   ];
 }
 
-function visitReport(days, names, from, to) {
+function visitReport(days, names, from, to, openViewers, resetGraph) {
   const { mode, only } = statsView;
   // Tables: the selected day, month, year or everything.
   const tableDays = mode === 'day' ? days.filter((d) => d.id === statsView.day) : days;
@@ -1059,7 +1288,8 @@ function visitReport(days, names, from, to) {
     return el('div', { class: 'stats-card' }, el('h3', {}, `${title} · ${plural(sum(prefix), 'visita', 'visitas')}`),
       rows.length ? el('table', { class: 'stats-table' }, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, prefix === 'c_' ? 'Canal' : prefix === 'l_' ? 'Título' : 'Evento'), el('th', { scope: 'col' }, 'Visitas'))),
         el('tbody', {}, rows.map(([key, value]) => el('tr', { 'aria-selected': String(key === only) },
-          el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver su evolución en la gráfica', onclick: () => { statsView.only = key === only ? null : key; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } },
+          el('td', {}, el('button', { type: 'button', class: 'linkish', title: 'Ver quién lo ha visto', 'aria-haspopup': 'dialog',
+            onclick: () => openViewers(key, names.get(key) || `${key.slice(2)} (eliminado)`, mode === 'day' ? to : from, to) },
             el('span', { class: 'share', style: `--w:${Math.max(2, Math.round(value / top * 100))}%`, 'aria-hidden': 'true' }), names.get(key) || `${key.slice(2)} (eliminado)`)),
           el('td', {}, value.toLocaleString('es-ES'))))))
         : el('p', { class: 'note' }, `Sin visitas a ${title.toLowerCase()} en este periodo.`));
@@ -1082,7 +1312,7 @@ function visitReport(days, names, from, to) {
     el('p', { class: 'stats-total' }, el('b', {}, plural(sum('c_') + sum('l_'), 'visita', 'visitas')), ` · ${period}`),
     el('div', { class: 'stats-card stats-chart-card' },
       el('h3', {}, `${only ? `Evolución de ${names.get(only) || only.slice(2)}` : 'Evolución de todas las visitas'} · ${mode === 'day' ? 'últimos 30 días' : mode === 'month' ? 'día a día' : mode === 'year' ? 'mes a mes' : 'año a año'}`),
-      only ? el('button', { type: 'button', class: 'ghost', onclick: () => { statsView.only = null; document.getElementById('view').querySelector('.stats-history').replaceChildren(...visitReport(days, names, from, to)); } }, 'Ver todas') : null,
+      only ? el('button', { type: 'button', class: 'ghost', onclick: resetGraph }, 'Ver todas') : null,
       chart),
     el('div', { class: 'stats-live' }, table('Canales', 'c_'), table('Eventos', 'e_'), table('Pelis y series', 'l_')),
   ];

@@ -78,13 +78,9 @@ final class SharedCatalog {
         if (!entry.has("streams")) continue;
         JSONArray links = entry.getJSONArray("streams");
         if (links.length() > 50) throw new JSONException("Máximo 50 fuentes por evento");
-        for (int j = 0; j < links.length(); j++) {
-          try {
-            java.net.URI uri = new java.net.URI(links.getString(j));
-            if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null)
-              throw new Exception("URL inválida");
-          } catch (Exception invalid) { throw new JSONException("Fuente de evento no válida"); }
-        }
+        for (int j = 0; j < links.length(); j++)
+          if (UserChannels.normalizeEventSource(links.getString(j)) == null)
+            throw new JSONException("Fuente de evento no válida");
       }
     }
     Set<String> eventIds = new HashSet<>();
@@ -93,8 +89,13 @@ final class SharedCatalog {
       for (int i = 0; i < events.length(); i++) {
         JSONObject event = events.getJSONObject(i);
         String id = event.getString("id"), cover = event.getString("cover");
+        String channel = event.optString("channelId");
+        JSONArray streams = event.optJSONArray("streams");
+        boolean agenda = Catalog.isZicoAgendaEvent(event) && event.optBoolean("imported");
+        boolean validSource = agenda ? channel.isEmpty() || ids.contains(channel)
+            : ids.contains(channel) || (streams != null && streams.length() > 0);
         if (id.isEmpty() || !eventIds.add(id) || event.getString("name").trim().isEmpty()
-            || (!ids.contains(event.optString("channelId")) && (event.optJSONArray("streams") == null || event.getJSONArray("streams").length() == 0)) || !validCover(cover))
+            || !validSource || (!(agenda && cover.isEmpty()) && !validCover(cover)))
           throw new JSONException("Cada evento necesita nombre, portada y un canal creado");
       }
     }

@@ -25,10 +25,12 @@ test('existing inline images remain visible before an image has been migrated',a
 test('catalog size is checked after photos are externalized, retaining the final limit',async()=>{
   const large=catalog();large.events=[];
   const data='data:image/jpeg;base64,'+'YWFh'.repeat(30000);
-  for(let i=0;i<5;i++)large.events.push({id:'e'+i,name:'Evento',channelId:'one',cover:data});
+  for(let i=0;i<5;i++)large.leagues.push({id:'league-'+i,name:'Liga '+i,background:data});
   assert.throws(()=>validateCatalog(large),/tamaño/);validateCatalog(large,{checkSize:false});
   const moved=await externalizeImages(large,{upload:async p=>({url:(await imageIdentity(p)).url})});
   validateCatalog(moved);assert.ok(JSON.stringify(moved).length<5000);
+  assert.equal(moved.leagues[1].background, (await imageIdentity(data)).url);
+  assert.equal(large.leagues[1].background, data);
 });
 test('Firebase authorization goes only to the HTTPS hosting; no repository credential is needed to upload',async()=>{
   let request;

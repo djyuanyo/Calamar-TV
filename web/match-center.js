@@ -2,6 +2,7 @@
 // Estadísticas, Alineaciones and H2H. With a Google match link the data comes from ESPN's summary of
 // the match (the same source as the score on the cards); without one, from the event itself.
 import { matchResult } from './match-scores.js';
+import { showPlayerStats } from './player-stats.js';
 
 const logoOf = (team) => team?.logo || team?.logos?.[0]?.href || '';
 const valid = (url) => /^https:\/\//.test(url || '') || /^data:image\//.test(url || '') ? url : '';
@@ -111,10 +112,11 @@ export function parseMatchCenter(data) {
     const subAt = (p) => (p.plays || []).find((x) => x.substitution)?.clock?.displayValue || '';
     const shirt = (p) => valid((p.athlete?.jerseyImages || []).find((j) => (j.rel || []).includes('dark'))?.href
       || p.athlete?.jerseyImages?.[0]?.href || '');
-    const player = (p) => ({ number: p.jersey || '', name: p.athlete?.displayName || p.athlete?.shortName || '', short: p.athlete?.shortName || p.athlete?.displayName || '',
+    const player = (p) => ({ id: String(p.athlete?.id || ''), teamId: String(r.team?.id || (side === 'home' ? home.id : away.id)),
+      teamName: side === 'home' ? home.name : away.name, stats: p.stats || [], number: p.jersey || '', name: p.athlete?.displayName || p.athlete?.shortName || '', short: p.athlete?.shortName || p.athlete?.displayName || '',
       position: p.position?.abbreviation || '', place: p.formationPlace || '', shirt: shirt(p),
       goals: stat(p, 'totalGoals'), ownGoals: stat(p, 'ownGoals'), assists: stat(p, 'goalAssists'), yellow: stat(p, 'yellowCards'), red: stat(p, 'redCards'),
-      subbedIn: !!p.subbedIn, subbedOut: !!p.subbedOut, subAt: subAt(p) });
+      subbedIn: !!(p.subbedIn?.didSub ?? p.subbedIn), subbedOut: !!(p.subbedOut?.didSub ?? p.subbedOut), subAt: subAt(p) });
     const sorted = [...r.roster].sort((a, b) => (Number(a.formationPlace) || 99) - (Number(b.formationPlace) || 99));
     return { side, team: side === 'home' ? home : away, formation: r.formation || '',
       starters: sorted.filter((p) => p.starter).map(player), subs: sorted.filter((p) => !p.starter).map(player) };
@@ -161,7 +163,8 @@ export function parseMatchCenter(data) {
   const venue = info.venue || competition.venue || {};
   const referee = (info.officials || []).find((o) => /referee|árbitro/i.test(o.position?.displayName || o.position?.name || '')) || info.officials?.[0];
   return {
-    id: result.id, state: result.state, status: result.text, clock: result.clock, live: result.live, home, away,
+    id: result.id, leagueCode: header.league?.slug || '', seasonYear: header.season?.year || '',
+    seasonType: header.season?.type || '', seasonName: header.season?.name || '', state: result.state, status: result.text, clock: result.clock, live: result.live, home, away,
     league: header.league?.name || header.league?.abbreviation || '', round: competition.notes?.[0]?.headline || '',
     date: competition.date || header.date || '', venue: venue.fullName || '', city: [venue.address?.city, venue.address?.country].filter(Boolean).join(', '),
     attendance: Number(info.attendance) > 0 ? Number(info.attendance) : 0, referee: referee?.displayName || referee?.fullName || '',
@@ -304,12 +307,15 @@ export function renderMatchCenter(el, m, tab, choose) {
       : [noLink, empty(m.state === 'scheduled' ? 'Las estadísticas aparecen cuando empieza el partido.' : 'No hay estadísticas de este partido.')];
   } else if (tab === 'lineups') {
     const list = (players) => el('ol', { class: 'mc-players' }, players.map((p) => el('li', {},
-      el('span', { class: 'mc-number' }, p.number), el('span', { class: 'mc-name' }, p.name, Number.isFinite(p.rating) ? el('i', { class: `mc-rating inline ${ratingClass(p.rating)}` }, p.rating.toFixed(1)) : null, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ` ↑${p.subAt ? ` ${p.subAt}` : ''}`) : null),
+      el('span', { class: 'mc-number' }, p.number), el('button', { class: 'mc-name mc-player-link', type: 'button', id: `mc-player-sub-${p.teamId || ''}-${p.id || p.number}`,
+        'aria-label': `Ver estadísticas de ${p.name}`, onclick: () => showPlayerStats(el, m, p) }, p.name, Number.isFinite(p.rating) ? el('i', { class: `mc-rating inline ${ratingClass(p.rating)}` }, p.rating.toFixed(1)) : null, p.subbedOut ? el('span', { class: 'mc-out', title: 'Sustituido' }, ' ↓') : null, p.subbedIn ? el('span', { class: 'mc-in', title: 'Entró' }, ` ↑${p.subAt ? ` ${p.subAt}` : ''}`) : null),
       el('span', { class: 'mc-pos' }, p.position))));
     // Both elevens on one pitch, as Google shows them: the home team from the top goal, the away team
     // from the bottom one. Each player: his shirt, number and name, goals, cards and when he was changed.
     const marker = (p) => el('li', { class: 'mc-man' },
-      el('span', { class: `mc-shirt${p.photo ? ' photo' : ''}` },
+      el('button', { class: `mc-shirt mc-player-link${p.photo ? ' photo' : ''}`, type: 'button',
+        id: `mc-player-start-${p.teamId || ''}-${p.id || p.number}`, 'aria-label': `Ver estadísticas de ${p.name}`,
+        onclick: () => showPlayerStats(el, m, p) },
         // His photo when API-Football has it; otherwise the shirt of the match; otherwise his number.
         p.photo || p.shirt ? el('img', { src: p.photo || p.shirt, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', onerror: (e) => {
           if (p.photo && p.shirt && e.target.src !== p.shirt) { e.target.src = p.shirt; e.target.parentNode.classList.remove('photo'); } else e.target.replaceWith(el('b', {}, p.number || '·'));

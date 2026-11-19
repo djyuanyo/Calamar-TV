@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://djyuanyo.github.io/Calamar-TV/" version="1.0.0" viewmodes="fullscreen">
+  <tizen:application id="ClmrTV2026.CalamarTV" package="ClmrTV2026" required_version="7.0"/>
+  <tizen:profile name="tv-samsung"/>
+  <name>Calamar TV</name>
+  <content src="index.html"/>
+  <icon src="assets/favicon-192.png"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" hwkey-event="enable"/>
+  <access origin="*"/>
+  <tizen:content-security-policy>default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: wss:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; frame-src https:; font-src 'self' https: data:; worker-src 'self' blob:</tizen:content-security-policy>
+</widget>

@@ -5,14 +5,14 @@ import { rankTop, libraryFeatured, libraryTop, itemLine, itemPath, LIBRARY_SECTI
 const film = (n, extra = {}) => ({ id: `m${n}`, kind: 'movie', title: `Peli ${n}`, status: 'matched', tmdb: { id: n, title: `Peli ${n}`, year: 2020 + (n % 5), genres: ['Drama', 'Comedia', 'Acción'], rating: 7.4 }, ...extra });
 const show = (n, extra = {}) => ({ id: `s${n}`, kind: 'tv', title: `Serie ${n}`, status: 'matched', tmdb: { id: n, title: `Serie ${n}` }, episodes: [], ...extra });
 
-test('films and series have their own top: TMDB trending first, in its order, then by popularity', () => {
-  const sections = { movies: [film(1), film(2), film(3), { ...film(4), status: 'unmatched' }], series: [show(1), show(2)], documentaries: [film(9)] };
-  const ranked = rankTop(sections, [{ id: 3, kind: 'movie' }, { id: 2, kind: 'tv' }, { id: 99, kind: 'movie' }], { 'movie:1': 5, 'movie:2': 50, 'movie:4': 999, 'tv:1': 3, 'movie:9': 9999 });
+test('each section has its own top: TMDB trending first, in its order, then by popularity', () => {
+  const sections = { movies: [film(1), film(2), film(3), { ...film(4), status: 'unmatched' }], series: [show(1), show(2)], documentaries: [film(1), show(9)] };
+  const ranked = rankTop(sections, [{ id: 3, kind: 'movie' }, { id: 2, kind: 'tv' }, { id: 99, kind: 'movie' }], { 'movie:1': 5, 'movie:2': 50, 'movie:4': 999, 'tv:1': 3, 'tv:9': 9999 });
   const library = { sections: ranked };
   assert.deepEqual(libraryTop(library, 'movies').map(({ item }) => item.id), ['m3', 'm2', 'm1']);
   assert.deepEqual(libraryTop(library, 'series').map(({ item }) => item.id), ['s2', 's1']);
   assert.equal(ranked.movies[3].trend, undefined); // without a TMDB record it is never ranked
-  assert.equal(ranked.documentaries[0].trend, undefined); // documentaries have no top
+  assert.deepEqual(libraryTop(library, 'documentaries').map(({ item }) => item.id), ['s9', 'm1']);
 });
 
 test('only the first 10 of each keep a place, and an old place is cleared', () => {

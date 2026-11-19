@@ -1,7 +1,8 @@
+import { fakeFirebase } from './browser_fixture.mjs';
 // Exercise the real UI against an isolated catalog; never signs in or writes to Firebase.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -11,46 +12,12 @@ const fixture = { channels: [
   { id: 'sport-one', name: 'Sports One', group: 'Deportes', streams: ['https://example.com/one.mp4'] },
   { id: 'sport-two', name: 'Sports Two', group: 'Deportes', streams: ['https://example.com/two.mp4'] },
 ], featured: ['sport-two'], hidden: [], events: [], leagues: [], teams: [] };
-const firebase = `
-import { validateCatalog } from './shared-catalog.js';
-let catalog = JSON.parse(sessionStorage.getItem('catalog') || 'null') || ${JSON.stringify(fixture)}, revision = 1;
-export const ready = Promise.resolve(), auth = { currentUser: { email: 'admin@example.com', getIdToken: async () => 'token' } };
-export const administrator = (user) => user === undefined || user?.email === 'admin@example.com';
-export const imageService = async () => ({configured: true});
-export const connectImageService = async () => ({configured: true});
-export const watchAuth = (changed) => { (window.__authWatchers ||= []).push(changed); return () => {}; };
-export const login = async () => {}, logout = async () => {}, explain = e => e.message;
-export const readCatalog = async () => ({ data: structuredClone(catalog), revision });
-export const publishCatalog = async data => { catalog = structuredClone(validateCatalog(data)); window.__published = catalog; sessionStorage.setItem('catalog', JSON.stringify(catalog)); return ++revision; };
-export const watchCatalog = (fallback, next) => { const send = () => next({ data: structuredClone(catalog) }); if (sessionStorage.getItem('slowCatalog')) setTimeout(send, 1500); else send(); return () => {}; };
-const present = new Map();
-window.__visits = [];
-export const beat = async (session, target) => { present.set(session, target); };
-export const leave = async session => { present.delete(session); };
-export const viewers = async target => [...present.values()].filter(t => t === target).length + 2;
-export const audience = async () => [...present.values()].map(target => ({ target, minute: Math.floor(Date.now() / 60000) }));
-export const viewersOf = async targets => new Map(targets.map(target => [target, [...present.values()].filter(t => t === target).length]));
-export const purgeAudience = async () => {};
-export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
-export const visits = async () => [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
-export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };
-export const saveLibrarySettings = async (settings) => { window.__librarySettings = settings; };
-export const publishLibraryParts = async (parts) => { window.__libraryParts = parts; };
-export const publishDeviceLogin = async (id) => { window.__deviceLogin = id; };
-export const watchDeviceLogin = (id, changed) => { window.__deviceUsed = () => changed(false); return () => {}; };
-export const readAccount = async () => window.__account || null;
-export const writeAccount = async (data) => { window.__account = data; };
-export const readProfileData = async (id) => (window.__profileData || {})[id] || null;
-export const writeProfileData = async (id, data) => { (window.__profileData ||= {})[id] = data; };
-export const deleteProfileData = async (id) => { delete (window.__profileData || {})[id]; };
-export const readCloudProgress = async () => ({ entries: {}, removed: {} });
-export const writeCloudProgress = async () => {};
-export const loginGoogle = async () => {}, registerEmail = async () => {}, loginEmail = async () => {}, resetPassword = async () => {};
-`;
+const firebase = fakeFirebase(fixture);
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   if (path === '/firebase.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(firebase); return; }
+  if (path === '/data/sports.json') { res.setHeader('Content-Type', 'application/json'); res.end(await readFile('data/sports.json')); return; }
   if (path === '/data/custom.json' || path === '/data/tdt.json') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(path.includes('custom') ? fixture : { channels: [] })); return; }
   try {
     const file = resolve(root, '.' + (path === '/' ? '/index.html' : path));
@@ -117,10 +84,19 @@ try {
   assert.equal(await page.locator('main .section-head h2 a.league-head').first().getAttribute('href'), '#/liga/liga-de-prueba');
   await page.locator('main .section-head h2 a.league-head').first().click();
   await page.locator('.league-hero h1', { hasText: 'Liga de prueba' }).waitFor();
-  // Only today's matches: this one is tomorrow (1 December), so the page says there are none today.
-  assert.equal(await page.locator('.league-grid .event-card').count(), 0);
-  await page.getByText('Hoy no hay partidos de esta liga con canal asignado.').waitFor();
+  // Tomorrow's linked match belongs to this week, so it is visible on the league page.
+  assert.equal(await page.locator('.league-grid .event-card').count(), 1);
+  await page.getByText('1 partido esta semana con enlace', { exact: true }).waitFor();
   await page.getByRole('button', { name: '⤴ Compartir' }).waitFor();
+  // The mixed live page has the same hero, using Calamar TV even with no live events.
+  await page.goto(base + '/#/directo');
+  await page.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
+  assert.equal(await page.locator('.live-hero .league-hero-logo').getAttribute('src'), './assets/calamar-menciano-tv.png');
+  await page.getByText('Ahora mismo no hay eventos en directo.', { exact: false }).waitFor();
+  await page.evaluate(() => { navigator.share = async (data) => { window.__liveShared = data; }; });
+  await page.getByRole('button', { name: '⤴ Compartir' }).click();
+  assert.equal(await page.evaluate(() => window.__liveShared.url), 'https://djyuanyo.github.io/Calamar-TV/directo/');
+
   await page.locator('.nav a').filter({ hasText: 'Inicio' }).click();
   await page.locator('.event-card:not(.live-rail *)').waitFor();
   const dimensions = await page.evaluate(() => {
@@ -179,7 +155,7 @@ try {
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   assert.equal(await page.locator('#player-viewers').isHidden(), true);
   // Multi-screen: two videos top and bottom, three in a 2x2 grid; tapping a tile gives it the sound.
-  await page.locator('.nav a').filter({ hasText: 'Multipantalla' }).click();
+  await page.goto(base + '/#/multipantalla');
   await page.getByRole('button', { name: 'Sports One', exact: true }).click();
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Ver 2 a la vez', exact: true }).click();
@@ -206,13 +182,49 @@ try {
   assert.equal(await page.locator('.multi').evaluate(m => m.classList.contains('idle')), true);
   await page.goBack();
   await page.waitForFunction(() => !document.querySelector('.multi'));
-  await page.locator('.admin-link').click();
+  assert.equal(await page.locator('header a[href="#/admin"]').count(), 0);
+  await page.goto(base + '/#/admin');
+  await page.evaluate(eventId => {
+    window.__statsVisitDays = [{ id: '2026-11-30', data: { 'c_sport-one': 3, [`e_${eventId}`]: 1, 'e_old-event': 1, 'l_archived-movie': 2, 'l_guest-movie': 1 } }];
+    window.__contentTestHistory = [
+      { uid: 'member-fixture', target: 'c:sport-one', startedAt: '2026-11-30T10:00:00Z', device: 'web' },
+      { uid: 'member-fixture', target: `e:${eventId}`, startedAt: '2026-11-30T11:00:00Z', device: 'tv' },
+      { uid: 'admin-fixture', target: 'c:sport-one', startedAt: '2026-11-29T12:00:00Z', device: 'web' },
+      { uid: 'member-fixture', target: 'e:old-event', startedAt: '2026-11-30T12:00:00Z', device: 'android' },
+      { uid: 'member-fixture', target: 'l:archived-movie', startedAt: '2026-11-30T13:00:00Z', device: 'web' },
+    ];
+  }, published.events[0].id);
   await page.locator('.admin-stats a').filter({ hasText: 'Estadísticas' }).click();
   await page.getByRole('heading', { name: 'En vivo ahora', exact: true }).waitFor();
   await page.locator('.stats-table').filter({ hasText: 'Sports One' }).waitFor();
-  assert.match(await page.locator('.stats-total').last().textContent(), /3 visitas/);
+  assert.match(await page.locator('.stats-total').last().textContent(), /6 visitas/);
+  assert.equal(await page.evaluate(() => window.__contentViewerQueries), undefined);
+  const report = page.locator('.stats-history');
+  const viewing = page.getByRole('dialog');
+  await report.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Álvaro', exact: true }).waitFor();
+  assert.equal(await viewing.getByRole('link', { name: 'Álvaro', exact: true }).count(), 1);
+  await viewing.getByText(/2 reproducciones.*Android TV/).waitFor();
+  assert.equal(await viewing.getByRole('link', { name: 'Administrador' }).count(), 0);
+  await viewing.getByRole('button', { name: 'Ver evolución' }).click();
+  await report.getByRole('heading', { name: /Evolución de Sports One/ }).waitFor();
+  await report.getByRole('button', { name: 'old-event (eliminado)', exact: true }).click();
+  assert.equal(await viewing.getByRole('link', { name: 'Álvaro' }).getAttribute('href'), '#/admin/usuarios/member-fixture');
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
+  await report.getByRole('button', { name: 'archived-movie (eliminado)', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Álvaro' }).waitFor();
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
+  await report.getByRole('button', { name: 'guest-movie (eliminado)', exact: true }).click();
+  const emptyHistory = 'No hay usuarios identificados en este periodo.';
+  await viewing.getByText(emptyHistory, { exact: true }).waitFor();
+  assert.equal(await viewing.locator('.stats-viewers-results').textContent(), emptyHistory);
+  await page.keyboard.press('Escape');
+  await viewing.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Año', exact: true }).click();
   assert.equal(await page.locator('.stats-chart .bar').count(), 12);
+  await report.getByRole('button', { name: 'Sports One', exact: true }).click();
+  await viewing.getByRole('link', { name: 'Administrador' }).waitFor();
+  await viewing.getByRole('button', { name: 'Cerrar' }).click();
   await page.locator('.admin-stats a').filter({ hasText: 'Eventos' }).click();
   await page.locator('.item').filter({ hasText: 'Local vs visitante' }).getByRole('link', { name: 'Editar', exact: true }).click();
   await page.getByRole('heading', { name: 'Editar evento', exact: true }).waitFor();
@@ -220,7 +232,7 @@ try {
   await page.getByPlaceholder('Buscar entre tus canales y los de TDT').fill('Two');
   await page.getByRole('button', { name: 'Sports Two', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
-  console.log('Editar evento', await page.locator('form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent, name: form.querySelector('input[aria-label="Nombre del evento"]')?.value, published: window.__published.events.map(e => ({id:e.id,name:e.name})) })));
+  console.log('Editar evento', await page.locator('main form').evaluate(form => ({ valid: form.checkValidity(), invalid: [...form.elements].filter(e => e.checkValidity && !e.checkValidity()).map(e => ({type:e.type,value:e.value.slice(0,80),message:e.validationMessage})), message: form.querySelector('.error')?.textContent, name: form.querySelector('input[aria-label="Nombre del evento"]')?.value, published: window.__published.events.map(e => ({id:e.id,name:e.name})) })));
   await page.waitForFunction(() => window.__published.events[0].name === 'Final');
   assert.equal((await page.evaluate(() => window.__published)).events[0].channelId, 'sport-two');
   const eventId = published.events[0].id;
@@ -228,15 +240,24 @@ try {
   await page.goto(base + '/#/evento/' + eventId);
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
-  // A link opened directly (no tap) cannot start in full screen: browsers do not allow it.
+  // A direct link fills the window without match widgets, even for the administrator.
   assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+  assert.equal(await page.locator('#match-center').isVisible(), false);
+  assert.equal(await page.locator('#player').evaluate(n => n.classList.contains('with-match')), false);
+  assert.equal(await page.locator('.player-screen').evaluate(n => Math.round(n.getBoundingClientRect().height)), await page.evaluate(() => innerHeight));
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.locator('.event-card:not(.live-rail *)').filter({ hasText: 'Final' }).click();
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'player');
+  assert.equal(await page.getByRole('tab', { name: 'Estadísticas' }).count(), 0);
+  assert.equal(await page.getByRole('tab', { name: 'Alineaciones' }).count(), 0);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
   // Old links with the id keep working; a preview page not yet published falls back to the event.
   await page.goto(base + '/evento/final/');
   await page.waitForURL(/#\/evento\/final$/);
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Final');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
-  await page.locator('.admin-link').click();
+  await page.goto(base + '/#/admin');
   await page.locator('.admin-stats a').filter({ hasText: 'Canales' }).click();
   await page.locator('.item').filter({ hasText: 'Sports Two' }).filter({ hasText: 'enlace(s)' }).getByRole('button', { name: 'Eliminar', exact: true }).click();
   await page.waitForFunction(() => window.__published.events.length === 0 && window.__published.channels.length === 1);
@@ -287,7 +308,7 @@ try {
   const matchFixture = () => ({ id: '401882870', date: '2026-11-30T12:00Z', competitions: [{ id: '401882870', status: { displayClock: "74'", type: { state: scoreFinished ? 'post' : 'in', name: scoreFinished ? 'STATUS_FULL_TIME' : 'STATUS_SECOND_HALF', completed: scoreFinished } }, competitors: [{ homeAway: 'home', score: '2', team: { displayName: 'Levante' } }, { homeAway: 'away', score: '1', team: { displayName: 'Athletic Club' } }] }] });
   await page.route('https://calamarmenciano.com/calamar-match.php?**', route => route.fulfill({ json: { url: 'https://www.google.com/search?q=levante+ud+contra+athletic+club' } }));
   // ESPN's summary as the match page reads it: key events, team statistics, line-ups and game information.
-  const matchSummary = () => ({ header: { ...matchFixture(), league: { name: 'LaLiga' } },
+  const matchSummary = () => ({ header: { ...matchFixture(), league: { name: 'LaLiga', slug: 'esp.1' }, season: { year: 2026, type: 1, name: '2026-27' } },
     keyEvents: [{ type: { type: 'goal', text: 'Goal' }, scoringPlay: true, clock: { displayValue: "12'" }, team: { displayName: 'Levante' }, participants: [{ athlete: { displayName: 'Carlos Álvarez' } }] },
       { type: { type: 'yellow-card', text: 'Yellow Card' }, clock: { displayValue: "30'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Oihan Sancet' } }] },
       { type: { type: 'substitution', text: 'Substitution' }, clock: { displayValue: "60'" }, team: { displayName: 'Athletic Club' }, participants: [{ athlete: { displayName: 'Nico Williams' } }, { athlete: { displayName: 'Iñaki Williams' } }] }],
@@ -295,7 +316,7 @@ try {
       { team: { displayName: 'Athletic Club' }, statistics: [{ name: 'possessionPct', displayValue: '42' }, { name: 'totalShots', displayValue: '9' }, { name: 'shotsOnTarget', displayValue: '3' }, { name: 'wonCorners', displayValue: '1' }, { name: 'yellowCards', displayValue: '1' }] }],
       form: [{ team: { displayName: 'Levante' }, events: [{ gameResult: 'W', score: '2-0' }, { gameResult: 'D', score: '1-1' }, { gameResult: 'L', score: '0-1' }] }] },
     headToHeadGames: [{ team: { id: '1', displayName: 'Levante' }, events: [{ id: 'g1', gameDate: '2025-03-01T20:00Z', homeTeamId: '1', score: '1-2', leagueName: 'LaLiga', opponent: { displayName: 'Athletic Club' } }] }],
-    rosters: [{ homeAway: 'home', formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
+    rosters: [{ homeAway: 'home', team: { id: '185' }, formation: '4-4-2', roster: [{ starter: true, jersey: '1', athlete: { id: '1001', displayName: 'Andrés Fernández' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: false, jersey: '20', athlete: { id: '1002', displayName: 'Roger Brugué' }, position: { abbreviation: 'F' } }] },
       { homeAway: 'away', formation: '4-2-3-1', roster: [{ starter: true, jersey: '13', athlete: { displayName: 'Julen Agirrezabala' }, position: { abbreviation: 'G' }, formationPlace: '1' }, { starter: true, jersey: '11', athlete: { displayName: 'Iñaki Williams' }, position: { abbreviation: 'F' }, subbedOut: true, formationPlace: '9' }] }],
     gameInfo: { venue: { fullName: 'Estadio Ciutat de València', address: { city: 'Valencia', country: 'España' } }, attendance: 21000, officials: [{ displayName: 'Mateu Lahoz', position: { displayName: 'Referee' } }] } });
   await page.route('https://site.api.espn.com/**', route => scoreOffline ? route.abort() : route.fulfill({ json: route.request().url().includes('scoreboard') ? { events: [matchFixture()] } : matchSummary() }));
@@ -353,6 +374,29 @@ try {
   assert.equal(await page.locator('.mc-half').count(), 2);
   assert.equal(await page.locator('.mc-man', { hasText: 'Iñaki Williams' }).locator('.mc-badge.out').count(), 1);
   assert.match(await page.locator('.mc-lineups').textContent(), /Suplentes · Levante.*20Roger Brugué/);
+  let playerStatRequests = 0;
+  await page.route('https://sports.core.api.espn.com/v2/sports/soccer/leagues/**', route => {
+    playerStatRequests++;
+    const season = route.request().url().includes('/seasons/2026/');
+    return route.fulfill({ json: { splits: { categories: [{ stats: [
+      { name: 'minutes', value: season ? 800 : 74, displayValue: season ? '800' : '74' },
+      { name: 'totalGoals', value: season ? 7 : 1, displayValue: season ? '7' : '1' },
+    ] }] } } });
+  });
+  assert.equal(playerStatRequests, 0, 'Player statistics are only requested on selection');
+  await page.getByRole('button', { name: 'Ver estadísticas de Andrés Fernández', exact: true }).click();
+  const playerCard = page.getByRole('dialog', { name: 'Estadísticas de Andrés Fernández', exact: true });
+  await playerCard.getByRole('heading', { name: 'Este partido', exact: true }).waitFor();
+  await playerCard.locator('.mc-player-section').filter({hasText:'En la competición'}).getByText('800', {exact:true}).waitFor();
+  await playerCard.locator('.mc-player-section').filter({hasText:'Este partido'}).getByText('74', {exact:true}).waitFor();
+  assert.equal(playerStatRequests, 2);
+  await mkdir('tools/ui-artifacts', {recursive:true});
+  await page.screenshot({path:'tools/ui-artifacts/player-statistics.png'});
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Ver estadísticas de Roger Brugué', exact: true }).click();
+  const subCard = page.getByRole('dialog', { name: 'Estadísticas de Roger Brugué', exact: true });
+  await subCard.locator('.mc-player-section').filter({hasText:'En la competición'}).getByText('800', {exact:true}).waitFor();
+  await subCard.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByRole('tab', { name: 'H2H' }).click();
   assert.match(await page.locator('.mc-h2h').textContent(), /2025.*LaLiga.*Levante.*1 – 2.*Athletic Club/);
   await page.getByRole('tab', { name: 'General' }).click();
@@ -415,18 +459,26 @@ try {
   assert.equal(await page.locator('#match-center').isHidden(), true);
   // Films and series: hidden in the menu until the administrator switches them on.
   const library = { attribution: 'Datos e imágenes de TMDB.', sections: {
-    movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched',
-      tmdb: { title: 'Avatar', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
-      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia'] } }],
-    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
+    movies: [{ id: 'mavatar', kind: 'movie', title: 'Avatar', year: 2009, file: 'Avatar.mp4', url: 'https://calamarmenciano.com/PELIS/Avatar.mp4', status: 'matched', trend: 1,
+      tmdb: { title: 'Avatar', titleLogo: 'https://image.tmdb.org/t/p/w500/TestAvatar.png', year: 2009, overview: 'En el planeta Pandora…', genres: ['Ciencia ficción'], rating: 7.6, votes: 30000, runtime: 162, cast: [{ name: 'Sam Worthington', character: 'Jake Sully' }], poster: '', backdrop: '' } },
+      { id: 'mtorrente', kind: 'movie', title: 'Torrente', year: 1998, file: 'Torrente.mp4', url: 'https://lulustream.com/torrente1998', status: 'matched', tmdb: { title: 'Torrente', genres: ['Comedia', 'Terror'] } }],
+    series: [{ id: 'spaco', kind: 'tv', title: 'Los hombres de Paco', folder: 'Los Hombres de Paco', status: 'matched', tmdb: { title: 'Los hombres de Paco', titleLogo: 'https://image.tmdb.org/t/p/w500/NoSuchLogo.png', overview: 'Comisaría', genres: ['Comedia'] }, skip: { intro: [30, 90], credits: 40 },
       episodes: [{ id: 'e1001', season: 10, episode: 1, name: 'Vuelta a empezar', url: 'https://www.googleapis.com/drive/v3/files/fE1001?alt=media&key=AIzaTEST' }, { id: 'e1002', season: 10, episode: 2, url: 'https://www.googleapis.com/drive/v3/files/fE1002?alt=media&key=AIzaTEST' }] }],
     documentaries: [] } };
   // The library comes from Firestore (index + parts), published by the admin page; no hosting involved.
   const libraryDocs = { index: { sections: { movies: 1, series: 1, documentaries: 1 }, attribution: library.attribution },
     'movies-0': { items: library.sections.movies }, 'series-0': { items: library.sections.series }, 'documentaries-0': { items: [] } };
+  await page.route('https://image.tmdb.org/t/p/w500/TestAvatar.png', route => route.fulfill({ path: 'web/assets/calamar-menciano-tv.png' }));
   await page.route('https://firestore.googleapis.com/v1/projects/menciamedia/databases/(default)/documents/calamarLibrary/**', async route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
-    const published = await page.evaluate(() => window.__libraryParts || null);
+    let published;
+    try { published = await page.evaluate(() => window.__libraryParts || null); }
+    catch (error) {
+      // A background catalog request can be overtaken by a full navigation in this test.
+      if (!/Execution context was destroyed|Cannot find context with specified id/.test(error.message)) throw error;
+      await route.abort().catch(() => {});
+      return;
+    }
     const doc = published ? (name === 'index' ? published.index : published.parts[name]) : libraryDocs[name];
     return doc ? route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(doc) } } } }) : route.fulfill({ status: 404, json: {} });
   });
@@ -458,14 +510,15 @@ try {
       : path.endsWith('/tv/4500/season/2') ? { episodes: [{ episode_number: 1, name: 'Vuelta' }] } : {};
     return route.fulfill({ json: body });
   });
+  await page.getByText('Añadir un título con TMDB', { exact: true }).click();
   await page.getByLabel('Sección', { exact: true }).first().selectOption('movies');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Avatar');
-  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('details').filter({ has: page.getByText('Añadir un título con TMDB', { exact: true }) }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Avatar: El sentido del agua' }).click();
-  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
+  await page.getByLabel('Enlace del vídeo', { exact: false }).fill('https://lulustream.com/fld/h9vd4z179z');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   await page.getByText(/^Enlace no válido/).waitFor(); // a folder link is refused
-  await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).fill('https://lulustream.com/abc123def456');
+  await page.getByLabel('Enlace del vídeo', { exact: false }).fill('https://lulustream.com/abc123def456');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   await page.getByText('Guardado y publicado.', { exact: true }).waitFor();
   let parts = await page.evaluate(() => window.__libraryParts);
@@ -474,8 +527,9 @@ try {
   // A series: the season picker, one link per episode; episodes without a link are left out.
   await page.getByLabel('Sección', { exact: true }).first().selectOption('series');
   await page.getByLabel('Buscar en TMDB', { exact: true }).fill('Paco');
-  await page.locator('.library-search-form').first().getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
+  await page.locator('details').filter({ has: page.getByText('Añadir un título con TMDB', { exact: true }) }).getByRole('button', { name: 'Buscar en TMDB', exact: true }).click();
   await page.locator('.library-result', { hasText: 'Los hombres de Paco' }).click();
+  await page.getByLabel('Título del capítulo 1', { exact: true }).fill('Piloto del catálogo');
   await page.getByLabel('Enlace del capítulo 1').fill('https://lulustream.com/paco1x01aaaa');
   await page.getByRole('button', { name: 'Guardar temporada', exact: true }).click();
   await page.getByText(/^Temporada 1 guardada y publicada: 1 capítulo con enlace/).waitFor();
@@ -500,13 +554,50 @@ try {
   await page.getByText(/^Guardado para la temporada 2: intro de 0:10 a 1:00/).waitFor();
   parts = await page.evaluate(() => window.__libraryParts);
   const paco = parts.parts['series-0'].items.find((m) => m.id === 's4500');
-  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto', 'https://luluvido.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://luluvido.com/paco2x01bbbb']]);
+  assert.deepEqual(paco.episodes.map((e) => [e.season, e.episode, e.name, e.url]), [[1, 1, 'Piloto del catálogo', 'https://luluvido.com/paco1x01aaaa'], [2, 1, 'Vuelta', 'https://luluvido.com/paco2x01bbbb']]);
   assert.deepEqual(paco.skip, { intro: [30, 105], credits: 50, seasons: { 2: { intro: [10, 60], credits: 50 } } });
-  // Editing later shows the saved links.
+  // Published search is local and reopening the series shows its edited episode name.
+  assert.equal(paco.episodes[0].sourceName, 'Piloto');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Buscar títulos publicados' }).fill('páco');
+  assert.equal(await page.locator('.library-item').count(), 2);
+  assert.equal(await page.locator('.library-item', { hasText: 'Los hombres de Paco' }).count(), 2);
+  await page.getByLabel('Tipo de título').selectOption('movies');
+  await page.getByText('No hay títulos publicados que coincidan.', { exact: true }).waitFor();
+  await page.getByLabel('Tipo de título').selectOption('series');
+  await page.locator('[data-library-id="s4500"]').getByRole('button', { name: 'Editar', exact: true }).click();
+  await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
+  await page.getByLabel('Título del capítulo 1', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Título del capítulo 1', { exact: true }).inputValue(), 'Piloto del catálogo');
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByLabel('Tipo de título').selectOption('');
+  await page.getByRole('searchbox', { name: 'Buscar títulos publicados' }).fill('');
   await page.locator('.library-item', { hasText: 'Avatar: El sentido del agua' }).getByRole('button', { name: 'Editar' }).click();
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
+  await page.getByRole('button', { name: 'Editar enlaces y temporadas', exact: true }).click();
+  assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/abc123def456');
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  // Artwork is edited without asking TMDB; both uploaded images and HTTPS URLs persist.
+  assert.equal(await page.getByRole('link', { name: 'Descargar app Android' }).getAttribute('href'), 'https://github.com/djyuanyo/Calamar-TV/releases/latest/download/Calamar-TV.apk');
+  assert.equal(await page.locator('#download-app .download-app-icon svg').count(), 1);
+  assert.equal(await page.locator('#download-app .download-app-arrow').count(), 1);
+  assert.equal(await page.locator('#open-in-app').count(), 0);
+  for (const id of ['m76600', 's4500']) {
+    await page.locator(`[data-library-id="${id}"]`).getByRole('button', { name: 'Editar', exact: true }).click();
+    await page.getByLabel('Enlace de carátula', { exact: true }).fill('https://img.example/poster.jpg');
+    await page.getByLabel('Subir imagen de portada', { exact: true }).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') });
+    await page.getByText('Imagen preparada. Pulsa Guardar cambios para publicarla.').waitFor();
+    await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+    await page.getByText('Carátula y portada guardadas y publicadas.').waitFor();
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await page.locator(`[data-library-id="${id}"]`).getByRole('button', { name: 'Editar', exact: true }).click();
+    assert.equal(await page.getByLabel('Enlace de carátula', { exact: true }).inputValue(), 'https://img.example/poster.jpg');
+    assert.equal(await page.getByLabel('Enlace de imagen de portada', { exact: true }).inputValue(), '');
+    assert.match(await page.getByRole('img', { name: 'Vista previa de imagen de portada', exact: true }).getAttribute('src'), /^data:image\/(png|jpeg|webp);base64,/);
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  }
+  parts = await page.evaluate(() => window.__libraryParts);
+  assert.equal(parts.parts['movies-0'].items.find(m => m.id === 'm76600').url, 'https://luluvido.com/abc123def456');
+  assert.equal(parts.parts['series-0'].items.find(m => m.id === 's4500').episodes.length, 2);
   // Or the LuluStream folders are read: Peliculas/ and Series/<Nombre>/Temporada N/, matched in TMDB.
   const luluFolders = { 0: { folders: [{ fld_id: 10, name: 'Películas' }, { fld_id: 20, name: 'Series' }] },
     10: { folders: [], files: [{ file_code: 'avatarlulu12', title: 'Avatar.El.sentido.del.agua.2022.1080p.mkv' }, { file_code: 'nadanada1234', title: 'Zzzz desconocida.mp4' }] },
@@ -519,7 +610,9 @@ try {
   await page.getByText(/Clave de LuluStream guardada \(privada\)\. Carpetas: Películas, Series/).waitFor();
   await page.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
   await page.getByText(/^Hecho: 0 películas y documentales y 1 serie \(1 capítulos\) publicados, y 1 sin ficha de TMDB/).waitFor();
-  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: añadida sin ficha de TMDB/);
+  assert.match(await page.locator('.library-scan-report').textContent(), /Zzzz desconocida\.mp4: pendiente de identificar en TMDB/);
+  assert.equal(await page.evaluate(() => window.__libraryParts.parts['movies-0'].items.some(item => item.title === 'Zzzz desconocida')), false);
+  assert.ok(await page.evaluate(() => JSON.parse(window.__librarySettings.importState).pending.movies.some(item => item.title === 'Zzzz desconocida')));
   // Mixed folders preserve the film already on LuluStream and add a missing episode from Drive.
   await page.getByLabel('Clave de Google Drive',{exact:true}).fill('AIza'+'x'.repeat(35));
   await page.getByRole('button',{name:'Guardar clave de Google Drive',exact:true}).click();
@@ -534,8 +627,11 @@ try {
   });
   await page.getByLabel('Carpetas de Películas',{exact:true}).fill('https://drive.google.com/drive/folders/films');
   await page.getByLabel('Carpetas de Series',{exact:true}).fill('https://drive.google.com/drive/folders/paco');
-  await page.getByRole('button',{name:'Buscar e importar de ambos sitios',exact:true}).click();
-  await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor();
+  await page.getByRole('button',{name:'Buscar e importar carpetas',exact:true}).click();
+  await page.getByText(/Hecho: 0 películas o documentales, 1 capítulos nuevos.*Omitidos: 1 títulos y 1 capítulos duplicados/).waitFor().catch(async error => {
+    console.log('Mixed folder status', await page.locator('[role=status]').allTextContents());
+    throw error;
+  });
   let mixed=await page.evaluate(()=>window.__libraryParts);
   assert.equal(mixed.parts['movies-0'].items.find(m=>m.id==='m76600').url,'https://luluvido.com/abc123def456');
   assert.equal(mixed.parts['series-0'].items.find(m=>m.id==='s4500').episodes.find(e=>e.season===1&&e.episode===3).url,driveEpisode);
@@ -573,7 +669,7 @@ try {
   parts = await page.evaluate(() => window.__libraryParts);
   assert.equal(parts.parts['movies-0'].items.some((m) => m.id === 'unadanada1234'), false);
   assert.equal(parts.parts['movies-0'].items.find((m) => m.id === 'm76600').url, 'https://luluvido.com/nadanada1234');
-  assert.equal(await page.getByLabel('Enlace del vídeo (LuluStream)', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
+  assert.equal(await page.getByLabel('Enlace del vídeo', { exact: false }).inputValue(), 'https://luluvido.com/nadanada1234');
   await page.getByRole('link', { name: 'Películas · 2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.getByRole('link', { name: 'Series · 2', exact: true }).click();
@@ -614,6 +710,19 @@ try {
   // Netflix-style rows without filters: today's picks and the genre rows, under «Todas las categorías».
   await page.getByRole('heading', { name: 'Recomendaciones de hoy para ti', exact: true }).waitFor();
   assert.ok(await page.locator('.browse-rail').count() > 0);
+  assert.equal(await page.getByText('Colección de terror', { exact: true }).count(), 0);
+  await page.getByLabel('Categoría', { exact: true }).selectOption('Terror');
+  assert.deepEqual(await page.locator('.poster-card .name').allTextContents(), ['Torrente']);
+  await page.getByLabel('Categoría', { exact: true }).selectOption('');
+  await page.locator('.top-rail').waitFor();
+  assert.equal(await page.getByText('Según TMDB', { exact: true }).count(), 0);
+  assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);
+  await page.getByRole('button', { name: 'Créditos', exact: true }).click();
+  const creditDialog = page.getByRole('dialog', { name: 'Créditos' });
+  await creditDialog.getByText(/Este producto usa la API de TMDB/).waitFor();
+  await creditDialog.getByRole('img', { name: 'The Movie Database (TMDB)' }).waitFor();
+  await creditDialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await creditDialog.waitFor({ state: 'hidden' });
   await page.getByLabel('Categoría', { exact: true }).selectOption('Ciencia ficción');
   assert.equal(await page.locator('.poster-card').count(), 1);
   await page.getByLabel('Categoría', { exact: true }).selectOption('');
@@ -631,6 +740,8 @@ try {
     };
   });
   await page.locator('.poster-card', { hasText: 'Torrente' }).first().click();
+  assert.equal(await page.locator('main').getByRole('button', { name: 'Descargar', exact: true }).count(), 0);
+  assert.equal(await page.locator('main').getByText(/Datos e imágenes de TMDB/).count(), 0);
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player-status').getByRole('button', { name: '↻ Reintentar' }).waitFor();
   assert.equal(await page.evaluate(() => window.__hlsSource), 'https://calamarmenciano.com/calamar-lulu.php?code=torrente1998&hls=1');
@@ -640,27 +751,88 @@ try {
   await page.locator('.poster-card').first().waitFor();
   await page.locator('.poster-card', { hasText: 'Avatar' }).first().click();
   await page.getByRole('heading', { name: 'Avatar', exact: true }).waitFor();
-  assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · ★ 7,6/);
+  await page.waitForFunction(() => document.querySelector('.title-logo')?.naturalWidth > 0);
+  assert.equal(await page.locator('.title-body h1').textContent(), '');
+  assert.match(await page.locator('.library-facts').textContent(), /2009 · 162 min · Ciencia ficción/);
+  await page.getByRole('tab', { name: 'Detalles' }).click();
   assert.match(await page.locator('.cast-list').textContent(), /Sam Worthington/);
+  await page.locator('.title-panel').getByText(/★ 7,6/).waitFor();
+  // Simulate an iPhone media element that freezes at minute 15 without reporting an error.
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    let address = '', position = 0;
+    window.__avatarLoads = 0;
+    Object.defineProperties(video, {
+      paused: { configurable: true, get: () => false },
+      duration: { configurable: true, get: () => 9720 },
+      currentTime: { configurable: true, get: () => position, set: value => { position = value; } },
+      src: { configurable: true, get: () => address, set: value => {
+        address = value;
+        window.__avatarLoads++;
+        queueMicrotask(() => video.dispatchEvent(new Event('loadedmetadata')));
+      } },
+    });
+    video.load = () => { address = ''; position = 0; };
+    video.play = async () => { video.dispatchEvent(new Event('playing')); };
+  });
   await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
   await page.locator('#player:not([hidden])').waitFor();
   assert.equal(await page.locator('#player-title').textContent(), 'Avatar');
+  await page.waitForFunction(() => window.__audienceTargets().includes('l:mavatar')
+    && window.__privateHistory.some(record => record.target === 'l:mavatar' && record.uid === 'admin-fixture'));
   assert.ok(page.url().endsWith('#/peliculas/mavatar/ver'));
+  assert.equal(await page.locator('#ctl-multi').isVisible(),false);
   await page.waitForFunction(() => document.getElementById('video').src === 'https://calamarmenciano.com/PELIS/Avatar.mp4');
   // Films are not live: no «En directo» pill or live button, whatever the stream says.
   await page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('durationchange')));
   assert.equal(await page.locator('#player .live-pill').count(), 0);
   assert.equal(await page.evaluate(() => document.fullscreenElement?.id), 'player');
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    video.currentTime = 900;
+    video.dispatchEvent(new Event('timeupdate'));
+    video.dispatchEvent(new Event('waiting'));
+  });
+  await page.clock.fastForward(30000);
+  await page.getByText('El vídeo se ha cortado. Reconectando…').waitFor();
+  await page.clock.fastForward(2000);
+  await page.waitForFunction(() => window.__avatarLoads === 2 && document.getElementById('video').currentTime === 900);
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
   await page.waitForFunction(() => location.hash === '#/peliculas/mavatar');
+  await page.waitForFunction(() => !window.__audienceTargets().includes('l:mavatar'));
+  await page.evaluate(() => {
+    const video = document.getElementById('video');
+    for (const name of ['paused', 'duration', 'currentTime', 'src', 'load', 'play']) delete video[name];
+  });
+  const youtubeEmbed = 'https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0';
+  const youtubeWatch = 'https://www.youtube.com/watch?v=12345678901';
+  const refreshLibrary = () => page.evaluate(async () => (await import('./library.js')).fetchLibrary({ fresh: true }));
+  library.sections.movies.push({ id: 'myoutube', kind: 'movie', title: 'Vídeo de YouTube', url: 'https://youtu.be/12345678901' });
+  let youtubeReferer;
+  await page.route(youtubeEmbed, async route => {
+    youtubeReferer = await route.request().headerValue('referer');
+    await route.fulfill({ contentType: 'text/html', body: '<p>Reproductor de YouTube</p>' });
+  });
+  await refreshLibrary();
+  await page.goto(base + '/#/peliculas/myoutube');
+  await page.getByRole('button', { name: '▶ Reproducir', exact: true }).click();
+  await page.frameLocator('#player-frame').getByText('Reproductor de YouTube').waitFor();
+  assert.equal(youtubeReferer, base + '/');
+  assert.equal(await page.getByRole('link', { name: 'Abrir en YouTube' }).getAttribute('href'), youtubeWatch);
+  await page.getByRole('button', { name: 'Volver', exact: true }).click();
+  await page.waitForFunction(() => location.hash === '#/peliculas/myoutube');
+  library.sections.movies.pop();
+  await refreshLibrary();
   await page.locator('.nav a', { hasText: 'Series' }).click();
   await page.locator('.poster-card', { hasText: 'Los hombres de Paco' }).first().click();
   // A series' page as on Netflix: «Reproducir» the first episode, the tabs, and the season drop-down.
+  await page.waitForFunction(() => document.querySelector('.title-body h1')?.textContent === 'Los hombres de Paco');
   assert.equal(await page.getByLabel('Temporada', { exact: true }).inputValue(), '10');
   await page.getByRole('button', { name: '▶ Reproducir T10:E1', exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'Tráileres y más' }).click();
+  assert.equal(await page.locator('main').getByRole('button', { name: /Descargar/ }).count(), 0);
+  await page.getByRole('tab', { name: 'Extras' }).click();
   await page.getByText('Este título no tiene tráiler en español.').waitFor();
-  await page.getByRole('tab', { name: 'Similares' }).click();
+  await page.getByRole('tab', { name: 'Sugerencias' }).click();
   await page.getByRole('tab', { name: 'Episodios' }).click();
   // An episode opens its own page (its name, or «Capítulo N» without one, and synopsis) with the play button.
   assert.equal(await page.locator('.episode b').nth(1).textContent(), 'Capítulo 2');
@@ -778,7 +950,9 @@ try {
   assert.equal(await weekRow.filter({ hasText: 'Sevilla vs Real Madrid' }).count(), 0, 'next week stays hidden');
   assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).innerText(), /Canal por confirmar/);
   assert.equal(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic img.crest').count(), 2);
-  assert.match(await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-generic').getAttribute('style'), /fondo\.jpg/);
+  const leagueBackground = weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).locator('.event-background');
+  assert.match(await leagueBackground.getAttribute('src'), /fondo\.jpg/);
+  assert.equal(await leagueBackground.getAttribute('loading'), 'lazy');
   if (process.env.CALAMAR_SHOTS) await page.screenshot({ path: `${process.env.CALAMAR_SHOTS}/competition-home.png`, fullPage: true });
   await weekRow.filter({ hasText: 'Real Madrid vs Barcelona' }).click();
   await page.getByText('Canal por confirmar. El partido se verá aquí en cuanto tenga canal.').waitFor();
@@ -823,28 +997,33 @@ try {
   const relay = 'https://calamarmenciano.com/calamar-player.php?page=https%3A%2F%2Fplayer.example%2Fcanal%2Funo&hls=1';
   assert.deepEqual(asked, [relay, `${relay}&intento=1`, `${relay}&intento=2`, `${relay}&intento=3`]);
   assert.match(await page.locator('#player-status').innerText(), /ninguna de sus fuentes funciona/);
-  // Failed lookup stays in our player and retries; it must never switch to an iframe.
-  await page.route('https://zicotv.cc/**', (route) => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: '<p>Sin fuentes ahora</p>' }));
+  // A Zico channel opens the provider frame with the URL from the web hosting.
+  let premiumZicoRequests = 0;
+  await page.route('https://calamarmenciano.com/calamar-player.php?*', route => {
+    const url = new URL(route.request().url());
+    const player = url.searchParams.get('zico_embed');
+    if (!player) return route.fulfill({status:403});
+    assert.equal(url.searchParams.get('zico_mode'), 'token');
+    premiumZicoRequests++;
+    return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{zicoEmbed:1,mode:'token',url:player+'?token=sample-embed-token-test'}});
+  });
+  await page.route('https://bp.zicotv.cc/api/player/*', route =>
+    route.fulfill({ contentType: 'text/html', body: '<p>Reproductor Zico de prueba</p>' }));
+  const expectZicoFrame = async (channel, query = '?token=sample-embed-token-test') => {
+    const frame = page.locator(`#player-frame[src="https://bp.zicotv.cc/api/player/${channel}${query}"]`);
+    await frame.contentFrame().getByText('Reproductor Zico de prueba').waitFor();
+    assert.equal(await frame.getAttribute('referrerpolicy'), 'origin');
+    assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
+  };
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.channels.push({ id: 'zico', name: 'Canal Zico', group: 'Deportes', streams: ['https://zicotv.cc/api/player/1'] });
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
   await page.goto(base + '/?zico=1#/canal/canal-zico');
-  await page.getByText(/No hay un M3U8 vigente/).waitFor();
-  await page.clock.runFor(90000);
-  assert.equal(await page.locator('#player-frame').count(), 0);
-  assert.equal(await page.evaluate(() => document.querySelector('#player').classList.contains('framed')), false);
+  await expectZicoFrame(1);
   assert.equal(await page.locator('#player-close').isVisible(), true);
-  assert.deepEqual(await page.evaluate(() => window.__hlsSources), []);
-  await page.locator('#player-close').click();
-  // Exposed sources use our HLS player without sending the page through the hosting.
-  let tokenVersion = 0;
-  await page.route('https://zicotv.cc/api/player/1', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' },
-    body: 'var ZT_SOURCES = ' + JSON.stringify([{ url: `https://cdn.example/renew.m3u8?token=fresh${++tokenVersion}` }]) + ';' }));
-  await page.goto(base + '/?zico=2#/canal/canal-zico');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('fresh1')));
-  assert.equal(await page.locator('#player-frame').count(), 0);
+  assert.equal(premiumZicoRequests, 1);
   await page.locator('#player-close').click();
   // Event page URLs expand into named public players, never an iframe of /events/.
   let eventReady = true;
@@ -852,28 +1031,327 @@ try {
     {name:'Canal A', player_url:'https://bp.zicotv.cc/api/player/22'},
     {name:'Canal B', player_url:'https://bp.zicotv.cc/api/player/23'}
   ] : [] } }) }));
-  await page.route('https://bp.zicotv.cc/api/player/*', route => route.fulfill({ contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'var ZT_SOURCES = ' + JSON.stringify([{url:`https://cdn.example/event-${route.request().url().split('/').pop()}.m3u8`}]) + ';' }));
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
     saved.events.push({id:'manual-zico',name:'Evento Zico Manual',cover:'https://example.com/cover.jpg',channelId:'',streams:['https://bp.zicotv.cc/events/98019']});
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
   await page.goto(base + '/?event-zico=1#/evento/evento-zico-manual');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  await expectZicoFrame(22);
   assert.deepEqual(await page.locator('#player-source-select option').allTextContents(), ['Canal A','Canal B']);
   await page.getByLabel('Cambiar fuente').selectOption('1');
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-23')));
+  await expectZicoFrame(23);
   assert.equal(await page.locator('#player-source-select').inputValue(), '1');
-  assert.equal(await page.locator('#player-frame').count(), 0);
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
-  await page.getByText('Zico TV todavía no publica fuentes disponibles para este evento.', {exact:false}).waitFor();
-  assert.equal(await page.locator('#player-frame').count(), 0);
+  await page.getByText('Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.', { exact: true }).waitFor();
+  assert.ok(page.url().endsWith('#/evento/evento-zico-manual'));
+  assert.equal(await page.locator('#player').isVisible(), true);
+  assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).events.some(event => event.id === 'manual-zico')), true);
   eventReady = true;
-  await page.getByRole('button', {name:'↻ Consultar de nuevo'}).click();
-  await page.waitForFunction(() => window.__hlsSources?.some(url => url.includes('event-22')));
+  await page.goto(base + '/?event-zico=3#/evento/evento-zico-manual');
+  await expectZicoFrame(22);
   await page.locator('#player-close').click();
+  // A player link from the provider can carry its short-lived signature.
+  await page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4?st=example'];
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  });
+  await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
+  await expectZicoFrame(4, '?st=example');
+  await page.locator('#player-close').click();
+  // Dailymotion is shown in the video screen with the original provider configuration.
+  const dmPage = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
+  await page.route(dmPage, route => route.fulfill({ body: '<video controls></video>', contentType: 'text/html' }));
+  await page.evaluate(url => {
+    const saved = JSON.parse(sessionStorage.getItem('catalog'));
+    saved.channels.find(c => c.id === 'zico').streams = [url];
+    sessionStorage.setItem('catalog', JSON.stringify(saved));
+  }, dmPage);
+  await page.goto(base + '/?dailymotion=1#/canal/canal-zico');
+  await page.locator('#player-frame').waitFor();
+  assert.equal(await page.locator('#player-frame').getAttribute('src'), dmPage);
+  await page.locator('#player-close').click();
+  // A sync that only deletes files must publish too. Exercise the actual admin handlers and readers.
+  const syncPage = await browser.newPage();
+  const driveLink = id => `https://calamarmenciano.com/calamar-drive.php?id=${id}&v=${'A'.repeat(80)}`;
+  const syncSeed = { index: { sections: { movies: 1, series: 1, documentaries: 1 } }, parts: {
+    'movies-0': { items: [{ id: 'm-sync-drive', kind: 'movie', title: 'Retirar Drive', url: driveLink('film'), fromFolder: true },
+      { id: 'm-sync-lulu', kind: 'movie', title: 'Retirar Lulu', url: 'https://luluvido.com/removed12345', fromFolder: true }] },
+    'series-0': { items: [{ id: 's-sync', kind: 'tv', title: 'Serie borrada', episodes: [
+      { id: 'e-sync', season: 1, episode: 1, url: driveLink('episode'), fromFolder: true }] }] },
+    'documentaries-0': { items: [] },
+  } };
+  await syncPage.addInitScript(seed => {
+    window.__libraryParts = seed;
+    window.__librarySettings = { tmdb: 'abcdef0123456789abcdef0123456789', lulu: 'clave123456', drive: 'AIza' + 'x'.repeat(35), sourceFolders: [
+      { section: 'movies', url: 'https://drive.google.com/drive/folders/movies' },
+      { section: 'series', url: 'https://drive.google.com/drive/folders/series' },
+    ] };
+  }, syncSeed);
+  await syncPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await syncPage.route('https://firestore.googleapis.com/**/calamarLibrary/*', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const data = await syncPage.evaluate(name => name === 'index' ? window.__libraryParts.index : window.__libraryParts.parts[name], name);
+    await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
+  });
+  let failSeries = true;
+  await syncPage.route('https://calamarmenciano.com/calamar-drive.php', route => {
+    const id = new URLSearchParams(route.request().postData()).get('id');
+    return route.fulfill({ status: failSeries && id === 'series' ? 502 : 200, json: failSeries && id === 'series'
+      ? { error: 'Falló la carpeta de series: catálogo conservado' } : { name: id, files: [], folders: [] } });
+  });
+  await syncPage.route('https://luluvido.com/api/folder/list*', route => route.fulfill({ json: { status: 200, result: { files: [], folders: [] } } }));
+  await syncPage.goto(base + '/#/admin/biblioteca');
+  await syncPage.getByText('Retirar Drive', { exact: false }).waitFor();
+  await syncPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await syncPage.getByText('Falló la carpeta de series: catálogo conservado', { exact: true }).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount || 0), 0, 'a failure after an empty folder never publishes deletions');
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts), syncSeed);
+  failSeries = false;
+  await syncPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await syncPage.getByText(/Retirados: 1 películas o documentales, 1 series y 1 capítulos/).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 1, 'zero additions still publishes the removals');
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.map(item => item.id)), ['m-sync-lulu']);
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['series-0'].items), []);
+  await syncPage.getByRole('button', { name: 'Leer carpetas de LuluStream', exact: true }).click();
+  await syncPage.getByText(/Retirados: 1 películas o documentales, 0 series y 0 capítulos/).waitFor();
+  assert.equal(await syncPage.evaluate(() => window.__libraryPublishCount), 2);
+  assert.deepEqual(await syncPage.evaluate(() => window.__libraryParts.parts['movies-0'].items), []);
+  await syncPage.close();
+  // Vidara uses the administrator's key in POST, and publishes only the video link.
+  const vidaraPage = await browser.newPage();
+  await vidaraPage.addInitScript(() => {
+    window.__libraryParts = { index: { sections: { movies: 1, series: 0, documentaries: 0 } },
+      parts: { 'movies-0': { items: [{ id: 'm90001', kind: 'movie', title: 'Ficha equivocada', status: 'matched',
+        tmdb: { id: 90001, title: 'Ficha equivocada' }, url: 'https://example.test/video.mp4' }] } } };
+  });
+  await vidaraPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await vidaraPage.route('https://firestore.googleapis.com/**/calamarLibrary/*', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const data = await vidaraPage.evaluate(name => name === 'index' ? window.__libraryParts.index : window.__libraryParts.parts[name], name);
+    await route.fulfill({ json: { fields: { json: { stringValue: JSON.stringify(data) } } } });
+  });
+  await vidaraPage.route('https://api.themoviedb.org/**', route => route.fulfill({
+    json: new URL(route.request().url()).pathname.endsWith('/movie/90002')
+      ? { id: 90002, title: 'Ficha correcta', release_date: '2024-01-02' } : { results: [] },
+  }));
+  let updatedVidaraBridge = false;
+  await vidaraPage.route('https://calamarmenciano.com/calamar-vidara.php', route => {
+    const body = new URLSearchParams(route.request().postData());
+    assert.equal(route.request().method(), 'POST');
+    assert.equal(body.get('key'), 'vidara-test-key');
+    if (updatedVidaraBridge && body.get('id') === '4') return route.fulfill({ status: 502,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: { bridge: 3, error: 'vidara_upstream', upstream_http: 500, upstream_status: 0 } });
+    const json = body.get('action') === 'folders' ? { folders: [
+      { fld_id: 4, name: 'Documentales' }, { fld_id: 5, name: 'Películas', videos: 2 },
+    ] }
+      : updatedVidaraBridge ? { complete_inventory: true, page: 1, total_pages: 1, total: 2, videos: [
+        { filecode: 'KILxn38HjQjsv', title: 'Película Vidara 2024.mp4', file_active: 1 },
+        { filecode: 'VIDQUEUE1234', title: 'Película en cola.mp4', file_active: 0 },
+      ] } : { page: 1, total_pages: 0, total: 0, videos: [] };
+    return route.fulfill({ json, headers: { 'Access-Control-Allow-Origin': '*' } });
+  });
+  await vidaraPage.goto(base + '/#/admin/biblioteca');
+  await vidaraPage.locator('summary', { hasText: 'Configuración' }).click();
+  await vidaraPage.getByLabel('Clave de Vidara', { exact: true }).fill('vidara-test-key');
+  await vidaraPage.getByRole('button', { name: 'Guardar clave de Vidara', exact: true }).click();
+  const category = vidaraPage.getByLabel('Categoría para Películas', { exact: true });
+  await category.waitFor();
+  assert.equal(await category.inputValue(), 'movies');
+  await vidaraPage.getByText('Archivos en Vidara · 2', { exact: true }).waitFor();
+  await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await vidaraPage.getByText(/«Películas».*Sustituye calamar-vidara.php/).waitFor();
+  assert.deepEqual(await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.map(item => item.id)), ['m90001']);
+  updatedVidaraBridge = true;
+  await vidaraPage.getByRole('button', { name: 'Buscar e importar carpetas', exact: true }).click();
+  await vidaraPage.getByText(/2 archivos detectados \(1 sin reproducción disponible\)/).waitFor();
+  await vidaraPage.getByText(/«Documentales».*Vidara HTTP 500/).waitFor();
+  await vidaraPage.waitForFunction(() => JSON.parse(window.__librarySettings.importState || '{}').pending?.movies.some(item => item.url === 'https://vidara.to/v/KILxn38HjQjsv'));
+  assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('KILxn38HjQjsv')), false);
+  assert.equal(await vidaraPage.evaluate(() => JSON.stringify(window.__libraryParts).includes('vidara-test-key')), false);
+  await vidaraPage.locator('[data-library-id="m90001"]').getByRole('button', { name: 'Editar', exact: true }).click();
+  await vidaraPage.getByRole('button', { name: 'Corregir ficha de TMDB', exact: true }).click();
+  await vidaraPage.getByLabel('Buscar su ficha en TMDB', { exact: true }).fill('https://www.themoviedb.org/movie/90002-ficha-correcta');
+  await vidaraPage.locator('.library-editor').getByRole('button', { name: 'Buscar', exact: true }).click();
+  await vidaraPage.locator('.library-editor .library-result', { hasText: 'Ficha correcta' }).click();
+  await vidaraPage.getByRole('heading', { name: 'Editar · Ficha correcta', exact: true }).waitFor();
+  const fixed = await vidaraPage.evaluate(() => window.__libraryParts.parts['movies-0'].items.find(item => item.id === 'm90001'));
+  assert.equal(fixed.tmdb.id, 90002);
+  assert.equal(fixed.url, 'https://example.test/video.mp4');
+  await vidaraPage.close();
+
+  // Several competitions keep their own groups under one Calamar TV header.
+  const crestImage = 'data:image/png;base64,' + (await readFile('web/assets/favicon-32.png')).toString('base64');
+  const livePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await livePage.clock.install({ time: new Date('2026-11-30T12:00:00Z') });
+  await livePage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await livePage.addInitScript(seed => sessionStorage.setItem('catalog', JSON.stringify(seed)), {
+    ...fixture, leagues: [{ id: 'l1', name: 'Liga Uno' }, { id: 'l2', name: 'Liga Dos' }],
+    teams: [{ id: 'home', name: 'Local', logo: crestImage }, { id: 'away', name: 'Visitante', logo: crestImage }],
+    events: [{ id: 'e1', sport: 'Soccer', name: 'Partido Uno', leagueId: 'l1', homeTeamId: 'home', awayTeamId: 'away', cover: crestImage, channelId: 'sport-one', startAt: '2026-11-30T11:00:00Z' },
+      { id: 'e2', sport: 'Basketball', name: 'Partido Dos', leagueId: 'l2', channelId: 'sport-two', startAt: '2026-11-30T13:00:00Z' },
+      { id: 'e3', name: 'Partido de mañana', leagueId: 'l1', channelId: 'sport-one', startAt: '2026-12-01T13:00:00Z' }],
+  });
+  livePage.on('pageerror', error => errors.push(error.message));
+  await livePage.goto(base + '/');
+  const homeSearch = livePage.getByRole('searchbox', { name: 'Buscar canales y eventos' });
+  assert.equal(await homeSearch.getAttribute('autocomplete'), 'off');
+  assert.equal(await homeSearch.getAttribute('data-1p-ignore'), '');
+  await homeSearch.fill('LÍGA UNO');
+  await homeSearch.press('Enter');
+  await livePage.getByRole('heading', { name: /Resultados para/ }).waitFor();
+  assert.equal(await livePage.locator('main .event-card').count(), 1);
+  assert.match(await livePage.locator('main .event-card').innerText(), /Partido Uno/);
+  await homeSearch.fill('');
+  await livePage.locator('a[href="#/directo"]').click();
+  await livePage.locator('.live-hero h1', { hasText: 'Eventos En Directo' }).waitFor();
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
+  assert.equal(await livePage.locator('.league-grid .event-generic img.crest').count(), 2);
+  assert.match(await livePage.locator('.league-grid .event-background').first().getAttribute('src'), /^data:image\/png;base64,/);
+  assert.equal(await livePage.locator('.live-hero img').getAttribute('src'), './assets/calamar-menciano-tv.png');
+  assert.deepEqual(await livePage.locator('main .section-head h2').allTextContents(), ['Liga Uno', 'Liga Dos']);
+  await livePage.getByRole('tab', {name:/Baloncesto/}).click();
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 1);
+  assert.match(await livePage.locator('.league-grid .event-card').innerText(), /Partido Dos/);
+  assert.equal(await livePage.getByRole('tab', {name:/Baloncesto/}).getAttribute('aria-selected'), 'true');
+  assert.match(await livePage.locator('.live-hero').innerText(), /1 evento hoy/);
+  await mkdir('tools/ui-artifacts', {recursive:true});
+  await livePage.screenshot({path:'tools/ui-artifacts/live-sport-tabs.png',fullPage:true});
+  await livePage.getByRole('tab', {name:/Baloncesto/}).press('ArrowLeft');
+  await livePage.waitForFunction(() => document.querySelector('#sport-tab-soccer')?.getAttribute('aria-selected') === 'true');
+  assert.match(await livePage.locator('.league-grid .event-card').innerText(), /Partido Uno/);
+  await livePage.getByRole('tab', {name:/Fútbol/}).press('Home');
+  await livePage.waitForFunction(() => document.querySelectorAll('.league-grid .event-card').length === 2);
+
+  assert.equal(await livePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await livePage.setViewportSize({ width: 1440, height: 900 });
+  assert.equal(await livePage.locator('.league-grid .event-card').count(), 2);
+  await livePage.locator('main a[href="#/liga/liga-uno"]').click();
+  await livePage.locator('.league-hero h1', { hasText: 'Liga Uno' }).waitFor();
+  assert.equal(await livePage.locator('.league-grid img.crest').count(), 2);
+  await livePage.close();
   assert.deepEqual(errors, []);
-  console.log('UI verificada: crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
+  // All types offer deletion, including unmatched titles, without loading TMDB.
+  await page.goto(base + '/#/admin/biblioteca');
+  await page.locator('.library-admin-list .library-item').first().waitFor();
+  const beforeDelete = await page.locator('.library-admin-list .library-item').count();
+  await page.locator('.library-admin-list .library-item').first().getByRole('button', { name: 'Editar', exact: true }).click();
+  await page.getByRole('button', { name: 'Eliminar del catálogo', exact: true }).click();
+  await page.waitForFunction(n => document.querySelectorAll('.library-admin-list .library-item').length === n - 1, beforeDelete);
+  // Add events from the player, retaining the initial channel and the live tile elements.
+  const multiPage = await browser.newPage({viewport:{width:390,height:844}});
+  const multiFixture={...fixture,events:[
+    {id:'mp1',name:'Águilas vs Betis',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp2',name:'Evento Beta',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp3',name:'Evento Gamma',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp4',name:'Evento Delta',channelId:'sport-two',cover:'https://example.com/cover.png'},
+    {id:'mp5',name:'Evento Quinto',channelId:'sport-two',cover:'https://example.com/cover.png'}]};
+  await multiPage.addInitScript(seed=>sessionStorage.setItem('catalog',JSON.stringify(seed)),multiFixture);
+  await multiPage.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
+  multiPage.on('pageerror',e=>errors.push(e.message));
+  await multiPage.goto(base+'/#/canal/sports-one');
+  await multiPage.locator('#ctl-multi').click();
+  const pick = multiPage.getByRole('dialog',{name:'Añadir evento',exact:true});
+  assert.equal(await pick.locator('.multi-event-choice').count(),5);
+  await pick.getByRole('button',{name:'Cancelar',exact:true}).click();
+  assert.equal(await multiPage.locator('#player').isVisible(),true);
+  assert.equal(await multiPage.locator('#player-title').textContent(),'Sports One');
+  await multiPage.locator('#ctl-multi').click();
+  await pick.getByRole('searchbox').fill('aguilas');
+  assert.equal(await pick.locator('.multi-event-choice').count(),1);
+  await pick.getByRole('button',{name:'Águilas vs Betis',exact:true}).click();
+  await multiPage.locator('.multi-tile').nth(1).waitFor();
+  assert.equal(await multiPage.locator('.multi-name').first().textContent(),'Sports One');
+  await multiPage.locator('.multi-tile video').first().evaluate(v=>v.dataset.retained='yes');
+  const addEvent=async name=>{
+    await multiPage.locator('.multi-tile').first().click();
+    await multiPage.getByRole('button',{name:'Añadir evento a multipantalla',exact:true}).click();
+    await pick.getByRole('searchbox').fill(name);
+    await pick.getByRole('button',{name,exact:true}).click();
+  };
+  await addEvent('Evento Beta');await addEvent('Evento Gamma');
+  assert.equal(await multiPage.locator('.multi-tile').count(),4);
+  assert.equal(await multiPage.locator('.multi-tile video').first().getAttribute('data-retained'),'yes');
+  assert.equal(await multiPage.getByRole('button',{name:'Añadir evento a multipantalla',exact:true}).isEnabled(),false);
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[false,true,true,true]);
+  await multiPage.getByRole('button',{name:'Oír Evento Gamma',exact:true}).click();
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[true,true,true,false]);
+  await multiPage.getByRole('button',{name:'Quitar Evento Gamma',exact:true}).click();
+  assert.equal(await multiPage.locator('.multi-tile').count(),3);
+  assert.deepEqual(await multiPage.locator('.multi-tile video').evaluateAll(v=>v.map(x=>x.muted)),[false,true,true]);
+  assert.equal(await multiPage.locator('.multi-tile video').first().getAttribute('data-retained'),'yes');
+  await multiPage.getByRole('button',{name:'✕ Salir',exact:true}).click();
+  await multiPage.locator('#player').waitFor({state:'visible'});
+  assert.equal(await multiPage.locator('#player-title').textContent(),'Sports One');
+  assert.equal(await multiPage.locator('.multi').count(),0);
+  await multiPage.close();
+  // Channel images can be chosen from a device when creating or editing; untouched images persist.
+  const channelPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  channelPage.on('pageerror', error => errors.push(error.message));
+  await channelPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  const logoFile = { name: 'canal.png', mimeType: 'image/png', buffer: await readFile('web/assets/calamar-menciano-tv.png') };
+  await channelPage.goto(base + '/#/admin');
+  await channelPage.getByLabel('Nombre', { exact: true }).fill('Canal con imagen');
+  await channelPage.getByLabel('Enlaces', { exact: true }).fill('https://example.com/channel.m3u8');
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles(logoFile);
+  await channelPage.getByText('Imagen preparada.', { exact: true }).waitFor();
+  const uploadedLogo = await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src');
+  assert.match(uploadedLogo, /^data:image\/(png|webp);base64,/);
+  await channelPage.evaluate(() => {
+    window.__beforeCatalogPublish = () => { throw new Error('Conexión interrumpida durante la publicación.'); };
+  });
+  await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await channelPage.getByText('Conexión interrumpida durante la publicación.', { exact: true }).waitFor();
+  assert.equal(await channelPage.getByLabel('Nombre', { exact: true }).inputValue(), 'Canal con imagen');
+  assert.equal(await channelPage.getByLabel('Enlaces', { exact: true }).inputValue(), 'https://example.com/channel.m3u8');
+  await channelPage.evaluate(() => {
+    window.__beforeCatalogPublish = catalog => {
+      catalog.channels.push({ id: 'concurrent-channel', name: 'Canal de otro dispositivo', streams: ['https://example.com/other.m3u8'] });
+      return catalog;
+    };
+  });
+  await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+  await channelPage.waitForFunction(() => window.__published?.channels.some(c => c.name === 'Canal con imagen'));
+  assert.equal(await channelPage.evaluate(() => window.__published.channels.filter(c => c.name === 'Canal con imagen').length), 1);
+  assert.equal(await channelPage.evaluate(() => window.__published.channels.some(c => c.id === 'concurrent-channel')), true);
+  await channelPage.reload();
+  await channelPage.getByText('Canal con imagen', { exact: true }).waitFor();
+  await channelPage.getByText('Canal de otro dispositivo', { exact: true }).waitFor();
+  const imageChannelId = await channelPage.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).channels.find(c => c.name === 'Canal con imagen').id);
+  const editChannel = async () => {
+    await channelPage.goto(base + '/#/admin/editar/' + imageChannelId);
+    await channelPage.getByRole('heading', { name: /Editar Canal con imagen/ }).waitFor();
+  };
+  const saveChannel = async expected => {
+    await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).click();
+    await channelPage.getByText('Guardado. Los cambios ya están publicados para la web y la app.', { exact: true }).waitFor();
+    await channelPage.waitForFunction(([id, expected]) => window.__published?.channels.find(c => c.id === id)?.logo === expected, [imageChannelId, expected]);
+  };
+  await editChannel();
+  assert.equal(await channelPage.getByLabel('Logo (opcional)', { exact: true }).inputValue(), '');
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Nombre', { exact: true }).fill('Canal con imagen editado');
+  await saveChannel(uploadedLogo);
+  await editChannel();
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles([]);
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles({ name: 'archivo.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+  await channelPage.getByText('Elige una imagen.', { exact: true }).waitFor();
+  assert.equal(await channelPage.getByRole('button', { name: 'Guardar y publicar', exact: true }).isEnabled(), true);
+  assert.equal(await channelPage.getByRole('img', { name: 'Vista previa del logo del canal' }).getAttribute('src'), uploadedLogo);
+  await channelPage.getByLabel('Logo (opcional)', { exact: true }).fill('https://example.com/new-logo.png');
+  await saveChannel('https://example.com/new-logo.png');
+  await editChannel();
+  assert.equal(await channelPage.getByLabel('Logo (opcional)', { exact: true }).inputValue(), 'https://example.com/new-logo.png');
+  await channelPage.getByLabel('Subir imagen del canal', { exact: true }).setInputFiles(logoFile);
+  await channelPage.getByText('Imagen preparada.', { exact: true }).waitFor();
+  await saveChannel(uploadedLogo);
+  await editChannel(); await channelPage.getByRole('button', { name: 'Quitar imagen', exact: true }).click(); await saveChannel('');
+  assert.equal(await channelPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await channelPage.close(); assert.deepEqual(errors, []);
+  console.log('UI verificada: crear y editar canales con subida de imagen, URL, transparencia y cancelación; crear evento, subir portada, buscar canal, fecha antes del inicio, carrusel automático y deslizable, espectadores y visitas, estadísticas, portada solo con eventos por liga, importar competición con jornadas de la semana, fondo de liga con escudos y «Canal por confirmar», multipantalla, categorías con orden arrastrable, nombre y color, pelis y series, editar y retirar eventos asociados; buscador bajo cabecera.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

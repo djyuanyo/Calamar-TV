@@ -47,7 +47,11 @@ final class Profiles {
   static void forget(Listener listener) { LISTENERS.remove(listener); }
 
   static FirebaseUser user(Context c) {
-    try { return SharedCatalog.auth(c).getCurrentUser(); } catch (RuntimeException unavailable) { return null; }
+    try { return verifiedUser(SharedCatalog.auth(c).getCurrentUser()); } catch (RuntimeException unavailable) { return null; }
+  }
+
+  static FirebaseUser verifiedUser(FirebaseUser user) {
+    return user != null && user.isEmailVerified() ? user : null;
   }
   static boolean signedIn() { return uid != null; }
   static List<JSONObject> profiles() { return ProfileData.profiles(account); }
@@ -59,6 +63,12 @@ final class Profiles {
   static JSONObject data() { return data; }
   /** Signed in, with profiles, and none chosen since the app opened. */
   static boolean needsPick() { return uid != null && !profiles().isEmpty() && !pickedThisLaunch; }
+
+  /** A first sign-in can be admitted before its profiles arrive from Firestore. */
+  static boolean awaitingProfiles(Context context) {
+    FirebaseUser signed = user(context);
+    return signed != null && !signed.isAnonymous() && (!signed.getUid().equals(uid) || profiles().isEmpty());
+  }
 
   /** «Continuar viendo» of the profile watching (calamarProgress/<uid> for the main one or without profiles). */
   static DocumentReference progressDocument(Context c, FirebaseUser user) {
@@ -94,7 +104,7 @@ final class Profiles {
   }
 
   private static void load(Context app, FirebaseAuth auth) {
-    FirebaseUser user = auth.getCurrentUser();
+    FirebaseUser user = verifiedUser(auth.getCurrentUser());
     String now = user == null ? null : user.getUid();
     if (now == null) {
       confirmed = true;
@@ -113,8 +123,10 @@ final class Profiles {
       data = localData(app);
     }
     confirmed = true;
+    UserDirectory.touch(app, user);
     db(app).document("calamarUsers/" + uid).get(Source.SERVER).addOnCompleteListener(task -> {
       if (!now.equals(uid)) return;
+      if (!task.isSuccessful() && !profiles().isEmpty()) { changed(); return; }
       JSONObject found = null;
       if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
         try { found = new JSONObject(task.getResult().getString("json")); } catch (Exception broken) { found = null; }

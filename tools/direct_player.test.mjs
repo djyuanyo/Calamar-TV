@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readSource, mount } from '../web/direct-player.js';
+import { webPlayback } from '../web/catalog.js';
 
 test('preserves signed URL including percent escapes, plus and ampersand', () => {
   const url = 'https://cdn.example/live/INDEX.M3U8?token=a%2Bb%2Fc-1799999999-&x=1+2';
@@ -51,4 +52,19 @@ test('fatal HLS failure stops requests; retry destroys the old engine and ignore
 test('expired and invalid sources never start HLS', () => {
   for (const url of ['https://cdn.example/live.m3u8?e=1000000000', 'javascript:alert(1)'])
     assert.equal(fixture(url).instances.length, 0);
+});
+
+test('RFAF channel 11 uses the Calamar hosting in the site and Android web player', () => {
+  for (const name of ['playlist.m3u8', 'chunklist_b1500000.m3u8']) {
+    const source = 'https://cdnlive.codev8.net/rfaf20live/smil:channel11.smil/' + name;
+    const playback = webPlayback(source, { pages: true });
+    const relay = new URL(playback.address);
+    assert.equal(playback.kind, 'hls');
+    assert.equal(relay.origin + relay.pathname, 'https://calamarmenciano.com/calamar-player.php');
+    assert.equal(relay.searchParams.get('page'), source);
+    assert.equal(relay.searchParams.get('hls'), '1');
+    assert.equal(fixture(source).instances[0].url, relay.href);
+    const anotherChannel = source.replace('channel11', 'channel12');
+    assert.equal(fixture(anotherChannel).instances[0].url, anotherChannel);
+  }
 });

@@ -1,5 +1,7 @@
 """calamar-player.php: player pages read like the app, lists relayed with signed addresses, catalog channels only."""
 import json
+import http.server
+import threading
 import os
 import pathlib
 import socket
@@ -15,12 +17,259 @@ PHP = str(ROOT / 'hosting/calamar-player.php')
 SECRET = 'secreto-de-prueba-0123456789abcdef'
 
 
-def php(code):
+def php(code, disabled=()):
     env = {**os.environ, 'CALAMAR_PLAYER_SECRET': SECRET}
-    return subprocess.check_output(['php', '-r', f'require {json.dumps(PHP)}; {code}'], text=True, env=env)
+    args = ['php'] + (['-d', 'disable_functions=' + ','.join(disabled)] if disabled else [])
+    return subprocess.check_output(args + ['-r', f'require {json.dumps(PHP)}; {code}'], text=True, env=env)
 
 
 class PlayerRelayTest(unittest.TestCase):
+    def test_cacheable_zico_player_uses_its_signed_renewal_post_without_executing_scripts(self):
+        page = 'https://bp.zicotv.cc/api/player/4'
+        renew = '/api/player/4/renew?expires=1794427569&signature=' + 'a' * 64
+        html = '<script>var ZT_SOURCES = [{"url":null}]; var ZT_SRC_GATE = null; var ZT_RENEW = ' + json.dumps({'url': renew, 'ttl': 1200, 'view': True}) + '; alert("must never run");</script>'
+        code = f'''
+        $calls = [];
+        $post = function($url,$page,$body) use (&$calls) {{
+            $calls[] = [$url,$page,$body];
+            return [200,json_encode(['ttl'=>1200,'sources'=>[
+                ['url'=>'https://cdn6.zicotv.cc/live/index.m3u8?token=fresh','label'=>'CDN 6'],
+                ['url'=>'https://cdn.zicotv.cc/live/index.m3u8?token=locked','locked'=>true],
+                ['url'=>'https://hidden.example/live.m3u8','hidden'=>true],
+                ['url'=>'http://private.example/live.m3u8'],
+                ['url'=>'https://user:secret@cdn.example/live.m3u8'],
+                ['url'=>null]
+            ]])];
+        }};
+        $result=playerZicoRenewSources({json.dumps(html)},{json.dumps(page)},$post);
+        echo json_encode([$calls,$result,playerJsonConfig('var ZT_RENEW = fetch("evil");','ZT_RENEW')]);
+        '''
+        calls, result, unsafe = json.loads(php(code))
+        self.assertEqual(calls, [[page + '/renew?expires=1794427569&signature=' + 'a' * 64, page, {'native': False}]])
+        self.assertEqual(result['ttl'], 1200)
+        self.assertEqual(result['sources'], [{'url': 'https://cdn6.zicotv.cc/live/index.m3u8?token=fresh', 'label': 'CDN 6'}])
+        self.assertIsNone(unsafe)
+
+    def test_renewal_stays_on_the_same_channel_and_respects_verification_and_session_gates(self):
+        good = '/api/player/4/renew?expires=1794427569&signature=' + 'a' * 64
+        variants = [
+            ({'url': 'https://evil.example' + good}, ''),
+            ({'url': good.replace('/4/', '/5/')}, ''),
+            ({'url': good + '&redirect=https://evil.example'}, ''),
+            ({'url': good, 'conn': True}, ''),
+            ({'url': good}, 'var ZT_SRC_GATE = {"url":"/captcha","sitekey":"test"};'),
+            ({'url': good}, 'var ZT_PREMIUM_GATE = true;'),
+            ({'url': good}, 'var ZT_CONN_LIMIT = true;'),
+            ({'url': good}, 'var ZT_APP_GATE = true;'),
+        ]
+        for config, gate in variants:
+            with self.subTest(config=config, gate=gate):
+                html = 'var ZT_RENEW = ' + json.dumps(config) + ';' + gate
+                result = json.loads(php(f'''
+                    $called=false; $rejected=false;
+                    try {{playerZicoRenewSources({json.dumps(html)},'https://bp.zicotv.cc/api/player/4',function()use(&$called){{$called=true;return [200,'{{"sources":[]}}'];}});}}
+                    catch(RuntimeException $e){{$rejected=true;}}
+                    echo json_encode([$called,$rejected]);
+                '''))
+                self.assertEqual(result, [False, True])
+        rejected = json.loads(php(f'''
+            $html={json.dumps('var ZT_RENEW = ' + json.dumps({'url':good}) + ';')};
+            try {{playerZicoRenewSources($html,'https://bp.zicotv.cc/api/player/4',function(){{return [403,'private upstream body'];}});}}
+            catch(RuntimeException $e){{echo json_encode($e->getMessage());}}
+        '''))
+        self.assertIn('403', rejected)
+        self.assertNotIn('private upstream body', rejected)
+
+    def test_expired_root_and_variant_are_refreshed_on_the_same_cdn_without_switching_channels(self):
+        code = '''
+        $calls=0;
+        $lookup=function($page,$token,$force)use(&$calls){$calls++;return ['sources'=>[
+            ['url'=>'https://cdn7.zicotv.cc/liga/index.m3u8?token=new-2999999999-'],
+            ['url'=>'https://cdn6.zicotv.cc/liga/index.m3u8?token=new-2999999999-']
+        ]];};
+        $page='https://bp.zicotv.cc/api/player/4'; $allow=function(){return true;};
+        $root=playerZicoFreshPlaylist('https://cdn6.zicotv.cc/liga/index.m3u8?token=old-1000000000-',$page,false,$lookup,$allow);
+        $variant=playerZicoFreshPlaylist('https://cdn6.zicotv.cc/liga/tracks-v1a1/mono.m3u8?token=old-1000000000-&quality=hd',$page,false,$lookup,$allow);
+        $other=playerZicoFreshPlaylist('https://cdn6.zicotv.cc/other/mono.m3u8?token=old-1000000000-',$page,false,$lookup,$allow);
+        $alive=playerZicoFreshPlaylist('https://cdn6.zicotv.cc/liga/index.m3u8?token=live-2999999999-',$page,false,$lookup,$allow);
+        $foreign=playerZicoFreshPlaylist('https://unrelated.example/video.m3u8','https://other.example/player',true,$lookup,$allow);
+        echo json_encode([$root,$variant,$other,$alive,$foreign,$calls,
+            playerSourceId($root)===playerSourceId('https://cdn6.zicotv.cc/liga/index.m3u8?token=another')]);
+        '''
+        root, variant, other, alive, foreign, calls, stable = json.loads(php(code))
+        self.assertEqual(root, 'https://cdn6.zicotv.cc/liga/index.m3u8?token=new-2999999999-')
+        self.assertIn('token=new-2999999999-', variant)
+        self.assertIn('quality=hd', variant)
+        self.assertIn('/liga/tracks-v1a1/mono.m3u8', variant)
+        self.assertIn('/other/mono.m3u8?token=old-', other)
+        self.assertIn('token=live-', alive)
+        self.assertEqual(foreign, 'https://unrelated.example/video.m3u8')
+        self.assertEqual(calls, 3)
+        self.assertTrue(stable)
+
+    def test_private_source_cache_reuses_unlimited_tokens_and_forces_a_new_renewal_when_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code = f'''
+            putenv('CALAMAR_ZICO_CACHE=' . {json.dumps(directory)});
+            $getCalls=0;$postCalls=0;
+            $get=function($url,$page,$limit=0,$hops=0)use(&$getCalls){{$getCalls++;return [200,
+                'var ZT_SOURCES=[]; var ZT_RENEW={{"url":"/api/player/4/renew?expires=1794427569&signature={'a'*64}","ttl":1200}};',
+                'https://bp.zicotv.cc/api/player/4'];}};
+            $post=function($url)use(&$postCalls){{if(str_ends_with($url,'/player-url'))return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test'])];
+                $postCalls++;return [200,json_encode(['ttl'=>1200,'sources'=>[
+                ['url'=>'https://cdn6.zicotv.cc/liga/index.m3u8?token=fresh-'.$postCalls,'label'=>'CDN 6']]])];}};
+            $a=playerZicoCurrent('https://bp.zicotv.cc/api/player/4','private-test-token',false,$get,$post);
+            playerZicoRememberSource('https://bp.zicotv.cc/api/player/4','private-test-token',$a['sources'][0]['url']);
+            $b=playerZicoCurrent('https://zicotv.cc/api/player/4','private-test-token',false,$get,$post);
+            $c=playerZicoCurrent('https://bp.zicotv.cc/api/player/4','private-test-token',true,$get,$post);
+            echo json_encode([$getCalls,$postCalls,$a['sources']===$b['sources'],$a['sources']!==$c['sources'],
+                strpos(file_get_contents(glob({json.dumps(directory)}.'/*.json')[0]),'private-test-token')===false,
+                $b['preferred']===playerSourceId($a['sources'][0]['url']),$c['preferred']===$b['preferred']]);
+            '''
+            self.assertEqual(json.loads(php(code)), [2, 2, True, True, True, True, True])
+
+    def test_signed_event_proofs_and_catalog_aliases_authorize_renewal_but_removed_channels_do_not(self):
+        result = json.loads(php('''
+            $event='https://bp.zicotv.cc/events/123';$page='https://bp.zicotv.cc/api/player/4';
+            $proof=$page.'?ct_event=123&ct_sig='.playerZicoProof($page,$event,playerSecret());
+            $calls=0;$url='https://cdn6.zicotv.cc/liga/index.m3u8?token=old-1000000000-';
+            $unchanged=playerZicoFreshPlaylist($url,$page,true,function()use(&$calls){$calls++;return [];},function(){return false;});
+            echo json_encode([
+                playerZicoCatalogPage($page,['https://zicotv.cc/channels/4'=>true]),
+                playerZicoCatalogPage($proof,[$event=>true]),
+                playerZicoCatalogPage($proof,[]),
+                playerZicoCatalogPage($page,['https://bp.zicotv.cc/channels/5'=>true]),
+                $unchanged===$url,$calls
+            ]);
+        '''))
+        self.assertEqual(result, [True, True, False, False, True, 0])
+
+    def test_channel_page_uses_its_player_and_server_token_without_redirecting_to_premium(self):
+        code = '''
+        $page = "https://bp.zicotv.cc/channels/1?from=calendar";
+        $requests = [];
+        $get = function($url,$referer,$limit=0,$hops=0) use (&$requests) {
+            $requests[] = [$url,$referer]; return [200,"video",$url];
+        };
+        $grantCalls = [];
+        $post = function($url,$referer,$body,$headers) use (&$grantCalls) {
+            $grantCalls[] = [$url,$referer,$body,$headers];
+            return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/1?st=signed-player-grant-for-test'])];
+        };
+        $premium = playerOpenPage($page,"private-test-token",$get,$post);
+        $public = playerOpenPage($page,"",$get);
+        $catalog = [$page => true];
+        echo json_encode([$requests,$premium,$public,$grantCalls,
+            playerAllowedPage("https://bp.zicotv.cc/api/player/1",$catalog),
+            playerAllowedPage("https://bp.zicotv.cc/channels/1",["https://bp.zicotv.cc/api/player/1"=>true]),
+            playerAllowedPage("https://bp.zicotv.cc/api/player/2",$catalog,function(){return [404,""];}),
+            playerZicoPage("https://evil.test/channels/1"),
+            playerZicoPage("https://u:p@bp.zicotv.cc/channels/1")]);
+        '''
+        requests, premium, public, grant_calls, allowed, reverse, wrong_id, bad_host, credentials = json.loads(php(code))
+        self.assertEqual(requests, [["https://bp.zicotv.cc/api/player/1?st=signed-player-grant-for-test", ""],
+                                    ["https://bp.zicotv.cc/api/player/1", ""]])
+        self.assertEqual(grant_calls, [["https://bp.zicotv.cc/api/v1/player-url", "", "channel=1&ttl=300",
+                                       ["Authorization: Bearer private-test-token"]]])
+        self.assertEqual(premium[2], "https://bp.zicotv.cc/api/player/1")
+        self.assertNotIn("private-test-token", json.dumps(premium))
+        self.assertEqual([allowed, reverse, wrong_id, bad_host, credentials], [True, True, False, '', ''])
+
+    def test_signed_player_grants_cannot_redirect_to_another_channel_or_expose_the_token(self):
+        for address in [
+            'https://evil.example/api/player/4?st=signed-player-grant-for-test',
+            'https://bp.zicotv.cc/api/player/5?st=signed-player-grant-for-test',
+            'https://user:pass@bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test',
+            'https://bp.zicotv.cc/api/player/4?st=signed-player-grant-for-test&token=private-test-token',
+            'https://bp.zicotv.cc/api/player/4?st=private-test-token',
+            'https://bp.zicotv.cc/api/player/4?token=private-test-token',
+        ]:
+            with self.subTest(address=address):
+                result = json.loads(php(f'''
+                    $getCalls = 0; $rejected = false;
+                    try {{playerOpenPage('https://bp.zicotv.cc/api/player/4','private-test-token',
+                        function()use(&$getCalls){{$getCalls++;return [200,'body',''];}},
+                        function(){{return [200,json_encode(['url'=>{json.dumps(address)}])];}});
+                    }} catch(RuntimeException $e){{$rejected=true;}}
+                    echo json_encode([$getCalls,$rejected]);
+                '''))
+                self.assertEqual(result, [0, True])
+
+    def test_rejected_api_tokens_use_the_normal_public_player_and_still_enforce_its_access_checks(self):
+        for status in [401, 403]:
+            result = json.loads(php(f'''
+                $requests=[];
+                $public=playerOpenPage('https://bp.zicotv.cc/api/player/4','private-test-token',
+                    function($url,$referer)use(&$requests){{$requests[]=[$url,$referer];
+                        return [200,'var ZT_PREMIUM_GATE = true; var ZT_RENEW = {{"url":"/api/player/4/renew"}};',$url];}},
+                    function(){{return [{status},'rejected token'];}});
+                $blocked=false;$postCalled=false;
+                try {{playerZicoRenewSources($public[1],$public[2],function()use(&$postCalled){{$postCalled=true;}});}}
+                catch(RuntimeException $e){{$blocked=true;}}
+                echo json_encode([$requests,$blocked,$postCalled]);
+            '''))
+            self.assertEqual(result, [[['https://bp.zicotv.cc/api/player/4', '']], True, False])
+
+    def test_shared_host_without_curl_multi_exec_uses_bounded_safe_fallback(self):
+        requests = []
+        class Origin(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                requests.append(self.path)
+                if self.path.startswith('/silent'): time.sleep(4)
+                if self.path.startswith('/redirect'):
+                    self.send_response(302); self.send_header('Location', 'https://fast.example/fast.m3u8'); self.end_headers(); return
+                body = b'<html>Error</html>' if self.path.startswith('/html') else b'#EXTM3U\n' if self.path.startswith('/empty') else b'#EXTM3U\n#EXTINF:6,\nvideo.ts\n'
+                self.send_response(200); self.end_headers()
+                try: self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError): pass
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Origin)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            factory = '$factory=function($url,$page){return curl_init("http://127.0.0.1:%d".parse_url($url,PHP_URL_PATH));};' % server.server_address[1]
+            for disabled in [('curl_multi_exec',), ('curl_multi_init', 'curl_multi_exec')]:
+                with self.subTest(disabled=disabled):
+                    before = time.monotonic()
+                    out = php(factory + 'echo json_encode(playerFirstList(["https://slow.example/silent.m3u8","https://bad.example/html.m3u8","https://empty.example/empty.m3u8","https://redirect.example/redirect.m3u8"], "https://zicotv.cc/api/player/4", $factory));', disabled)
+                    status, body, url = json.loads(out)
+                    self.assertEqual(status, 200); self.assertIn('#EXTINF:6', body)
+                    self.assertEqual(url, 'https://fast.example/fast.m3u8')
+                    self.assertLess(time.monotonic() - before, 3.5, 'a silent source must be abandoned after two seconds')
+                    self.assertEqual(json.loads(php('echo json_encode(playerFirstList(["https://127.0.0.1/private.m3u8"], "https://zicotv.cc/api/player/4"));', disabled)), [0, None, ''])
+            self.assertIn('/fast.m3u8', requests)
+        finally:
+            server.shutdown(); server.server_close()
+
+    def test_first_valid_hls_wins_without_waiting_for_a_silent_first_source(self):
+        requests = []
+        class Origin(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                requests.append(self.path)
+                if self.path.startswith('/slow'): time.sleep(2)
+                if self.path.startswith('/fast'): time.sleep(0.15)
+                body = b'<html>Error</html>' if self.path.startswith('/html') else b'#EXTM3U\n' if self.path.startswith('/empty') else b'#EXTM3U\r\n#EXTINF:6,\r\nvideo.ts\r\n'
+                self.send_response(200); self.end_headers()
+                try: self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError): pass
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Origin)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            port = server.server_address[1]
+            # Injection is local to this test function; production always validates DNS and pins public IPs.
+            factory = '$factory=function($url,$page){$ch=curl_init("http://127.0.0.1:%d".parse_url($url,PHP_URL_PATH));curl_setopt($ch,CURLOPT_TIMEOUT,4);return $ch;};' % port
+            before = time.monotonic()
+            out = php(factory + 'echo json_encode(playerFirstList(["https://slow.example/slow.m3u8","https://bad.example/html.m3u8","https://empty.example/empty.m3u8","https://fast.example/fast.m3u8"], "https://zicotv.cc/api/player/4", $factory));')
+            elapsed = time.monotonic() - before
+            status, body, url = json.loads(out)
+            self.assertEqual(status, 200); self.assertIn('#EXTINF:6', body)
+            self.assertEqual(url, 'https://fast.example/fast.m3u8')
+            self.assertLess(elapsed, 1.5, 'must cancel the losing two-second source')
+            self.assertEqual(set(requests), {'/slow.m3u8', '/html.m3u8', '/empty.m3u8', '/fast.m3u8'})
+            self.assertEqual(json.loads(php('echo json_encode(playerFirstList(["https://127.0.0.1/private.m3u8"], "https://zicotv.cc/api/player/4"));')), [0, None, ''])
+        finally:
+            server.shutdown(); server.server_close()
+
     def test_zt_sources_in_order_without_the_locked_ones(self):
         page = ('<script>var ZT_SOURCES = [{"label":"CDN 4","url":"https://cdn4.zicotv.cc/live/a.m3u8?t=1","premium":false},'
                 '{"label":"CDN 1","url":"/live/b.m3u8?t=\\"2\\"","hidden":true},'
@@ -78,6 +327,103 @@ class PlayerRelayTest(unittest.TestCase):
             out = subprocess.check_output(['php', '-d', f'sys_temp_dir={tmp}', '-r', code],
                 text=True, env={**os.environ, 'TMPDIR': tmp, 'CALAMAR_PLAYER_SECRET': SECRET})
         self.assertEqual(json.loads(out), [True, True, False, False])
+
+    def test_premium_is_authorized_for_the_catalog_event_and_credential_stays_on_the_player_host(self):
+        data = {'data': {'sources': [
+            {'source': 'own', 'name': 'Canal Premium', 'url': 'https://bp.zicotv.cc/api/player/22', 'is_premium': True},
+            {'source': 'manual', 'url': 'https://outside.example/api/player/22', 'locked': True},
+        ]}}
+        code = f'''
+        $data = json_decode({json.dumps(json.dumps(data))}, true);
+        $event = "https://bp.zicotv.cc/events/98019";
+        $catalog = [$event => true];
+        $token = "test-token-with+private/chars";
+        $sources = playerZicoEventSources($data, $event, $catalog, playerSecret(), $token);
+        $page = $sources[0]["player_url"];
+        $proof = playerZicoSignedSource($page, $catalog, playerSecret());
+        $tampered = playerZicoSignedSource(str_replace("player/22", "player/23", $page), $catalog, playerSecret());
+        $other = playerZicoSignedSource($page, [], playerSecret());
+        $request = [];
+        $grantCalls = [];
+        $result = playerOpenPage($page, $token, function($url,$referer,$limit,$hops) use (&$request) {{
+            $request = [$url,$referer,$hops];
+            return [200,"body",$url];
+        }}, function($url,$referer,$body,$headers) use (&$grantCalls) {{
+            $grantCalls = [$url,$referer,$body,$headers];
+            return [200,json_encode(['url'=>'https://bp.zicotv.cc/api/player/22?st=signed-player-grant-for-test'])];
+        }});
+        echo json_encode([$sources,$proof,$tampered,$other,$request,$result,$grantCalls,
+            playerZicoEventSources($data,$event,$catalog,playerSecret(),"")]);
+        '''
+        sources, proof, tampered, other, request, result, grant_calls, public = json.loads(php(code))
+        self.assertEqual(len(sources), 1)
+        self.assertNotIn('token=', sources[0]['player_url'])
+        self.assertEqual([proof, tampered, other], [True, False, False])
+        self.assertEqual(request, ['https://bp.zicotv.cc/api/player/22?st=signed-player-grant-for-test', '', 1])
+        self.assertEqual(grant_calls, ['https://bp.zicotv.cc/api/v1/player-url', '', "channel=22&ttl=300",
+                                      ['Authorization: Bearer test-token-with+private/chars']])
+        self.assertEqual(result, [200, 'body', 'https://bp.zicotv.cc/api/player/22'])
+        self.assertEqual(public, [])
+
+    def test_zico_embed_checks_only_the_requested_catalog_event(self):
+        result = json.loads(php('''
+            $event = 'https://bp.zicotv.cc/events/7';
+            $page = 'https://bp.zicotv.cc/api/player/4';
+            $catalog = [$event => true, 'https://bp.zicotv.cc/events/8' => true,
+                'https://zicotv.cc/channels/5' => true];
+            $requests = [];
+            $lookup = function($url) use (&$requests) {
+                $requests[] = $url;
+                return [200, json_encode(['data'=>['sources'=>[['url'=>'https://zicotv.cc/channels/4']]]])];
+            };
+            echo json_encode([
+                playerZicoEmbedAllowed($page, '', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed($page, 'https://bp.zicotv.cc/events/9', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed('https://bp.zicotv.cc/api/player/5', '', $catalog, playerSecret(), $lookup),
+                playerZicoEmbedAllowed($page, $event, $catalog, playerSecret(), $lookup),
+                $requests
+            ]);
+        '''))
+        self.assertEqual(result, [False, False, True, True, ['https://bp.zicotv.cc/api/v1/events/7']])
+
+    def test_zico_embed_token_mode_uses_saved_token_only_for_catalog_channels(self):
+        page = 'https://bp.zicotv.cc/api/player/4'
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            token_file = root / 'calamar-zico-config.php'
+            token_file.write_text("<?php return 'sample-token+with/slash';")
+            (root / 'calamar-player-catalog.json').write_text(json.dumps({
+                'channels': [{'streams': ['https://zicotv.cc/channels/4']}],
+            }))
+            env = {**os.environ, 'CALAMAR_ZICO_CONFIG': str(token_file), 'CALAMAR_PLAYER_SECRET': SECRET}
+            def embed(address):
+                code = f'require {json.dumps(PHP)}; playerZicoEmbed({json.dumps(address)}, "", "token", playerSecret());'
+                return json.loads(subprocess.check_output(['php', '-d', f'sys_temp_dir={directory}', '-r', code], text=True, env=env))
+            self.assertEqual(embed(page), {
+                'zicoEmbed': 1, 'mode': 'token', 'url': page + '?token=sample-token%2Bwith%2Fslash',
+            })
+            self.assertEqual(embed('https://bp.zicotv.cc/api/player/5'), {
+                'zicoEmbed': 1, 'error': 'Este canal de ZicoTV no está disponible en el catálogo.',
+            })
+
+    def test_zico_credentials_can_only_be_saved_outside_document_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            public = pathlib.Path(tmp, 'public')
+            public.mkdir()
+            private_file = pathlib.Path(tmp, 'private.php')
+            public_file = public / 'config.php'
+            code = f'''
+            $_SERVER["DOCUMENT_ROOT"] = {json.dumps(str(public))};
+            putenv("CALAMAR_ZICO_CONFIG=" . {json.dumps(str(public_file))});
+            $unsafe = playerSaveZicoToken("only-used-in-this-test");
+            putenv("CALAMAR_ZICO_CONFIG=" . {json.dumps(str(private_file))});
+            $saved = playerSaveZicoToken("only-used-in-this-test");
+            echo json_encode([$unsafe,$saved,playerZicoToken(),playerContainsZicoToken("a%6fnly-used-in-this-test","only-used-in-this-test")]);
+            '''
+            unsafe, saved, token, exposed = json.loads(php(code))
+            self.assertEqual([unsafe, saved, token, exposed], [False, True, 'only-used-in-this-test', True])
+            self.assertFalse(public_file.exists())
+            self.assertEqual(private_file.stat().st_mode & 0o777, 0o600)
 
     def test_unsigned_addresses_other_sites_and_unknown_pages_are_refused(self):
         with socket.socket() as s:

@@ -154,7 +154,7 @@ export function startProfiles(shared) {
   shared().then((f) => {
     firebase = f;
     f.watchAuth(async (signed) => {
-      user = signed || null;
+      user = signed?.isAnonymous ? null : signed || null;
       const remembered = cachedUid;
       cachedUid = null;
       setProgressScope('');

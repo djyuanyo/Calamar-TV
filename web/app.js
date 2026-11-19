@@ -1,21 +1,32 @@
+import { eventSport, eventSportTabs } from './event-sports.js';
+import { loadEpisodeHistory, saveEpisodeHistory, mergeEpisodeHistory, recordEpisode } from './episode-history.js';
+import { viewingSession } from './user-playback.js';
+import { createWebAccess } from './web-access.js';
+import { eventCover as drawEventCover } from './event-art.js';
+import { isSamsungTizen, updateAppDownload } from './app-links.js';
+import { playbackTimer } from './sleep-timer.js';
 import { zicoEventApi, expandEventSources } from './event-sources.js';
-import { mountRenewable } from './renewable-player.js';
+import { premiumZicoIframe, zicoPlayerIframe, zicoPublicIframe } from './zico-channel.js';
+import { usesZicoAgenda } from './zico-agenda.js';
+import { mountRenewable, hostedPage } from './renewable-player.js';
 import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch } from './match-scores.js';
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport } from './catalog.js';
-import { eventPath, eventShareLink, channelShareLink, leagueShareLink, EVENT_STATES } from './sports.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
+import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { autoplay, soundChosen } from './autoplay.js';
+import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
 import { openMulti, closeMulti, multiPlayable, MULTI_MAX } from './multi-view.js';
+import { pickMultiEvent, closeMultiPicker } from './multi-picker.js';
 import { LIBRARY_SECTIONS, sectionByPage, libraryVisible, fetchLibrary, libraryPage, libraryDetail, libraryEpisode, playable, continueRow,
   cachedLibrary, libraryFeatured, libraryTop, topRow, itemTitle, itemLine, itemPath, halloweenOn, halloweenRow, halloweenPage, HALLOWEEN_PAGE, platformPage, PLATFORM_PAGE,
-  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
-import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles } from './profiles.js';
-import { accountPage, paintAccountButton, profileGate } from './account.js';
+  loadProgress, saveProgress, recordProgress, removeProgress, progressList, skipButton, withIntroDb, episodeAvailable, listedEpisodes, finished, librarySearch, browseCard, similarTitles, recommendedTitles, gateSlides } from './library.js';
+import { startProfiles, onProfilesChanged, needsProfile, pickedThisVisit, profileData, listEntries, lastLiked, toggleMyList, rateTitle, inMyList, ratingOf, isFavorite, toggleFavoriteChannel, rememberWatched, watchedEntries, signedUser, accountProfiles, activeProfile } from './profiles.js';
+import { accountPage, paintAccountButton, profileGate, signIn } from './account.js';
 import { initCast } from './cast-player.js';
 import { startProgressSync, refreshProgress } from './progress-sync.js';
 import { sourceOptions, selectedSource, renderSourcePicker } from './player-sources.js';
@@ -23,26 +34,50 @@ import { audienceTarget, sessionId, visitKey, madridDay, eventLabel, nextStart, 
 
 const view = document.getElementById('view');
 const search = document.getElementById('search');
+let stopMusic = null;
 let sharedStarted = false;
 // Firebase loads on demand so the bundled catalog works even when it cannot be reached.
 let firebase = null;
 // True while the administrator is signed in on this browser (see the library section below).
 let libraryAdmin = false;
 const shared = () => (firebase ||= import('./firebase.js'));
+let accessReturnHash = null;
+let admissionSignature = '';
+const webAccess = createWebAccess(shared, admission => {
+  const signature = JSON.stringify([admission.decision, admission.user?.uid || null, admission.administrator === true]);
+  if (signature === admissionSignature) return;
+  admissionSignature = signature;
+  if (typeof route === 'function') route();
+});
 let sharedValue = null;
 // True once the live catalog arrived, failed or took too long: until then a link to an event or channel
 // missing from the bundled copy is still loading, not missing.
 let sharedSettled = false;
 const settleShared = () => { if (sharedSettled) return; sharedSettled = true; if (!location.hash.startsWith('#/admin')) route(); };
+let sportDefinitions = { sports: [{ id: 'other', name: 'Otros deportes', icon: '🏅', aliases: [] }], leagues: {} };
+let liveSport = 'all';
+let sportsRequest = null;
+function loadSports() {
+  return (sportsRequest ||= fetchJson('data/sports.json').then(definitions => {
+    if (definitions?.sports?.length) sportDefinitions = definitions;
+  }).catch(() => { sportsRequest = null; }));
+}
 const state = { tdt: null, custom: null, channels: [], error: '' };
 
 export async function fetchJson(path) {
+  const bundled = window.calamarTizenData?.[path];
+  if (bundled) return structuredClone(bundled);
   const response = await fetch(`${path}?t=${Date.now()}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
-export async function loadCatalog() {
+let catalogRequest = null;
+export function loadCatalog() {
+  return (catalogRequest ||= requestCatalog().finally(() => { catalogRequest = null; }));
+}
+
+async function requestCatalog() {
   const [tdt, custom, copies] = await Promise.all([fetchJson('data/tdt.json'), fetchJson('data/custom.json'), fetchJson('data/logos.json').catch(() => ({}))]);
   setLogoCopies(copies);
   state.tdt = tdt;
@@ -65,6 +100,7 @@ export async function loadCatalog() {
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
+  if (tag === 'img') node.decoding = 'async';
   for (const [key, value] of Object.entries(attrs)) {
     if (value === undefined || value === null || value === false) continue;
     if (key === 'class') node.className = value;
@@ -75,6 +111,8 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 export { el };
+
+document.getElementById('open-credits').addEventListener('click', () => document.getElementById('credits').showModal());
 
 function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -87,10 +125,11 @@ function hue(name) {
   return h;
 }
 
+const eventCover = (c, cls) => drawEventCover(el, c, cls);
 function logo(c, cls) {
   const fallback = () => el('span', { class: `initials ${cls || ''}`.trim() }, initials(c.name));
   if (!c.logo) return fallback();
-  const img = el('img', { src: c.logo, alt: '', loading: cls ? 'eager' : 'lazy', referrerpolicy: 'no-referrer', class: cls });
+  const img = el('img', { src: c.logo, alt: '', loading: cls ? 'eager' : 'lazy', fetchpriority: cls === 'hero-art' ? 'high' : null, referrerpolicy: 'no-referrer', class: cls });
   img.addEventListener('error', () => img.replaceWith(fallback()));
   return img;
 }
@@ -116,17 +155,9 @@ function card(c, pick = null) {
 }
 
 /**
- * The cover of an event; without one, the league's background with the home and away crests on top
- * and the league's logo between them (imported matches all share it).
+ * Teams' crests stay on top of the event's cover (or the league's background), including manual
+ * matches. Events without registered crests keep their full photo.
  */
-function eventCover(c, cls) {
-  if (c.cover) return el('img', { class: cls, src: c.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
-  const crest = (src, side) => src ? el('img', { class: `crest ${side}`, src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: `crest ${side} crest-empty` });
-  return el('span', { class: `${cls} event-generic`, style: c.background ? `background-image:url("${c.background}")` : null, 'aria-hidden': 'true' },
-    crest(c.homeLogo, 'home'),
-    c.leagueLogo ? el('span', { class: 'crest-league' }, el('img', { src: c.leagueLogo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })) : el('span', { class: 'crest-vs' }, 'VS'),
-    crest(c.awayLogo, 'away'));
-}
 
 /** Until an event starts its badge shows the date and time; then «En directo». */
 const matchScores = new Map();
@@ -375,7 +406,18 @@ function homeLibrary() {
   const library = cachedLibrary();
   if (!library && !homeLibraryAsked) {
     homeLibraryAsked = true;
-    fetchLibrary().then(() => { if (!location.hash.replace(/^#\/?/, '') && !search.value.trim()) route(); }).catch(() => {});
+    // Let the initial hero and event rows paint before requesting the video catalog.
+    requestAnimationFrame(() => setTimeout(() => {
+      const page = location.hash.replace(/^#\/?/, '');
+      if ((page && page !== 'inicio') || search.value.trim() || webAccess.current().decision !== 'allowed' || gate) {
+        homeLibraryAsked = false;
+        return;
+      }
+      fetchLibrary().then((data) => {
+        try { localStorage.setItem(GATE_SLIDES, JSON.stringify(gateSlides(data))); } catch {}
+        if (['', 'inicio'].includes(location.hash.replace(/^#\/?/, '')) && !search.value.trim()) route();
+      }).catch(() => { homeLibraryAsked = false; });
+    }, 0));
   }
   return library;
 }
@@ -404,12 +446,12 @@ function home() {
   // and with an account signed in, those of its other devices too.
   const unfinished = libraryShown() ? progressList(loadProgress()) : [];
   if (libraryShown()) refreshProgress();
-  const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => [libraryTop(library, key), what]);
+  const tops = LIBRARY_SECTIONS.map(({ key, label }) => [libraryTop(library, key), label.toLowerCase()]);
   if (unfinished.length) nodes.push(...continueRow(el, unfinished, { open: resumeEntry,
     remove: (entry) => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }));
   // The profile's own rows: «Mi lista» and «Porque te gustó…», as in Netflix.
   if (libraryShown() && library) nodes.push(...profileRows(library));
-  // The weekly top of films and of series (set from TMDB in the admin page), as many as there are.
+  // One top per library section, in menu order.
   for (const [top, what] of tops) if (top.length) nodes.push(...topRow(el, top, what));
   // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
   if (libraryShown() && halloweenOn()) nodes.push(...halloweenRow(el, library));
@@ -420,7 +462,7 @@ function home() {
   // week's events only: a league whose next matches are in two weeks does not appear yet.
   for (const row of eventRows(thisWeekEvents(matches), state.custom)) {
     // The league's name opens its page: every match of the league that has a channel.
-    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null, row.name];
     nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
       : el('span', { class: 'league-head' }, ...head),
       el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)), rail(row.events, { wide: true, limit: row.events.length }));
@@ -452,6 +494,26 @@ function profileRows(library) {
   return nodes;
 }
 
+function accountDashboard() {
+  const nodes = [];
+  const library = libraryShown() ? cachedLibrary() : null;
+  const entries = libraryShown() ? progressList(loadProgress()) : [];
+  const find = ({ page, item }) => {
+    const section = sectionByPage(page);
+    const match = section && (library?.sections?.[section.key] || []).find(title => title.id === item);
+    return match && browseCard(el, section, match);
+  };
+  if (entries.length) nodes.push(...continueRow(el, entries, { open: resumeEntry,
+    remove: entry => { saveProgress(removeProgress(loadProgress(), entry.key)); route(); } }, 'Seguir viendo'));
+  const row = (title, entries) => {
+    const cards = entries.map(find).filter(Boolean);
+    if (cards.length) nodes.push(sectionHead(title), el('div', { class: 'rail browse-rail' }, cards));
+  };
+  row('Series y películas que te han gustado', Object.values(profileData().ratings || {}).filter(entry => entry.value > 0).sort((a, b) => b.at - a.at));
+  row('Mi lista', listEntries(profileData()));
+  return nodes;
+}
+
 /** «+ Mi lista», «Me gusta» and «No me gusta» on a title's page; they change in place. */
 function titleExtras(section, item) {
   const mark = (button, on, label) => { button.setAttribute('aria-pressed', String(on)); button.lastChild.textContent = label; };
@@ -470,18 +532,42 @@ function titleExtras(section, item) {
   return [list, up, down];
 }
 
+function chooseLiveSport(id) {
+  liveSport = id;
+  route().then(() => {
+    const selected = document.getElementById(`sport-tab-${liveSport}`);
+    selected?.focus({ preventScroll: true });
+    selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
+}
+
 /** #/directo: every event of «Eventos En Directo» in a grid per competition, in the order of the leagues. */
 function livePage() {
   const live = liveEvents(events(state.channels, state.custom));
-  const nodes = [el('section', { class: 'live-page-head' }, el('h1', {}, LIVE_ROW),
-    el('p', { class: 'note' }, live.length === 1 ? '1 evento hoy, ordenado por competición' : `${live.length} eventos hoy, ordenados por competición`))];
-  for (const row of eventRows(live, state.custom)) {
-    const head = [row.logo ? el('img', { src: row.logo, alt: '', referrerpolicy: 'no-referrer' }) : null, row.name];
-    nodes.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
+  const tabs = eventSportTabs(live, state.custom, sportDefinitions);
+  if (!tabs.some(tab => tab.id === liveSport)) liveSport = 'all';
+  const filtered = liveSport === 'all' ? live : live.filter(event => eventSport(event, state.custom, sportDefinitions) === liveSport);
+  const nodes = [sportsHero({ name: LIVE_ROW, logo: './assets/calamar-menciano-tv.png', live: true,
+    count: filtered.length === 1 ? '1 evento hoy, ordenado por competición' : `${filtered.length} eventos hoy, ordenados por competición`, url: liveShareLink() }),
+    el('div', { class: 'sport-tabs', role: 'tablist', 'aria-label': 'Filtrar eventos por deporte' },
+      tabs.map(tab => el('button', { class: `sport-tab${tab.id === liveSport ? ' on' : ''}`, role: 'tab', type: 'button',
+        id: `sport-tab-${tab.id}`, 'aria-selected': String(tab.id === liveSport), 'aria-controls': 'live-sport-events', tabindex: tab.id === liveSport ? '0' : '-1',
+        onclick: () => chooseLiveSport(tab.id),
+        onkeydown: event => {
+          const index = tabs.findIndex(option => option.id === tab.id);
+          const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+          const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : step ? (index + step + tabs.length) % tabs.length : -1;
+          if (target >= 0) { event.preventDefault(); chooseLiveSport(tabs[target].id); }
+        } }, tab.icon ? el('span', { 'aria-hidden': 'true' }, tab.icon) : null, el('span', {}, tab.name), el('span', { class: 'sport-count' }, String(tab.count)))))];
+  const groups = [];
+  for (const row of eventRows(filtered, state.custom)) {
+    const head = [row.logo ? el('img', { src: row.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null, row.name];
+    groups.push(sectionHead(row.slug ? el('a', { class: 'league-head', href: `#/liga/${encodeURIComponent(row.slug)}`, title: `Todos los partidos de ${row.name}` }, ...head)
       : el('span', { class: 'league-head' }, ...head), el('span', {}, row.events.length === 1 ? '1 evento' : `${row.events.length} eventos`)),
       el('div', { class: 'grid league-grid' }, row.events.map((c) => card(c))));
   }
-  if (!live.length) nodes.push(el('p', { class: 'status' }, 'Ahora mismo no hay eventos en directo. ', el('a', { href: '#/canales' }, 'Ver los canales')));
+  if (!live.length) groups.push(el('p', { class: 'status' }, 'Ahora mismo no hay eventos en directo. ', el('a', { href: '#/canales' }, 'Ver los canales')));
+  nodes.push(el('div', { id: 'live-sport-events', role: 'tabpanel', 'aria-labelledby': `sport-tab-${liveSport}` }, groups));
   return nodes;
 }
 
@@ -490,25 +576,29 @@ function leaguePage(slug) {
   const slugs = leagueSlugs(state.custom);
   const league = (state.custom?.leagues || []).find((l) => slugs.get(l.id) === slug);
   if (!league) return [el('p', { class: 'error' }, `No existe la liga «${slug || ''}».`), ...home()];
-  // Only today's matches (Madrid day; one past midnight still on air too), as «Eventos En Directo».
-  const list = liveEvents(leagueEvents(state.channels, state.custom, league.id));
+  // All linked matches of the current week (Monday to Sunday in Madrid).
+  const list = leagueEvents(state.channels, state.custom, league.id);
+  return [sportsHero({ name: league.name, logo: league.logo, background: league.background,
+      count: list.length === 1 ? '1 partido esta semana con enlace' : `${list.length} partidos esta semana con enlace`, url: leagueShareLink(slug) }),
+    list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
+      : el('p', { class: 'status' }, 'Esta semana no hay partidos de esta liga con enlace.')];
+}
+
+/** The same branded header and sharing controls for a league and the mixed live schedule. */
+function sportsHero({ name, logo, background, count, url, live = false }) {
   const image = (v) => (typeof v === 'string' && (v.startsWith('https://') || v.startsWith('data:image/')) ? v : '');
-  const art = image(league.background);
+  const art = image(background);
   const status = el('span', { class: 'note', role: 'status' });
   const share = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
-    const url = leagueShareLink(slug);
     try {
-      if (navigator.share) await navigator.share({ title: league.name, url });
+      if (navigator.share) await navigator.share({ title: name, url });
       else { await navigator.clipboard.writeText(url); status.textContent = 'Enlace copiado.'; }
     } catch (error) { if (error?.name !== 'AbortError') status.textContent = `Copia este enlace: ${url}`; }
   } }, '⤴ Compartir');
-  return [el('section', { class: 'league-hero', style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
-      image(league.logo) ? el('img', { class: 'league-hero-logo', src: image(league.logo), alt: '', referrerpolicy: 'no-referrer' }) : null,
-      el('h1', {}, league.name),
-      el('p', {}, list.length === 1 ? '1 partido hoy con canal' : `${list.length} partidos hoy con canal`),
-      el('div', { class: 'league-hero-actions' }, share, status)),
-    list.length ? el('div', { class: 'grid league-grid' }, list.map((c) => card(c)))
-      : el('p', { class: 'status' }, 'Hoy no hay partidos de esta liga con canal asignado.')];
+  return el('section', { class: `league-hero${live ? ' live-hero' : ''}`, style: art ? `--league-art:url("${art.replace(/"/g, '%22')}")` : null },
+    live || image(logo) ? el('img', { class: 'league-hero-logo', src: logo, alt: live ? 'Calamar TV' : '', referrerpolicy: 'no-referrer' }) : null,
+    el('h1', {}, name), el('p', {}, count),
+    el('div', { class: 'league-hero-actions' }, share, status));
 }
 
 function channelsPage(selected) {
@@ -524,18 +614,7 @@ function channelsPage(selected) {
   for (const [group, channels] of map) {
     if (selected && selected !== group) continue;
     nodes.push(sectionHead(group, el('span', {}, channels.length === 1 ? '1 canal' : `${channels.length} canales`)));
-    const sorted = [...channels].sort((a, b) => a.region.localeCompare(b.region, 'es') || Number(b.playable) - Number(a.playable));
-    let region = null;
-    let grid = null;
-    for (const c of sorted) {
-      if (c.region && c.region !== region) {
-        region = c.region;
-        nodes.push(el('p', { class: 'region' }, region.toUpperCase()));
-        grid = null;
-      }
-      if (!grid) nodes.push((grid = el('div', { class: 'grid' })));
-      grid.append(card(c));
-    }
+    nodes.push(el('div', { class: 'grid' }, channels.map((c) => card(c))));
   }
   return nodes;
 }
@@ -545,15 +624,15 @@ function channelsPage(selected) {
 let multiPicks = [];
 const multiKey = (c) => (c.event ? `e:${c.slug}` : `c:${c.slug}`);
 function multiItems(keys) {
-  const list = events(state.channels, state.custom);
-  return keys.map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
+  const list = events(state.channels, state.custom, Date.now(), { allWeeks: true });
+  return keys.slice(0, MULTI_MAX).map((key) => (key.startsWith('e:') ? list.find((e) => e.slug === key.slice(2)) : findChannel(state.channels, key.slice(2)))).filter(Boolean);
 }
 function multiPage() {
   const query = el('input', { type: 'search', placeholder: 'Buscar canales y eventos', 'aria-label': 'Buscar para la multipantalla' });
   const watch = el('button', { class: 'btn', type: 'button' });
   const clear = el('button', { class: 'ghost', type: 'button' }, 'Quitar selección');
   const grid = el('div', { class: 'grid' });
-  const candidates = [...events(state.channels, state.custom), ...state.channels].filter(multiPlayable);
+  const candidates = [...events(state.channels, state.custom, Date.now(), { allWeeks: true }), ...state.channels].filter(multiPlayable);
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const draw = () => {
     multiPicks = multiPicks.filter((key) => candidates.some((c) => multiKey(c) === key));
@@ -593,6 +672,9 @@ function showMulti(arg) {
   if (items.length < 1) { history.replaceState(null, '', '#/multipantalla'); return false; }
   multiPicks = items.map(multiKey);
   openMulti(items, {
+    track: item => viewingSession(shared, item, undefined, true),
+    onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
+    onChange: selected => { multiPicks = selected.map(multiKey); history.replaceState(null, '', `#/multipantalla/${multiPicks.map(encodeURIComponent).join('+')}`); },
     onClose: () => { if (history.length > 1) history.back(); else location.hash = '#/multipantalla'; },
     onWatch: (c) => shared().then((f) => f.recordVisit(madridDay(), visitKey(c.event ? 'event' : 'channel', c.event ? c.eventId : c.id))
       .then(() => c.event && f.recordVisit(madridDay(), visitKey('channel', c.channelId)))).catch(() => {}),
@@ -600,10 +682,12 @@ function showMulti(arg) {
   return true;
 }
 
-function results(query) {
-  const q = query.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
+function results(query, homeSearch) {
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
-  const found = [...events(state.channels, state.custom), ...state.channels].filter((c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q));
+  const q = norm(query);
+  const matches = (c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q);
+  const league = homeSearch ? todayLeagueEvents(state.channels, state.custom, query) : null;
+  const found = [...(league ?? events(state.channels, state.custom).filter(matches)), ...state.channels.filter(matches)];
   // Films, series and documentaries too, under the channels, once the library has loaded.
   const titles = el('div', { class: 'search-titles' });
   if (libraryShown()) {
@@ -615,7 +699,9 @@ function results(query) {
         el('div', { class: 'rail browse-rail search-posters' }, hits.map(({ section, item }) => browseCard(el, section, item))));
     }).catch(() => {});
   }
-  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} canales`)), found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : el('p', { class: 'status' }, 'No hay canales con ese nombre.'), titles];
+  return [sectionHead(`Resultados para «${query}»`, el('span', {}, `${found.length} resultados`)),
+    league?.length === 0 ? el('p', { class: 'status' }, 'No hay eventos de esa liga para hoy.') : null,
+    found.length ? el('div', { class: 'grid' }, found.map(c => card(c))) : league === null ? el('p', { class: 'status' }, 'No hay canales con ese nombre.') : null, titles].filter(Boolean);
 }
 
 // ---- Player ----------------------------------------------------------------------------------
@@ -632,25 +718,66 @@ let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
-initCast({
+let inlineMulti = null;
+function chooseMultiEvent(selected, onChoose, parent) {
+  return pickMultiEvent({ events: events(state.channels, state.custom, Date.now(), { allWeeks: true }), selected, onChoose, ...(parent ? { parent } : {}) });
+}
+document.getElementById('ctl-multi').addEventListener('click', () => {
+  if (!current || !multiPlayable(current)) return;
+  const initial = current;
+  chooseMultiEvent([initial], event => {
+    if (current !== initial) return;
+    const first = { ...initial, position: initial.vod ? video.currentTime : 0,
+      streams: [...new Set([currentSourceUrl, ...initial.streams].filter(Boolean))] };
+    const origin = location.hash, sleepDeadline = sleepTimer?.deadline();
+    hidePlayer(); inlineMulti = { hash: origin };
+    openMulti([first, event], {
+      sleepDeadline,
+      track: item => viewingSession(shared, item, undefined, true),
+      onAdd: (selected, add, parent) => chooseMultiEvent(selected, add, parent),
+      onClose: (selected, deadline) => {
+        const resume = selected.find(c => c.id === initial.id && c.event === initial.event)?.position || first.position;
+        closeMultiPicker(); closeMulti(); inlineMulti = null;
+        open(initial, true);
+        if (deadline) sleepTimer?.setDeadline(deadline);
+        if (initial.vod && resume > 0) video.addEventListener('loadedmetadata', () => { if (current === initial) video.currentTime = resume; }, { once: true });
+      },
+      onSleep: () => {
+        closeMultiPicker(); closeMulti(); inlineMulti = null;
+        closePlayer();
+      },
+    });
+  });
+});
+let casting = false;
+const cast = initCast({
   button: document.getElementById('ctl-cast'),
   toggle: document.getElementById('ctl-cast-toggle'),
   disconnect: document.getElementById('ctl-cast-disconnect'),
-  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo } : null,
-  onSent: stop,
+  getSource: () => current && currentSourceUrl ? { url: currentSourceUrl, title: current.name, logo: current.logo, vod: current.vod, position: video.currentTime, audio: controls.selectedAudio() } : null,
+  onSent: () => { casting = true; stop(); watching?.privateViewing.watching(true); },
   onStatus: (message) => { playerStatus.textContent = message; },
-  onDisconnect: () => { if (current) playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
+  onDisconnect: () => { casting = false; if (current && webAccess.current().decision === 'allowed') playSource(current, Math.max(0, current.streams.indexOf(currentSourceUrl))); },
+});
+const sleepTimer = playbackTimer(player.querySelector('.player-toolbar'), () => {
+  const remote = casting;
+  casting = false;
+  closePlayer();
+  if (remote) cast.stop();
 });
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
-let stopRenewable = null, sourceLookup = null;
+let stopRenewable = null, sourceLookup = null, stopStallWatch = null;
 function stop() {
+  if (!casting) watching?.privateViewing.watching(false);
   playbackGeneration++;
   if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
+  if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
   video.onerror = null;
   video.onplaying = null;
+  video.onloadedmetadata = null;
   if (stopTs) { stopTs(); stopTs = null; }
   if (hls) hls.destroy();
   hls = null;
@@ -675,7 +802,7 @@ function recoveryRound(c, now = Date.now()) {
 }
 const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
 
-async function playSource(c, index) {
+async function playSource(c, index, resumeAt = 0, compatible = false) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
@@ -685,29 +812,40 @@ async function playSource(c, index) {
     return;
   }
   const generation = playbackGeneration;
-  if (c.streams.some(zicoEventApi) && !c.eventSourcesExpanded) {
+  const requestedStreams = c.vod ? c.streams.slice(0, 1) : c.streams;
+  if (requestedStreams.some(zicoEventApi) && !c.eventSourcesExpanded) {
     playerStatus.textContent = 'Consultando fuentes del evento…';
     renderSourcePicker(playerSources, [], 0, () => {});
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
-    const resolved = await expandEventSources(c.streams, { signal: lookup.signal });
+    const resolved = await expandEventSources(requestedStreams, { signal: lookup.signal, preferHosted: usesZicoAgenda(c) });
     clearTimeout(timeout);
     if (generation !== playbackGeneration) return;
     sourceLookup = null;
-    c = { ...c, streams: resolved.map(s => s.url), eventSourcesExpanded: true,
-      sourceNames: Object.fromEntries(resolved.map(s => [s.url, s.name])),
-      sourceErrors: Object.fromEntries(resolved.filter(s => s.error).map(s => [s.url, s.error])),
+    if (c.event && resolved.length && resolved.every(source => source.unavailable)) {
+      playerStatus.textContent = 'Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.';
+      return;
+    }
+    const sources = resolved.filter(source => !source.unavailable);
+    c = { ...c, streams: sources.map(s => s.url), eventSourcesExpanded: true,
+      sourceNames: Object.fromEntries(sources.map(s => [s.url, s.name])),
+      sourceEvents: Object.fromEntries(sources.filter(s => s.origin).map(s => [s.url, s.origin])),
+      sourceErrors: Object.fromEntries(sources.filter(s => s.error).map(s => [s.url, s.error])),
       originalStreams: c.streams };
-    index = Math.max(0, resolved.findIndex(s => s.url === requested || s.origin === requested));
+    const chosen = sources.findIndex(s => !s.error && (s.url === requested || s.origin === requested));
+    index = chosen >= 0 ? chosen : Math.max(0, sources.findIndex(s => !s.error));
   }
-  const allSources = sourceOptions(c.streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
+  const streams = c.vod ? c.streams.slice(0, 1) : c.streams;
+  const allSources = sourceOptions(streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));
   const candidates = allSources.filter((source) => source.how.ok);
   // A signed link past its time cannot work, so do not even try it.
   const playable = candidates.filter((s) => !s.expiry || s.expiry > Date.now());
-  const source = selectedSource(allSources, index);
+  const original = selectedSource(allSources, index);
+  const compatibility = c.vod && original?.how.compatibility;
+  const source = compatible && compatibility ? { ...original, how: webPlayback(compatibility) } : original;
   currentSourceUrl = source?.url || '';
-  renderSourcePicker(playerSources, allSources, source?.index ?? index, (chosen) => playSource(c, chosen));
+  renderSourcePicker(playerSources, c.vod ? [] : allSources, source?.index ?? index, (chosen) => playSource(c, chosen));
   if (candidates.length && !playable.length) {
     const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
@@ -723,18 +861,23 @@ async function playSource(c, index) {
   const next = (data) => {
     if (generation !== playbackGeneration || failureHandled) return;
     failureHandled = true;
-    if (position + 1 < playable.length) {
+    if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
+    const positionToKeep = c.vod ? resumeAt || video.currentTime : 0;
+    if (compatibility && !compatible) {
+      playSource(c, source.index, positionToKeep, true);
+    } else if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
-      playSource(c, playable[position + 1].index);
-    } else if (recoveryRound(c)) {
+      playSource(c, playable[position + 1].index, positionToKeep);
+    } else if ((!compatible || data?.response?.code !== 429) && recoveryRound(c)) {
       // Back to the first source: a server that failed a moment ago often answers again.
       if (hls) hls.stopLoad();
       if (stopTs) { stopTs(); stopTs = null; }
-      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : 'La emisión se ha cortado. Reconectando…';
+      const reconnecting = c.vod ? 'El vídeo se ha cortado. Reconectando…' : 'La emisión se ha cortado. Reconectando…';
+      playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : reconnecting;
       setTimeout(() => {
         if (generation !== playbackGeneration) return;
-        const latest = state.channels.find((item) => item.id === c.id) || c;
-        playSource(latest, playable[0].index);
+        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, playable[0].index, positionToKeep, compatible && source.index === playable[0].index);
       }, 2000);
     } else {
       // A fatal network error is no longer a buffering state. Keep the failure
@@ -758,8 +901,8 @@ async function playSource(c, index) {
         report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
         // Firebase may have delivered fresh URLs since playback began.
-        const latest = state.channels.find((item) => item.id === c.id) || c;
-        playSource(latest, 0);
+        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        playSource(latest, 0, positionToKeep);
       } }, '↻ Reintentar');
       // Direct navigation may work even when hls.js fetches from GitHub Pages are
       // rejected by CORS or by the origin policy of the upstream CDN.
@@ -777,19 +920,28 @@ async function playSource(c, index) {
         ' ',
         direct,
         c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
-        diagnosis,
+        webAccess.current().administrator === true ? diagnosis : null,
       );
     }
   };
-  playerStatus.textContent = 'Conectando…';
-  const showFrame = () => {
+  playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
+  const showFrame = (address = source.how.address || source.url, referrerPolicy = null) => {
     // The page's own player, straight from its servers: nothing passes through the hosting.
-    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: source.how.address || source.url, title: c.name,
-      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '' });
+    // Pilot popup blocking on M+ LaLiga before enabling it for other ZicoTV channels.
+    const zicoPopupTrial = !!zicoPublicIframe(address) || zicoPlayerIframe(address)?.split('?')[0] === 'https://bp.zicotv.cc/api/player/4';
+    const sandbox = zicoPopupTrial ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null;
+    const frame = el('iframe', { id: 'player-frame', class: 'player-frame', src: address, title: c.name,
+      allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: '',
+      referrerpolicy: referrerPolicy || (source.how.youtube ? 'strict-origin-when-cross-origin' : null), sandbox });
+    frame.addEventListener('load', () => {
+      if (generation === playbackGeneration && current === c) watching?.privateViewing.watching(true);
+    }, { once: true });
     document.querySelector('#player .player-stage').append(frame);
     player.classList.add('framed');
     controls.attach(null);
-    playerStatus.textContent = '';
+    playerStatus.replaceChildren(...(source.how.youtube
+      ? [el('a', { href: source.how.youtube, target: '_blank', rel: 'noopener' }, 'Abrir en YouTube')]
+      : []));
   };
   if (source.how.kind === 'event') {
     const message = c.sourceErrors?.[source.url] || 'No se pudieron obtener las fuentes de este evento.';
@@ -798,8 +950,40 @@ async function playSource(c, index) {
     } }, '↻ Consultar de nuevo'));
     return;
   }
+  const zicoFrame = zicoPlayerIframe(source.url);
+  if (zicoFrame) {
+    playerStatus.textContent = 'Preparando el reproductor Premium de ZicoTV…';
+    const lookup = sourceLookup = new AbortController();
+    const timeout = setTimeout(() => lookup.abort(), 23000);
+    try {
+      const address = await premiumZicoIframe(source.url, PLAYER_ENDPOINT, { event: c.sourceEvents?.[source.url], signal: lookup.signal });
+      if (generation === playbackGeneration) showFrame(address, 'origin');
+    } catch (error) {
+      if (generation === playbackGeneration) playerStatus.replaceChildren(
+        lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
+          : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
+        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
+        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
+      );
+    } finally {
+      clearTimeout(timeout);
+      if (sourceLookup === lookup) sourceLookup = null;
+    }
+    return;
+  }
   if (source.how.renewable) {
-    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls,
+    stopRenewable = mountRenewable({ page: source.url, video, Hls: window.Hls, preferDirect: false,
+      onSources: options => {
+        if (generation !== playbackGeneration || c.vod) return;
+        const page = hostedPage(source.url), first = c.streams.findIndex(url => hostedPage(url) === page);
+        const other = c.streams.filter(url => hostedPage(url) !== page);
+        const name = c.sourceNames?.[page] || c.name;
+        const rows = [{ url: page, name: `${name} · Automática` }, ...options.map((option, i) => ({ ...option, name: `${name} · Señal ${i + 1}` }))];
+        const streams = [...other.slice(0, first), ...rows.map(row => row.url), ...other.slice(first)];
+        c = { ...c, streams, sourceNames: { ...c.sourceNames, ...Object.fromEntries(rows.map(row => [row.url, row.name])) } };
+        renderSourcePicker(playerSources, sourceOptions(streams).map(row => ({ ...row, label: c.sourceNames[row.url] || row.label })),
+          streams.indexOf(source.url), chosen => playSource(c, chosen));
+      },
       onAttach: (instance) => { hls = instance; controls.attach(instance); },
       onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
       onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
@@ -807,6 +991,10 @@ async function playSource(c, index) {
     return;
   }
   if (source.how.kind === 'frame') { showFrame(); return; }
+  const watchStall = () => {
+    stopStallWatch = watchPlaybackStall(video, () => next({ details: 'playbackStalled',
+      userMessage: 'El vídeo se ha detenido y no se pudo reconectar.' })).stop;
+  };
   if (source.how.kind === 'ts') {
     controls.attach(null);
     // The hosting's adapted HLS of the channel (calamar-cast.php): one continuous connection to the
@@ -832,6 +1020,7 @@ async function playSource(c, index) {
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = compatible.url;
       else { next({ ...data, details: 'codecUnsupported' }); return; }
       controls.attach(hls);
+      watchStall();
       autoplay(video).catch(() => {
         if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
       });
@@ -861,13 +1050,21 @@ async function playSource(c, index) {
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
   const round = roundOf(c);
   const address = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
+  if (c.vod && resumeAt > 0) video.onloadedmetadata = () => {
+    if (generation !== playbackGeneration) return;
+    video.onloadedmetadata = null;
+    if (!Number.isFinite(video.duration) || resumeAt < video.duration) video.currentTime = resumeAt;
+    resumeAt = 0;
+  };
   if (source.how.kind === 'hls' && window.Hls && window.Hls.isSupported()) {
     hls = new window.Hls({ lowLatencyMode: false });
     hls.on(window.Hls.Events.ERROR, (_e, data) => {
       // The hosting answers 409 while LuluStream is still converting a video just uploaded.
-      if (data.fatal && source.how.address && !source.how.page && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
+      if (data.fatal && source.how.address && !source.how.page && !compatible && data.response?.code === 409) data.userMessage = 'Este vídeo todavía se está procesando en LuluStream. Prueba de nuevo en un rato.';
       // Player pages read by the hosting (calamar-player.php): what failed, in plain words.
       if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
+      if (data.fatal && compatible && data.response?.code === 429) data.userMessage = 'Google Drive ha alcanzado la cuota de descarga de este vídeo.';
+      if (data.fatal && compatible && data.response?.code === 503) data.userMessage = 'El hosting está adaptando otros vídeos. Pulsa Reintentar en un momento.';
       if (data.fatal) next(data);
     });
     hls.loadSource(address);
@@ -878,6 +1075,7 @@ async function playSource(c, index) {
   controls.attach(hls);
   video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
   video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
+  watchStall();
   autoplay(video).catch(() => {
     if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
@@ -892,9 +1090,13 @@ function pagePlaybackError(code) {
 
 // ---- Audience -------------------------------------------------------------------------------
 // While the player is open this tab reports what it watches once a minute and shows how many
-// people are watching the same channel or event. Nothing about the viewer is stored.
+// people are watching the same channel or event. Account history is kept separately.
 const viewersBadge = document.getElementById('player-viewers');
 let watching = null;
+video.addEventListener('playing', () => watching?.privateViewing.watching(true));
+for (const event of ['pause', 'ended', 'waiting', 'error']) {
+  video.addEventListener(event, () => { if (!casting) watching?.privateViewing.watching(false); });
+}
 function showViewers(count) {
   viewersBadge.hidden = !Number.isInteger(count) || count < 0;
   viewersBadge.querySelector('b').textContent = count > 999 ? `${(count / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mil` : String(count);
@@ -904,18 +1106,21 @@ function showViewers(count) {
 }
 function startAudience(c, visit = true) {
   const target = audienceTarget(c);
-  if (watching?.target === target) return;
+  const playbackKey = c.progress?.key || target;
+  if (watching?.key === playbackKey) return;
   stopAudience();
-  const session = { target, id: sessionId(), timers: [] };
+  const id = sessionId();
+  const session = { key: playbackKey, id, livePlayer: !c.vod, timers: [], privateViewing: viewingSession(shared, c, id, c.vod) };
   watching = session;
   if (c.vod) viewersBadge.hidden = true;
   const live = () => watching === session;
   // Films and series count in the statistics too, but their player shows no «people watching».
-  const count = () => c.vod ? Promise.resolve() : shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
-  const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
-  beat().then(() => { if (live()) count(); });
-  session.timers.push(setInterval(beat, HEARTBEAT_MS));
-  if (!c.vod) session.timers.push(setInterval(count, COUNT_MS));
+  if (!c.vod) {
+    const count = () => shared().then((f) => f.viewers(target)).then((n) => { if (live()) showViewers(n); }).catch(() => {});
+    const beat = () => shared().then((f) => f.beat(session.id, target)).catch(() => {});
+    beat().then(() => { if (live()) count(); });
+    session.timers.push(setInterval(beat, HEARTBEAT_MS), setInterval(count, COUNT_MS));
+  }
   // One visit per opening; refreshes of the same player are not new visits. An event also counts
   // as a visit to the channel it plays on. The rules accept one counter per write, so each goes alone.
   if (visit) {
@@ -929,12 +1134,18 @@ function stopAudience() {
   if (!watching) return;
   const session = watching;
   watching = null;
+  session.privateViewing.close();
   for (const timer of session.timers) clearInterval(timer);
   showViewers(0);
-  shared().then((f) => f.leave(session.id)).catch(() => {});
+  if (session.livePlayer) shared().then((f) => f.leave(session.id)).catch(() => {});
 }
 window.addEventListener('pagehide', stopAudience);
-window.addEventListener('pageshow', (e) => { if (e.persisted && current && !player.hidden) startAudience(current, false); });
+window.addEventListener('pageshow', (e) => {
+  if (!e.persisted || !current || player.hidden || current.pending) return;
+  startAudience(current, false);
+  if (casting || document.getElementById('player-frame') || (!video.paused && !video.ended && video.readyState >= 3))
+    watching?.privateViewing.watching(true);
+});
 
 // Every channel has a link of its own: its id is the slug (#/canal/la-1).
 let current = null;
@@ -942,6 +1153,7 @@ let pushed = false;
 const channelLink = (c) => `${location.origin}${location.pathname}${c.event ? eventPath(c) : `#/canal/${encodeURIComponent(c.slug)}`}`;
 
 function open(c, fromRoute = false) {
+  if (webAccess.current().decision !== 'allowed') { route(); return; }
   if (!c.playable && !c.pending) {
     window.open(c.web, '_blank', 'noopener');
     return;
@@ -952,11 +1164,14 @@ function open(c, fromRoute = false) {
   }
   if (player.hidden) returnFocus = document.activeElement;
   current = c;
+  document.getElementById('ctl-multi').hidden = !!c.vod;
+  document.getElementById('ctl-multi').disabled = !multiPlayable(c);
   // Channels and events are shared through their preview page; films and episodes are not.
   shareButton.hidden = !!c.vod;
   paintFavorite();
   // An imported match without a channel has no video: only its match page and the notice.
   player.classList.toggle('pending', !!c.pending);
+  if (sleepTimer) sleepTimer.button.hidden = !!c.pending;
   playerTitle.textContent = c.name;
   refreshScores();
   playerLogo.hidden = !c.logo;
@@ -966,11 +1181,9 @@ function open(c, fromRoute = false) {
   for (const n of behind()) n.inert = true;
   controls.wake();
   document.getElementById('player-close').focus();
-  // Pressing «Ver» opens the video in full screen, as in the app. Browsers only allow it right after a
-  // tap, so a link opened directly (fromRoute) starts in the normal player. Events with a Google match
-  // link stay in the page instead, with the match's information, statistics and line-ups under the video.
+  // On a direct link the player already fills the window; browsers need a tap to hide their own bars.
   const withMatch = showMatchCenter(c);
-  if (!fromRoute && !withMatch && !controls.isFullscreen()) controls.enterFullscreen();
+  if (!fromRoute && !withMatch && !c.pending && !controls.isFullscreen()) controls.enterFullscreen();
   // What the profile watches feeds «Recomendado para ti».
   if (c.vod && c.progress?.page) rememberWatched(c.progress.page, c.progress.item);
   // Viewers and visits are counted per channel and event; films and episodes are not.
@@ -978,27 +1191,49 @@ function open(c, fromRoute = false) {
   if (!c.pending) startAudience(c);
   // Intro and credits of this episode from TheIntroDB, where none were typed in the admin page.
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
-  playSource(c, 0);
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
-  if (resume > 0) video.addEventListener('loadedmetadata', () => {
-    if (current === c && (!Number.isFinite(video.duration) || video.duration > resume + 5)) video.currentTime = resume;
-  }, { once: true });
+  playSource(c, 0, resume);
   lastSaved = 0;
 }
 
 // ---- Continuar viendo: position of films and episodes, and the next episode when one ends ----------
 let lastSaved = 0;
+function episodeContext(page, item) {
+  const profile = activeProfile()?.id;
+  return { uid: profile ? signedUser()?.uid : null, profile, page, item };
+}
+async function fetchEpisodeHistory(context) {
+  const local = loadEpisodeHistory(context);
+  if (!context.uid) return local;
+  const sync = shared().then(service => service.syncEpisodeHistory(context, local, mergeEpisodeHistory))
+    .then(history => saveEpisodeHistory(context, history)).catch(() => local);
+  return Promise.race([sync, new Promise(resolve => setTimeout(() => resolve(local), 1500))]);
+}
+function rememberEpisode(player, completed = false) {
+  if (!player.progress?.episode || player.episodeCompleted || (!completed && player.episodeStarted)) return;
+  player.episodeStarted = true;
+  player.episodeCompleted = completed;
+  const { page, item, episode } = player.progress;
+  const context = player.episodeContext ||= episodeContext(page, item);
+  const local = saveEpisodeHistory(context, recordEpisode(loadEpisodeHistory(context), episode, completed));
+  if (context.uid) shared().then(service => service.syncEpisodeHistory(context, local, mergeEpisodeHistory))
+    .then(history => saveEpisodeHistory(context, history)).catch(() => {});
+}
 function rememberPosition(force = false) {
   if (!current?.vod || !current.progress || video.seeking) return;
   if (!force && Date.now() - lastSaved < 5000) return;
   lastSaved = Date.now();
   saveProgress(recordProgress(loadProgress(), current.progress, video.currentTime, video.duration));
+  if (video.currentTime >= 10) {
+    rememberEpisode(current, finished(video.currentTime, video.duration));
+  }
 }
 video.addEventListener('timeupdate', () => rememberPosition());
 video.addEventListener('pause', () => rememberPosition(true));
 function playNext() {
   if (!current?.vod) return;
+  rememberEpisode(current, true);
   saveProgress(removeProgress(loadProgress(), current.progress?.key));
   const following = current.next?.();
   if (!following) return;
@@ -1038,8 +1273,8 @@ async function resumeEntry(entry) {
   try {
     const library = await fetchLibrary();
     const item = (library.sections[section?.key] || []).find((i) => i.id === entry.item);
-    const episode = entry.episode ? item?.episodes?.find((e) => e.id === entry.episode) : null;
-    if (!item || (entry.episode && !episode)) throw new Error('Este título ya no está en el catálogo.');
+    const episode = entry.episode && item ? listedEpisodes(item).find(e => e.id === entry.episode) : null;
+    if (!item || (entry.episode && !episodeAvailable(episode))) throw new Error('Este título ya no está en el catálogo.');
     open(playable(section, item, episode));
   } catch (error) {
     view.prepend(el('p', { class: 'error', role: 'alert' }, error.message));
@@ -1161,9 +1396,9 @@ function showEventAdmin(c) {
 }
 /** Shows the match of an event under the video; true when it did (events only). */
 function showMatchCenter(c) {
-  // Only events with a match link show the match under the video; the rest open in full screen
-  // (for the administrator too, so the event page has its «Seleccionar canal» at the end).
-  const key = c?.event && (c.matchUrl || libraryAdmin) ? String(c.eventId || c.id) : '';
+  // A catalog event can have a video without an ESPN match. That is a player-only view for every account.
+  const id = c?.event && c.matchUrl && c.matchId ? String(c.matchId) : '';
+  const key = id ? String(c.eventId || c.id) : '';
   if (key && key === matchShown) return true;
   clearInterval(matchTimer);
   matchShown = key; matchModel = null; matchTab = 'general';
@@ -1173,10 +1408,8 @@ function showMatchCenter(c) {
   showEventAdmin(key ? c : null);
   if (!key) { matchPanel.replaceChildren(); return false; }
   const base = eventMatchModel(c, state.custom, eventLabel(c, Date.now(), EVENT_STATES).text);
-  const id = c.matchUrl && c.matchId ? String(c.matchId) : '';
-  matchModel = id ? { ...base, note: 'Cargando los datos del partido…' } : base;
+  matchModel = { ...base, note: 'Cargando los datos del partido…' };
   paintMatch();
-  if (!id) return true;
   const load = async () => {
     try {
       const espn = parseMatchCenter(await fetchSummary(id));
@@ -1194,6 +1427,9 @@ function showMatchCenter(c) {
 }
 
 function hidePlayer() {
+  sleepTimer?.cancel();
+  document.querySelector('.mc-player-dialog')?.close();
+  closeMultiPicker();
   showMatchCenter(null);
   rememberPosition(true);
   if (controls.isFullscreen()) controls.leaveFullscreen();
@@ -1298,17 +1534,21 @@ async function libraryRoute(page, [itemId, sub, episodeId], version) {
   if (!itemId) { view.replaceChildren(...[hiddenNote, ...libraryPage(el, section, library, browseOptions())].filter(Boolean)); return; }
   const item = (library.sections[section.key] || []).find((i) => i.id === itemId);
   if (!item) { view.replaceChildren(el('p', { class: 'error' }, 'Este título ya no está en el catálogo.'), ...(libraryShown() ? libraryPage(el, section, library) : [])); return; }
-  const play = (target, episode, restart = false) => open({ ...playable(section, target, episode), restart });
+  const play = (target, episode, restart = false) => {
+    if (!episode || episodeAvailable(episode)) open({ ...playable(section, target, episode), restart });
+  };
   const progress = loadProgress();
   const saved = (id) => progress[id] || null;
-  if (sub === 'capitulo') {
-    const episode = item.episodes?.find((e) => e.id === episodeId);
-    if (episode) { view.replaceChildren(...libraryEpisode(el, section, library, item, episode, play, saved)); return; }
+  const history = item.kind === 'tv' ? await fetchEpisodeHistory(episodeContext(page, item.id)) : {};
+  if (version !== routeVersion) return;
+  const episode = episodeId && item.kind === 'tv' ? listedEpisodes(item).find(e => e.id === episodeId) : null;
+  if (sub === 'capitulo' && episode) {
+    view.replaceChildren(...libraryEpisode(el, section, item, episode, play, saved, history));
+    return;
   }
-  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item)));
-  if (sub === 'ver') {
-    const episode = episodeId ? item.episodes?.find((e) => e.id === episodeId) : null;
-    const c = playable(section, item, episode);
+  view.replaceChildren(...libraryDetail(el, section, library, item, play, saved, sub === 'temporada' ? Number(episodeId) : null, titleExtras(section, item), history));
+  if (sub === 'ver' && (item.kind !== 'tv' || episodeAvailable(episode))) {
+    const c = playable(section, item, episode || null);
     if (player.hidden || current?.id !== c.id) open(c, true);
   }
 }
@@ -1334,28 +1574,24 @@ function slidesForGate() {
     try { localStorage.setItem(GATE_SLIDES, JSON.stringify(slides)); } catch {}
     return slides;
   }
-  fetchLibrary().then(() => { if (gate && !gate.dataset.fromLibrary) showGate(); }).catch(() => {});
   try { return JSON.parse(localStorage.getItem(GATE_SLIDES) || '[]').filter((s) => s && typeof s.image === 'string' && s.image.startsWith('https://')); } catch { return []; }
 }
 function showGate() {
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
-  if (!signedUser() || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
-  const fromLibrary = !!cachedLibrary();
-  // Already open with the library's titles: only the profiles can have changed.
-  if (gate && gate.dataset.fromLibrary && fromLibrary && gate.dataset.profiles === JSON.stringify(accountProfiles())) return;
+  const access = webAccess.current(), user = signedUser();
+  if (!['loading', 'allowed'].includes(access.decision) || !user?.uid || (access.authReady && access.user?.uid !== user.uid)
+      || !accountProfiles().length || pickedThisVisit() || ['admin', 'cuenta', 'tv'].includes(page)) { closeGate(); return; }
+  const profiles = JSON.stringify(accountProfiles());
+  if (gate?.dataset.profiles === profiles) return;
   const next = profileGate(el, { slides: slidesForGate(),
     chosen: () => { closeGate(); route(); },
     manage: (what) => { closeGate(); accountEditing = what; location.hash = '#/cuenta'; } });
-  if (fromLibrary) next.dataset.fromLibrary = '1';
-  next.dataset.profiles = JSON.stringify(accountProfiles());
+  next.dataset.profiles = profiles;
   if (gate) gate.replaceWith(next); else document.body.append(next);
   gate = next;
   document.body.classList.add('gate-open');
   gate.querySelector('.gate-profile')?.focus();
 }
-// The administration icon only for the administrator's own account (there is no separate sign-in).
-const adminLink = document.querySelector('.admin-link');
-shared().then((f) => f.watchAuth((user) => { adminLink.hidden = !f.administrator(user); })).catch(() => {});
 onProfilesChanged(() => {
   paintAccountButton(el, accountLink);
   const page = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
@@ -1364,18 +1600,68 @@ onProfilesChanged(() => {
   if (needsProfile() && page !== 'cuenta' && page !== 'admin') { location.hash = '#/cuenta'; return; }
   if (page === 'cuenta' || (!page && !search.value.trim())) { clearTimeout(profileRedraw); profileRedraw = setTimeout(route, 50); }
 });
+webAccess.start();
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
+if (isSamsungTizen(navigator.userAgent)) updateAppDownload();
 async function route() {
+  const admission = webAccess.current();
+  const accessPage = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
+  const locked = admission.decision !== 'allowed';
+  document.body.classList.toggle('access-locked', locked);
+  document.body.classList.toggle('access-signin', admission.decision === 'login' && accessPage !== 'tv');
+  if (locked) {
+    if (casting) { casting = false; cast.stop(); }
+    showGate();
+    if (!player.hidden) hidePlayer();
+    closeMultiPicker(); closeMulti(); inlineMulti = null;
+    stopHighlight();
+    if (stopMusic) { stopMusic(); stopMusic = null; }
+    if (!['admin', 'cuenta', 'tv'].includes(accessPage) || (admission.decision === 'login' && accessPage !== 'tv')) {
+      if (!accessReturnHash) accessReturnHash = location.hash || '#/';
+      for (const dialog of document.querySelectorAll('dialog[open]:not(.auth-verification)')) dialog.close();
+      const ticket = ++routeVersion;
+      if (admission.decision === 'login') {
+        try { const f = await shared(); if (ticket !== routeVersion) return; view.replaceChildren(...signIn(el, f, route)); }
+        catch { view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con el inicio de sesión. Recarga para volver a intentarlo.')); }
+      } else if (admission.decision === 'blocked') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'Acceso suspendido'), el('p', {}, 'Esta cuenta tiene el acceso bloqueado. Contacta con el administrador.'), el('a', { class: 'btn', href: '#/cuenta' }, 'Mi cuenta')));
+      else if (admission.decision === 'error') view.replaceChildren(el('section', { class: 'auth-card' }, el('h1', {}, 'No se pudo comprobar el acceso'), el('p', {}, 'Comprueba la conexión y vuelve a intentarlo.'), el('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, 'Reintentar'), el('a', { class: 'ghost', href: '#/cuenta' }, 'Iniciar sesión')));
+      else view.replaceChildren();
+      return;
+    }
+  }
+
+  if (!locked) {
+    showGate();
+    if (accessPage !== 'cuenta') accessReturnHash = null;
+    if (gate) { ++routeVersion; view.replaceChildren(); return; }
+  }
+  if (inlineMulti) {
+    if (location.hash === inlineMulti.hash) return;
+    closeMultiPicker(); closeMulti(); inlineMulti = null;
+  } else closeMultiPicker();
+  updateAppDownload();
   const version = ++routeVersion;
   stopHighlight();
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const [page, arg] = hash.split('/');
+  if (page !== 'directo') liveSport = 'all';
+  // Account and administration routes must release the player's overlay/inert lock too.
+  if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
-  search.closest('.search').hidden = !!sectionByPage(page) || page === HALLOWEEN_PAGE || page === PLATFORM_PAGE;
+  if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
+  search.closest('.search').hidden = !!sectionByPage(page) || [HALLOWEEN_PAGE, PLATFORM_PAGE, 'musica', 'admin', 'cuenta', 'tv'].includes(page);
   for (const a of document.querySelectorAll('[data-route]'))
     a.toggleAttribute('aria-current', a.dataset.route === (page || 'inicio'));
   for (const a of document.querySelectorAll('[aria-current]')) a.setAttribute('aria-current', 'page');
+  if (page === 'musica') {
+    if (!player.hidden) hidePlayer();
+    const music = await import('./music.js');
+    if (version !== routeVersion) return;
+    view.replaceChildren();
+    stopMusic = music.renderMusic(view, signedUser());
+    return;
+  }
   if (page === 'tv') {
     // An app signing in from this phone: its QR / short link (…/tv/K7Q2) opens here.
     const login = await import('./tv-login.js');
@@ -1388,8 +1674,13 @@ async function route() {
     try {
       const f = await shared();
       if (version !== routeVersion) return;
-      view.replaceChildren(...accountPage(el, f, { rerender: route, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
-        chosen: () => { accountEditing = null; location.hash = '#/'; } }));
+      view.replaceChildren(...accountPage(el, f, { rerender: route, dashboard: accountDashboard, editing: accountEditing, setEditing: (value) => { accountEditing = value; },
+        chosen: () => { accountEditing = null; const destination = accessReturnHash || '#/'; accessReturnHash = null; location.hash = destination; } }));
+      if (admission.decision === 'allowed' && signedUser() && !cachedLibrary()) {
+        const catalog = state.tdt ? Promise.resolve() : loadCatalog();
+        catalog.then(() => libraryShown() ? fetchLibrary() : null)
+          .then(library => { if (library && version === routeVersion) route(); }).catch(() => {});
+      }
     } catch {
       view.replaceChildren(el('p', { class: 'error' }, 'No se pudo conectar con las cuentas. Comprueba la conexión y recarga.'));
     }
@@ -1456,11 +1747,20 @@ async function route() {
     }
     return;
   }
+  if (page === 'directo') {
+    await loadSports();
+    if (version !== routeVersion) return;
+  }
   const query = search.value.trim();
-  view.replaceChildren(...(query ? results(query) : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
+  view.replaceChildren(...(query ? results(query, !page || page === 'inicio') : page === 'canales' ? channelsPage(arg) : page === 'liga' ? leaguePage(arg) : page === 'directo' ? livePage() : home()));
 }
 
 let typing;
+search.form?.addEventListener('submit', event => {
+  event.preventDefault();
+  clearTimeout(typing);
+  route();
+});
 search.addEventListener('input', () => {
   clearTimeout(typing);
   typing = setTimeout(route, 180);

@@ -3,10 +3,14 @@ package es.yuanyo.calamartv;
 import java.io.*;
 import java.net.URI;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.json.*;
 
 /** Channels added by the user. Stored only in the app's private storage. */
 public final class UserChannels {
+  private static final Pattern EVENT_URL = Pattern.compile("^(https?://[^/?#]+)(/[^?#]*)?([?#].*)?$");
+
   private UserChannels() {}
 
   /** Returns the trimmed address if it is an http(s) URL with a host, otherwise null. */
@@ -20,8 +24,26 @@ public final class UserChannels {
       scheme = scheme.toLowerCase(Locale.ROOT);
       if (!scheme.equals("http") && !scheme.equals("https")) return null;
       if (uri.getHost() == null || uri.getHost().isEmpty()) return null;
-      return trimmed;
+      String player = VideoResolver.channelPlayer(trimmed);
+      return player == null ? trimmed : player;
     } catch (Exception invalid) {
+      return null;
+    }
+  }
+
+  /** Browsers accept literal brackets in player paths, but Java's URI requires them encoded. */
+  static String normalizeEventSource(String address) {
+    Matcher parts = EVENT_URL.matcher(address);
+    if (!parts.matches()) return null;
+    String path = parts.group(2), suffix = parts.group(3);
+    String encoded = parts.group(1) + (path == null ? "" : path.replace("[", "%5B").replace("]", "%5D"))
+        + (suffix == null ? "" : suffix);
+    try {
+      URI uri = URI.create(encoded);
+      if (uri.getHost() == null || uri.getUserInfo() != null) return null;
+      String player = VideoResolver.channelPlayer(encoded);
+      return player == null ? encoded : player;
+    } catch (IllegalArgumentException invalid) {
       return null;
     }
   }

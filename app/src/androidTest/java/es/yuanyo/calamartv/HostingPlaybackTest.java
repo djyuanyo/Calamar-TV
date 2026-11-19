@@ -31,6 +31,97 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 @android.annotation.SuppressLint("UnsafeOptInUsageError")
 public class HostingPlaybackTest {
+  @Test public void importedIframeAndDirectSourceUseDifferentPlayers() throws Exception {
+    String embed = "https://zicotv.gcorecdn.com/api/player/4";
+    String direct = "https://example.invalid/live.m3u8";
+    Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
+        .putExtra("page_url", embed).putExtra("title", "Evento con dos señales")
+        .putStringArrayListExtra("channel_streams", new java.util.ArrayList<>(java.util.Arrays.asList(embed, direct)));
+    Field browser = NativePlayerActivity.class.getDeclaredField("browser");
+    Field player = NativePlayerActivity.class.getDeclaredField("player");
+    Field button = NativePlayerActivity.class.getDeclaredField("sourceButton");
+    browser.setAccessible(true);
+    player.setAccessible(true);
+    button.setAccessible(true);
+    try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
+      AtomicBoolean opened = new AtomicBoolean();
+      long deadline = SystemClock.elapsedRealtime() + 10000;
+      while (!opened.get() && SystemClock.elapsedRealtime() < deadline) {
+        scenario.onActivity(activity -> {
+          try {
+            if (browser.get(activity) == null) return;
+            assertNull(player.get(activity));
+            opened.set(((android.widget.Button) button.get(activity)).performClick());
+          } catch (IllegalAccessException failure) { throw new AssertionError(failure); }
+        });
+        if (!opened.get()) SystemClock.sleep(100);
+      }
+      assertTrue("The public iframe should open without a hosting lookup", opened.get());
+      onView(withText("Evento con dos señales · Señal 1")).inRoot(isDialog()).perform(click());
+      scenario.onActivity(activity -> {
+        try {
+          assertNull("Switching source must destroy the iframe", browser.get(activity));
+          assertNotNull("The direct HLS source must use Media3", player.get(activity));
+        } catch (IllegalAccessException failure) { throw new AssertionError(failure); }
+      });
+    }
+  }
+
+  @Test public void hostingFailureNeverContactsProviderOrOpensWebPlayer() throws Exception {
+    NetworkTransport system = NetworkTransport.get(DnsProvider.SYSTEM), secure = NetworkTransport.get(DnsProvider.GOOGLE);
+    Field field = NetworkTransport.class.getDeclaredField("client"); field.setAccessible(true);
+    OkHttpClient previousSystem = (OkHttpClient) field.get(system), previousSecure = (OkHttpClient) field.get(secure);
+    DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
+    AtomicInteger hosted = new AtomicInteger(), direct = new AtomicInteger();
+    field.set(system, new OkHttpClient.Builder().addInterceptor(chain -> {
+      if (HostingPlayback.isRelay(chain.request().url().toString())) hosted.incrementAndGet();
+      else direct.incrementAndGet();
+      throw new java.net.UnknownHostException("Hosting temporalmente inaccesible");
+    }).build());
+    field.set(secure, new OkHttpClient.Builder().addInterceptor(chain -> {
+      direct.incrementAndGet(); throw new java.net.UnknownHostException("No se debe consultar el proveedor desde la app");
+    }).build());
+    NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
+    try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
+        .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba solo hosting"))) {
+      AtomicBoolean finished = new AtomicBoolean();
+      java.util.concurrent.atomic.AtomicReference<String> lastStatus = new java.util.concurrent.atomic.AtomicReference<>("");
+      // Four bounded attempts now consult two owned hostnames. Allow emulator scheduling overhead.
+      long deadline = SystemClock.elapsedRealtime() + 35000;
+      while (!finished.get() && SystemClock.elapsedRealtime() < deadline) {
+        scenario.onActivity(activity -> {
+          try {
+            Field browser = NativePlayerActivity.class.getDeclaredField("browser"); browser.setAccessible(true);
+            assertNull("A hosting outage must not open a browser player", browser.get(activity));
+            Field status = NativePlayerActivity.class.getDeclaredField("status"); status.setAccessible(true);
+            lastStatus.set(((android.widget.TextView) status.get(activity)).getText().toString());
+            assertEquals("No retry may contact the upstream provider", 0, direct.get());
+            if (lastStatus.get().contains("No se pudo conectar con esta fuente")) {
+              // Menu lookups run independently and may finish after a previous activity closes.
+              // Check this player's retry state instead of counting unrelated HTTP requests.
+              Field attempts = NativePlayerActivity.class.getDeclaredField("automaticAttempts"); attempts.setAccessible(true);
+              assertEquals("Exactly three automatic retries must precede the terminal error", 3, attempts.getInt(activity));
+              if (android.os.Build.VERSION.SDK_INT >= 29) {
+                Field handler = NativePlayerActivity.class.getDeclaredField("handler"); handler.setAccessible(true);
+                Field retry = NativePlayerActivity.class.getDeclaredField("renewalRequest"); retry.setAccessible(true);
+                assertFalse("No automatic retry may remain after the terminal error",
+                    ((android.os.Handler) handler.get(activity)).hasCallbacks((Runnable) retry.get(activity)));
+              }
+              finished.set(true);
+            }
+          } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        });
+        SystemClock.sleep(100);
+      }
+      assertTrue("Hosting retries must finish with a visible connection error; status=" + lastStatus.get() + ", hosted=" + hosted.get(), finished.get());
+      assertTrue("The configured hosting was never requested", hosted.get() >= 3);
+      assertEquals("The device must never contact the upstream provider", 0, direct.get());
+    } finally {
+      field.set(system, previousSystem); field.set(secure, previousSecure);
+      NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous);
+    }
+  }
+
   @Test public void blockedPageUsesHostingForVideoAndRenewsThere() throws Exception { playback(false, true); }
   @Test public void televisionRemoteSelectsAndRenewsHostedSignal() throws Exception {
     org.junit.Assume.assumeTrue((ApplicationProvider.getApplicationContext().getResources().getConfiguration().uiMode
@@ -39,10 +130,21 @@ public class HostingPlaybackTest {
   }
   @Test public void unavailableSourceMenuCannotBlockAutomaticHostedVideo() throws Exception { playback(false, false); }
   @Test public void countOnlyHostingSelectsAndRenewsUsingSystemDns() throws Exception { playback(false, true, true); }
+  @Test public void channelDetailLinkUsesNativeHostedVideoAndRenews() throws Exception { playback(false, true, false, false, false, "https://bp.zicotv.cc/channels/4"); }
+  @Test public void livePlaylistRenewalPreservesDecoderAndUsesTheNewSignature() throws Exception { playback(false,true,false,false,false,"https://bp.zicotv.cc/api/player/4",true); }
   private void playback(boolean remote, boolean menuAvailable) throws Exception { playback(remote, menuAvailable, false); }
-  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception {
+  @Test public void rootConnectionFailureKeepsNativeVideoAndRenewalsOnWww() throws Exception { playback(false, true, false, true, false); }
+  @Test public void slowHostedListsAndFragmentsRenderBeforeTheHostedDeadline() throws Exception { playback(false, false, false, false, true); }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu) throws Exception { playback(remote, menuAvailable, legacyMenu, false, false); }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow) throws Exception {
+    playback(remote, menuAvailable, legacyMenu, rootUnavailable, slow, "https://bp.zicotv.cc/api/player/4");
+  }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry) throws Exception {
+    playback(remote,menuAvailable,legacyMenu,rootUnavailable,slow,entry,false);
+  }
+  private void playback(boolean remote, boolean menuAvailable, boolean legacyMenu, boolean rootUnavailable, boolean slow, String entry, boolean continuous) throws Exception {
     HeldCertificate cert = new HeldCertificate.Builder().commonName("calamarmenciano.com")
-        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
+        .addSubjectAlternativeName("calamarmenciano.com").addSubjectAlternativeName("www.calamarmenciano.com").addSubjectAlternativeName("bp.zicotv.cc").build();
     HandshakeCertificates serverTls = new HandshakeCertificates.Builder().heldCertificate(cert).build();
     HandshakeCertificates tls = new HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate()).build();
     Buffer video = new Buffer();
@@ -50,6 +152,7 @@ public class HostingPlaybackTest {
       byte[] block = new byte[8192]; for (int n; (n = in.read(block)) != -1;) video.write(block, 0, n);
     }
     AtomicInteger pages = new AtomicInteger(), renewals = new AtomicInteger(), segments = new AtomicInteger(), rotations = new AtomicInteger(), resolutionFailures = new AtomicInteger();
+    java.util.concurrent.ConcurrentHashMap<String,AtomicInteger> manifests = new java.util.concurrent.ConcurrentHashMap<>();
     java.util.concurrent.atomic.AtomicReference<String> selectedId = new java.util.concurrent.atomic.AtomicReference<>("");
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false); server.start();
@@ -70,12 +173,15 @@ public class HostingPlaybackTest {
                 "{\"url\":\"calamar-player.php?seg=manifest&sig=" + n + "&l=1\"}");
           }
           if (path.startsWith("/calamar-player.php?seg=manifest")) {
+            String signature=r.getRequestUrl().queryParameter("sig");
+            manifests.computeIfAbsent(signature,key->new AtomicInteger()).incrementAndGet();
             if (path.contains("sig=1&")) return new MockResponse().setResponseCode(403);
-            return new MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
-                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
+            if (continuous && !String.valueOf(renewals.get()).equals(signature)) return new MockResponse().setResponseCode(403);
+            return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(
+                continuous ? "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=0\n#EXT-X-DISCONTINUITY\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=1\n#EXT-X-DISCONTINUITY\n#EXTINF:8.023,\ncalamar-player.php?seg=video&sig=piece&n=2\n" : "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=video&sig=piece\n#EXT-X-ENDLIST\n");
           }
           if (path.startsWith("/calamar-player.php?seg=video")) {
-            segments.incrementAndGet(); return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
+            segments.incrementAndGet(); return new MockResponse().setBodyDelay(slow ? 13 : 0, java.util.concurrent.TimeUnit.SECONDS).setHeader("Content-Type", "video/mp2t").setBody(video.clone());
           }
           return new MockResponse().setResponseCode(404);
         }
@@ -86,18 +192,29 @@ public class HostingPlaybackTest {
       NetworkTransport secureNetwork = NetworkTransport.get(DnsProvider.GOOGLE);
       OkHttpClient originalSecure = (OkHttpClient) f.get(secureNetwork);
       DnsProvider previous = NetworkTransport.selected(ApplicationProvider.getApplicationContext());
-      OkHttpClient local = new OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
-          .dns(host -> Collections.singletonList(InetAddress.getByName("127.0.0.1")))
-          .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
-              .url(chain.request().url().newBuilder().port(server.getPort()).build()).build())).build();
+      OkHttpClient local = new OkHttpClient.Builder().readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+          .sslSocketFactory(tls.sslSocketFactory(), tls.trustManager())
+          .dns(host -> { if (rootUnavailable && "calamarmenciano.com".equals(host)) throw new java.net.UnknownHostException("Root unavailable"); return Collections.singletonList(InetAddress.getByName("127.0.0.1")); })
+          .addInterceptor(chain -> {
+            okhttp3.Request requested = chain.request();
+            // Redirect only the socket to the local test server. Keep the canonical URL reported
+            // to HLS, as in production; a fake port would change every playlist's origin.
+            return chain.proceed(requested.newBuilder().url(requested.url().newBuilder().port(server.getPort()).build()).build())
+                .newBuilder().request(requested).build();
+          }).build();
       f.set(network, local);
       // Reproduce the real distinction that 2.20.57 missed: menu/system DNS works while selected DNS fails.
       f.set(secureNetwork, new OkHttpClient.Builder().dns(host -> { throw new java.net.UnknownHostException("DNS seguro no disponible"); }).build());
       NetworkTransport.select(ApplicationProvider.getApplicationContext(), DnsProvider.GOOGLE);
       Intent intent = new Intent(ApplicationProvider.getApplicationContext(), NativePlayerActivity.class)
-          .putExtra("page_url", "https://bp.zicotv.cc/api/player/4").putExtra("title", "Prueba hosting");
+          .putExtra("page_url", entry).putExtra("title", "Prueba hosting");
       try (ActivityScenario<NativePlayerActivity> scenario = ActivityScenario.launch(intent)) {
-        assertPlays(scenario);
+        assertPlays(scenario, slow ? 55000 : 30000);
+        if (slow) assertEquals("Slow valid media must not restart lookup", 2, renewals.get());
+        if (rootUnavailable) scenario.onActivity(activity -> {
+          try {Field endpoint=NativePlayerActivity.class.getDeclaredField("hostingEndpoint"); endpoint.setAccessible(true); assertEquals(HostingPlayback.ALTERNATE_ENDPOINT,endpoint.get(activity));}
+          catch(ReflectiveOperationException error) {throw new AssertionError(error);}
+        });
         assertTrue("A rejected hosted token must obtain a fresh signed list", renewals.get() >= 2);
         assertTrue(segments.get() > 0);
         assertEquals(0, pages.get());
@@ -134,8 +251,10 @@ public class HostingPlaybackTest {
         assertPlays(scenario);
         assertEquals(legacyMenu ? "1" : "fedcba9876543210", selectedId.get());
         int before = renewals.get();
+        java.util.concurrent.atomic.AtomicReference<ExoPlayer> decoder = new java.util.concurrent.atomic.AtomicReference<>();
         scenario.onActivity(activity -> {
           try {
+            Field current = NativePlayerActivity.class.getDeclaredField("player"); current.setAccessible(true); decoder.set((ExoPlayer)current.get(activity));
             Field renewal = NativePlayerActivity.class.getDeclaredField("renewal"); renewal.setAccessible(true);
             ((Runnable) renewal.get(activity)).run();
           } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
@@ -143,15 +262,26 @@ public class HostingPlaybackTest {
         long deadline = SystemClock.elapsedRealtime() + 15000;
         while (renewals.get() <= before && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(100);
         assertTrue(renewals.get() > before);
+        if (continuous) {
+          String signature=String.valueOf(renewals.get());
+          long refreshed=SystemClock.elapsedRealtime()+14000;
+          while ((!manifests.containsKey(signature)||manifests.get(signature).get()<2)&&SystemClock.elapsedRealtime()<refreshed) SystemClock.sleep(100);
+          assertTrue("The live decoder must use the fresh signature, after the background prefetch",manifests.containsKey(signature)&&manifests.get(signature).get()>=2);
+        }
         assertPlays(scenario);
+        scenario.onActivity(activity -> {
+          try { Field current=NativePlayerActivity.class.getDeclaredField("player");current.setAccessible(true);assertSame("A scheduled renewal must retain the decoder and buffer",decoder.get(),current.get(activity)); }
+          catch(ReflectiveOperationException error){throw new AssertionError(error);}
+        });
         assertEquals("Renewals must stay on the selected signal", legacyMenu ? "1" : "fedcba9876543210", selectedId.get());
         assertEquals("Playback must not contact the provider", 0, pages.get());
       } finally { f.set(network, original); f.set(secureNetwork, originalSecure); NetworkTransport.select(ApplicationProvider.getApplicationContext(), previous); }
     }
   }
 
-  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) {
-    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + 30000;
+  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario) {assertPlays(scenario,30000);}
+  private void assertPlays(ActivityScenario<NativePlayerActivity> scenario, long timeout) {
+    AtomicBoolean playing = new AtomicBoolean(); long deadline = SystemClock.elapsedRealtime() + timeout;
     while (!playing.get() && SystemClock.elapsedRealtime() < deadline) {
       scenario.onActivity(activity -> {
         try {

@@ -36,7 +36,7 @@ final class ProgressSync {
 
   static void pushSoon(Context context) {
     final Context app = context.getApplicationContext();
-    if (SharedCatalog.auth(app).getCurrentUser() == null) return;
+    if (Profiles.user(app) == null) return;
     if (pending != null) HANDLER.removeCallbacks(pending);
     pending = () -> { pending = null; sync(app, null); };
     HANDLER.postDelayed(pending, PUSH_AFTER_MS);
@@ -45,7 +45,7 @@ final class ProgressSync {
   /** Joins both copies and keeps the result in both; tells whether this device's row changed. */
   static void sync(Context context, Done done) {
     final Context app = context.getApplicationContext();
-    FirebaseUser user = SharedCatalog.auth(app).getCurrentUser();
+    FirebaseUser user = Profiles.user(app);
     // Only once a profile is chosen: before that this device's row is not the account's (a guest's or another account's).
     if (user == null || busy || Profiles.activeId() == null) {
       if (done != null) done.changed(false);

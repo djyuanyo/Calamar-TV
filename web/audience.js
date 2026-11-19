@@ -47,8 +47,21 @@ export function visitKey(kind, id) {
 }
 
 /** Calendar day in Madrid, the same day for every visitor: 2026-10-21. */
-export function madridDay(now = Date.now()) {
-  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+const madridCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+export const madridDay = (now = Date.now()) => madridCalendar.format(new Date(now));
+
+/** Count one account's playbacks that started in the report period. */
+export function viewingSummary(entries, from, to) {
+  let count = 0, latest = null, at = -Infinity;
+  for (const entry of entries) {
+    const time = entry.startedAt?.toMillis?.() ?? new Date(entry.startedAt ?? NaN).getTime();
+    if (!Number.isFinite(time)) continue;
+    const day = madridDay(time);
+    if (day < from || day > to) continue;
+    count++;
+    if (time > at) { latest = entry; at = time; }
+  }
+  return latest ? { count, at, latest } : null;
 }
 
 /** Live presence documents grouped by what they watch: Map(target -> viewers). */

@@ -108,7 +108,7 @@ test('the scan is matched in TMDB and merged with the titles added by hand', asy
     [2, 1, '', 'https://luluvido.com/paco2x01bbbb'], [3, 1, undefined, 'https://luluvido.com/paco3x01cccc']]);
   assert.deepEqual(result.added, { films: 2, shows: 1, episodes: 3, pending: 1 });
   // Not in TMDB: added anyway with the file's name, to be matched in the admin page.
-  assert.deepEqual(result.sections.documentaries, [{ id: 'uplaneta12345', kind: 'movie', title: 'Nuestro planeta', year: null, file: 'Nuestro planeta.mp4', url: 'https://luluvido.com/planeta12345', status: 'unmatched' }]);
+  assert.deepEqual(result.sections.documentaries, [{ id: 'uplaneta12345', kind: 'movie', title: 'Nuestro planeta', year: null, file: 'Nuestro planeta.mp4', url: 'https://luluvido.com/planeta12345', status: 'unmatched', fromFolder: true, folderSources: { planeta12345: ['lulu:library:documentaries'] } }]);
   assert.ok(result.unknown.some((line) => /Nuestro planeta.*sin ficha de TMDB/.test(line)));
   assert.deepEqual(progress, ['1/4', '2/4', '3/4', '4/4']);
 });

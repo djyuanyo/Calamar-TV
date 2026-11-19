@@ -1,8 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts } from '../web/library-tmdb.js';
+import { searchTmdb, tmdbDetails, tmdbFacts, seasonEpisodes, movieItem, seriesWithSeason, libraryParts,
+  correctTmdbTitle, findTmdbTitle, freeTmdbTitleId, applyEpisodeTitles } from '../web/library-tmdb.js';
 import { lulustreamEmbed, webPlayback } from '../web/catalog.js';
 import { validVideoLink } from '../web/library.js';
+
+test('YouTube links are valid catalogue videos and open the same embedded player', () => {
+  const watch = 'https://www.youtube.com/watch?v=12345678901';
+  const embed = 'https://www.youtube-nocookie.com/embed/12345678901?playsinline=1&rel=0';
+  for (const url of [watch + '&list=PLExample', 'https://youtu.be/12345678901?si=test',
+    'https://m.youtube.com/shorts/12345678901', 'https://www.youtube.com/live/12345678901', embed]) {
+    assert.ok(validVideoLink(url));
+    assert.deepEqual(webPlayback(url), { ok: true, kind: 'frame', address: embed, youtube: watch });
+  }
+  for (const url of ['https://youtube.com.evil.test/watch?v=12345678901',
+    'https://www.youtube.com/playlist?list=PLExample', '12345678901']) assert.ok(!validVideoLink(url));
+});
 
 const fake = (bodies, calls = []) => async (url, init) => {
   calls.push([url, init?.headers?.Authorization]);
@@ -10,6 +23,88 @@ const fake = (bodies, calls = []) => async (url, init) => {
   const body = Object.entries(bodies).find(([end]) => path.endsWith(end))?.[1];
   return body ? { status: 200, json: async () => body } : { status: 404, json: async () => ({}) };
 };
+
+test('title logos prefer Spanish and reach the library metadata refresh', async () => {
+  const calls = [];
+  const fetcher = fake({ '/movie/8': { title: 'Planeta', images: { logos: [
+    { iso_639_1: 'en', file_path: '/English.png', vote_average: 9 },
+    { iso_639_1: 'es', file_path: '/Espanol.svg', vote_average: 5 },
+    { iso_639_1: 'es', file_path: 'https://example.test/bad.png', vote_average: 10 },
+  ] } } }, calls);
+  const expected = 'https://image.tmdb.org/t/p/original/Espanol.svg';
+  assert.equal((await tmdbDetails(8, 'movie', 'key', fetcher)).info.titleLogo, expected);
+  assert.equal((await tmdbFacts(8, 'movie', 'key', fetcher)).titleLogo, expected);
+  assert.equal(calls.length, 2);
+  assert.match(new URL(calls[0][0]).searchParams.get('append_to_response'), /\bimages\b/);
+  assert.equal(new URL(calls[0][0]).searchParams.get('include_image_language'), 'es,en,null');
+});
+
+test('title logos can use other languages and preserve existing metadata when images are unavailable', async () => {
+  const calls = [];
+  const show = { name: 'Serie', original_language: 'ko', images: { logos: [] } };
+  const found = await tmdbFacts(7, 'tv', 'key', fake({
+    '/tv/7': show, '/tv/7/images': { logos: [{ iso_639_1: 'ko', file_path: '/Korean.png' }] },
+  }, calls));
+  assert.equal(found.titleLogo, 'https://image.tmdb.org/t/p/w500/Korean.png');
+  assert.equal(new URL(calls[1][0]).searchParams.has('language'), false);
+  assert.equal((await tmdbFacts(7, 'tv', 'key', fake({ '/tv/7': show }))).titleLogo, undefined);
+  assert.equal((await tmdbFacts(7, 'tv', 'key', fake({ '/tv/7': show, '/tv/7/images': { logos: [] } }))).titleLogo, '');
+});
+
+test('TMDB season dates are kept when the first episode has no published date', async () => {
+  const show = { name: 'Serie', seasons: [
+    { season_number: 0, air_date: '2099-11-13' },
+    { season_number: 1, air_date: '2000-01-01' },
+    { season_number: 2, air_date: '2099-11-14' },
+    { season_number: 3, air_date: null },
+  ] };
+  const fetcher = fake({ '/tv/7': show });
+  const { info } = await tmdbDetails(7, 'tv', 'key', fetcher);
+  const facts = await tmdbFacts(7, 'tv', 'key', fetcher);
+  assert.equal(facts.nextEpisode, null);
+  assert.deepEqual(facts.seasonPremieres, [{ season: 2, aired: '2099-11-14' }]);
+  assert.deepEqual(info.seasonPremieres, facts.seasonPremieres);
+});
+
+test('correcting TMDB metadata keeps film IDs, catalogue links and artwork', async () => {
+  const old = { ...movieItem({ id: 6, title: 'Incorrecta' }, 'https://example.test/movie.mp4'),
+    artwork: { poster: 'https://example.test/poster.jpg' }, addedAt: '2026-10-20', featured: 1,
+    mirrors: ['https://example.test/copy.mp4'], folderSources: { video: ['vidara:5'] } };
+  const fixed = await correctTmdbTitle(old, 8, 'tmdb-key', fake({ '/movie/8': { title: 'Correcta', release_date: '2026-01-02' } }));
+  assert.equal(fixed.id, old.id);
+  assert.equal(fixed.url, old.url);
+  assert.deepEqual(fixed.mirrors, old.mirrors);
+  assert.deepEqual(fixed.folderSources, old.folderSources);
+  assert.deepEqual(fixed.artwork, old.artwork);
+  assert.equal(fixed.addedAt, old.addedAt);
+  assert.equal(fixed.featured, 1);
+  assert.deepEqual([fixed.tmdb.id, fixed.title], [8, 'Correcta']);
+  const sections = { documentaries: [fixed] };
+  assert.equal(findTmdbTitle(sections, 'movie', 8), fixed);
+  assert.equal(findTmdbTitle(sections, 'movie', 6), undefined);
+  assert.equal(freeTmdbTitleId(sections, 'movie', 6), 'm6-2');
+});
+
+test('correcting a series refreshes episode metadata while retaining its progress keys and all links', async () => {
+  const ep = { id: 'e6x1x1', season: 1, episode: 1, name: 'Incorrecto', url: 'https://example.test/episode.mp4',
+    mirrors: ['https://example.test/mirror.mp4'], runtime: 44 };
+  const extra = { id: 'e6x9x2', season: 9, episode: 2, name: 'Incorrecto', url: 'https://example.test/extra.mp4' };
+  const before = { id: 's6', kind: 'tv', tmdb: { id: 6 }, episodes: [ep, extra], skip: { intro: [15, 25] } };
+  const fixed = await correctTmdbTitle(before, 8, 'tmdb-key', fake({
+    '/tv/8': { name: 'Correcta', seasons: [{ season_number: 1 }] },
+    '/tv/8/season/1': { episodes: [{ episode_number: 1, name: 'Piloto' }] },
+  }));
+  assert.equal(fixed.id, before.id);
+  assert.deepEqual(fixed.skip, before.skip);
+  assert.deepEqual(fixed.episodes.map(e => [e.id, e.name, e.url]), [
+    [ep.id, 'Piloto', ep.url], [extra.id, '', extra.url],
+  ]);
+  assert.equal(fixed.episodes[0].runtime, undefined);
+  assert.deepEqual(fixed.episodes[0].mirrors, ep.mirrors);
+  const next = seriesWithSeason(fixed, fixed.tmdb, 1, [{ episode: 1, name: 'Piloto' }, { episode: 2, name: 'Dos' }], { 1: ep.url, 2: 'https://example.test/2.mp4' });
+  assert.equal(next.id, 's6');
+  assert.deepEqual(next.episodes.map(e => e.id), ['e6x1x1', 'e6x1x2', 'e6x9x2']);
+});
 
 test('search: films, series, or both for documentaries (people are left out)', async () => {
   const calls = [];
@@ -159,4 +254,20 @@ test('unidentified includes records without a usable TMDB id as well as imported
   assert.equal(unidentifiedItem({ status: 'unmatched', tmdb: { id: 4 } }), true);
   for (const tmdb of [undefined, {}, { id: 0 }, { id: -1 }, { id: 'wrong' }]) assert.equal(unidentifiedItem({ status: 'matched', tmdb }), true);
   for (const id of [4500, '76600']) assert.equal(unidentifiedItem({ tmdb: { id } }), false);
+});
+
+
+test('manual episode names survive a link change and clearing them restores the source name', () => {
+  const tmdb = { id: 40, title: 'Serie', nextEpisode: { season: 1, episode: 1, name: 'Piloto original' } };
+  const existing = { id: 's40', kind: 'tv', tmdb, episodeTitles: { '1x1': 'Mi piloto' },
+    episodes: [{ id: 'episodio-existente', season: 1, episode: 1, name: 'Piloto original', url: 'https://example.com/previous.mp4' }] };
+  const published = applyEpisodeTitles(existing);
+  assert.equal(published.tmdb.nextEpisode.name, 'Mi piloto');
+  const rebuilt = seriesWithSeason(published, published.tmdb, 1, published.episodes, { 1: 'https://example.net/replacement.mp4' });
+  const edited = applyEpisodeTitles(rebuilt);
+  assert.deepEqual([edited.episodes[0].id, edited.episodes[0].name, edited.episodes[0].sourceName],
+    ['episodio-existente', 'Mi piloto', 'Piloto original']);
+  const reset = applyEpisodeTitles({ ...edited, episodeTitles: {} });
+  assert.equal(reset.episodes[0].name, 'Piloto original');
+  assert.equal(reset.tmdb.nextEpisode.name, 'Piloto original');
 });

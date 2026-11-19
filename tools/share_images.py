@@ -8,6 +8,7 @@ import base64
 import concurrent.futures
 import hashlib
 import io
+import json
 import pathlib
 import re
 import urllib.request
@@ -27,6 +28,9 @@ class Images:
         self.cache = pathlib.Path(cache) if cache else None
         self.opener = opener or self._download
         self.memory = {}
+        self.backup_root = pathlib.Path(__file__).resolve().parents[1] / "web/crest-backups"
+        index = self.backup_root / "sources.json"
+        self.backups = json.loads(index.read_text(encoding="utf-8")) if index.is_file() else {}
         if self.cache:
             self.cache.mkdir(parents=True, exist_ok=True)
 
@@ -45,7 +49,12 @@ class Images:
             return self.memory[url]
         data = None
         match = DATA.match(url)
-        if match:
+        backup = self.backups.get(url)
+        if isinstance(backup, str) and pathlib.Path(backup).name == backup and (self.backup_root / backup).is_file():
+            # Keep verified copies when the original crest URL has disappeared. These bytes also
+            # feed logo_mirror, so the web and Android resolve the same original URL to the copy.
+            data = (self.backup_root / backup).read_bytes()
+        elif match:
             data = base64.b64decode(match.group(2))
         elif url.startswith('https://'):
             file = self.cache / hashlib.sha256(url.encode()).hexdigest() if self.cache else None

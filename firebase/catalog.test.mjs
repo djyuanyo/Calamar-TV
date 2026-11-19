@@ -138,7 +138,7 @@ test('each account reads and writes only its own «Continuar viendo»', async ()
   await assertFails(getDocs(collection(mine, 'calamarProgress')));
 });
 test('each account reads and writes only its own profiles, their data and their «Continuar viendo»', async () => {
-  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', firebase: { sign_in_provider: 'password' } }).firestore();
+  const mine = env.authenticatedContext('user-a', { email: 'a@example.com', email_verified: true, firebase: { sign_in_provider: 'password' } }).firestore();
   const other = env.authenticatedContext('user-b', claims({ email: 'b@example.com' })).firestore();
   const value = (overrides = {}) => ({ json: '{}', updatedAt: serverTimestamp(), ...overrides });
   for (const path of ['calamarUsers/user-a', 'calamarUsers/user-a/profiles/p2', 'calamarUsers/user-a/progress/p2']) {
@@ -155,4 +155,113 @@ test('each account reads and writes only its own profiles, their data and their 
   await assertFails(getDocs(collection(mine, 'calamarUsers')));
   await assertFails(getDocs(collection(mine, 'calamarUsers/user-a/profiles')));
   await assertSucceeds(deleteDoc(doc(mine, 'calamarUsers/user-a/profiles/p2')));
+});
+
+test('web admission settings are public to read and only the verified Google administrator may change them',async()=>{
+  const guest=env.unauthenticatedContext().firestore(),other=env.authenticatedContext('u',claims({email:'u@example.com'})).firestore();
+  await assertSucceeds(getDoc(doc(guest,'calamarWeb/access')));
+  const value={requireLogin:true,updatedAt:serverTimestamp()};
+  await assertFails(setDoc(doc(guest,'calamarWeb/access'),value));await assertFails(setDoc(doc(other,'calamarWeb/access'),value));
+  await assertSucceeds(setDoc(doc(admin(),'calamarWeb/access'),value));
+  await assertFails(setDoc(doc(admin(),'calamarWeb/access'),{...value,requireLogin:'yes'}));
+});
+test('the users directory is private; owners can report identity but cannot forge another account or moderation',async()=>{
+  const mine=env.authenticatedContext('member',claims({email:'member@example.com'})).firestore(), other=env.authenticatedContext('other',claims({email:'other@example.com'})).firestore(),guest=env.unauthenticatedContext().firestore();
+  const member={name:'Member',email:'member@example.com',photo:'',verified:true,provider:'google.com',createdAt:serverTimestamp(),lastSeen:serverTimestamp()};
+  await assertSucceeds(setDoc(doc(mine,'calamarMembers/member'),member));await assertFails(getDoc(doc(guest,'calamarMembers/member')));await assertFails(getDoc(doc(other,'calamarMembers/member')));await assertFails(getDocs(collection(mine,'calamarMembers')));
+  await assertSucceeds(getDocs(collection(admin(),'calamarMembers')));await assertSucceeds(getDocs(collection(admin(),'calamarUsers')));
+  await assertFails(setDoc(doc(mine,'calamarMembers/other'),member));await assertFails(setDoc(doc(mine,'calamarMembers/member'),{email:'juanjocarrillo7@gmail.com',lastSeen:serverTimestamp()},{merge:true}));
+  await assertFails(setDoc(doc(mine,'calamarMembers/member'),{blocked:false,lastSeen:serverTimestamp()},{merge:true}));
+});
+test('only the administrator can suspend web access; owners cannot remove the block by editing profiles',async()=>{
+  const mine=env.authenticatedContext('member',claims({email:'member@example.com'})).firestore(),guest=env.unauthenticatedContext().firestore();
+  const status={blocked:true,updatedAt:serverTimestamp()};
+  await assertSucceeds(setDoc(doc(admin(),'calamarUserAccess/member'),status));await assertSucceeds(getDoc(doc(mine,'calamarUserAccess/member')));
+  await assertFails(getDoc(doc(guest,'calamarUserAccess/member')));await assertFails(setDoc(doc(mine,'calamarUserAccess/member'),{...status,blocked:false}));await assertFails(deleteDoc(doc(mine,'calamarUserAccess/member')));
+  await assertFails(setDoc(doc(admin(),'calamarUserAccess/admin'),status));
+  await assertSucceeds(setDoc(doc(admin(),'calamarUserAccess/member'),{...status,blocked:false}));
+});
+
+test('unverified email/password registrations can register their own directory identity',async()=>{
+  const email=env.authenticatedContext('email-member',claims({email:'email@example.com',email_verified:false,firebase:{sign_in_provider:'password'}})).firestore();
+  await assertSucceeds(setDoc(doc(email,'calamarMembers/email-member'),{name:'Email',email:'email@example.com',photo:'',verified:false,provider:'password',createdAt:serverTimestamp(),lastSeen:serverTimestamp()}));
+});
+
+test('unverified and deleted accounts cannot access private playback or profile data', async () => {
+  const uid = 'member';
+  const identity = { email: 'member@example.com', firebase: { sign_in_provider: 'password' } };
+  const pending = env.authenticatedContext(uid, { ...identity, email_verified: false }).firestore();
+  const verified = env.authenticatedContext(uid, { ...identity, email_verified: true }).firestore();
+  const access = doc(admin(), 'calamarUserAccess', uid);
+  const data = { json: '{}', updatedAt: serverTimestamp() };
+  for (const path of ['calamarProgress/member', 'calamarUsers/member', 'calamarUsers/member/profiles/main']) {
+    await assertFails(setDoc(doc(pending, path), data));
+    await assertSucceeds(setDoc(doc(verified, path), data));
+    await assertFails(getDoc(doc(pending, path)));
+  }
+  await assertFails(setDoc(doc(verified, access.path), { blocked: true, deleted: true, updatedAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(pending, access.path)));
+  await assertFails(setDoc(access, { blocked: false, deleted: true, updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(access, { blocked: true, deleted: true, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(access, { blocked: false, updatedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(access));
+  await assertFails(getDoc(doc(verified, 'calamarProgress/member')));
+  await assertFails(setDoc(doc(verified, 'calamarUsers/member/profiles/main'), data));
+  await assertSucceeds(getDoc(doc(verified, access.path)));
+});
+
+test('only the owner and administrator can read the private history; only the owner can record it', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  const anonymous = env.authenticatedContext('viewer', claims({ firebase: { sign_in_provider: 'anonymous' } })).firestore();
+  const id = 'ABCDEF0123456789ABCDEF0123';
+  const path = `calamarViewing/viewer/sessions/${id}`;
+  const details = { target: 'l:film', title: 'Película de prueba', profile: 'Principal', device: 'tv' };
+  const entry = { ...details, startedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, path), entry));
+  await assertFails(setDoc(doc(anonymous, path), entry));
+  await assertFails(setDoc(doc(owner, path), { ...entry, startedAt: new Date(0) }));
+  await assertSucceeds(setDoc(doc(owner, path), entry));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarViewing/viewer/sessions')));
+  const byTarget = db => query(collection(db, 'calamarViewing/viewer/sessions'), where('target', 'in', ['l:film', 'e:game']));
+  assert.deepEqual((await assertSucceeds(getDocs(byTarget(admin())))).docs.map(item => item.data().target), ['l:film']);
+  await assertFails(getDocs(byTarget(other)));
+  await assertFails(getDocs(byTarget(guest)));
+  await assertSucceeds(getDoc(doc(owner, path)));
+  await assertFails(getDocs(collection(guest, 'calamarViewing/viewer/sessions')));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(admin(), path), { endedAt: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(owner, path), { title: 'Otro título', endedAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(owner, path), { endedAt: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(owner, path), { endedAt: serverTimestamp() }, { merge: true }));
+});
+
+test('live viewer identity is admin-only and cannot be claimed by a different account', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  const path = 'calamarLiveViewers/ABCDEF0123456789ABCDEF0123';
+  const data = { uid: 'viewer', target: 'e:game', title: 'Partido', profile: 'Principal', device: 'android', updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, path), data));
+  await assertFails(setDoc(doc(guest, path), data));
+  await assertSucceeds(setDoc(doc(owner, path), data));
+  await assertSucceeds(getDocs(collection(admin(), 'calamarLiveViewers')));
+  await assertFails(getDocs(collection(guest, 'calamarLiveViewers')));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(other, path), { ...data, uid: 'other' }));
+  await assertFails(deleteDoc(doc(other, path)));
+  await assertSucceeds(deleteDoc(doc(owner, path)));
+});
+
+test('the administrator can read profile favourites without editing them or reading progress', async () => {
+  const owner = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const other = env.authenticatedContext('other', claims({ email: 'other@example.com' })).firestore();
+  const path = 'calamarUsers/viewer/profiles/main';
+  const data = { json: '{"favorites":{"la-1":{"at":123}}}', updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(owner, path), data));
+  await assertSucceeds(getDoc(doc(admin(), path)));
+  await assertFails(getDoc(doc(other, path)));
+  await assertFails(setDoc(doc(admin(), path), data));
+  await assertFails(getDoc(doc(admin(), 'calamarUsers/viewer/progress/main')));
 });

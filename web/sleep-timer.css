@@ -1,0 +1,31 @@
+.sleep-dialog {
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid #4d535a;
+  border-radius: 16px;
+  color: #f5f7fa;
+  background: #1a1e24;
+  font: 16px system-ui, sans-serif;
+}
+.sleep-dialog::backdrop { background: #000a; }
+.sleep-dialog h2 { margin: 0 0 10px; }
+.sleep-dialog label { display: flex; align-items: center; gap: 12px; }
+.sleep-dialog input {
+  width: 100px;
+  padding: 8px;
+  color: inherit;
+  background: #0e1014;
+  border: 1px solid #626a74;
+  border-radius: 7px;
+  font: inherit;
+}
+.sleep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.sleep-dialog button { padding: 8px 12px; }
+button[title="Temporizador"][aria-pressed="true"] { color: #d4ff41; }
+.sleep-icon { display: inline-flex; align-items: center; justify-content: center; }
+.sleep-icon[hidden] { display: none; }
+.trailer-timer { margin-top: 8px; }

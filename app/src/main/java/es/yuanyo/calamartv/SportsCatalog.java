@@ -99,6 +99,7 @@ final class SportsCatalog {
   static final String WEB = "https://djyuanyo.github.io/Calamar-TV/";
   static String link(String slug) { return WEB + "evento/" + slug + "/"; }
   /** A league's shared link: the public web publishes liga/<slug>/ with its card. */
+  static String liveLink() { return WEB + "directo/"; }
   static String leagueLink(String slug) { return WEB + "liga/" + slug + "/"; }
 
   /** Link name of every league, as leagueSlugs() on the web: its name, repeated names get -2, -3… */

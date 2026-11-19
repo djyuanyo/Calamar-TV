@@ -242,6 +242,10 @@ function luluMain() {
         if (!preg_match('/\.m3u8$/i', parse_url($video, PHP_URL_PATH) ?: '')) answer(array('error' => 'Este vídeo no es HLS.'), 415);
         list($status, $body) = luluGet($video);
         if ($status !== 200 || $body === null) answer(array('error' => 'LuluStream no entrega la lista (' . $status . ').'), 502);
+        if (isset($_GET['cast_audio'])) {
+            require_once __DIR__ . '/calamar-cast-audio.php';
+            $body = castAudioManifest($body, $_GET['cast_audio'], $_GET['cast_audio_name'] ?? '');
+        }
         luluList(luluRewrite($body, $video, luluSecret()));
     }
     answer(array('url' => $video));

@@ -217,8 +217,12 @@ final class Ui {
     PLAY,
     EYE,
     BACK,
-    ADMIN,
-    SHARE
+    PROFILE,
+    SHARE,
+    MULTI,
+    TIMER,
+    ADD,
+    FILM
   }
 
   static Drawable icon(Icon icon, int color, int sizePx) {
@@ -245,6 +249,14 @@ final class Ui {
       } else if (icon == Icon.EYE) {
         path.moveTo(2f,12f);path.cubicTo(6f,3f,18f,3f,22f,12f);path.cubicTo(18f,21f,6f,21f,2f,12f);path.close();
         path.addCircle(12f,12f,3f,Path.Direction.CW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);
+      } else if (icon == Icon.MULTI) {
+        for (int y : new int[] {3, 14}) for (int x : new int[] {3, 14}) path.addRoundRect(x, y, x + 7, y + 7, 1.2f, 1.2f, Path.Direction.CW);
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f);
+      } else if (icon == Icon.TIMER) {
+        path.addCircle(12f, 14f, 8f, Path.Direction.CW);
+        path.moveTo(9f, 2f); path.lineTo(15f, 2f);
+        path.moveTo(12f, 10f); path.lineTo(12f, 14f); path.lineTo(15f, 16f);
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f); paint.setStrokeCap(Paint.Cap.ROUND);
       } else if (icon == Icon.SHARE) {
         // Three dots joined by two lines, as the web's share button.
         path.addCircle(18f, 5f, 3f, Path.Direction.CW);
@@ -257,8 +269,19 @@ final class Ui {
         paint.setStyle(Paint.Style.FILL_AND_STROKE);
         paint.setStrokeWidth(2.2f);
         paint.setStrokeCap(Paint.Cap.ROUND);
-      } else if (icon == Icon.ADMIN) {
-        // Account silhouette: head and shoulders, as the web's admin button.
+      } else if (icon == Icon.ADD || icon == Icon.FILM) {
+        if (icon == Icon.ADD) {
+          path.moveTo(12, 4); path.lineTo(12, 20);
+          path.moveTo(4, 12); path.lineTo(20, 12);
+        } else {
+          path.addRoundRect(3, 5, 21, 19, 2, 2, Path.Direction.CW);
+          path.moveTo(10, 9); path.lineTo(15, 12); path.lineTo(10, 15); path.close();
+        }
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+      } else if (icon == Icon.PROFILE) {
         path.addCircle(12f, 8f, 3.6f, Path.Direction.CW);
         path.moveTo(5f, 20f);
         path.cubicTo(5f, 15.8f, 8.1f, 13.4f, 12f, 13.4f);

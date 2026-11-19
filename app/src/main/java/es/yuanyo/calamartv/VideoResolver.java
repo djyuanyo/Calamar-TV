@@ -29,8 +29,20 @@ public final class VideoResolver {
       String host = u.getHost();
       return "https".equalsIgnoreCase(u.getScheme()) && u.getUserInfo() == null && host != null
           && (host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))
-          && u.getPath() != null && u.getPath().matches("/api/player/[0-9]+/?");
+          && u.getPath() != null && (u.getPath().matches("/api/player/[0-9]+/?") || channelPlayer(address) != null);
     } catch (Exception invalid) { return false; }
+  }
+
+  /** Resolve the channel's detail URL through the documented player, never its premium landing page. */
+  public static String channelPlayer(String address) {
+    try {
+      URI u = URI.create(address);
+      String host = u.getHost();
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null || u.getPort() != -1 || host == null
+          || !(host.equalsIgnoreCase("zicotv.cc") || host.equalsIgnoreCase("bp.zicotv.cc"))) return null;
+      Matcher match = Pattern.compile("/channels/([0-9]{1,16})/?").matcher(u.getPath());
+      return match.matches() ? "https://bp.zicotv.cc/api/player/" + match.group(1) : null;
+    } catch (Exception invalid) { return null; }
   }
 
   public static String eventApi(String address) {
@@ -38,7 +50,8 @@ public final class VideoResolver {
       URI u = URI.create(address);
       String host = u.getHost();
       if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null || host == null
-          || !(host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc"))) return null;
+          || !(host.equalsIgnoreCase("zicotv.cc") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".zicotv.cc")
+              || (ProviderPlayers.ZICO_EMBED_HOST.equalsIgnoreCase(host) && u.getPort() == -1))) return null;
       Matcher match = Pattern.compile("/(?:api/v1/)?events/([0-9]+)/?").matcher(u.getPath());
       return match.matches() ? "https://" + u.getRawAuthority() + "/api/v1/events/" + match.group(1) : null;
     } catch (Exception invalid) { return null; }
@@ -66,7 +79,10 @@ public final class VideoResolver {
     if (url.isEmpty()) url = entry.optString("url");
     try {
       URI u = URI.create(url);
-      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null || eventApi(url) != null) return;
+      if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null) return;
+      if (u.getQuery() != null && Pattern.compile("(?:^|&)token(?:=|&|$)").matcher(u.getQuery()).find()) return;
+      // Do not send third-party embeds or finite video clips to the live player.
+      if (ProviderPlayers.zicoFramePage(url) == null && !renewablePage(url) && (u.getPath() == null || !u.getPath().matches("(?i).*\\.(m3u8|ts)$"))) return;
       for (Source source : out) if (source.url.equals(url)) return;
       String name = entry.optString("name");
       if (name.isEmpty()) name = parent.optString("name");
@@ -92,6 +108,7 @@ public final class VideoResolver {
 
   public static List<Source> parse(String html, String pageUrl) throws Exception {
     List<Source> sources = new ArrayList<>();
+    boolean zico = AppSources.zico(pageUrl);
     Matcher assignment =
         Pattern.compile("\\b(?:var|let|const)\\s+ZT_SOURCES\\s*=\\s*(\\[)").matcher(html);
     if (assignment.find()) {
@@ -109,14 +126,18 @@ public final class VideoResolver {
           JSONArray array = new JSONArray(html.substring(start, i + 1));
           for (int n = 0; n < array.length(); n++) {
             JSONObject s = array.optJSONObject(n);
-            if (s != null && !s.optBoolean("locked"))
-              add(sources, s.optString("label", "Fuente " + (n + 1)), s.optString("url"), pageUrl);
+            if (s != null && !s.optBoolean("locked") && !s.optBoolean("off") && !s.optBoolean("hidden")) {
+              String url = s.optString("url");
+              if (!zico || isHls(pageUrl, url))
+                add(sources, s.optString("label", "Fuente " + (n + 1)), url, pageUrl);
+            }
           }
           return sources; // Do not pick up a locked source elsewhere in the same document.
         }
       }
       throw new IllegalArgumentException("Lista de fuentes incompleta");
     }
+    if (zico) return sources;
     Matcher tags =
         Pattern.compile(
                 "<(?:video|source)\\b[^>]*\\bsrc\\s*=\\s*([\"'])(.*?)\\1", Pattern.CASE_INSENSITIVE)
@@ -132,6 +153,13 @@ public final class VideoResolver {
         Pattern.compile("\\bfile\\s*:\\s*([\"'])(https://[^\"']+)\\1").matcher(scripts.toString().replace("\\/", "/"));
     while (files.find()) add(sources, "Vídeo " + (sources.size() + 1), files.group(2), pageUrl);
     return sources;
+  }
+
+  private static boolean isHls(String page, String address) {
+    try {
+      String path = URI.create(page).resolve(address).getPath();
+      return path != null && path.matches("(?i).*\\.m3u8$");
+    } catch (IllegalArgumentException invalid) { return false; }
   }
 
   private static final Pattern PROCESSING =

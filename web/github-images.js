@@ -22,7 +22,7 @@ export async function imageRequest(body, token, fetcher = fetch) {
 export async function externalizeImages(catalog, { known = {}, upload } = {}) {
   const data = structuredClone(catalog), cached = new Map();
   // Only image fields are migrated. Descriptions and stream addresses are preserved verbatim.
-  for (const [group, fields] of [['channels', ['logo', 'cover']], ['events', ['cover']], ['teams', ['logo']], ['leagues', ['logo']]]) {
+  for (const [group, fields] of [['channels', ['logo', 'cover']], ['events', ['cover']], ['teams', ['logo']], ['leagues', ['logo', 'background']]]) {
     for (const item of data[group] || []) for (const field of fields) {
       const value = item[field];
       if (typeof value !== 'string' || !value.startsWith('data:image/')) continue;

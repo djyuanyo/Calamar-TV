@@ -29,9 +29,9 @@ public class MainActivity extends Activity {
   final List<LazySection> lazySections = new ArrayList<>();
   final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
   final ExecutorService sharedWorker = Executors.newSingleThreadExecutor();
-  // Several pictures at a time: a row of posters no longer comes in two by two.
-  final ExecutorService imageWorker = Executors.newFixedThreadPool(6);
-  final ExecutorService prefetchWorker = Executors.newSingleThreadExecutor();
+  final ExecutorService imageWorker = Executors.newFixedThreadPool(4);
+  final Map<ImageView, Runnable> visibleImages = new LinkedHashMap<>();
+  final Rect imageBounds = new Rect();
   final Map<String, List<java.lang.ref.WeakReference<ImageView>>> pendingImages = new HashMap<>();
   int imageGeneration;
   long sharedServerAt;
@@ -39,8 +39,12 @@ public class MainActivity extends Activity {
   boolean sharedRefreshBusy;
   int sharedSession;
   String lastRenderKey = "";
+  String liveSport = "all";
+  EventSports eventSports;
+  final Map<String, Integer> sportTabIds = new HashMap<>();
   final Runnable searchRender = this::render;
   final Runnable lazyUpdate = this::updateLazySections;
+  final Runnable loadHomeLibrary = this::loadLibraryForHome;
 
   TextView message;
   JSONObject tdt = new JSONObject(), custom = new JSONObject();
@@ -74,6 +78,100 @@ public class MainActivity extends Activity {
         }
       };
 
+  AppLink pendingAppLink;
+  private Runnable stopAccess;
+  private boolean contentAdmitted, catalogRestored;
+  private AppAccess.State admission = AppAccess.State.LOADING;
+  private boolean requiredLoginOpen;
+  private static final int REQUIRED_LOGIN = 218;
+
+  private void openRequiredLogin() {
+    if (!resumed || admission != AppAccess.State.LOGIN || requiredLoginOpen || isFinishing()) return;
+    requiredLoginOpen = true;
+    startActivityForResult(new Intent(this, AccountActivity.class)
+        .putExtra(AccountActivity.REQUIRED, true), REQUIRED_LOGIN);
+  }
+  private final List<Dialog> contentDialogs = new ArrayList<>();
+  private final Map<Dialog, Runnable> episodeViews = new java.util.LinkedHashMap<>();
+  private SleepTimer embeddedSleepTimer;
+
+  private void showAccess(AppAccess.State state) {
+    if (isFinishing() || isDestroyed()) return;
+    admission = state;
+    if (state == AppAccess.State.ALLOWED) {
+      enterContent();
+      return;
+    }
+    if (contentAdmitted) {
+      contentAdmitted = false;
+      if (gate != null) gate.dismiss();
+      for (Dialog dialog : new ArrayList<>(contentDialogs)) dialog.dismiss();
+      contentDialogs.clear();
+      pauseContent();
+    }
+    if (state == AppAccess.State.LOADING || state == AppAccess.State.LOGIN) {
+      // The profile chooser can open over this blank host while admission is checked.
+      showAccessBackground();
+      if (state == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
+      else {
+        if (gate != null) gate.dismiss();
+        openRequiredLogin();
+      }
+      return;
+    }
+    if (gate != null) gate.dismiss();
+    LinearLayout screen = new LinearLayout(this);
+    screen.setOrientation(LinearLayout.VERTICAL);
+    screen.setGravity(Gravity.CENTER);
+    screen.setPadding(dp(24), dp(24), dp(24), dp(24));
+    screen.setBackgroundColor(Ui.BG);
+    screen.setFitsSystemWindows(true);
+    screen.addView(label("Calamar TV", 30, FG));
+    String message = state == AppAccess.State.BLOCKED ? "Acceso suspendido" : "No se pudo comprobar el acceso.";
+    TextView note = label(message, 17, MUTED);
+    note.setGravity(Gravity.CENTER);
+    screen.addView(note);
+    boolean retry = state == AppAccess.State.ERROR;
+    Button action = Ui.pill(this, retry ? "Reintentar" : "Mi Cuenta", Ui.Kind.ACCENT, true);
+    action.setOnClickListener(v -> {
+      if (retry) AppAccess.retry(this);
+      else startActivity(new Intent(this, AccountActivity.class));
+    });
+    screen.addView(action);
+    action.requestFocus();
+    setContentView(screen);
+  }
+
+  private void showAccessBackground() {
+    View background = new View(this);
+    background.setBackgroundColor(Ui.BG);
+    setContentView(background);
+  }
+
+  private void enterContent() {
+    if (Profiles.needsPick()) { profileGate(); return; }
+    if (admission != AppAccess.State.ALLOWED || Profiles.awaitingProfiles(this)) return;
+    if (gate != null) gate.dismiss();
+    if (contentAdmitted) return;
+    contentAdmitted = true;
+    if (!catalogRestored) {
+      restore();
+      lastRenderKey = tdt.toString() + custom.toString();
+      catalogRestored = true;
+    }
+    syncFavorites();
+    home();
+    if (resumed) resumeContent();
+  }
+
+  private void showContentDialog(Dialog dialog) {
+    if (!contentAdmitted) return;
+    contentDialogs.removeIf(d -> !d.isShowing());
+    contentDialogs.add(dialog);
+    dialog.show();
+  }
+
+
   public void onCreate(Bundle b) {
     super.onCreate(b);
     television = getPackageManager().hasSystemFeature("android.software.leanback")
@@ -86,24 +184,122 @@ public class MainActivity extends Activity {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     updater = createUpdater();
-    restore();
-    favorites.addAll(getSharedPreferences("favorites", MODE_PRIVATE).getStringSet("ids", Collections.emptySet()));
+    showAccessBackground();
+    getWindow().setStatusBarColor(Ui.BG);
+    getWindow().setNavigationBarColor(Ui.BG);
     // Accounts and profiles: «Elige tu perfil» each time the app opens, and each profile's own rows.
     Profiles.start(this);
     Profiles.listen(profilesChanged);
-    home();
-    // A signed-in account: «Elige tu perfil» at once, with the profiles kept on this device.
-    if (Profiles.needsPick()) profileGate();
+    receiveAppLink(getIntent());
+    stopAccess = AppAccess.observe(this, this::showAccess);
+  }
+
+  @Override protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    receiveAppLink(intent);
+  }
+
+  void receiveAppLink(Intent intent) {
+    if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+    AppLink link = AppLink.parse(intent.getData().toString());
+    if (link == null) return;
+    pendingAppLink = link;
+    handler.post(this::openPendingAppLink);
+    handler.postDelayed(() -> {
+      if (pendingAppLink == link && contentAdmitted && !Profiles.needsPick()) {
+        pendingAppLink = null;
+        Toast.makeText(this, "No se ha encontrado esta página. Actualiza el catálogo y vuelve a abrir el enlace.", Toast.LENGTH_LONG).show();
+      }
+    }, 30000);
+  }
+
+  /** Keep a new shared page pending while the catalog loads or the viewer chooses a profile. */
+  void openPendingAppLink() {
+    if (!contentAdmitted || pendingAppLink == null || !resumed || Profiles.needsPick() || isFinishing()) return;
+    AppLink link = pendingAppLink;
+    String destination = null;
+    Catalog.Channel selected = null;
+    Library.Item title = null;
+    String titleSection = null;
+    if (!link.slug.isEmpty() && ("peliculas".equals(link.page) || "series".equals(link.page) || "documentales".equals(link.page))) {
+      titleSection = "peliculas".equals(link.page) ? "movies" : "series".equals(link.page) ? "series" : "documentaries";
+      if (library == null) { loadLibrary(); return; }
+      title = library.find(titleSection, link.slug);
+      if (title == null) return;
+    } else if ("liga".equals(link.page)) {
+      for (java.util.Map.Entry<String, String> entry : SportsCatalog.leagueSlugs(custom).entrySet())
+        if (link.slug.equals(entry.getValue()) || link.slug.equals(entry.getKey())) { destination = LEAGUE + entry.getKey(); break; }
+    } else if ("evento".equals(link.page)) {
+      java.util.Map<String, String> slugs = SportsCatalog.slugs(custom);
+      for (Catalog.Channel channel : Catalog.events(channels, custom, System.currentTimeMillis(), true, true)) {
+        String slug = slugs.get(channel.id);
+        if (link.slug.equals(slug) || (link.slug + "-1").equals(slug) || link.slug.equals(channel.id)) { selected = channel; break; }
+      }
+    } else if ("canal".equals(link.page)) {
+      java.util.Map<String, String> slugs = Catalog.slugs(channels);
+      for (Catalog.Channel channel : channels)
+        if (link.slug.equals(slugs.get(channel.id)) || link.slug.equals(channel.id)) { selected = channel; break; }
+    } else {
+      switch (link.page) {
+        case "inicio": destination = "Inicio"; break;
+        case "directo": destination = LIVE; break;
+        case "canales": destination = "TV"; break;
+        case "peliculas": destination = "Películas"; break;
+        case "series": destination = "Series"; break;
+        case "documentales": destination = "Documentales"; break;
+        default: return;
+      }
+    }
+    if (destination == null && selected == null && title == null) return;
+    pendingAppLink = null;
+    query = "";
+    if (title != null) {
+      String resume = getIntent().getStringExtra("account_resume");
+      getIntent().removeExtra("account_resume");
+      if (resume != null) {
+        try {
+          JSONObject entry = new JSONObject(resume);
+          Library.Episode episode = title.episode(entry.optString("episode"));
+          if (!title.series || (episode != null && episode.available())) {
+            playEntry(title.entry(titleSection, episode), false);
+            return;
+          }
+        } catch (JSONException ignored) {}
+      }
+      int season = -1;
+      String episodeId = "";
+      if (getIntent().getData() != null && getIntent().getData().isHierarchical()) {
+        Uri data = getIntent().getData();
+        try { season = Integer.parseInt(data.getQueryParameter("temporada")); } catch (NumberFormatException ignored) {}
+        String requested = data.getQueryParameter("capitulo");
+        if (requested != null) episodeId = requested;
+      }
+      Library.Episode episode = title.series ? title.episode(episodeId) : null;
+      if (episode != null && episode.available()) episodePage(titleSection, title, episode);
+      else libraryDetail(titleSection, title, season);
+    }
+    else if (destination != null) { mode = destination; home(); }
+    else if (selected.event && MatchScores.expired(selected.matchId, System.currentTimeMillis())) {
+      startActivity(new Intent(this, MatchActivity.class).putExtra("title", selected.name)
+          .putExtra("match_id", selected.matchId).putExtra("event_info", eventInfo(selected).toString()));
+    } else open(selected);
   }
 
   /** «Elige tu perfil» while it is on screen. */
   Dialog gate;
   final Profiles.Listener profilesChanged = () -> runOnUiThread(() -> {
-    if (isFinishing()) return;
+    if (isFinishing() || isDestroyed()) return;
+    if (!contentAdmitted) {
+      if (admission == AppAccess.State.ALLOWED) enterContent();
+      else if (admission == AppAccess.State.LOADING && Profiles.needsPick()) profileGate();
+      return;
+    }
     syncFavorites();
     if (Profiles.needsPick()) profileGate();
-    else if (gate != null && gate.isShowing()) gate.dismiss();
+    else if (gate != null) gate.dismiss();
     render();
+    openPendingAppLink();
   });
 
   /** The favourite channels of the profile watching (those of this device without an account). */
@@ -117,6 +313,7 @@ public class MainActivity extends Activity {
    * the account, «Añadir» and «Modificar». Once each time the app opens.
    */
   void profileGate() {
+    if (admission != AppAccess.State.LOADING && admission != AppAccess.State.ALLOWED) return;
     if (gate != null && gate.isShowing()) return;
     FrameLayout root = new FrameLayout(this);
     root.setBackgroundColor(Ui.BG);
@@ -124,7 +321,6 @@ public class MainActivity extends Activity {
     final ImageView art = new ImageView(this);
     art.setScaleType(ImageView.ScaleType.CENTER_CROP);
     root.addView(art, new FrameLayout.LayoutParams(-1, -1));
-    if (library == null && libraryShown(custom)) loadLibrary();
     View shade = new View(this);
     shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x220b0d10, 0x880b0d10, 0xff0b0d10}));
     root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
@@ -167,7 +363,7 @@ public class MainActivity extends Activity {
     for (JSONObject profile : Profiles.profiles()) {
       final String id = profile.optString("id");
       View tile = gateTile(AccountActivity.avatar(this, profile, size), profile.optString("name"), size);
-      tile.setOnClickListener(v -> { Profiles.choose(this, id, true); if (gate != null) gate.dismiss(); });
+      tile.setOnClickListener(v -> Profiles.choose(this, id, true));
       profiles.addView(tile);
       if (first == null) first = tile;
     }
@@ -357,6 +553,7 @@ public class MainActivity extends Activity {
           renderFilters();
           render();
         } else if (message != null) message.setText(status());
+        openPendingAppLink();
         if (focusId != View.NO_ID && root != null) {
           View replacement = root.findViewById(focusId);
           if (replacement != null) replacement.requestFocus();
@@ -385,6 +582,8 @@ public class MainActivity extends Activity {
   }
 
   void home() {
+    if (!contentAdmitted) return;
+    if (!LIVE.equals(mode)) liveSport = "all";
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(dp(gutter()), 0, dp(gutter()), 0);
@@ -419,17 +618,26 @@ public class MainActivity extends Activity {
     updates.setContentDescription("Actualizaciones");
     updates.setOnClickListener(v -> { if (updater != null) updater.check(true); });
     addButton(mast, updates);
-    // Icon only (account silhouette); the name stays for screen readers and as a tooltip.
-    ImageButton admin = new ImageButton(this);
-    admin.setImageDrawable(Ui.icon(Ui.Icon.ADMIN, Ui.MUTED, dp(22)));
-    admin.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 999, 0));
-    admin.setContentDescription("Mi cuenta");
-    if (android.os.Build.VERSION.SDK_INT >= 26) admin.setTooltipText("Mi cuenta");
-    // «Mi cuenta»: sign in, the profiles and, from there, «Administración».
-    admin.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
-    LinearLayout.LayoutParams adminSize = new LinearLayout.LayoutParams(dp(44), dp(44));
-    adminSize.setMargins(dp(4), dp(4), dp(4), dp(4));
-    mast.addView(admin, adminSize);
+    if (Profiles.user(this) == null) {
+      Button signIn = Ui.pill(this, "Entrar", Ui.Kind.SURFACE, true);
+      signIn.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+      addButton(mast, signIn);
+    } else {
+      JSONObject active = Profiles.active();
+      FrameLayout profile = new FrameLayout(this);
+      TextView avatar = AccountActivity.avatar(this, active == null ? new JSONObject() : active, 34);
+      avatar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      profile.addView(avatar, new FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER));
+      profile.setBackground(Ui.focusFill(this, 0, 0x22ffffff, Ui.ACC, 10, 0));
+      profile.setFocusable(true);
+      String profileLabel = "Mi Cuenta";
+      profile.setContentDescription(profileLabel);
+      if (android.os.Build.VERSION.SDK_INT >= 26) profile.setTooltipText(profileLabel);
+      profile.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
+      LinearLayout.LayoutParams profileSize = new LinearLayout.LayoutParams(dp(44), dp(44));
+      profileSize.setMargins(dp(4), dp(4), dp(4), dp(4));
+      mast.addView(profile, profileSize);
+    }
     root.addView(mast);
     EditText search = new EditText(this);
     search.setSingleLine(true);
@@ -439,7 +647,10 @@ public class MainActivity extends Activity {
     String hint = Library.section(mode) != null ? "Buscar títulos" : "Buscar canales y eventos";
     search.setHint(hint);
     search.setContentDescription(hint);
-    search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+    search.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_FILTER);
+    search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      search.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
     search.setBackground(Ui.focusFill(this, Ui.SURFACE, 0x33ffffff, Ui.ACC, 24, 0));
     search.setPadding(dp(18), dp(10), dp(18), dp(10));
     search.setText(query);
@@ -484,9 +695,7 @@ public class MainActivity extends Activity {
     root.addView(message);
     ScrollView scroll = new ScrollView(this);
     catalogScroll = scroll;
-    scroll.getViewTreeObserver().addOnScrollChangedListener(this::updateLazySections);
-    scroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateLazySections);
-    scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> updateLazySections());
+    watchCatalogViewport(scroll);
     scroll.setClipToPadding(false);
     list = new LinearLayout(this);
     list.setOrientation(LinearLayout.VERTICAL);
@@ -495,6 +704,31 @@ public class MainActivity extends Activity {
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     renderFilters();
     render();
+  }
+
+  private void watchCatalogViewport(ScrollView scroll) {
+    ViewTreeObserver.OnScrollChangedListener onScroll = this::updateLazySections;
+    ViewTreeObserver.OnGlobalLayoutListener onLayout = this::updateLazySections;
+    ViewTreeObserver.OnPreDrawListener beforeDraw = () -> {
+      loadVisibleImages();
+      return true;
+    };
+    scroll.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      private ViewTreeObserver observer;
+      @Override public void onViewAttachedToWindow(View attached) {
+        observer = attached.getViewTreeObserver();
+        observer.addOnScrollChangedListener(onScroll);
+        observer.addOnGlobalLayoutListener(onLayout);
+        observer.addOnPreDrawListener(beforeDraw);
+      }
+      @Override public void onViewDetachedFromWindow(View detached) {
+        if (observer == null || !observer.isAlive()) return;
+        observer.removeOnScrollChangedListener(onScroll);
+        observer.removeOnGlobalLayoutListener(onLayout);
+        observer.removeOnPreDrawListener(beforeDraw);
+        observer = null;
+      }
+    });
   }
 
   /** A section tab: bold capitals, with a lime bar under the one that is open. */
@@ -559,7 +793,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(30), dp(30));
     lp.setMargins(dp(4), 0, 0, 0);
     r.addView(logo, 1, lp);
-    logo(logo, url);
+    visibleImage(logo, url, true);
   }
 
   void heading(String title, String sub) {
@@ -580,7 +814,9 @@ public class MainActivity extends Activity {
   }
 
   void render() {
-    if (list == null) return;
+    if (!contentAdmitted || list == null) return;
+    visibleImages.clear();
+    handler.removeCallbacks(loadHomeLibrary);
     handler.removeCallbacks(heroAdvance); heroHost = null;
     handler.removeCallbacks(browseAdvance); browseTrack = null;
     lazySections.clear();
@@ -616,8 +852,15 @@ public class MainActivity extends Activity {
     }
     if (!query.trim().isEmpty()) {
       heading("Resultados", null);
+      List<Catalog.Channel> league = "Inicio".equals(mode)
+          ? Catalog.todayLeagueEvents(channels, custom, query, System.currentTimeMillis()) : null;
       List<Catalog.Channel> found = new ArrayList<>();
-      for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
+      if (league != null) {
+        found.addAll(league);
+        if (league.isEmpty()) list.addView(label("No hay eventos de esa liga para hoy.", 15, Ui.MUTED));
+      } else {
+        for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
+      }
       for (Catalog.Channel c : channels) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
       channelGrid(found);
       // Films, series and documentaries too, as on the web.
@@ -628,7 +871,7 @@ public class MainActivity extends Activity {
           if (titles.size() < 30 && matches(item.title + " " + android.text.TextUtils.join(" ", item.genres))) titles.add(item);
       }
       if (!titles.isEmpty()) posterRail("Películas, series y documentales", titles, wide() ? 140 : 108);
-      if (found.isEmpty() && titles.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
+      if (league == null && found.isEmpty() && titles.isEmpty()) list.addView(label("Sin resultados", 15, Ui.MUTED));
       return;
     }
     if (channels.isEmpty()) {
@@ -642,7 +885,7 @@ public class MainActivity extends Activity {
       List<Catalog.Channel> featured = new ArrayList<>(Catalog.highlights(channels, custom));
       // Films and series marked «En portada» in the admin page join the featured events and channels.
       if (libraryShown(custom)) {
-        loadLibrary();
+        handler.postDelayed(loadHomeLibrary, 300);
         if (library != null) for (Library.Item item : library.featured()) featured.add(libraryHero(item));
       }
       List<Catalog.Channel> events = Catalog.events(channels, custom);
@@ -665,8 +908,12 @@ public class MainActivity extends Activity {
         continueRow();
         if (library != null) profileRows();
         if (library != null) {
-          topRow(library.top("movies"), "películas");
-          topRow(library.top("series"), "series");
+          for (String[] section : Library.SECTIONS) {
+            List<Library.Item> top = library.top(section[0]);
+            String title = section[0].equals("documentaries") ? Library.documentaryTopTitle(top.size())
+                : "Top " + top.size() + " " + section[1].toLowerCase(java.util.Locale.ROOT) + " de la semana";
+            topRow(top, title);
+          }
           // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
           if (Library.halloweenOn(System.currentTimeMillis())) halloweenRow();
         }
@@ -796,7 +1043,7 @@ public class MainActivity extends Activity {
     lp.gravity = wide() ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Gravity.END | Gravity.TOP);
     lp.setMargins(0, wide() ? 0 : dp(18), dp(wide() ? 48 : 18), 0);
     frame.addView(logo, lp);
-    logo(logo, c.logo);
+    visibleImage(logo, c.logo, true);
     if (c.event) logo.setVisibility(View.GONE);
 
     View scrim = new View(this);
@@ -893,7 +1140,7 @@ public class MainActivity extends Activity {
         Ui.LogoView small = new Ui.LogoView(this, picks.get(i).name, 6);
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER);
         thumb.addView(small, sp);
-        image(small, picks.get(i).logo);
+        visibleImage(small, picks.get(i).logo, false);
         favoriteAction(thumb, picks.get(i));
         thumb.setOnClickListener(
             new View.OnClickListener() {
@@ -999,17 +1246,17 @@ public class MainActivity extends Activity {
   }
 
   /**
-   * The cover of an event; without one (imported matches), the league's background with the home and
-   * away crests on top. `shift` moves the crests right, past the hero's text.
+   * Registered teams' crests stay on top of a manual or imported match's artwork. Events without
+   * crests keep their full photo. `shift` moves the crests right, past the hero's text.
    */
   View eventArt(Catalog.Channel c, float shift) {
     FrameLayout art = new FrameLayout(this);
     ImageView cover = new ImageView(this);
     cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
     art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-    if (!c.cover.isEmpty()) { image(cover, c.cover); return art; }
+    if (!c.cover.isEmpty() && c.homeLogo.isEmpty() && c.awayLogo.isEmpty()) { visibleImage(cover, c.cover, false); return art; }
     art.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0xff10261a, 0xff1d4029, 0xff0b1410}));
-    image(cover, c.background);
+    visibleImage(cover, c.cover.isEmpty() ? c.background : c.cover, false);
     // Each crest gets 30% of the width and keeps its shape (FIT_CENTER), whatever the card's size.
     LinearLayout crests = new LinearLayout(this);
     crests.setGravity(Gravity.CENTER);
@@ -1032,7 +1279,7 @@ public class MainActivity extends Activity {
         tile.setPadding(dp(4), dp(4), dp(4), dp(4));
         ImageView league = new ImageView(this);
         league.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        logo(league, c.leagueLogo);
+        visibleImage(league, c.leagueLogo, true);
         tile.addView(league, new FrameLayout.LayoutParams(-1, -1));
         slot.addView(tile, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         crests.addView(slot, new LinearLayout.LayoutParams(0, -1, 1.7f));
@@ -1047,7 +1294,7 @@ public class MainActivity extends Activity {
       ImageView crest = new ImageView(this);
       crest.setScaleType(ImageView.ScaleType.FIT_CENTER);
       if (logo.isEmpty()) { GradientDrawable dot = new GradientDrawable(); dot.setShape(GradientDrawable.OVAL); dot.setColor(0x24ffffff); crest.setImageDrawable(dot); }
-      else logo(crest, logo);
+      else visibleImage(crest, logo, true);
       crests.addView(crest, new LinearLayout.LayoutParams(0, -1, 3));
     }
     crests.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
@@ -1075,12 +1322,13 @@ public class MainActivity extends Activity {
       art.setClipToOutline(true);
     }
     // The logo fills the card as much as it can, with a small margin from the rounded corners.
-    Ui.LogoView logo = new Ui.LogoView(this, c.name, 8);
-    FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
-    logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
-    art.addView(logo, logoSize);
-    logo(logo, c.logo);
-    if (c.event) logo.setVisibility(View.GONE);
+    if (!c.event) {
+      Ui.LogoView logo = new Ui.LogoView(this, c.name, 8);
+      FrameLayout.LayoutParams logoSize = new FrameLayout.LayoutParams(-1, -1);
+      logoSize.setMargins(dp(6), dp(6), dp(6), dp(6));
+      art.addView(logo, logoSize);
+      visibleImage(logo, c.logo, true);
+    }
     FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     bp.setMargins(dp(8), dp(8), 0, 0);
     if (c.event) {TextView badge=eventBadge(c,9);badge.setMaxWidth(dp(Math.max(60,width-88)));art.addView(badge,bp);}
@@ -1123,7 +1371,7 @@ public class MainActivity extends Activity {
       rememberedHeight = height;
       setMinimumHeight(height);
       setFocusable(true);
-      setContentDescription("Más canales");
+      setContentDescription("Más contenido");
       setOnFocusChangeListener((v, focused) -> {
         if (focused) { populate(); if (getChildCount() > 0) getChildAt(0).requestFocus(View.FOCUS_DOWN); }
       });
@@ -1159,19 +1407,17 @@ public class MainActivity extends Activity {
   }
 
   void updateLazySections() {
-    if (!television || catalogScroll == null || !resumed || isDestroyed()) return;
-    int margin = catalogScroll.getHeight();
-    if (margin <= 0 || list.isLayoutRequested()) return;
-    int top = catalogScroll.getScrollY() - margin;
-    int bottom = top + margin * 3;
+    if (!contentAdmitted || catalogScroll == null || !resumed || isDestroyed()) return;
+    int height = catalogScroll.getHeight();
+    if (height <= 0 || list.isLayoutRequested()) return;
+    int top = catalogScroll.getScrollY() - height / 2;
+    int bottom = top + height * 2;
     for (LazySection section : lazySections) section.update(top, bottom);
   }
 
   void carousel(List<Catalog.Channel> a, int limit) {
-    if (television) {
-      // Groups remain complete. Their cards are created only as the row approaches the screen.
-      lazyRow(220, () -> channelCarousel(a, limit));
-    } else list.addView(channelCarousel(a, limit));
+    // Keep the row complete, but create its cards only when it approaches the screen.
+    lazyRow(wide() ? 220 : 180, () -> channelCarousel(a, limit));
   }
 
   View channelCarousel(List<Catalog.Channel> a, int limit) {
@@ -1190,51 +1436,16 @@ public class MainActivity extends Activity {
   }
 
   void grid() {
-    int columns = wide() ? 4 : 2;
-    int width = gridWidth(columns);
     for (Map.Entry<String, List<Catalog.Channel>> e : Catalog.groups(channels, custom).entrySet()) {
       if (!group.equals("Todos") && !group.equals(e.getKey())) continue;
       heading(e.getKey(), e.getValue().size() + " canales");
-      if (television) { channelGrid(regionSorted(e.getValue())); continue; }
-      String region = null;
-      LinearLayout r = null;
-      int i = 0;
-      for (Catalog.Channel c : regionSorted(e.getValue())) {
-        if (!c.region.isEmpty() && !c.region.equals(region)) {
-          region = c.region;
-          TextView regionLabel =
-              label(region.toUpperCase(new Locale("es", "ES")), 12, Ui.ACC);
-          regionLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-          regionLabel.setLetterSpacing(0.1f);
-          regionLabel.setPadding(dp(4), dp(16), 0, dp(4));
-          list.addView(regionLabel);
-          i = 0;
-        }
-        if (i++ % columns == 0) {
-          r = row();
-          r.setGravity(Gravity.TOP);
-          list.addView(r);
-        }
-        r.addView(card(c, width));
-      }
+      channelGrid(e.getValue());
     }
   }
 
-  List<Catalog.Channel> regionSorted(List<Catalog.Channel> in) {
-    List<Catalog.Channel> out = new ArrayList<>(in);
-    Collections.sort(
-        out,
-        new Comparator<Catalog.Channel>() {
-          public int compare(Catalog.Channel a, Catalog.Channel b) {
-            int r = a.region.compareTo(b.region);
-            return r != 0 ? r : Boolean.compare(b.playable(), a.playable());
-          }
-        });
-    return out;
-  }
-
-  /** Multi-screen: pick 2 to 6 channels or events (events first) and watch them together. */
+  /** Multi-screen: pick 2 to 4 channels or events (events first) and watch them together. */
   void pickMulti() {
+    if (!contentAdmitted) return;
     final List<Catalog.Channel> options = new ArrayList<>();
     for (Catalog.Channel c : Catalog.events(channels, custom)) if (directMedia(c)) options.add(c);
     for (Catalog.Channel c : channels) if (directMedia(c)) options.add(c);
@@ -1278,18 +1489,19 @@ public class MainActivity extends Activity {
       ArrayList<String> titles=new ArrayList<>(),streams=new ArrayList<>(),targets=new ArrayList<>(),channelIds=new ArrayList<>();for(Catalog.Channel c:selected){titles.add(c.name);streams.add(android.text.TextUtils.join("\n",AppSources.forAndroid(c.streams)));targets.add(AudienceModel.target(c.event,c.id));channelIds.add(c.event?c.channelId:c.id);}
       dialog.dismiss();startActivity(new Intent(this,MultiPlayerActivity.class).putStringArrayListExtra(MultiPlayerActivity.TITLES,titles).putStringArrayListExtra(MultiPlayerActivity.STREAMS,streams).putStringArrayListExtra("audience_targets",targets).putStringArrayListExtra("audience_channels",channelIds));
     });
-    multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});dialog.show();
+    multiPicker=panel;redrawMulti=draw;dialog.setOnDismissListener(d -> {multiPicker=null;redrawMulti=null;});showContentDialog(dialog);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);dialog.getWindow().setLayout(-1,-1);
     dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);draw.run();
   }
 
-  /** Channels whose links are videos the player opens directly (not pages resolved in the full player). */
+  /** Channel and player-page sources that the independent native tiles can resolve. */
   boolean directMedia(Catalog.Channel c) {
     List<String> sources = AppSources.forAndroid(c.streams);
-    return !sources.isEmpty() && !UserChannels.isPage(sources.get(0));
+    return !sources.isEmpty();
   }
 
   void open(Catalog.Channel c) {
+    if (!contentAdmitted) return;
     if (isLibraryHero(c)) { openLibraryHero(c, false); return; }
     if(c.event&&MatchScores.expired(c.matchId,System.currentTimeMillis())){Toast.makeText(this,"El evento ha finalizado",Toast.LENGTH_SHORT).show();return;}
     if (c.pending) {
@@ -1351,12 +1563,18 @@ public class MainActivity extends Activity {
 
   protected void onPause() {
     super.onPause();
-    if (trailerPreview != null) { trailerPreview.evaluateJavascript("window.pauseTrailer && window.pauseTrailer()", null); trailerPreview.onPause(); }
+    resumed = false;
+    pauseContent();
+  }
+
+  private void pauseContent() {
+    if (embeddedSleepTimer != null) embeddedSleepTimer.pause();
     if (updater != null) updater.pause();
     sharedSession++;
-    resumed = false; handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
+    handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
     handler.removeCallbacks(searchRender);
+    handler.removeCallbacks(loadHomeLibrary);
     if (sharedListener != null) {
       sharedListener.remove();
       sharedListener = null;
@@ -1365,18 +1583,29 @@ public class MainActivity extends Activity {
 
   protected void onResume() {
     super.onResume();
-    if (trailerPreview != null) trailerPreview.onResume();
+    resumed = true;
+    if (contentAdmitted) resumeContent();
+    else openRequiredLogin();
+  }
+
+  private void resumeContent() {
+    if (embeddedSleepTimer != null) embeddedSleepTimer.resume();
     if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
     if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
-    // Signing in or out as administrator (in Administración) shows or hides the library while it is hidden.
+    // Signing in or out as administrator shows or hides the library while it is hidden.
     boolean admin = libraryAdmin();
     if (admin != libraryAdminShown) { libraryAdminShown = admin; if (custom != null) render(); }
-    resumed = true; handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
+    handler.post(this::updateLazySections); handler.removeCallbacks(audienceRefresh);handler.post(audienceRefresh); pruneFinishedEvents(); handler.removeCallbacks(scoreRefresh); handler.post(scoreRefresh);
     if (!television && heroHost != null && heroItems.size() > 1) handler.postDelayed(heroAdvance, 5000);
     handler.removeCallbacks(refresh);
     handler.post(refresh);
     observeSharedCatalog();
+    handler.post(this::openPendingAppLink);
+    if ("Inicio".equals(mode) && library == null && query.trim().isEmpty()) {
+      handler.removeCallbacks(loadHomeLibrary);
+      handler.postDelayed(loadHomeLibrary, 300);
+    }
     // «Continuar viendo» of the signed-in account: what its other devices left half watched.
     ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
@@ -1427,6 +1656,7 @@ public class MainActivity extends Activity {
         int focusId = focused == null ? View.NO_ID : focused.getId();
         if (menuChanged) home();
         else { renderFilters(); render(); }
+        openPendingAppLink();
         View replacement = focusId == View.NO_ID ? null : root.findViewById(focusId);
         if (replacement != null) replacement.requestFocus();
       });
@@ -1435,15 +1665,16 @@ public class MainActivity extends Activity {
 
   protected void onDestroy() {
     Profiles.forget(profilesChanged);
+    if (stopAccess != null) stopAccess.run();
     if (gate != null && gate.isShowing()) gate.dismiss();
     if (updater != null) updater.close();
     handler.removeCallbacksAndMessages(null);
     imageGeneration++;
     imageWorker.shutdownNow();
-    prefetchWorker.shutdownNow();
     catalogWorker.shutdownNow();
     sharedWorker.shutdownNow();
     pendingImages.clear();
+    visibleImages.clear();
     lazySections.clear();
     images.evictAll();
     super.onDestroy();
@@ -1491,6 +1722,34 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(44));
     p.setMargins(dp(4), dp(4), dp(4), dp(4));
     r.addView(b, p);
+  }
+
+  /** Cards can exist before they are visible, including farther along a horizontal rail. */
+  void visibleImage(ImageView view, String url, boolean copyFirst) {
+    if (url == null || url.isEmpty()) return;
+    View.OnAttachStateChangeListener visibility = new View.OnAttachStateChangeListener() {
+      @Override public void onViewAttachedToWindow(View attached) {
+        ViewParent parent = attached.getParent();
+        while (parent != null && parent != catalogScroll) parent = parent.getParent();
+        if (parent == null) image(view, url, copyFirst);
+        else visibleImages.put(view, () -> image(view, url, copyFirst));
+      }
+      @Override public void onViewDetachedFromWindow(View detached) { visibleImages.remove(view); }
+    };
+    view.addOnAttachStateChangeListener(visibility);
+    if (view.isAttachedToWindow()) visibility.onViewAttachedToWindow(view);
+  }
+
+  void loadVisibleImages() {
+    if (!resumed || !contentAdmitted || visibleImages.isEmpty()) return;
+    for (Iterator<Map.Entry<ImageView, Runnable>> it = visibleImages.entrySet().iterator(); it.hasNext();) {
+      Map.Entry<ImageView, Runnable> request = it.next();
+      ImageView view = request.getKey();
+      if (!view.isShown() || !view.getGlobalVisibleRect(imageBounds)) continue;
+      Runnable load = request.getValue();
+      it.remove();
+      load.run();
+    }
   }
 
   void image(final ImageView view, final String url) {
@@ -1594,20 +1853,6 @@ public class MainActivity extends Activity {
     for (File f : files) { if (total < 60L * 1024 * 1024) break; total -= f.length(); f.delete(); }
   }
 
-  /** The posters of the library downloaded ahead (one at a time, in the background), for the rows to show at once. */
-  void prefetchPosters(Library.Data data) {
-    final List<String> urls = new ArrayList<>();
-    for (String[] section : Library.SECTIONS) for (Library.Item item : data.items(section[0]))
-      if (item.poster.startsWith("https://") && urls.size() < 400) urls.add(item.poster);
-    prefetchWorker.execute(() -> {
-      for (String url : urls) {
-        if (Thread.currentThread().isInterrupted()) return;
-        File file = cachedImage(url);
-        if (file != null && !file.isFile()) imageBytes(url);
-      }
-    });
-  }
-
   /** An image read from the network, scaled down when large; null when it cannot be read. */
   static Bitmap readBitmap(String address) {
     byte[] data = imageBytes(address);
@@ -1704,6 +1949,10 @@ public class MainActivity extends Activity {
   long libraryAt;
   String libraryError = "";
 
+  void loadLibraryForHome() {
+    if (resumed && contentAdmitted && "Inicio".equals(mode) && libraryShown(custom)) loadLibrary();
+  }
+
   /** Downloads the list at most every 2 minutes; the page redraws when it arrives. */
   void loadLibrary() {
     if (libraryBusy || (library != null && System.currentTimeMillis() - libraryAt < 120000)) return;
@@ -1721,7 +1970,7 @@ public class MainActivity extends Activity {
       final String failure = error;
       runOnUiThread(() -> {
         libraryBusy = false;
-        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); prefetchPosters(result); }
+        if (result != null) { library = result; libraryAt = System.currentTimeMillis(); handler.post(this::openPendingAppLink); }
         libraryError = failure;
         // The home page also draws again the first time, for the titles «En portada» and the top.
         if (!isFinishing() && (Library.section(mode) != null || (result != null && "Inicio".equals(mode) && (first || !query.trim().isEmpty())))) render();
@@ -1780,7 +2029,6 @@ public class MainActivity extends Activity {
     boolean filtered = !genre.isEmpty() || libYear > 0 || !libPlatform.isEmpty() || !libOnly.isEmpty();
     if (!filtered && libOrder.isEmpty() && query.trim().isEmpty() && !items.isEmpty()) {
       browseRows(section, items);
-      if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
       return;
     }
     if (items.isEmpty())
@@ -1803,7 +2051,6 @@ public class MainActivity extends Activity {
         r.addView(poster(items.get(i), width));
       }
     }
-    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }
 
   /** A 2:3 poster with the title under it; without a TMDB poster the title is written on the card. */
@@ -1833,7 +2080,7 @@ public class MainActivity extends Activity {
       ImageView cover = new ImageView(this);
       cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-      image(cover, item.poster);
+      visibleImage(cover, item.poster, false);
     }
     if (item.trend > 0) {
       // «TOP 10» in the corner of the titles of the weekly top, as on Netflix (and on the web).
@@ -1898,12 +2145,17 @@ public class MainActivity extends Activity {
    * «Reproducir», the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», «Compartir», and the
    * tabs «Episodios» (series), «Tráileres y más» (the trailer in Spanish) and «Similares».
    */
-  private android.webkit.WebView trailerPreview;
 
   void libraryDetail(final String section, final Library.Item item) {
+    libraryDetail(section, item, -1);
+  }
+
+  private void libraryDetail(final String section, final Library.Item item, int initialSeason) {
+    if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar);
     ScrollView scroll = new ScrollView(this);
-    scroll.setBackgroundColor(0xff000000);
+    final int surface = 0xff17171c;
+    scroll.setBackgroundColor(surface);
     final LinearLayout page = new LinearLayout(this);
     page.setOrientation(LinearLayout.VERTICAL);
     page.setPadding(0, 0, 0, dp(28));
@@ -1918,43 +2170,9 @@ public class MainActivity extends Activity {
       hero.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
       image(backdrop, picture);
     }
-    final android.webkit.WebView preview;
-    if (!item.trailer.isEmpty()) {
-      preview = new android.webkit.WebView(this);
-      trailerPreview = preview;
-      preview.setAlpha(0f);
-      preview.addJavascriptInterface(new Object() {
-        @android.webkit.JavascriptInterface public void state(String state) {
-          runOnUiThread(() -> {
-            if (trailerPreview == preview) preview.setAlpha("playing".equals(state) || "blocked".equals(state) ? 1f : 0f);
-          });
-        }
-      }, "CalamarTrailer");
-      preview.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-      preview.getSettings().setJavaScriptEnabled(true);
-      preview.getSettings().setDomStorageEnabled(true);
-      preview.getSettings().setMediaPlaybackRequiresUserGesture(false);
-      preview.getSettings().setAllowFileAccess(false);
-      preview.getSettings().setAllowContentAccess(false);
-      preview.setWebViewClient(new android.webkit.WebViewClient() {
-        @Override public void onReceivedError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
-          if (request.isForMainFrame()) view.setVisibility(View.GONE);
-        }
-        @Override public void onReceivedHttpError(android.webkit.WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceResponse response) {
-          if (request.isForMainFrame()) view.setVisibility(View.GONE);
-        }
-      });
-      hero.addView(preview, new FrameLayout.LayoutParams(-1, -1));
-      preview.loadUrl("https://djyuanyo.github.io/Calamar-TV/trailer.html?v=" + item.trailer);
-      dialog.setOnDismissListener(d -> {
-        if (trailerPreview == preview) trailerPreview = null;
-        preview.stopLoading(); preview.loadUrl("about:blank");
-        hero.removeView(preview); preview.destroy();
-      });
-    } else preview = null;
     View scrim = new View(this);
-    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {0xff000000, 0x00000000, 0x00000000, 0x66000000}));
-    if (preview == null) hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+    scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {surface, 0x0017171c, 0x0017171c, 0x66000000}));
+    hero.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
     Button back = Ui.pill(this, "‹", Ui.Kind.SURFACE, true);
     back.setContentDescription("Volver");
     back.setOnClickListener(v -> dialog.dismiss());
@@ -1962,12 +2180,14 @@ public class MainActivity extends Activity {
     bp.setMargins(dp(gutter()), dp(12), 0, 0);
     hero.addView(back, bp);
     int screen = Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
-    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(Math.max(preview == null ? 0 : 240, Math.min(wide() ? 420 : 300, screen * 9 / 16)))));
+    page.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? Math.min(420, screen * 9 / 16) : Math.min(430, screen * 3 / 4))));
 
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(LinearLayout.VERTICAL);
     body.setPadding(dp(gutter() + 4), dp(4), dp(gutter() + 4), 0);
-    page.addView(body);
+    LinearLayout.LayoutParams bodySize = new LinearLayout.LayoutParams(-1, -2);
+    bodySize.topMargin = -dp(26);
+    page.addView(body, bodySize);
     if (!item.providers.isEmpty()) {
       String name = item.providers.get(0), logo = item.logos.get(name);
       JSONArray platforms = custom == null ? null : custom.optJSONArray("platforms");
@@ -1980,26 +2200,74 @@ public class MainActivity extends Activity {
         brand.setContentDescription(name);
         brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams logoSize = new LinearLayout.LayoutParams(dp(64), dp(64));
-        logoSize.setMargins(0, 0, 0, dp(8));
+        logoSize.gravity = Gravity.CENTER_HORIZONTAL;
+        logoSize.height = dp(38);
         body.addView(brand, logoSize); image(brand, logo);
-      } else body.addView(noPad(label(name, 18, 0xffe50914)));
+      }
     }
     TextView title = text(item.title, wide() ? 36 : 30);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    title.setGravity(Gravity.CENTER);
     title.setPadding(0, 0, 0, dp(4));
     body.addView(title);
+    if (!item.titleLogo.isEmpty()) {
+      ImageView titleArt = new androidx.appcompat.widget.AppCompatImageView(
+          new android.view.ContextThemeWrapper(this, androidx.appcompat.R.style.Theme_AppCompat)) {
+        @Override public void setImageBitmap(Bitmap bitmap) {
+          super.setImageBitmap(bitmap);
+          setVisibility(bitmap == null ? View.GONE : View.VISIBLE);
+          title.setVisibility(bitmap == null ? View.VISIBLE : View.GONE);
+        }
+      };
+      titleArt.setContentDescription(item.title);
+      titleArt.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      titleArt.setVisibility(View.GONE);
+      body.addView(titleArt, new LinearLayout.LayoutParams(-1, dp(wide() ? 104 : 80)));
+      image(titleArt, item.titleLogo);
+    }
     String facts = item.facts();
-    if (!facts.isEmpty()) body.addView(noPad(label(facts, 15, 0xffb3b8c0)));
+    String genres = String.join(", ", item.genres.subList(0, Math.min(2, item.genres.size())));
+    String metadata = genres.isEmpty() ? facts : facts.isEmpty() ? genres : facts + " · " + genres;
+    if (!metadata.isEmpty()) {
+      TextView factsView = noPad(label(metadata, 15, 0xffe7e7eb));
+      factsView.setGravity(Gravity.CENTER);
+      body.addView(factsView);
+    }
+    String premiere = item.series ? item.premiereNotice(Library.madridDay(System.currentTimeMillis())) : "";
+    if (!premiere.isEmpty()) {
+      TextView note = label(premiere, 15, 0xffffd284);
+      note.setGravity(Gravity.CENTER);
+      note.setPadding(0, dp(10), 0, dp(4));
+      body.addView(note);
+    }
     final JSONObject progress = Library.Progress.load(this);
+    final EpisodeHistory episodeHistory = item.series ? new EpisodeHistory(this, section, item.id) : null;
+    final Runnable refreshPlay;
     if (item.series) {
-      final Library.Episode next = Library.resumeEpisode(item, progress);
-      if (next != null) {
-        JSONObject saved = progress.optJSONObject(next.id);
-        String text = (saved != null ? "Continuar T" : "Reproducir T") + next.season + ":E" + next.episode + (saved != null ? " · " + Library.clock(saved.optLong("position")) : "");
-        bigPlay(body, text, () -> playEntry(item.entry(section, next), false)).requestFocus();
-        if (saved != null) body.addView(progressBar(saved), progressBarParams(dp(4)));
-      }
+      if (Library.resumeEpisode(item, progress, episodeHistory.local()) != null) {
+        final Button play = bigPlay(body, "Reproducir", () -> {
+          Library.Episode next = Library.resumeEpisode(item, Library.Progress.load(this), episodeHistory.local());
+          if (next != null) playEntry(item.entry(section, next), false);
+        });
+        final LinearLayout progressHost = new LinearLayout(this);
+        progressHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(progressHost, new LinearLayout.LayoutParams(-1, -2));
+        refreshPlay = () -> {
+          JSONObject latest = Library.Progress.load(this), seen = episodeHistory.local();
+          Library.Episode next = Library.resumeEpisode(item, latest, seen);
+          if (next == null) { play.setVisibility(View.GONE); return; }
+          JSONObject saved = latest.optJSONObject(next.id);
+          if (saved != null && saved.optLong("at") <= EpisodeHistory.watchedAt(seen, next.id)) saved = null;
+          play.setText((saved == null ? "Reproducir T" : "Continuar T") + next.season + ":E" + next.episode
+              + (saved == null ? "" : " · " + Library.clock(saved.optLong("position"))));
+          progressHost.removeAllViews();
+          if (saved != null) progressHost.addView(progressBar(saved), progressBarParams(dp(4)));
+        };
+        refreshPlay.run();
+        play.requestFocus();
+      } else refreshPlay = () -> {};
     } else {
+      refreshPlay = () -> {};
       final JSONObject entry = item.entry(section, null);
       JSONObject saved = progress.optJSONObject(entry.optString("key"));
       bigPlay(body, saved == null ? "Reproducir" : "Continuar · " + Library.clock(saved.optLong("position")), () -> playEntry(entry, false)).requestFocus();
@@ -2012,10 +2280,20 @@ public class MainActivity extends Activity {
         body.addView(progressBar(saved), progressBarParams(dp(4)));
       }
     }
-    TextView overview = label(item.overview.isEmpty() ? "Sin sinopsis." : item.overview, 16, 0xffffffff);
-    overview.setPadding(0, dp(14), 0, dp(8));
-    overview.setLineSpacing(0, 1.15f);
-    body.addView(overview);
+    LinearLayout quickActions = row();
+    quickActions.setGravity(Gravity.CENTER);
+    LinearLayout.LayoutParams actionsSize = new LinearLayout.LayoutParams(-1, -2);
+    actionsSize.topMargin = dp(15);
+    body.addView(quickActions, actionsSize);
+    LinearLayout details = new LinearLayout(this);
+    details.setOrientation(LinearLayout.VERTICAL);
+    if (!metadata.isEmpty()) details.addView(label(metadata, 15, MUTED));
+    if (!item.overview.isEmpty()) {
+      TextView overview = label(item.overview, 16, 0xffffffff);
+      overview.setPadding(0, dp(14), 0, dp(8));
+      overview.setLineSpacing(0, 1.15f);
+      body.addView(overview);
+    }
     if (!item.cast.isEmpty()) {
       final List<String> names = new ArrayList<>();
       for (String[] person : item.cast) names.add(person[0]);
@@ -2030,18 +2308,18 @@ public class MainActivity extends Activity {
         starring.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 6, 0));
         starring.setOnClickListener(v -> { all[0] = true; drawCast.run(); });
       }
-      body.addView(noPad(starring));
+      details.addView(noPad(starring));
     }
     if (!item.creators.isEmpty())
-      body.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
-    if (!item.genres.isEmpty()) body.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
+      details.addView(noPad(credit(item.series ? "Creada por: " : "Dirigida por: ", String.join(", ", item.creators))));
+    if (!item.genres.isEmpty()) details.addView(noPad(credit("Géneros: ", String.join(", ", item.genres))));
     // «Mi lista», «Me gusta» and «No me gusta» of the profile watching (in this device without an account).
     final String titlePage = Library.page(section);
     LinearLayout mine = row();
-    final Button listButton = Ui.pill(this, "", Ui.Kind.SURFACE, true), up = Ui.pill(this, "", Ui.Kind.SURFACE, true), down = Ui.pill(this, "", Ui.Kind.SURFACE, true);
+    final Button listButton = titleAction("Mi lista", Ui.Icon.ADD), up = Ui.pill(this, "", Ui.Kind.SURFACE, true), down = Ui.pill(this, "", Ui.Kind.SURFACE, true);
     final Runnable paintMine = () -> {
       JSONObject data = Profiles.data();
-      listButton.setText(ProfileData.inList(data, titlePage, item.id) ? "✓  En mi lista" : "+  Mi lista");
+      listButton.setText(ProfileData.inList(data, titlePage, item.id) ? "En mi lista" : "Mi lista");
       int rating = ProfileData.rating(data, titlePage, item.id);
       up.setText(rating > 0 ? "👍  Te gusta" : "👍  Me gusta");
       down.setText(rating < 0 ? "👎  No te gusta" : "👎  No me gusta");
@@ -2050,7 +2328,7 @@ public class MainActivity extends Activity {
     listButton.setOnClickListener(v -> { Profiles.toggleList(this, titlePage, item.id); paintMine.run(); });
     up.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, 1); paintMine.run(); });
     down.setOnClickListener(v -> { Profiles.rate(this, titlePage, item.id, -1); paintMine.run(); });
-    for (Button b : new Button[] {listButton, up, down}) {
+    for (Button b : new Button[] {up, down}) {
       LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, dp(44));
       mp.setMargins(0, dp(12), dp(8), 0);
       mine.addView(b, mp);
@@ -2058,17 +2336,21 @@ public class MainActivity extends Activity {
     HorizontalScrollView mineScroll = new HorizontalScrollView(this);
     mineScroll.setHorizontalScrollBarEnabled(false);
     mineScroll.addView(mine);
-    body.addView(mineScroll);
-    Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
+    details.addView(mineScroll);
+    Button share = titleAction("", Ui.Icon.SHARE);
+    share.setContentDescription("Compartir");
     share.setOnClickListener(v -> {
       Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
-          .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/#/" + Library.page(section) + "/" + Uri.encode(item.id));
+          .putExtra(Intent.EXTRA_TEXT, item.title + " · https://djyuanyo.github.io/Calamar-TV/" + Library.page(section) + "/" + Uri.encode(item.id) + "/");
       try { startActivity(Intent.createChooser(send, "Compartir")); }
       catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });
-    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
-    sp.setMargins(0, dp(12), 0, dp(6));
-    body.addView(share, sp);
+    FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.END);
+    sp.setMargins(0, dp(12), dp(gutter()), 0);
+    hero.addView(share, sp);
+    Button trailerAction = titleAction("Tráiler", Ui.Icon.FILM);
+    if (!item.trailer.isEmpty()) quickActions.addView(trailerAction);
+    quickActions.addView(listButton);
 
     // The tabs.
     final LinearLayout tabs = row();
@@ -2076,26 +2358,29 @@ public class MainActivity extends Activity {
     panel.setOrientation(LinearLayout.VERTICAL);
     final List<String> tabNames = new ArrayList<>();
     if (item.series) tabNames.add("Episodios");
-    tabNames.add("Tráileres y más");
-    tabNames.add("Similares");
+    tabNames.add("Sugerencias");
+    tabNames.add("Extras");
+    tabNames.add("Detalles");
     final Runnable[] open = new Runnable[1];
-    final String[] chosen = {item.series ? "Episodios" : !item.trailer.isEmpty() ? "Tráileres y más" : "Similares"};
+    final String[] chosen = {item.series ? "Episodios" : "Sugerencias"};
+    final int[] selectedSeason = {initialSeason};
+    final Runnable[] refreshEpisodes = {() -> {}};
     open[0] = () -> {
       tabs.removeAllViews();
       for (final String name : tabNames) {
-        // The open tab has a red bar on top, as on Netflix.
+        // The selected tab is underlined.
         LinearLayout tab = new LinearLayout(this);
         tab.setOrientation(LinearLayout.VERTICAL);
         tab.setFocusable(true);
         tab.setClickable(true);
         tab.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 4, 0));
         View bar = new View(this);
-        bar.setBackgroundColor(name.equals(chosen[0]) ? 0xffe50914 : 0x00000000);
-        tab.addView(bar, new LinearLayout.LayoutParams(-1, dp(4)));
+        bar.setBackgroundColor(name.equals(chosen[0]) ? 0xffffffff : 0x00000000);
         TextView text = label(name, 16, name.equals(chosen[0]) ? 0xffffffff : 0xffb3b8c0);
         text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         text.setPadding(dp(4), dp(12), dp(4), dp(10));
         tab.addView(text);
+        tab.addView(bar, new LinearLayout.LayoutParams(-1, dp(3)));
         tab.setContentDescription(name + (name.equals(chosen[0]) ? ", seleccionada" : ""));
         tab.setOnClickListener(v -> { chosen[0] = name; open[0].run(); });
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
@@ -2103,10 +2388,17 @@ public class MainActivity extends Activity {
         tabs.addView(tab, tp);
       }
       panel.removeAllViews();
-      if (chosen[0].equals("Episodios")) episodesTab(panel, section, item, progress);
-      else if (chosen[0].equals("Tráileres y más")) trailerTab(panel, item);
+      refreshEpisodes[0] = () -> {};
+      if (chosen[0].equals("Episodios")) refreshEpisodes[0] = episodesTab(panel, section, item, episodeHistory, selectedSeason);
+      else if (chosen[0].equals("Extras")) trailerTab(panel, item);
+      else if (chosen[0].equals("Detalles")) panel.addView(details);
       else similarTab(panel, section, item, dialog);
     };
+    trailerAction.setOnClickListener(v -> {
+      chosen[0] = "Extras";
+      open[0].run();
+      panel.post(() -> scroll.smoothScrollTo(0, body.getTop() + tabs.getTop()));
+    });
     open[0].run();
     View line = new View(this);
     line.setBackgroundColor(0x33ffffff);
@@ -2118,11 +2410,11 @@ public class MainActivity extends Activity {
     tabScroll.addView(tabs);
     body.addView(tabScroll);
     body.addView(panel);
-    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
 
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
-    dialog.show();
-    dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
+    showContentDialog(dialog);
+    if (episodeHistory != null) observeEpisodeHistory(dialog, episodeHistory, () -> { refreshPlay.run(); refreshEpisodes[0].run(); });
+    dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(surface));
     dialog.getWindow().setLayout(-1, -1);
   }
 
@@ -2140,7 +2432,7 @@ public class MainActivity extends Activity {
     play.setTextSize(18);
     play.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     play.setTextColor(0xff111111);
-    play.setBackground(Ui.focusFill(this, 0xffffffff, 0xffdddddd, Ui.ACC, 6, 0));
+    play.setBackground(Ui.focusFill(this, 0xffffffff, 0xffdddddd, Ui.ACC, 999, 0));
     play.setCompoundDrawablesWithIntrinsicBounds(Ui.icon(Ui.Icon.PLAY, 0xff111111, dp(20)), null, null, null);
     play.setCompoundDrawablePadding(dp(8));
     play.setPadding(dp(16), dp(10), dp(16), dp(10));
@@ -2152,30 +2444,38 @@ public class MainActivity extends Activity {
   }
 
   /** «Episodios»: «Temporada N ▾» and the episodes of that season. */
-  void episodesTab(final LinearLayout panel, final String section, final Library.Item item, JSONObject progress) {
+  private void observeEpisodeHistory(Dialog dialog, EpisodeHistory history, Runnable draw) {
+    episodeViews.put(dialog, draw);
+    dialog.setOnDismissListener(d -> episodeViews.remove(dialog));
+    history.sync(() -> { if (dialog.isShowing()) draw.run(); });
+  }
+
+  Runnable episodesTab(final LinearLayout panel, final String section, final Library.Item item, EpisodeHistory history, int[] selectedSeason) {
     final Map<Integer, List<Library.Episode>> seasons = item.seasons();
-    if (seasons.isEmpty()) return;
-    Library.Episode next = Library.resumeEpisode(item, progress);
-    final int[] current = {next != null && seasons.containsKey(next.season) ? next.season : seasons.keySet().iterator().next()};
+    if (seasons.isEmpty()) return () -> {};
     final Button picker = Ui.pill(this, "", Ui.Kind.SURFACE, false);
     final LinearLayout episodes = new LinearLayout(this);
     episodes.setOrientation(LinearLayout.VERTICAL);
     final Runnable draw = () -> {
-      picker.setText("Temporada " + current[0] + "  ▾");
+      JSONObject progress = Library.Progress.load(this), seen = history.local();
+      int selected = seasons.containsKey(selectedSeason[0]) ? selectedSeason[0] : Library.defaultSeason(item, progress, seen);
+      if (!seasons.containsKey(selected)) selected = seasons.keySet().iterator().next();
+      picker.setText("Temporada " + selected + "  ▾");
       episodes.removeAllViews();
-      for (Library.Episode e : seasons.get(current[0])) episodes.addView(episodeRow(section, item, e));
+      for (Library.Episode e : seasons.get(selected)) episodes.addView(episodeRow(section, item, e, progress, seen));
     };
     picker.setOnClickListener(v -> {
       final List<Integer> numbers = new ArrayList<>(seasons.keySet());
       String[] labels = new String[numbers.size()];
       for (int i = 0; i < labels.length; i++) labels[i] = "Temporada " + numbers.get(i);
-      new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { current[0] = numbers.get(which); draw.run(); }).show();
+      showContentDialog(new android.app.AlertDialog.Builder(this).setTitle("Temporada").setItems(labels, (d, which) -> { selectedSeason[0] = numbers.get(which); draw.run(); }).create());
     });
     draw.run();
     LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, dp(50));
     pp.setMargins(0, dp(10), 0, dp(10));
     panel.addView(picker, pp);
     panel.addView(episodes);
+    return draw;
   }
 
   /** «Tráileres y más»: the trailer in Spanish (its YouTube picture opens it in YouTube). */
@@ -2224,11 +2524,13 @@ public class MainActivity extends Activity {
     }
   }
 
-  View episodeRow(final String section, final Library.Item item, final Library.Episode e) {
+  View episodeRow(final String section, final Library.Item item, final Library.Episode e, JSONObject progress, JSONObject seen) {
+    boolean upcoming = !e.available();
+    boolean watched = !upcoming && EpisodeHistory.watchedAt(seen, e.id) > 0;
     LinearLayout box = new LinearLayout(this);
     box.setOrientation(LinearLayout.VERTICAL);
     box.setFocusable(true);
-    box.setClickable(true);
+    box.setClickable(!upcoming);
     box.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 10, 0));
     box.setPadding(dp(2), dp(6), dp(2), dp(8));
     LinearLayout r = row();
@@ -2245,18 +2547,20 @@ public class MainActivity extends Activity {
       still.addView(image, new FrameLayout.LayoutParams(-1, -1));
       image(image, e.still);
     }
-    ImageView play = new ImageView(this);
-    play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(16)));
-    play.setScaleType(ImageView.ScaleType.CENTER);
-    play.setBackground(Ui.shape(this, 0x77000000, 999, 2, 0xffffffff));
-    still.addView(play, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
-    JSONObject saved = Library.Progress.load(this).optJSONObject(e.id);
-    if (saved != null) {
-      FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM);
-      barSize.setMargins(dp(6), 0, dp(6), dp(5));
-      still.addView(progressBar(saved), barSize);
+    if (!upcoming) {
+      ImageView play = new ImageView(this);
+      play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(16)));
+      play.setScaleType(ImageView.ScaleType.CENTER);
+      play.setBackground(Ui.shape(this, 0x77000000, 999, 2, 0xffffffff));
+      still.addView(play, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
+      JSONObject saved = progress.optJSONObject(e.id);
+      if (saved != null && !watched) {
+        FrameLayout.LayoutParams barSize = new FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM);
+        barSize.setMargins(dp(6), 0, dp(6), dp(5));
+        still.addView(progressBar(saved), barSize);
+      }
     }
-    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 140), dp(wide() ? 112 : 79)));
+    r.addView(still, new LinearLayout.LayoutParams(dp(wide() ? 200 : 110), dp(wide() ? 112 : 62)));
     LinearLayout texts = new LinearLayout(this);
     texts.setOrientation(LinearLayout.VERTICAL);
     texts.setGravity(Gravity.CENTER_VERTICAL);
@@ -2264,6 +2568,15 @@ public class MainActivity extends Activity {
     name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     name.setPadding(dp(14), 0, dp(4), 0);
     texts.addView(name);
+    String premiere = e.premiereLabel(Library.madridDay(System.currentTimeMillis()));
+    boolean dated = !premiere.isEmpty();
+    String state = dated ? premiere + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
+    if (!state.isEmpty()) {
+      TextView badge = label(state, 13, dated ? 0xffffd284 : Ui.ACC);
+      badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+      badge.setPadding(dp(14), dp(3), dp(4), 0);
+      texts.addView(badge);
+    }
     if (e.runtime > 0) {
       TextView minutes = label(e.runtime + " min", 14, 0xffb3b8c0);
       minutes.setPadding(dp(14), dp(2), dp(4), 0);
@@ -2277,8 +2590,8 @@ public class MainActivity extends Activity {
       about.setLineSpacing(0, 1.1f);
       box.addView(about);
     }
-    box.setContentDescription(e.seasonLabel() + ", " + e.title());
-    box.setOnClickListener(v -> episodePage(section, item, e));
+    box.setContentDescription(e.seasonLabel() + ", " + e.title() + (state.isEmpty() ? "" : ", " + state));
+    if (!upcoming) box.setOnClickListener(v -> episodePage(section, item, e));
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.setMargins(0, dp(6), 0, dp(6));
     box.setLayoutParams(p);
@@ -2319,6 +2632,18 @@ public class MainActivity extends Activity {
     parent.addView(scroll);
     if (saved != null) parent.addView(progressBar(saved), progressBarParams(dp(4)));
     watch.requestFocus();
+  }
+
+  private Button titleAction(String label, Ui.Icon icon) {
+    Button button = Ui.pill(this, label, Ui.Kind.GHOST, true);
+    button.setMinWidth(dp(44));
+    button.setMinimumWidth(dp(44));
+    button.setMinHeight(dp(48));
+    button.setMinimumHeight(dp(48));
+    button.setPadding(dp(7), dp(5), dp(7), dp(5));
+    button.setCompoundDrawablesWithIntrinsicBounds(null, Ui.icon(icon, Ui.FG, dp(24)), null, null);
+    button.setCompoundDrawablePadding(dp(5));
+    return button;
   }
 
   /** The watched part of a film or episode, as a lime bar. */
@@ -2383,7 +2708,19 @@ public class MainActivity extends Activity {
     TextView overview = label(about, 15, 0xffd6dbe2);
     overview.setPadding(0, dp(10), 0, dp(10));
     body.addView(overview);
-    playButtons(body, item.entry(section, e));
+    EpisodeHistory episodeHistory = new EpisodeHistory(this, section, item.id);
+    String premiere = e.premiereLabel(Library.madridDay(System.currentTimeMillis()));
+    boolean dated = !premiere.isEmpty();
+    TextView badge = label("", 14, dated ? 0xffffd284 : Ui.ACC);
+    Runnable refreshBadge = () -> {
+      boolean watched = e.available() && EpisodeHistory.watchedAt(episodeHistory.local(), e.id) > 0;
+      String state = dated ? premiere + (watched ? " · ✓ Visto" : "") : watched ? "✓ Visto" : "";
+      badge.setText(state);
+      badge.setVisibility(state.isEmpty() ? View.GONE : View.VISIBLE);
+    };
+    refreshBadge.run();
+    body.addView(badge);
+    if (e.available()) playButtons(body, item.entry(section, e));
     final Library.Episode next = item.next(e);
     if (next != null) {
       Button following = Ui.pill(this, "Siguiente: " + next.seasonLabel() + " · " + next.title() + " ›", Ui.Kind.SURFACE, true);
@@ -2392,9 +2729,9 @@ public class MainActivity extends Activity {
       addButton(r, following);
       body.addView(r);
     }
-    if (library != null && !library.attribution.isEmpty()) body.addView(label(library.attribution, 11, 0xff727b88));
     dialog.setContentView(scroll, new ViewGroup.LayoutParams(-1, -1));
-    dialog.show();
+    showContentDialog(dialog);
+    observeEpisodeHistory(dialog, episodeHistory, refreshBadge);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
     dialog.getWindow().setLayout(-1, -1);
   }
@@ -2406,6 +2743,11 @@ public class MainActivity extends Activity {
    * count in the channel audience. When one ends the player says so and the next episode starts.
    */
   void playEntry(JSONObject entry, boolean restart) {
+    playEntry(entry, restart, 0L);
+  }
+
+  private void playEntry(JSONObject entry, boolean restart, long sleepDeadline) {
+    if (!contentAdmitted) return;
     if (entry.optString("url").isEmpty()) {
       // Left half watched on another device: the link and the marks come from the library.
       JSONObject full = libraryEntry(entry);
@@ -2416,22 +2758,32 @@ public class MainActivity extends Activity {
       }
       entry = full;
     }
+    if (!entry.optString("episode").isEmpty() && Library.upcoming(entry.optString("aired"))) return;
     String url = entry.optString("url");
     if (!Library.Media.allowed(url)) return;
     String anon = Library.Media.anonmp4(url);
-    if (anon != null) { embedPlayer(entry.optString("title"), anon); return; }
+    if (anon != null) { embedPlayer(entry.optString("title"), anon, AudienceModel.libraryTarget(entry.optString("item")), sleepDeadline); return; }
     JSONObject saved = Library.Progress.load(this).optJSONObject(entry.optString("key"));
+    String episode = entry.optString("episode");
+    if (saved != null && !episode.isEmpty()) {
+      JSONObject seen = new EpisodeHistory(this, entry.optString("section"), entry.optString("item")).local();
+      if (EpisodeHistory.watchedAt(seen, episode) >= saved.optLong("at")) saved = null;
+    }
     // What the profile watches feeds «Recomendado para ti».
     if (Profiles.signedIn() && Profiles.active() != null && !entry.optString("section").isEmpty())
       Profiles.markWatched(this, Library.page(entry.optString("section")), entry.optString("item"));
     Intent intent = new Intent(this, NativePlayerActivity.class);
+    String vidara = ProviderPlayers.vidara(url);
     String embed = Library.Media.embed(url);
-    if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
+    if (Library.Media.youtubeEmbed(url) != null) intent.putExtra("page_url", url);
+    else if (vidara != null) intent.putExtra("page_url", vidara);
+    else if (embed != null) { // LuluStream: the video is read from its player page; if not, the page itself is shown
       intent.putExtra("page_url", embed);
       intent.putExtra("football_fallback", true);
     } else intent.putStringArrayListExtra("media_urls", new ArrayList<>(Collections.singletonList(url)));
     intent.putExtra("title", entry.optString("title"));
     intent.putExtra("progress_entry", entry.toString());
+    intent.putExtra(SleepTimer.DEADLINE, sleepDeadline);
     // Its own statistics (l:<id>, all the episodes of a series together), without «people watching».
     String audienceTarget = AudienceModel.libraryTarget(entry.optString("item"));
     if (audienceTarget != null) intent.putExtra("audience_target", audienceTarget);
@@ -2443,7 +2795,8 @@ public class MainActivity extends Activity {
    * AnonMP4: its embed page (the address its API gives for other sites) with its own player, full screen.
    * Back closes it. «Continuar viendo» cannot know where it was left, as the player is AnonMP4's.
    */
-  void embedPlayer(String title, String address) {
+  void embedPlayer(String title, String address, String target, long sleepDeadline) {
+    if (!contentAdmitted) return;
     final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
     final FrameLayout box = new FrameLayout(this);
     box.setBackgroundColor(0xff000000);
@@ -2456,6 +2809,14 @@ public class MainActivity extends Activity {
     web.setBackgroundColor(0xff000000);
     final String host = Uri.parse(address).getHost();
     web.setWebViewClient(new android.webkit.WebViewClient() {
+      @Override public boolean onRenderProcessGone(android.webkit.WebView view, android.webkit.RenderProcessGoneDetail detail) {
+        box.removeView(view);
+        view.destroy();
+        dialog.dismiss();
+        Toast.makeText(MainActivity.this, "El reproductor web se ha cerrado. Vuelve a abrir el vídeo.", Toast.LENGTH_LONG).show();
+        return true;
+      }
+
       @Override
       public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
         // Only AnonMP4's own pages: pop-ups and adverts that try to open other sites stay closed.
@@ -2468,6 +2829,7 @@ public class MainActivity extends Activity {
       public void onShowCustomView(View view, CustomViewCallback callback) {
         full = view;
         box.addView(view, new FrameLayout.LayoutParams(-1, -1));
+        if (embeddedSleepTimer != null) embeddedSleepTimer.button().bringToFront();
       }
       @Override
       public void onHideCustomView() {
@@ -2476,9 +2838,45 @@ public class MainActivity extends Activity {
       }
     });
     box.addView(web, new FrameLayout.LayoutParams(-1, -1));
+    final SleepTimer timer = SleepTimer.supported(this) ? new SleepTimer(this, sleepDeadline, () -> {
+      if (web.getParent() == box) {
+        box.removeView(web);
+        web.destroy();
+      }
+      dialog.dismiss();
+    }) : null;
+    if (timer != null) {
+      embeddedSleepTimer = timer;
+      FrameLayout.LayoutParams timerSize = new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.TOP | Gravity.END);
+      timerSize.setMargins(0, dp(8), dp(8), 0);
+      box.addView(timer.button(), timerSize);
+    }
     dialog.setContentView(box);
-    dialog.setOnDismissListener(d -> { web.loadUrl("about:blank"); web.destroy(); });
-    dialog.show();
+    AudienceSession audience = new AudienceSession(this, target, null, title, null);
+    Runnable measure = new Runnable() {
+      @Override public void run() {
+        if (!dialog.isShowing() || web.getParent() != box) return;
+        if (resumed && contentAdmitted) {
+          web.evaluateJavascript("(function(){var v=document.querySelector('video');return !!v&&!v.paused&&v.readyState>=2})()",
+              playing -> audience.watching(resumed && contentAdmitted && "true".equals(playing)));
+        } else audience.watching(false);
+        handler.postDelayed(this, 2000);
+      }
+    };
+    dialog.setOnDismissListener(d -> {
+      if (timer != null) timer.close();
+      if (embeddedSleepTimer == timer) embeddedSleepTimer = null;
+      handler.removeCallbacks(measure);
+      audience.close();
+      if (web.getParent() == box) {
+        box.removeView(web);
+        web.destroy();
+      }
+    });
+    audience.open();
+    handler.post(measure);
+    showContentDialog(dialog);
+    if (timer != null && timer.resume()) return;
     web.loadUrl(address);
     web.requestFocus();
     Toast.makeText(this, title, Toast.LENGTH_SHORT).show();
@@ -2516,21 +2914,21 @@ public class MainActivity extends Activity {
     else libraryDetail(parts[0], item);
   }
 
-  /** «Top 10 películas / series de la semana» (or as many as there are): big numbers next to the posters, as on Netflix. */
-  void topRow(List<Library.Item> items, String what) {
-    topRow(items, what, "Top " + items.size() + " " + what + " de la semana");
+  /** A top row with big numbers next to the posters, as on Netflix. */
+  void topRow(List<Library.Item> items, String title) {
+    if (items.isEmpty()) return;
+    heading(title, null);
+    int width = wide() ? 190 : 140;
+    lazyRow(width * 3 / 2 + 24, () -> topCarousel(items, width));
   }
 
-  void topRow(List<Library.Item> items, String what, String title) {
-    if (items.isEmpty()) return;
-    heading(title, "Según TMDB");
+  View topCarousel(List<Library.Item> items, int width) {
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
     h.setClipToPadding(false);
     LinearLayout r = row();
     r.setGravity(Gravity.BOTTOM);
     // Bigger than the posters of the other rows, and whole (only the picture, at 2:3).
-    int width = wide() ? 190 : 140;
     for (int i = 0; i < items.size(); i++) {
       LinearLayout pair = row();
       pair.setGravity(Gravity.BOTTOM);
@@ -2550,7 +2948,7 @@ public class MainActivity extends Activity {
       r.addView(pair);
     }
     h.addView(r);
-    list.addView(h);
+    return h;
   }
 
   static final String HALLOWEEN = "Especial Halloween";
@@ -2558,7 +2956,7 @@ public class MainActivity extends Activity {
   /** The signed-in user's first name, for «Seguir viendo para …» (empty without an account). */
   String userName() {
     try {
-      com.google.firebase.auth.FirebaseUser user = SharedCatalog.auth(this).getCurrentUser();
+      com.google.firebase.auth.FirebaseUser user = Profiles.user(this);
       String name = user == null || user.getDisplayName() == null ? "" : user.getDisplayName().trim();
       return name.isEmpty() ? "" : name.split("\\s+")[0];
     } catch (RuntimeException unavailable) {
@@ -2581,7 +2979,7 @@ public class MainActivity extends Activity {
         // «Descubrir todo»: every horror title of this section, as when «Terror» is chosen in the categories.
         horrorBanner(row.title, entries, () -> { genre = "Terror"; render(); });
       }
-      else if (row.kind.equals("top")) topRow(row.items, "", row.title);
+      else if (row.kind.equals("top")) topRow(row.items, row.title);
       else posterRail(row.title, row.items, row.kind.equals("big") ? (wide() ? 230 : 170) : (wide() ? 140 : 108));
     }
   }
@@ -2599,11 +2997,7 @@ public class MainActivity extends Activity {
       h.addView(r);
       return h;
     };
-    // On a television the rows far from the screen are built when they come near (as the poster grid).
-    if (television) lazyRow(width * 3 / 2 + 24, rail);
-    else {
-      try { list.addView(rail.call()); } catch (Exception impossible) { throw new IllegalStateException(impossible); }
-    }
+    lazyRow(width * 3 / 2 + 24, rail);
   }
 
   static final String PLATFORM = "Plataforma: ";
@@ -2618,8 +3012,49 @@ public class MainActivity extends Activity {
     bp.setMargins(0, dp(10), 0, dp(6));
     list.addView(back, bp);
     List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(channels, custom), System.currentTimeMillis());
-    heading(Catalog.LIVE_ROW, live.size() == 1 ? "1 evento hoy" : live.size() + " eventos hoy");
-    for (Catalog.EventRow row : Catalog.eventRows(live, custom)) {
+    if (eventSports == null) {
+      JSONObject definitions;
+      try (InputStream input = getAssets().open("sports.json")) { definitions = readJson(input); }
+      catch (Exception unavailable) { definitions = new JSONObject(); }
+      eventSports = new EventSports(definitions);
+    }
+    List<EventSports.Tab> tabs = eventSports.tabs(live, custom);
+    boolean available = false;
+    for (EventSports.Tab tab : tabs) if (tab.id.equals(liveSport)) available = true;
+    if (!available) liveSport = "all";
+    List<Catalog.Channel> filtered = new ArrayList<>();
+    for (Catalog.Channel event : live)
+      if ("all".equals(liveSport) || liveSport.equals(eventSports.sport(event, custom))) filtered.add(event);
+    sportsHero(Catalog.LIVE_ROW, "", "", filtered.size() == 1 ? "1 evento hoy, ordenado por competición" : filtered.size() + " eventos hoy, ordenados por competición", SportsCatalog.liveLink(), true);
+    HorizontalScrollView tabScroll = new HorizontalScrollView(this);
+    tabScroll.setHorizontalScrollBarEnabled(false);
+    LinearLayout buttons = row();
+    for (EventSports.Tab option : tabs) {
+      String label = (option.icon.isEmpty() ? "" : option.icon + " ") + option.name + "  " + option.count;
+      Button button = Ui.pill(this, label, option.id.equals(liveSport) ? Ui.Kind.ACCENT : Ui.Kind.SURFACE, true);
+      if (!sportTabIds.containsKey(option.id)) sportTabIds.put(option.id, View.generateViewId());
+      final int id = sportTabIds.get(option.id);
+      button.setId(id);
+      button.setSelected(option.id.equals(liveSport));
+      button.setContentDescription(option.name + ", " + option.count + (option.count == 1 ? " evento" : " eventos"));
+      button.setOnClickListener(v -> {
+        liveSport = option.id;
+        render();
+        handler.post(() -> {
+          View selected = root.findViewById(id);
+          if (selected != null) {
+            selected.requestFocus();
+            selected.requestRectangleOnScreen(new Rect(0, 0, selected.getWidth(), selected.getHeight()), true);
+          }
+        });
+      });
+      addButton(buttons, button);
+    }
+    tabScroll.addView(buttons);
+    LinearLayout.LayoutParams tabSize = new LinearLayout.LayoutParams(-1, -2);
+    tabSize.setMargins(0, dp(10), 0, dp(16));
+    list.addView(tabScroll, tabSize);
+    for (Catalog.EventRow row : Catalog.eventRows(filtered, custom)) {
       heading(row.id.isEmpty() ? row.name : row.name + "  ›", row.events.size() == 1 ? "1 evento" : row.events.size() + " eventos");
       if (!row.logo.isEmpty()) leagueLogo(row.logo);
       if (!row.id.isEmpty()) leagueHeadingOpens(row.id, row.name);
@@ -2648,12 +3083,21 @@ public class MainActivity extends Activity {
     JSONObject league = SportsCatalog.find(custom == null ? null : custom.optJSONArray("leagues"), leagueId);
     if (league == null) { list.addView(label("Esta liga ya no está en el catálogo.", 15, MUTED)); return; }
     final String name = league.optString("name");
-    // Only today's matches, as «Eventos En Directo» (and the league's page on the web).
-    List<Catalog.Channel> matches = Catalog.liveEvents(Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis()), System.currentTimeMillis());
+    // All linked matches of the current week, Monday to Sunday in Madrid.
+    List<Catalog.Channel> matches = Catalog.leagueEvents(channels, custom, leagueId, System.currentTimeMillis());
+    final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
+    sportsHero(name, league.optString("logo"), league.optString("background"),
+        matches.size() == 1 ? "1 partido esta semana con enlace" : matches.size() + " partidos esta semana con enlace",
+        slug == null ? null : SportsCatalog.leagueLink(slug), false);
+    if (matches.isEmpty()) list.addView(label("Esta semana no hay partidos de esta liga con enlace.", 15, MUTED));
+    else channelGrid(matches);
+  }
+
+  /** Shared league/live header, with the app's bundled logo for mixed competitions. */
+  void sportsHero(String name, String logo, String background, String subtitle, String shareUrl, boolean branded) {
     FrameLayout hero = new FrameLayout(this);
     hero.setBackground(Ui.shape(this, 0xff14261b, 14, 0, 0));
     hero.setClipToOutline(true);
-    String background = league.optString("background");
     if (background.startsWith("https://") || background.startsWith("data:image/")) {
       ImageView art = new ImageView(this);
       art.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -2667,39 +3111,38 @@ public class MainActivity extends Activity {
     box.setOrientation(LinearLayout.VERTICAL);
     box.setGravity(Gravity.CENTER_HORIZONTAL);
     box.setPadding(dp(12), dp(18), dp(12), dp(16));
-    String logo = league.optString("logo");
-    if (logo.startsWith("https://") || logo.startsWith("data:image/")) {
+    if (branded || logo.startsWith("https://") || logo.startsWith("data:image/")) {
       ImageView icon = new ImageView(this);
       icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
       box.addView(icon, new LinearLayout.LayoutParams(dp(wide() ? 110 : 88), dp(wide() ? 110 : 88)));
-      logo(icon, logo);
+      if (branded) icon.setImageResource(R.drawable.calamar_menciano_tv);
+      else logo(icon, logo);
+      icon.setContentDescription(branded ? "Calamar TV" : name);
     }
     TextView title = label(name, wide() ? 32 : 26, 0xffffffff);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setGravity(Gravity.CENTER);
     title.setShadowLayer(dp(8), 0, dp(2), 0xcc000000);
     box.addView(title);
-    TextView count = label(matches.size() == 1 ? "1 partido hoy con canal" : matches.size() + " partidos hoy con canal", 14, 0xddffffff);
+    TextView count = label(subtitle, 14, 0xddffffff);
     count.setGravity(Gravity.CENTER);
     box.addView(count);
-    final String slug = SportsCatalog.leagueSlugs(custom).get(leagueId);
     Button share = Ui.pill(this, "⤴  Compartir", Ui.Kind.SURFACE, true);
     share.setOnClickListener(v -> {
-      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, name + " · " + SportsCatalog.leagueLink(slug));
+      Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, name + " · " + shareUrl);
       try { startActivity(Intent.createChooser(send, "Compartir")); }
       catch (RuntimeException none) { Toast.makeText(this, "No hay ninguna aplicación para compartir.", Toast.LENGTH_SHORT).show(); }
     });
     LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(44));
     sp.gravity = Gravity.CENTER_HORIZONTAL;
     sp.setMargins(0, dp(10), 0, 0);
-    if (slug != null) box.addView(share, sp);
+    if (shareUrl != null) box.addView(share, sp);
     hero.addView(box, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
     LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
     hp.setMargins(0, 0, 0, dp(14));
     list.addView(hero, hp);
-    if (matches.isEmpty()) list.addView(label("Hoy no hay partidos de esta liga con canal asignado.", 15, MUTED));
-    else channelGrid(matches);
   }
+
   /** The section a platform's page was opened from, to go back to it. */
   String platformFrom = "Películas";
   HorizontalScrollView browseTrack;
@@ -2880,7 +3323,6 @@ public class MainActivity extends Activity {
     list.addView(hero, new LinearLayout.LayoutParams(-1, dp(wide() ? 340 : 280)));
     if (all.isEmpty()) list.addView(label("Todavía no hay títulos de " + name + ".", 15, MUTED));
     for (Library.Row row : rows) posterRail(row.title, row.items, wide() ? 140 : 108);
-    if (!library.attribution.isEmpty()) list.addView(label(library.attribution, 11, 0xff727b88));
   }
 
   /** The home page block of «Especial Halloween»: a dark banner with the horror titles and «Descubrir todo». */
@@ -2986,7 +3428,13 @@ public class MainActivity extends Activity {
   @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
+    if (request == REQUIRED_LOGIN) {
+      requiredLoginOpen = false;
+      if (result != RESULT_OK && admission == AppAccess.State.LOGIN) finish();
+      return;
+    }
     if (request != PLAY_LIBRARY) return;
+    for (Runnable refresh : new ArrayList<>(episodeViews.values())) refresh.run();
     render();
     String key = result == RESULT_OK && data != null ? data.getStringExtra("ended") : null;
     if (key == null || library == null) return;
@@ -2997,7 +3445,7 @@ public class MainActivity extends Activity {
         Library.Episode next = item.next(e);
         if (next == null) return;
         Toast.makeText(this, "Siguiente: " + next.seasonLabel() + " · " + next.title(), Toast.LENGTH_SHORT).show();
-        playEntry(item.entry(section[0], next), false);
+        playEntry(item.entry(section[0], next), false, data.getLongExtra(SleepTimer.DEADLINE, 0));
         return;
       }
   }
@@ -3037,7 +3485,7 @@ public class MainActivity extends Activity {
     for (JSONObject entry : Library.Progress.list(Library.Progress.load(this)))
       if (section == null || section.equals(entry.optString("section"))) entries.add(entry);
     if (entries.isEmpty()) return;
-    loadLibrary();
+    if (section != null) loadLibrary();
     heading(title, null);
     HorizontalScrollView h = new HorizontalScrollView(this);
     h.setHorizontalScrollBarEnabled(false);
@@ -3070,7 +3518,7 @@ public class MainActivity extends Activity {
       ImageView picture = new ImageView(this);
       picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
       art.addView(picture, new FrameLayout.LayoutParams(-1, -1));
-      image(picture, entry.optString("image"));
+      visibleImage(picture, entry.optString("image"), false);
     }
     ImageView play = new ImageView(this);
     play.setImageDrawable(Ui.icon(Ui.Icon.PLAY, Ui.FG, dp(22)));

@@ -96,8 +96,8 @@ service cloud.firestore {
     // «Continuar viendo» of each signed-in account, shared by its web and app sessions: only that
     // account reads or writes its own document.
     match /calamarProgress/{uid} {
-      allow get, delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
+      allow get, delete: if owner(uid);
+      allow create, update: if owner(uid)
         && request.resource.data.keys().hasAll(['json', 'updatedAt'])
         && request.resource.data.keys().hasOnly(['json', 'updatedAt'])
         && request.resource.data.json is string
@@ -108,18 +108,30 @@ service cloud.firestore {
     // Accounts (Google or email and password): the profiles of each account and, per profile, its
     // «Continuar viendo» (the main profile keeps calamarProgress/<uid>), My list, likes and favourite
     // channels. Only that account reads or writes them.
-    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function sameAccount(uid) { return request.auth != null && request.auth.uid == uid; }
+    function verifiedAccount(uid) {
+      return sameAccount(uid) && request.auth.token.get('email_verified', false) == true;
+    }
+    function accountDeleted(uid) {
+      let path = /databases/$(database)/documents/calamarUserAccess/$(uid);
+      return exists(path) && get(path).data.get('deleted', false) == true;
+    }
+    function owner(uid) {
+      return verifiedAccount(uid) && !accountDeleted(uid);
+    }
     function jsonDoc(limit) {
       let p = request.resource.data;
       return p.keys().hasAll(['json', 'updatedAt']) && p.keys().hasOnly(['json', 'updatedAt'])
         && p.json is string && p.json.size() <= limit && p.updatedAt == request.time;
     }
     match /calamarUsers/{uid} {
-      allow get, delete: if owner(uid);
+      allow get: if owner(uid) || administrator();
+      allow delete: if owner(uid);
       allow create, update: if owner(uid) && jsonDoc(20000);
-      allow list: if false;
+      allow list: if administrator();
       match /profiles/{profile} {
-        allow get, delete: if owner(uid);
+        allow get: if owner(uid) || administrator();
+        allow delete: if owner(uid);
         allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
         allow list: if false;
       }
@@ -128,6 +140,83 @@ service cloud.firestore {
         allow create, update: if owner(uid) && profile.matches('^[a-z0-9]{1,20}$') && jsonDoc(200000);
         allow list: if false;
       }
+    }
+    // One sign-in policy for the website, Android and Android TV.
+    match /calamarWeb/access {
+      allow get: if true;
+      allow create, update: if administrator()
+        && request.resource.data.keys().hasAll(['requireLogin', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['requireLogin', 'updatedAt'])
+        && request.resource.data.requireLogin is bool && request.resource.data.updatedAt == request.time;
+      allow delete, list: if false;
+    }
+    // Only metadata needed by the users panel; each member may update their own identity.
+    function memberData() {
+      let p = request.resource.data;
+      return p.keys().hasAll(['name', 'email', 'photo', 'verified', 'provider', 'lastSeen', 'createdAt'])
+        && p.keys().hasOnly(['name', 'email', 'photo', 'verified', 'provider', 'lastSeen', 'createdAt', 'registeredAt'])
+        && p.name is string && p.name.size() <= 80
+        && p.email == request.auth.token.email
+        && p.photo is string && p.photo.size() <= 2048
+        && p.verified == request.auth.token.get('email_verified', false)
+        && p.provider == request.auth.token.firebase.sign_in_provider
+        && p.lastSeen == request.time
+        && (!('registeredAt' in p) || p.registeredAt is timestamp);
+    }
+    match /calamarMembers/{uid} {
+      // Pending registrations may only record their own token-validated directory identity.
+      allow get: if (sameAccount(uid) && !accountDeleted(uid)) || administrator();
+      allow list: if administrator();
+      allow create: if sameAccount(uid) && !accountDeleted(uid)
+        && memberData() && request.resource.data.createdAt == request.time;
+      allow update: if sameAccount(uid) && !accountDeleted(uid)
+        && memberData() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+    // Kept separate from editable profiles: changing/deleting a profile cannot undo a block.
+    match /calamarUserAccess/{uid} {
+      allow get: if verifiedAccount(uid) || administrator();
+      allow list: if administrator();
+      allow create, update: if administrator() && uid != request.auth.uid
+        && request.resource.data.keys().hasAll(['blocked', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['blocked', 'deleted', 'updatedAt'])
+        && request.resource.data.blocked is bool && request.resource.data.updatedAt == request.time
+        && (('deleted' in request.resource.data)
+          ? request.resource.data.deleted == true && request.resource.data.blocked
+          : !accountDeleted(uid));
+      allow delete: if administrator() && uid != request.auth.uid && !accountDeleted(uid);
+    }
+    // Authenticated viewing never puts account identifiers in public audience counters.
+    function viewer(uid) {
+      return owner(uid) && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function viewingFields(p) {
+      return p.target is string && p.target.matches('^[cel]:[^|/]{1,200}$')
+        && p.title is string && p.title.size() <= 250
+        && p.profile is string && p.profile.size() <= 24
+        && p.device in ['web', 'android', 'tv'];
+    }
+    function validLiveViewer(id) {
+      let p = request.resource.data;
+      return id.matches('^[A-Za-z0-9]{20,40}$')
+        && p.keys().hasOnly(['uid', 'target', 'title', 'profile', 'device', 'updatedAt'])
+        && viewer(p.uid) && viewingFields(p) && p.updatedAt == request.time;
+    }
+    match /calamarLiveViewers/{id} {
+      allow read: if administrator();
+      allow create: if validLiveViewer(id);
+      allow update: if validLiveViewer(id) && request.resource.data.uid == resource.data.uid;
+      allow delete: if viewer(resource.data.uid) || administrator();
+    }
+    match /calamarViewing/{uid}/sessions/{id} {
+      allow read: if owner(uid) || administrator();
+      allow create: if viewer(uid) && id.matches('^[A-Za-z0-9]{20,40}$')
+        && request.resource.data.keys().hasOnly(['target', 'title', 'profile', 'device', 'startedAt'])
+        && viewingFields(request.resource.data) && request.resource.data.startedAt == request.time;
+      allow update: if viewer(uid) && !('endedAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endedAt'])
+        && request.resource.data.endedAt == request.time;
+      allow delete: if false;
     }
     match /{document=**} {
       allow read, write: if false;

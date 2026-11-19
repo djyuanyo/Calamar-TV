@@ -1,15 +1,17 @@
+import { GOOGLE_G } from './google-icon.js';
 // The page the app's QR or short link opens on a phone: confirm the code the app shows and sign in with Google.
 import { deviceKey } from './device-login.js';
 
 export async function render(el, keyText, codeText) {
   const key = deviceKey(keyText);
   const title = el('h2', {}, 'Iniciar sesión en la app');
-  if (!key) return [title, el('p', { class: 'error' }, 'Este enlace no es válido. Abre el QR o el enlace que muestra la app Calamar TV, en Mi cuenta (o Administración) → Iniciar sesión con el móvil.')];
+  if (!key) return [title, el('p', { class: 'error' }, 'Este enlace no es válido. Abre el QR o la dirección que muestra Calamar TV al elegir iniciar sesión con el móvil.')];
   const { publishDeviceLogin, watchDeviceLogin, explain } = await import('./firebase.js');
   const code = el('input', { type: 'text', value: deviceKey(codeText) || '', maxlength: '5', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false',
     class: 'device-code-input', 'aria-label': 'Código que muestra la app', placeholder: 'AB3D' });
   const note = el('p', { class: 'note', role: 'status' });
   const confirm = el('button', { class: 'btn', type: 'submit' }, 'Confirmar e iniciar sesión con Google');
+  const googleMark = el('span', { class: 'google-mark', 'aria-hidden': 'true' }); googleMark.innerHTML = GOOGLE_G; confirm.prepend(googleMark);
   const form = el('form', { class: 'device-login', onsubmit: async (event) => {
     event.preventDefault();
     const typed = deviceKey(code.value);

@@ -1,5 +1,6 @@
 package es.yuanyo.calamartv;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -11,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -44,7 +46,9 @@ final class MatchCenter {
   static final class Form { String result = "", score = "", opponent = ""; }
   static final class Meeting { String date = "", competition = "", home = "", away = "", score = ""; boolean upcoming, dateKnown = true; }
   static final class Player implements Pitch.Spot {
-    String number = "", name = "", shortName = "", position = "", place = "", shirt = "", subAt = "", photo = ""; boolean in, out; int goals, ownGoals, yellow, red;
+    String id = "", teamId = "", teamName = "", number = "", name = "", shortName = "", position = "", place = "", shirt = "", subAt = "", photo = "";
+    JSONArray statistics = new JSONArray();
+    boolean in, out; int goals, ownGoals, yellow, red;
     double rating = Double.NaN;
     public String position() { return position; }
     public String place() { return place; }
@@ -52,6 +56,7 @@ final class MatchCenter {
   static final class Lineup { String side = "", formation = ""; Team team; final List<Player> starters = new ArrayList<>(), subs = new ArrayList<>(); }
   static final class Model {
     String status = "", state = "", league = "", date = "", venue = "", city = "", referee = "", clock = "", round = "", description = "", note = "", source = "espn";
+    String id = "", leagueCode = "", seasonYear = "", seasonType = "", seasonName = "";
     boolean live; int attendance;
     final Team home = new Team(), away = new Team();
     final List<Event> events = new ArrayList<>();
@@ -168,12 +173,16 @@ final class MatchCenter {
           Player pl = new Player();
           pl.number = p.optString("jersey");
           JSONObject athlete = p.optJSONObject("athlete");
+          pl.id = athlete == null ? "" : athlete.optString("id");
+          pl.teamId = l.team.id;
+          pl.teamName = l.team.name;
           pl.name = athlete == null ? "" : athlete.optString("displayName", athlete.optString("shortName"));
           pl.shortName = athlete == null ? "" : athlete.optString("shortName", pl.name);
           JSONObject position = p.optJSONObject("position");
           pl.position = position == null ? "" : position.optString("abbreviation");
           pl.place = p.optString("formationPlace");
-          pl.in = p.optBoolean("subbedIn"); pl.out = p.optBoolean("subbedOut");
+          pl.in = p.optJSONObject("subbedIn") == null ? p.optBoolean("subbedIn") : p.optJSONObject("subbedIn").optBoolean("didSub");
+          pl.out = p.optJSONObject("subbedOut") == null ? p.optBoolean("subbedOut") : p.optJSONObject("subbedOut").optBoolean("didSub");
           // The shirt with his number (ESPN draws it per match), on the dark background when there is one.
           JSONArray shirts = athlete == null ? null : athlete.optJSONArray("jerseyImages");
           for (int k = 0; shirts != null && k < shirts.length(); k++) {
@@ -183,6 +192,7 @@ final class MatchCenter {
             if (pl.shirt.isEmpty() || String.valueOf(j.optJSONArray("rel")).contains("dark")) pl.shirt = href;
           }
           JSONArray stats = p.optJSONArray("stats");
+          if (stats != null) pl.statistics = stats;
           for (int k = 0; stats != null && k < stats.length(); k++) {
             JSONObject st = stats.optJSONObject(k);
             if (st == null) continue;
@@ -290,6 +300,14 @@ final class MatchCenter {
     while (m.h2h.size() > 10) m.h2h.remove(m.h2h.size() - 1);
     JSONObject league = header.optJSONObject("league");
     m.league = league == null ? "" : league.optString("name", league.optString("abbreviation"));
+    m.id = header.optString("id", comp.optString("id"));
+    m.leagueCode = league == null ? "" : league.optString("slug");
+    JSONObject season = header.optJSONObject("season");
+    if (season != null) {
+      m.seasonYear = season.optString("year");
+      m.seasonType = season.optString("type");
+      m.seasonName = season.optString("name");
+    }
     m.date = comp.optString("date", header.optString("date"));
     JSONObject info = data.optJSONObject("gameInfo");
     if (info == null) info = new JSONObject();
@@ -387,6 +405,10 @@ final class MatchCenter {
     view = new ScrollView(context);
     view.setBackgroundColor(Ui.BG);
     view.setFillViewport(true);
+    view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      public void onViewAttachedToWindow(View attached) {}
+      public void onViewDetachedFromWindow(View detached) { if (playerDialog != null) playerDialog.dismiss(); }
+    });
     page = new LinearLayout(context);
     page.setOrientation(LinearLayout.VERTICAL);
     page.setPadding(dp(14), dp(12), dp(14), dp(28));
@@ -542,14 +564,14 @@ final class MatchCenter {
 
   void load(final ImageView view, final View placeholder, final String url) {
     Bitmap cached = logos.get(url);
-    if (cached != null) { view.setImageBitmap(cached); placeholder.setVisibility(View.INVISIBLE); return; }
+    if (cached != null) { view.setImageBitmap(cached); if (placeholder != null) placeholder.setVisibility(View.INVISIBLE); return; }
     new Thread(() -> {
       try {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(6000); c.setReadTimeout(7000);
         try (InputStream in = c.getInputStream()) {
           final Bitmap b = BitmapFactory.decodeStream(in);
-          if (b != null) handler.post(() -> { logos.put(url, b); view.setImageBitmap(b); placeholder.setVisibility(View.INVISIBLE); });
+          if (b != null) handler.post(() -> { logos.put(url, b); view.setImageBitmap(b); if (placeholder != null) placeholder.setVisibility(View.INVISIBLE); });
         } finally { c.disconnect(); }
       } catch (Exception ignored) {}
     }).start();
@@ -1377,8 +1399,95 @@ final class MatchCenter {
     if (p.red > 0) said.append(", tarjeta roja"); else if (p.yellow > 0) said.append(", tarjeta amarilla");
     if (p.out) said.append(", sustituido").append(p.subAt.isEmpty() ? "" : " en el " + p.subAt);
     if (!Double.isNaN(p.rating)) said.append(", nota ").append(String.format(Locale.ROOT, "%.1f", p.rating));
-    box.setContentDescription(said);
+    box.setContentDescription(said + ". Ver estadísticas del jugador");
+    box.setFocusable(true);
+    box.setClickable(true);
+    box.setBackground(Ui.focusFill(context, 0, 0x22ffffff, Ui.ACC, 8, 0));
+    box.setOnClickListener(v -> playerStats(p));
     return box;
+  }
+
+  AlertDialog playerDialog;
+
+  void playerStats(Player player) {
+    final Model match = model;
+    if (match == null) return;
+    if (playerDialog != null) playerDialog.dismiss();
+    LinearLayout body = new LinearLayout(context);
+    body.setOrientation(LinearLayout.VERTICAL);
+    body.setPadding(dp(18), dp(12), dp(18), dp(18));
+    body.setBackgroundColor(Ui.BG);
+    if (!player.photo.isEmpty() || !player.shirt.isEmpty()) {
+      ImageView photo = new ImageView(context);
+      photo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      body.addView(photo, new LinearLayout.LayoutParams(dp(64), dp(64)));
+      load(photo, null, player.photo.isEmpty() ? player.shirt : player.photo);
+    }
+    body.addView(text((player.number.isEmpty() ? "" : "Dorsal " + player.number + " · ") + player.teamName, 14, Ui.MUTED, false));
+    body.addView(text(match.league + (match.seasonName.isEmpty() ? "" : " · " + match.seasonName), 14, Ui.MUTED, false));
+    LinearLayout game = statsSection(body, "Este partido");
+    LinearLayout season = statsSection(body, "En la competición");
+    body.addView(text("Datos de ESPN", 12, Ui.MUTED, false));
+    ScrollView scroll = new ScrollView(context);
+    scroll.addView(body);
+    final AlertDialog dialog = new AlertDialog.Builder(context)
+        .setTitle(player.name).setView(scroll).setNegativeButton("Cerrar", null).create();
+    playerDialog = dialog;
+    dialog.setOnDismissListener(d -> { if (playerDialog == dialog) playerDialog = null; });
+    dialog.show();
+    if ("scheduled".equals(match.state)) {
+      game.addView(text("Las estadísticas aparecerán cuando empiece el partido.", 14, Ui.MUTED, false));
+    } else loadPlayerStats(dialog, game, PlayerStats.matchUrl(match, player), player, PlayerStats.rows(player.statistics, player.position));
+    loadPlayerStats(dialog, season, PlayerStats.seasonUrl(match, player), player, Collections.emptyList());
+  }
+
+  LinearLayout statsSection(LinearLayout body, String title) {
+    TextView heading = text(title, 17, Ui.ACC, true);
+    heading.setPadding(0, dp(18), 0, dp(8));
+    body.addView(heading);
+    LinearLayout section = new LinearLayout(context);
+    section.setOrientation(LinearLayout.VERTICAL);
+    body.addView(section, new LinearLayout.LayoutParams(-1, -2));
+    return section;
+  }
+
+  void showPlayerRows(LinearLayout target, List<PlayerStats.Row> rows) {
+    target.removeAllViews();
+    for (PlayerStats.Row stat : rows) {
+      LinearLayout row = new LinearLayout(context);
+      row.setGravity(Gravity.CENTER_VERTICAL);
+      row.setPadding(0, dp(7), 0, dp(7));
+      row.addView(text(stat.label, 14, Ui.FG, false), new LinearLayout.LayoutParams(0, -2, 1));
+      row.addView(text(stat.value, 14, Ui.FG, true));
+      target.addView(row);
+    }
+    if (rows.isEmpty()) target.addView(text("Estadísticas no disponibles.", 14, Ui.MUTED, false));
+  }
+
+  void loadPlayerStats(AlertDialog dialog, LinearLayout target, String address, Player player, List<PlayerStats.Row> fallback) {
+    if (address.isEmpty()) { showPlayerRows(target, fallback); return; }
+    if (fallback.isEmpty()) {
+      target.removeAllViews();
+      target.addView(text("Cargando estadísticas…", 14, Ui.MUTED, false));
+    } else showPlayerRows(target, fallback);
+    new Thread(() -> {
+      List<PlayerStats.Row> rows = Collections.emptyList();
+      boolean failed = false;
+      try { rows = PlayerStats.rows(PlayerStats.fetch(address), player.position); }
+      catch (Exception unavailable) { failed = true; }
+      final List<PlayerStats.Row> result = rows.isEmpty() ? fallback : rows;
+      final boolean retry = failed;
+      handler.post(() -> {
+        if (!dialog.isShowing() || playerDialog != dialog) return;
+        showPlayerRows(target, result);
+        if (retry) {
+          target.addView(text("No se pudieron cargar las estadísticas.", 14, Ui.MUTED, false));
+          Button again = Ui.pill(context, "Reintentar", Ui.Kind.SURFACE, true);
+          again.setOnClickListener(v -> loadPlayerStats(dialog, target, address, player, fallback));
+          target.addView(again);
+        }
+      });
+    }, "Calamar-player-stats").start();
   }
 
   TextView badge(String value, int fg, int bg) {
@@ -1402,6 +1511,11 @@ final class MatchCenter {
       name.setPadding(dp(10), 0, dp(8), 0);
       r.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
       r.addView(text(p.position, 12, Ui.MUTED, false));
+      r.setFocusable(true);
+      r.setClickable(true);
+      r.setContentDescription("Ver estadísticas de " + p.name);
+      r.setBackground(Ui.focusFill(context, 0, 0x22ffffff, Ui.ACC, 8, 0));
+      r.setOnClickListener(v -> playerStats(p));
       box.addView(r);
     }
   }

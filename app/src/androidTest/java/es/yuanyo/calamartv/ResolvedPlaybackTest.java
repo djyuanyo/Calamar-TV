@@ -58,16 +58,22 @@ public class ResolvedPlaybackTest {
     AtomicInteger pages = new AtomicInteger();
     java.util.concurrent.CountDownLatch releasePage = new java.util.concurrent.CountDownLatch(1);
     AtomicBoolean matchingProfile = new AtomicBoolean(true);
+    AtomicBoolean requestedAd = new AtomicBoolean();
     try (MockWebServer server = new MockWebServer()) {
       server.useHttps(serverTls.sslSocketFactory(), false);
       server.start();
       String origin = server.url("/").newBuilder().host(fixtureHost).build().toString();
+      String eventSources = "{\"data\":{\"sources\":["
+          + "{\"name\":\"Publicidad\",\"url\":\"" + origin + "preroll.mp4\"},"
+          + "{\"name\":\"Reproductor externo\",\"url\":\"" + origin + "external\"},"
+          + "{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}";
       server.setDispatcher(new Dispatcher() {
         @Override public MockResponse dispatch(RecordedRequest request) {
           String path = request.getPath();
           if (!manualDirect && !eventPage && !PlayerDocument.BROWSER_USER_AGENT.equals(request.getHeader("User-Agent"))) matchingProfile.set(false);
-          if (path.startsWith("/calamar-player.php?event=")) return new MockResponse().setHeader("Content-Type", "application/json")
-              .setBody("{\"data\":{\"sources\":[{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}");
+          if (path.startsWith("/preroll.mp4") || path.startsWith("/external")) requestedAd.set(true);
+          if (path.startsWith("/calamar-player.php?event=") || path.startsWith("/api/v1/events/98019"))
+            return new MockResponse().setHeader("Content-Type", "application/json").setBody(eventSources);
           if (path.startsWith("/calamar-player.php?page=")) {
             if (path.contains("&list=1")) return new MockResponse().setBody("{\"name\":\"Canal del evento\",\"items\":[{\"id\":\"0123456789abcdef\",\"name\":\"Canal del evento\"}]}");
             pages.incrementAndGet(); return new MockResponse().setBody("{\"url\":\"calamar-player.php?seg=manifest&sig=ok\"}");
@@ -75,8 +81,6 @@ public class ResolvedPlaybackTest {
           if (path.startsWith("/calamar-player.php?seg=manifest")) return new MockResponse()
               .setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:20\n#EXTINF:20,\ncalamar-player.php?seg=piece&sig=ok\n#EXT-X-ENDLIST\n");
           if (path.startsWith("/calamar-player.php?seg=piece")) return new MockResponse().setHeader("Content-Type", "video/mp2t").setBody(video.clone());
-          if (path.startsWith("/api/v1/events/98019")) return new MockResponse().setHeader("Content-Type", "application/json")
-              .setBody("{\"data\":{\"sources\":[{\"name\":\"Canal del evento\",\"player_url\":\"" + origin + "api/player/28\"}]}}");
           if (path.startsWith("/api/player/28")) {
             int n = pages.incrementAndGet();
             if (manualDirect) {
@@ -166,27 +170,15 @@ public class ResolvedPlaybackTest {
           } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         });
         onView(withText(manualDirect ? "Prueba de canal resuelto · Señal 1" : eventPage ? "Canal del evento · Automática" : "CDN prueba")).inRoot(isDialog()).check(matches(isChecked()));
-        if (!rejectFirst && !manualDirect && !eventPage) {
-          int beforeDns = pages.get();
-          onView(withText("DNS")).inRoot(isDialog()).perform(click());
-          onView(withText("Google · DNS seguro")).inRoot(isDialog())
-              .check(matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
-          onView(withText("DNS del sistema")).inRoot(isDialog()).perform(click());
-          assertEquals(DnsProvider.SYSTEM, NetworkTransport.selected(ApplicationProvider.getApplicationContext()));
-          AtomicBoolean reconnected = new AtomicBoolean();
-          long dnsDeadline = SystemClock.elapsedRealtime() + 15000;
-          while (!reconnected.get() && SystemClock.elapsedRealtime() < dnsDeadline) {
-            scenario.onActivity(activity -> {
-              try {
-                Field playerField = NativePlayerActivity.class.getDeclaredField("player"); playerField.setAccessible(true);
-                ExoPlayer current = (ExoPlayer) playerField.get(activity);
-                reconnected.set(pages.get() > beforeDns && current != null && current.isPlaying());
-              } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
-            });
-            SystemClock.sleep(100);
-          }
-          assertTrue("Choosing DNS must re-read the page and resume native playback", reconnected.get());
-        } else onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
+        if (eventPage) {
+          onView(withText("Publicidad")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+          onView(withText("Reproductor externo")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+          assertFalse("Only the live signal should be requested", requestedAd.get());
+        }
+        // This fixture is a viewer without an administrator account.
+        onView(withText("DNS")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+        onView(withText("Diagnóstico")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+        onView(withText("Cerrar")).inRoot(isDialog()).perform(click());
       } finally {
         releasePage.countDown();
         clientField.set(network, original);

@@ -6,6 +6,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -57,9 +58,11 @@ final class Library {
     final int runtime;
     final String aired;
 
-    Episode(JSONObject e) {
+    Episode(JSONObject e) { this(e, e.optString("aired")); }
+
+    Episode(JSONObject e, String airDate) {
       id = e.optString("id");
-      aired = e.optString("aired");
+      aired = airDate;
       runtime = e.optInt("runtime", 0);
       addedAt = e.optString("addedAt");
       url = e.optString("url");
@@ -83,6 +86,41 @@ final class Library {
     String seasonLabel() {
       return "Temporada " + season;
     }
+
+    boolean upcoming() { return Library.upcoming(aired); }
+
+    private boolean hasVideo() { return !id.isEmpty() && !url.trim().isEmpty(); }
+
+    boolean available() { return hasVideo() && !upcoming(); }
+
+    boolean hasPremiereDate(String today) {
+      return isDate(aired) && aired.compareTo(today) >= 0;
+    }
+
+    boolean inPremiereWindow(String today) {
+      return isDate(aired) && (aired.compareTo(today) >= 0 || day(today) - day(aired) == DAY);
+    }
+
+    String premiereLabel(String today) {
+      if (!inPremiereWindow(today)) return "";
+      if (aired.equals(today)) return hasVideo() ? "Estrenado Hoy" : "Estreno Hoy";
+      if (aired.compareTo(today) < 0) return "Estrenado Ayer";
+      return "Estreno el " + formattedPremiere(aired);
+    }
+  }
+
+  private static String formattedPremiere(String aired) {
+    java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
+    format.setTimeZone(TimeZone.getTimeZone("UTC"));
+    return format.format(new java.util.Date(day(aired)));
+  }
+
+  static boolean upcoming(String aired) {
+    return isDate(aired) && aired.compareTo(madridDay(System.currentTimeMillis())) > 0;
+  }
+
+  private static boolean isDate(String aired) {
+    return aired != null && aired.matches("\\d{4}-\\d{2}-\\d{2}");
   }
 
   static final long DAY = 86400000L;
@@ -139,7 +177,8 @@ final class Library {
     if (value.matches("[A-Za-z0-9_-]{11}")) return value;
     try {
       java.net.URI uri = java.net.URI.create(value);
-      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null) return "";
+      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null
+          || (uri.getPort() != -1 && uri.getPort() != 443)) return "";
       String host = uri.getHost(), id = "";
       if ("youtu.be".equalsIgnoreCase(host)) id = uri.getPath().substring(1);
       else if (host != null && java.util.Arrays.asList("youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com").contains(host.toLowerCase(java.util.Locale.ROOT))) {
@@ -153,16 +192,18 @@ final class Library {
   }
 
   static final class Item {
-    final String id, title, url, overview, poster, backdrop;
+    final String id, title, url, overview, poster, backdrop, titleLogo;
     final int year, runtime, votes;
     final double rating;
     final boolean series;
     final List<String> genres = new ArrayList<>();
     final List<String[]> cast = new ArrayList<>();
     final List<Episode> episodes = new ArrayList<>();
+    final Map<String, Episode> scheduled = new LinkedHashMap<>();
+    private final Map<Integer, String> seasonPremieres = new HashMap<>();
     /** «Saltar intro» and «Siguiente capítulo» times set in the admin page (or empty). */
     final JSONObject skip;
-    /** TMDB id of the series (0 without a TMDB record), to ask TheIntroDB for each episode's times. */
+    /** TMDB id of the title (0 without a TMDB record). */
     final int tmdbId;
     /** «En portada»: when the administrator marked it (0 when not); and its place in the weekly top (0 outside). */
     final long featured;
@@ -195,9 +236,10 @@ final class Library {
       title = t.optString("title", "").isEmpty() ? o.optString("title") : t.optString("title");
       year = t.optInt("year", o.optInt("year", 0));
       url = o.optString("url");
-      overview = t.optString("overview");
+      overview = t.isNull("overview") ? "" : t.optString("overview").trim();
       poster = t.optString("poster");
       backdrop = t.optString("backdrop");
+      titleLogo = t.optString("titleLogo", "");
       runtime = t.optInt("runtime", 0);
       votes = t.optInt("votes", 0);
       rating = t.optDouble("rating", 0);
@@ -229,12 +271,34 @@ final class Library {
           JSONObject p = c.optJSONObject(i);
           if (p != null) cast.add(new String[] {p.optString("name"), p.optString("character")});
         }
+      addScheduled(le);
+      JSONArray upcoming = t.optJSONArray("upcoming");
+      if (upcoming != null) for (int i = 0; i < upcoming.length(); i++) addScheduled(upcoming.optJSONObject(i));
+      addScheduled(t.optJSONObject("nextEpisode"));
+      JSONArray premieres = t.optJSONArray("seasonPremieres");
+      if (premieres != null) for (int i = 0; i < premieres.length(); i++) {
+        JSONObject premiere = premieres.optJSONObject(i);
+        if (premiere == null) continue;
+        int season = premiere.optInt("season");
+        String aired = premiere.optString("aired");
+        if (season > 1 && isDate(aired)) seasonPremieres.put(season, aired);
+      }
       JSONArray e = o.optJSONArray("episodes");
       if (e != null)
         for (int i = 0; i < e.length(); i++) {
           JSONObject ep = e.optJSONObject(i);
-          if (ep != null && Media.allowed(ep.optString("url"))) episodes.add(new Episode(ep));
+          if (ep != null && Media.allowed(ep.optString("url"))) {
+            Episode scheduledEpisode = scheduled.remove(ep.optInt("season", 1) + "/" + ep.optInt("episode"));
+            episodes.add(scheduledEpisode == null ? new Episode(ep) : new Episode(ep, scheduledEpisode.aired));
+          }
         }
+    }
+
+    private void addScheduled(JSONObject metadata) {
+      if (metadata == null) return;
+      Episode episode = new Episode(metadata);
+      if (episode.season >= 0 && episode.episode > 0 && isDate(episode.aired))
+        scheduled.put(episode.season + "/" + episode.episode, episode);
     }
 
     boolean playable() {
@@ -259,8 +323,13 @@ final class Library {
 
     /** Episodes grouped by season, in order. */
     Map<Integer, List<Episode>> seasons() {
+      return seasons(madridDay(System.currentTimeMillis()));
+    }
+
+    Map<Integer, List<Episode>> seasons(String today) {
       Map<Integer, List<Episode>> out = new LinkedHashMap<>();
       List<Episode> sorted = new ArrayList<>(episodes);
+      for (Episode e : scheduled.values()) if (e.inPremiereWindow(today)) sorted.add(e);
       Collections.sort(
           sorted,
           (a, b) -> a.season != b.season ? Integer.compare(a.season, b.season) : Integer.compare(a.episode, b.episode));
@@ -272,6 +341,31 @@ final class Library {
       return out;
     }
 
+    String premiereNotice(String today) {
+      Map<Integer, String> dates = new HashMap<>();
+      Episode next = null;
+      for (List<Episode> season : seasons(today).values()) for (Episode e : season) {
+        if (!e.hasPremiereDate(today)) continue;
+        if (e.season > 1 && e.episode == 1) dates.put(e.season, e.aired);
+        if (next == null || e.aired.compareTo(next.aired) < 0) next = e;
+      }
+      seasonPremieres.forEach((season, aired) -> { if (aired.compareTo(today) >= 0) dates.put(season, aired); });
+      int nextSeason = 0;
+      String date = "";
+      for (Map.Entry<Integer, String> entry : dates.entrySet()) {
+        int order = entry.getValue().compareTo(date);
+        if (date.isEmpty() || order < 0 || (order == 0 && entry.getKey() < nextSeason)) {
+          nextSeason = entry.getKey();
+          date = entry.getValue();
+        }
+      }
+      if (nextSeason != 0) return "Temporada " + nextSeason + " el " + formattedPremiere(date);
+      if (next == null) return "";
+      String number = "T" + next.season + ":E" + next.episode;
+      String label = next.premiereLabel(today);
+      return next.aired.equals(today) ? label + " · " + number : "Próximo estreno · " + number + " · " + label;
+    }
+
     /** The player's title: «Los hombres de Paco · T1 · Piloto» (or «· Capítulo 1» without a name). */
     String episodeTitle(Episode e) {
       return title + " · T" + e.season + " · " + e.title();
@@ -281,7 +375,10 @@ final class Library {
     Episode next(Episode current) {
       List<Episode> all = new ArrayList<>();
       for (List<Episode> season : seasons().values()) all.addAll(season);
-      for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) return all.get(i + 1);
+      for (int i = 0; i < all.size() - 1; i++) if (all.get(i).id.equals(current.id)) {
+        Episode following = all.get(i + 1);
+        return following.available() ? following : null;
+      }
       return null;
     }
 
@@ -299,6 +396,7 @@ final class Library {
             .put("sub", e == null ? (year > 0 ? String.valueOf(year) : "") : e.seasonLabel() + " · " + e.title())
             .put("image", e != null && !e.still.isEmpty() ? e.still : !backdrop.isEmpty() ? backdrop : poster);
         if (e != null) {
+          o.put("aired", e.aired);
           int[] marks = skipMarks(skip, e.season);
           o.put("intro_start", marks[0]).put("intro_end", marks[1]).put("credits", marks[2]).put("has_next", next(e) != null)
               .put("manual_intro", marks[0] >= 0).put("manual_credits", marks[4] > 0)
@@ -402,6 +500,23 @@ final class Library {
     return java.text.Normalizer.normalize(s.toLowerCase(new Locale("es", "ES")), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
   }
 
+  static String documentaryTopTitle(int size) {
+    return "Top " + size + " de documentales";
+  }
+
+  private static List<Item> topItems(String section, List<Item> items) {
+    List<Item> top = new ArrayList<>();
+    for (Item item : items) if (item.trend > 0) top.add(item);
+    if (top.isEmpty() && section.equals("documentaries")) {
+      // Until the first weekly ranking is published, use the votes already in the catalogue.
+      for (Item item : items) if (item.tmdbId > 0) top.add(item);
+      top.sort(java.util.Comparator.comparingInt((Item item) -> item.votes).reversed()
+          .thenComparing(java.util.Comparator.comparingDouble((Item item) -> item.rating).reversed())
+          .thenComparing(item -> item.id));
+    } else top.sort(java.util.Comparator.comparingInt(item -> item.trend));
+    return top.size() > 10 ? new ArrayList<>(top.subList(0, 10)) : top;
+  }
+
   /** The rows of a section page, in the web's order; empty rows are left out except «Seguir viendo» (filled by the page). */
   static List<Row> browseRows(String section, List<Item> items, java.util.Set<String> watched, String name, long now) {
     List<Row> rows = new ArrayList<>();
@@ -412,13 +527,11 @@ final class Library {
     Collections.sort(spanish, INTEREST);
     add(rows, "spanish", section.equals("series") ? "Series españolas" : section.equals("documentaries") ? "Documentales españoles" : "Películas españolas", spanish, "poster");
     add(rows, "today", "Recomendaciones de hoy para ti", todaysPicks(items, watched, madridDay(now), 15), "poster");
-    if (!section.equals("documentaries")) {
-      List<Item> top = new ArrayList<>();
-      for (Item item : items) if (item.trend > 0) top.add(item);
-      Collections.sort(top, (a, b) -> Integer.compare(a.trend, b.trend));
-      if (top.size() > 10) top = new ArrayList<>(top.subList(0, 10));
-      add(rows, "top", top.size() > 1 ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana" : "La " + one(section) + " más popular de la semana", top, "top");
-    }
+    List<Item> top = topItems(section, items);
+    String topTitle = section.equals("documentaries") ? documentaryTopTitle(top.size()) : top.size() > 1
+        ? "Las " + top.size() + " " + label.toLowerCase(Locale.ROOT) + " más populares de la semana"
+        : "La " + one(section) + " más popular de la semana";
+    add(rows, "top", topTitle, top, "top");
     // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
     genre(rows, GENRE_ROWS[0], label + " de terror", items, used, "horror");
     // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
@@ -633,17 +746,49 @@ final class Library {
     return out.size() > size ? new ArrayList<>(out.subList(0, size)) : out;
   }
 
-  /** The episode to play from a series' page: the one left half watched most recently, else the first. */
-  static Episode resumeEpisode(Item item, JSONObject progress) {
-    Episode first = null, latest = null;
+  private static Episode latestProgress(Item item, JSONObject progress) {
+    Episode latest = null;
     long at = -1;
+    for (Episode e : item.episodes) {
+      JSONObject saved = progress == null ? null : progress.optJSONObject(e.id);
+      if (!e.upcoming() && saved != null && saved.optLong("at") > at) {
+        at = saved.optLong("at");
+        latest = e;
+      }
+    }
+    return latest;
+  }
+
+  /** Open the last watched season, even when its last episode is already finished. */
+  static int defaultSeason(Item item, JSONObject progress, JSONObject history) {
+    Episode started = latestProgress(item, progress);
+    JSONObject recent = history == null ? null : history.optJSONObject("recent");
+    Episode last = recent == null ? null : item.episode(recent.optString("episode"));
+    if (last != null && (started == null || recent.optLong("at") > progress.optJSONObject(started.id).optLong("at"))) return last.season;
+    if (started != null) return started.season;
+    Map<Integer, List<Episode>> seasons = item.seasons();
+    return seasons.isEmpty() ? -1 : seasons.keySet().iterator().next();
+  }
+
+  static Episode resumeEpisode(Item item, JSONObject progress) {
+    return resumeEpisode(item, progress, null);
+  }
+
+  /** Continue the latest in-progress episode, or offer the first one the profile has not finished. */
+  static Episode resumeEpisode(Item item, JSONObject progress, JSONObject history) {
+    Episode started = latestProgress(item, progress);
+    if (started != null) {
+      long completed = EpisodeHistory.watchedAt(history, started.id);
+      if (completed == 0 || progress.optJSONObject(started.id).optLong("at") > completed) return started;
+    }
+    Episode first = null;
     for (List<Episode> season : item.seasons().values())
       for (Episode e : season) {
+        if (!e.available()) continue;
         if (first == null) first = e;
-        JSONObject saved = progress == null ? null : progress.optJSONObject(e.id);
-        if (saved != null && saved.optLong("at", 0) > at) { at = saved.optLong("at", 0); latest = e; }
+        if (EpisodeHistory.watchedAt(history, e.id) == 0) return e;
       }
-    return latest != null ? latest : first;
+    return first;
   }
 
   // ---- Especial Halloween: 1 October to 2 November (Madrid), every horror title, as on the web ----
@@ -671,7 +816,6 @@ final class Library {
 
   static final class Data {
     final Map<String, List<Item>> sections = new LinkedHashMap<>();
-    final String attribution;
 
     Data(JSONObject json) {
       JSONObject s = json.optJSONObject("sections");
@@ -687,7 +831,6 @@ final class Library {
           }
         sections.put(section[0], items);
       }
-      attribution = json.optString("attribution");
     }
 
     /** The section key of a title. */
@@ -704,12 +847,9 @@ final class Library {
       return out;
     }
 
-    /** The weekly top of one section (films or series, set from TMDB in the admin page), at most 10. */
+    /** The top of one section, at most 10. */
     List<Item> top(String section) {
-      List<Item> out = new ArrayList<>();
-      for (Item item : items(section)) if (item.trend > 0) out.add(item);
-      Collections.sort(out, (a, b) -> Integer.compare(a.trend, b.trend));
-      return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
+      return topItems(section, items(section));
     }
 
     Item find(String section, String id) {
@@ -1087,6 +1227,15 @@ final class Library {
   static final class Media {
     private Media() {}
 
+    static String youtubeId(String address) {
+      return address != null && address.trim().startsWith("https://") ? youtubeTrailer(address) : "";
+    }
+
+    static String youtubeEmbed(String address) {
+      String id = youtubeId(address);
+      return id.isEmpty() ? null : "https://www.youtube-nocookie.com/embed/" + id + "?playsinline=1&rel=0";
+    }
+
     /** The LuluStream player page (https://luluvido.com/e/CODE: LuluStream's site since lulustream.com went down) of a LuluStream link, or null. */
     static String embed(String address) {
       try {
@@ -1124,7 +1273,7 @@ final class Library {
     }
 
     static boolean allowed(String address) {
-      if (embed(address) != null || anonmp4(address) != null) return true;
+      if (!youtubeId(address).isEmpty() || embed(address) != null || anonmp4(address) != null || ProviderPlayers.vidara(address) != null) return true;
       try {
         java.net.URI u = java.net.URI.create(address);
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.ROOT);
@@ -1158,7 +1307,7 @@ final class Library {
       }
       sections.put(section, items);
     }
-    library.put("sections", sections).put("attribution", index == null ? "" : index.optString("attribution"));
+    library.put("sections", sections);
     return new Data(library);
   }
 

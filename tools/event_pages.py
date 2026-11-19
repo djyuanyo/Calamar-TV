@@ -13,6 +13,7 @@ Usage: event_pages.py SITE_DIR BASE_URL [CACHE_DIR]   e.g. event_pages.py _site 
 """
 import base64
 import datetime
+import concurrent.futures
 import html
 import json
 import math
@@ -143,7 +144,9 @@ def summary(event, catalog):
 
 
 def page(event, catalog, slug, base, image, kind='evento', text=None):
-    target = f'{base}#/{kind}/{slug}'
+    route = f'{kind}/{slug}' if slug else kind
+    public_path = f'{route}/'
+    target = f'{base}#/{route}'
     title, text = event.get('name') or 'Calamar TV', summary(event, catalog) if text is None else text
     e = lambda value: html.escape(str(value), quote=True)
     tags = [
@@ -151,7 +154,7 @@ def page(event, catalog, slug, base, image, kind='evento', text=None):
         '<meta property="og:site_name" content="Calamar TV">',
         f'<meta property="og:title" content="{e(title)}">',
         f'<meta property="og:description" content="{e(text)}">',
-        f'<meta property="og:url" content="{e(base)}{kind}/{e(slug)}/">',
+        f'<meta property="og:url" content="{e(base)}{e(public_path)}">',
         f'<meta name="twitter:card" content="{"summary_large_image" if image else "summary"}">',
         f'<meta name="twitter:title" content="{e(title)}">',
         f'<meta name="twitter:description" content="{e(text)}">',
@@ -204,17 +207,79 @@ def download_cover(url):
     return data, IMAGE_TYPES[kind]
 
 
+LIBRARY_URL = CATALOG_URL.rsplit('/', 2)[0] + '/calamarLibrary/'
+LIBRARY_PAGES = {'movies': 'peliculas', 'series': 'series', 'documentaries': 'documentales'}
+
+
+def read_library(fetch=None):
+    """Public library parts only; private administrator settings are never needed for previews."""
+    def get(name):
+        with urllib.request.urlopen(LIBRARY_URL + name, timeout=20) as answer:
+            return json.loads(json.load(answer)['fields']['json']['stringValue'])
+    fetch = fetch or get
+    index = fetch('index')
+    names = [(section, f'{section}-{n}') for section, count in index.get('sections', {}).items()
+             if section in LIBRARY_PAGES for n in range(min(int(count), 200))]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+        parts = list(pool.map(lambda entry: fetch(entry[1]), names))
+    sections = {section: [] for section in LIBRARY_PAGES}
+    for (section, _), part in zip(names, parts):
+        sections[section].extend(part.get('items', []))
+    return {'sections': sections}
+
+
+def publish_library(site, base, library, images=None, download=download_cover):
+    """Real film/series/documentary URLs let social crawlers read each title's cover without JS."""
+    site, base = pathlib.Path(site), base.rstrip('/') + '/'
+    if images:
+        images.prefetch([(item.get('artwork') or item.get('tmdb') or {}).get('backdrop') or (item.get('artwork') or item.get('tmdb') or {}).get('poster')
+                         for items in library.get('sections', {}).values() for item in items])
+    for section, route in LIBRARY_PAGES.items():
+        for item in library.get('sections', {}).get(section, []):
+            item_id = str(item.get('id') or '')
+            if not re.fullmatch(r'[\w+ .-]{1,200}', item_id) or item_id in ('.', '..'):
+                continue
+            slug = urllib.parse.quote(item_id, safe='')
+            folder = site / route / item_id
+            folder.mkdir(parents=True, exist_ok=True)
+            info = {**(item.get('tmdb') or {}), **(item.get('artwork') or {})}
+            cover = str(info.get('backdrop') or info.get('poster') or '')
+            image = ''
+            if images and cover:
+                import share_images
+                art = images.image(cover)
+                if art is not None:
+                    (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.cover_crop(art)))
+                    image = f'{base}{route}/{slug}/vista.jpg'
+            if not image:
+                match = COVER.fullmatch(cover)
+                copy = download(cover) if cover.startswith('https://') and not cover.startswith(OWN_IMAGES) else None
+                if match:
+                    kind, data = match.groups()
+                    copy = (base64.b64decode(data), 'jpg' if kind == 'jpeg' else kind)
+                if copy:
+                    data, extension = copy
+                    (folder / f'portada.{extension}').write_bytes(data)
+                    image = f'{base}{route}/{slug}/portada.{extension}'
+                elif cover.startswith('https://'):
+                    image = cover
+            title = info.get('title') or item.get('title') or 'Calamar TV'
+            text = info.get('overview') or f'{title} en Calamar TV'
+            (folder / 'index.html').write_text(page({'name': title}, {}, slug, base, image, kind=route, text=text), encoding='utf-8')
+
+
 def event_preview(event, catalog, images):
     """The card of an event as a JPEG: its cover, or the league's background with both crests."""
     import share_images
     cover = images.image(event.get('cover')) if event.get('cover') else None
-    if cover:
-        return share_images.jpeg(share_images.cover_crop(cover))
     find = lambda group, key: next((x for x in catalog.get(group) or [] if x.get('id') == event.get(key)), {})
     league = find('leagues', 'leagueId')
+    home, away = find('teams', 'homeTeamId'), find('teams', 'awayTeamId')
+    if cover and not (home.get('logo') or away.get('logo')):
+        return share_images.jpeg(share_images.cover_crop(cover))
     pick = lambda value: images.image(value) if value else None
-    return share_images.jpeg(share_images.match_card(pick(league.get('background')), pick(find('teams', 'homeTeamId').get('logo')),
-                                                     pick(find('teams', 'awayTeamId').get('logo')), pick(league.get('logo'))))
+    return share_images.jpeg(share_images.match_card(cover if cover is not None else pick(league.get('background')), pick(home.get('logo')),
+                                                     pick(away.get('logo')), pick(league.get('logo'))))
 
 
 def publish(site, base, catalog, download=download_cover, images=None, tdt=None):
@@ -257,6 +322,7 @@ def publish(site, base, catalog, download=download_cover, images=None, tdt=None)
             alias = site / 'evento' / old
             alias.mkdir(parents=True, exist_ok=True)
             (alias / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+    publish_live(site, base, catalog, images)
     publish_leagues(site, base, catalog, images)
     if tdt is not None:
         publish_channels(site, base, catalog, tdt, images)
@@ -274,6 +340,21 @@ def league_slugs(catalog):
         used.add(slug)
         out[league['id']] = slug
     return out
+
+
+def publish_live(site, base, catalog, images=None):
+    """The shared mixed live schedule uses Calamar TV's own logo."""
+    folder = pathlib.Path(site) / 'directo'
+    folder.mkdir(parents=True, exist_ok=True)
+    image = f'{base}assets/calamar-menciano-tv.png'
+    if images:
+        import share_images
+        from PIL import Image
+        with Image.open(ROOT / 'web/assets/calamar-menciano-tv.png') as logo:
+            (folder / 'vista.jpg').write_bytes(share_images.jpeg(share_images.league_card(None, logo.convert('RGBA'))))
+        image = f'{base}directo/vista.jpg'
+    (folder / 'index.html').write_text(page({'name': 'Eventos En Directo'}, catalog, '', base, image,
+        kind='directo', text='Todos los eventos de hoy, ordenados por competición, en Calamar TV'), encoding='utf-8')
 
 
 def publish_leagues(site, base, catalog, images=None):
@@ -294,7 +375,7 @@ def publish_leagues(site, base, catalog, images=None):
                 print(f'::warning::No se pudo dibujar la vista previa de {league.get("name")} ({error})')
         elif str(league.get('background') or league.get('logo') or '').startswith('https://'):
             image = league.get('background') or league.get('logo')
-        text = f'Todos los partidos de {league.get("name")} con canal, en Calamar TV'
+        text = f'Los partidos de {league.get("name")} con enlace de esta semana, en Calamar TV'
         (folder / 'index.html').write_text(page(league, catalog, slug, base, image, kind='liga', text=text), encoding='utf-8')
 
 
@@ -335,3 +416,9 @@ if __name__ == '__main__':
     tdt = json.loads(tdt_file.read_text(encoding='utf-8')) if tdt_file.exists() else {'channels': []}
     found = publish(site, base, read_catalog(), images=images, tdt=tdt)
     print(f'Páginas de vista previa de eventos: {len(found)}')
+    try:
+        library = read_library()
+    except Exception as error:
+        print(f'::error::No se pudo leer la biblioteca para las portadas compartidas: {error}')
+        raise
+    publish_library(site, base, library, images=images)

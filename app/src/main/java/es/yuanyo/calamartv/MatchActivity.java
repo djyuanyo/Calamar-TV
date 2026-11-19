@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -88,6 +89,27 @@ public class MatchActivity extends Activity {
     back.requestFocus();
   }
 
-  @Override protected void onResume() { super.onResume(); active = true; handler.removeCallbacks(refresh); handler.post(refresh); }
-  @Override protected void onPause() { active = false; handler.removeCallbacks(refresh); super.onPause(); }
+  private Runnable stopAccess;
+  @Override protected void onResume() {
+    super.onResume();
+    View content = findViewById(android.R.id.content);
+    content.setVisibility(View.INVISIBLE);
+    stopAccess = AppAccess.observe(this, state -> {
+      if (state == AppAccess.State.ALLOWED) {
+        content.setVisibility(View.VISIBLE);
+        active = true;
+        handler.removeCallbacks(refresh);
+        handler.post(refresh);
+      } else if (active || state != AppAccess.State.LOADING) {
+        content.setVisibility(View.INVISIBLE);
+        finish();
+      }
+    });
+  }
+  @Override protected void onPause() {
+    if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
+    active = false;
+    handler.removeCallbacks(refresh);
+    super.onPause();
+  }
 }

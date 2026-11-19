@@ -31,6 +31,59 @@ public class CatalogEventsTest {
     event.put("streams", new JSONArray().put("javascript:alert(1)"));
     try { SharedCatalog.validate(data); fail("Invalid link accepted"); } catch (JSONException expected) {}
   }
+  @Test public void agendaLookupWithoutASourceIsHidden() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "").put("cover", "")
+        .put("streams", new JSONArray().put("https://bp.zicotv.cc/events/98019"));
+    SharedCatalog.validate(data);
+    long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
+    assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
+    String page = event.getJSONArray("streams").getString(0);
+    event.put("zicoStreams", new JSONArray().put(page));
+    assertEquals(Collections.singletonList(page), Catalog.events(Collections.emptyList(), data, now, true).get(0).streams);
+    event.remove("zicoStreams");
+    event.getJSONArray("streams").put("https://bp.zicotv.cc/api/player/22");
+    assertEquals(1, Catalog.events(Collections.emptyList(), data, now, true).size());
+    event.put("imported", false);
+    try { SharedCatalog.validate(data); fail("A manual event still needs a cover"); } catch (JSONException expected) {}
+  }
+  @Test public void agendaPlayerWithBracketsInPathSurvivesValidationAndReachesPlayback() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    String original = "https://example.com/embed/Football/Local-[ES]/1?quality=hd";
+    String player = "https://example.com/embed/Football/Local-%5BES%5D/1?quality=hd";
+    event.put("id", "zico-event-98019").put("imported", true).put("channelId", "").put("cover", "")
+        .put("streams", new JSONArray().put("https://bp.zicotv.cc/events/98019").put(original));
+    SharedCatalog.validate(data);
+    long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
+    Catalog.Channel card = Catalog.events(Collections.emptyList(), data, now, true).get(0);
+    assertEquals(player, AppSources.forAndroid(card.streams).get(0));
+    assertEquals(original, event.getJSONArray("streams").getString(1));
+    assertEquals("http://[::1]/one.m3u8", UserChannels.normalizeEventSource("http://[::1]/one.m3u8"));
+    assertNull(UserChannels.normalizeEventSource("https://user@example.com/embed/[ES]"));
+  }
+  @Test public void leaguePageIncludesOnlyLinkedMatchesOfCurrentMadridWeek() throws Exception {
+    JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
+    base.put("leagueId", "l");
+    JSONArray entries = new JSONArray();
+    String[] dates = {"2026-10-25T22:59:59Z", "2026-10-25T23:00:00Z", "2026-10-31T19:00:00Z", "2026-11-01T22:59:59Z", "2026-11-01T23:00:00Z", ""};
+    for (int i = 0; i < dates.length; i++) entries.put(new JSONObject(base.toString()).put("id", "week-" + i).put("startAt", dates[i]));
+    entries.getJSONObject(1).put("matchUrl", "https://www.google.com/search?q=Local+Visitante").put("matchId", "weekly-ended-native");
+    entries.getJSONObject(2).put("channelId", "").put("streams", new JSONArray().put("https://example.com/manual.m3u8"));
+    entries.put(new JSONObject(base.toString()).put("id", "no-link").put("channelId", "").put("startAt", dates[2]));
+    data.put("events", entries);
+    long now = SportsCatalog.instant("2026-10-30T12:00:00Z");
+    MatchScores.Result ended = new MatchScores.Result("Final", "Local", "Visitante", "finished");
+    ended.finishedAt = now - 3600000;
+    MatchScores.remember("weekly-ended-native", ended, now);
+    try {
+      List<Catalog.Channel> shown = Catalog.leagueEvents(Catalog.merge(null, data), data, "l", now);
+      List<String> ids = new ArrayList<>();
+      for (Catalog.Channel match : shown) ids.add(match.id);
+      assertEquals(Arrays.asList("week-1", "week-2", "week-3"), ids);
+      shown = Catalog.leagueEvents(Catalog.merge(null, data), data, "l", SportsCatalog.instant("2026-11-01T23:00:00Z"));
+      assertEquals(1, shown.size()); assertEquals("week-4", shown.get(0).id);
+    } finally { MatchScores.remember("weekly-ended-native", new MatchScores.Result("", "", "", "scheduled"), now); }
+  }
   @Test public void legacyCatalogNeedsNoEvents() throws Exception {
     JSONObject data = catalog(); data.remove("events"); SharedCatalog.validate(data);
     assertTrue(Catalog.events(Catalog.merge(null, data), data).isEmpty());
@@ -68,4 +121,24 @@ public class CatalogEventsTest {
     assertEquals("A", rows.get(1).name);
     assertEquals("B", rows.get(2).name);
   }
+  @Test public void homeSearchFindsLeagueEventsForTheMadridDay() throws Exception {
+    JSONObject data = catalog(), base = data.getJSONArray("events").getJSONObject(0);
+    data.put("leagues", new JSONArray()
+        .put(new JSONObject().put("id", "l1").put("name", "LaLiga Hypermótion"))
+        .put(new JSONObject().put("id", "l2").put("name", "Liga F")));
+    JSONArray entries = new JSONArray();
+    String[] dates = {"2026-11-05T23:05:00Z", "2026-11-06T00:00:00Z", "2026-11-06T23:00:00Z", "2026-11-06T00:00:00Z"};
+    for (int i = 0; i < dates.length; i++)
+      entries.put(new JSONObject(base.toString()).put("id", "event-" + i).put("leagueId", i == 3 ? "l2" : "l1").put("startAt", dates[i]));
+    data.put("events", entries);
+    List<Catalog.Channel> channels = Catalog.merge(null, data);
+    long now = SportsCatalog.instant("2026-11-06T12:00:00Z");
+    List<Catalog.Channel> found = Catalog.todayLeagueEvents(channels, data, "LA LIGA HYPERMOTION", now);
+    assertEquals(2, found.size());
+    assertEquals("event-0", found.get(0).id);
+    assertEquals("event-1", found.get(1).id);
+    assertTrue(Catalog.todayLeagueEvents(channels, data, "hypermotion", now + 2 * 86400000L).isEmpty());
+    assertNull(Catalog.todayLeagueEvents(channels, data, "Local vs visitante", now));
+  }
+
 }

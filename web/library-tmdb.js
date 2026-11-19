@@ -1,6 +1,8 @@
+import { madridDay } from './audience.js';
 // Films, series and documentaries added by hand in the admin page: the title is chosen in TMDB (synopsis,
 // cast, rating, images, seasons and episodes) and the administrator pastes the video link of each film or
 // episode (LuluStream or any direct video). The library is published to Firestore (calamarLibrary).
+import { videoKey } from './library-sync.js';
 export const TMDB_API = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE = 'https://image.tmdb.org/t/p/';
 export const ATTRIBUTION = 'Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.';
@@ -11,7 +13,8 @@ export const TMDB_TIMEOUT_MS = 20000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function tmdb(path, params, key, fetcher, attempt = 1) {
   const bearer = key.includes('.'); // v4 read token (JWT) or v3 key
-  const query = new URLSearchParams({ ...params, language: 'es-ES', ...(bearer ? {} : { api_key: key }) });
+  const query = new URLSearchParams({ language: 'es-ES', ...params, ...(bearer ? {} : { api_key: key }) });
+  if (params.language === null) query.delete('language');
   const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) } : {};
   let response, data;
   try {
@@ -24,12 +27,33 @@ async function tmdb(path, params, key, fetcher, attempt = 1) {
   }
   if (response.status === 401) throw new Error('TMDB no acepta la clave. Revísala en Pelis y series → Configuración.');
   if ((response.status === 429 || response.status >= 500) && attempt < 2) { await wait(response.status === 429 ? 3000 : 1500); return tmdb(path, params, key, fetcher, attempt + 1); }
-  if (response.status !== 200 || !data) throw new Error('TMDB no responde ahora. Vuelve a intentarlo.');
+  if (response.status !== 200 || !data) {
+    const error = new Error(response.status === 404 ? 'TMDB no encuentra esa ficha.' : 'TMDB no responde ahora. Vuelve a intentarlo.');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 export const checkTmdbKey = (key, fetcher = globalThis.fetch) => tmdb('/configuration', {}, key, fetcher);
 const image = (path, size) => path ? `${TMDB_IMAGE}${size}${path}` : '';
 const yearOf = (date) => date ? Number(String(date).slice(0, 4)) || null : null;
+const titleImageLanguages = 'es,en,null';
+
+async function titleLogo(details, path, key, fetcher) {
+  if (!Array.isArray(details.images?.logos)) return undefined;
+  const valid = (logos) => logos.filter((logo) => /^\/[\w-]+\.(?:png|svg)$/i.test(logo?.file_path || ''));
+  let logos = valid(details.images.logos);
+  if (!logos.length) {
+    const all = await tmdb(`${path}/images`, { language: null }, key, fetcher).catch(() => null);
+    if (!Array.isArray(all?.logos)) return undefined;
+    logos = valid(all.logos);
+  }
+  const languages = [...new Set(['es', details.original_language || 'en', 'en', null])];
+  const rank = (logo) => languages.includes(logo.iso_639_1) ? languages.indexOf(logo.iso_639_1) : languages.length;
+  const logo = logos.sort((a, b) => rank(a) - rank(b) || (b.vote_average || 0) - (a.vote_average || 0)
+    || (b.width || 0) - (a.width || 0))[0];
+  return logo ? image(logo.file_path, /\.svg$/i.test(logo.file_path) ? 'original' : 'w500') : '';
+}
 
 /** A public TMDB record URL (its slug/language are optional); only its type and numeric id are used. */
 export function tmdbReference(value) {
@@ -69,12 +93,17 @@ export async function searchTmdb(query, kind, key, fetcher = globalThis.fetch, y
 
 /** A film's or series' details in Spanish; for series also its seasons [{ season, name, episodes }]. */
 export async function tmdbDetails(id, kind, key, fetcher = globalThis.fetch) {
-  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'credits,watch/providers,videos', include_video_language: 'es' }, key, fetcher);
-  const info = { id: Number(id), kind, trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
+  const path = `/${kind}/${Number(id)}`;
+  const d = await tmdb(path, { append_to_response: 'credits,watch/providers,videos,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
+  const logo = await titleLogo(d, path, key, fetcher);
+  const nextEpisode = kind === 'tv' ? nextEpisodeOf(d) : null;
+  const info = { id: Number(id), kind, ...(nextEpisode ? { nextEpisode } : {}), trailer: trailerOf(d), creators: creatorsOf(d), ...(lastEpisodeOf(d) ? { lastEpisode: lastEpisodeOf(d) } : {}), title: d.title || d.name || '', year: yearOf(d.release_date || d.first_air_date), overview: d.overview || '',
     released: d.release_date || d.first_air_date || '', providers: providersOf(d), logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '',
     genres: (d.genres || []).map((g) => g.name), cast: (d.credits?.cast || []).slice(0, 10).map((c) => ({ name: c.name, character: c.character || '' })),
     rating: d.vote_average != null ? Math.round(d.vote_average * 10) / 10 : null, votes: d.vote_count || 0,
     runtime: d.runtime || d.episode_run_time?.[0] || null, poster: image(d.poster_path, 'w342'), backdrop: image(d.backdrop_path, 'w1280') };
+  if (logo !== undefined) info.titleLogo = logo;
+  if (kind === 'tv') info.seasonPremieres = seasonPremieresOf(d);
   const seasons = kind === 'tv' ? (d.seasons || []).map((s) => ({ season: s.season_number, name: s.name || `Temporada ${s.season_number}`, episodes: s.episode_count || 0 }))
     .sort((a, b) => (a.season === 0) - (b.season === 0) || a.season - b.season) : [];
   return { info, seasons };
@@ -98,9 +127,17 @@ export async function tmdbPopularity(id, kind, key, fetcher = globalThis.fetch) 
 
 /** Popularity, release date and the platforms where it can be watched in Spain, in one request. */
 export async function tmdbFacts(id, kind, key, fetcher = globalThis.fetch) {
-  const d = await tmdb(`/${kind}/${Number(id)}`, { append_to_response: 'watch/providers,videos,credits', include_video_language: 'es' }, key, fetcher);
-  return { popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
-    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d) };
+  const path = `/${kind}/${Number(id)}`;
+  const d = await tmdb(path, { append_to_response: 'watch/providers,videos,credits,images', include_video_language: 'es', include_image_language: titleImageLanguages }, key, fetcher);
+  const logo = await titleLogo(d, path, key, fetcher);
+  const nextEpisode = kind === 'tv' ? nextEpisodeOf(d) : null;
+  const upcoming = nextEpisode
+    ? await seasonEpisodes(id, nextEpisode.season, key, fetcher).then(episodes => scheduledEpisodes(episodes, nextEpisode.season)).catch(() => undefined)
+    : undefined;
+  return { nextEpisode, upcoming, seasonPremieres: kind === 'tv' ? seasonPremieresOf(d) : undefined,
+    popularity: Number(d.popularity) || 0, released: d.release_date || d.first_air_date || '', providers: providersOf(d),
+    logos: providerLogosOf(d), countries: countriesOf(d), language: d.original_language || '', trailer: trailerOf(d), creators: creatorsOf(d), lastEpisode: lastEpisodeOf(d),
+    ...(logo !== undefined ? { titleLogo: logo } : {}) };
 }
 
 /** The logo of each of those platforms (TMDB's square icons): { «Netflix»: «https://image.tmdb.org/…» }. */
@@ -120,6 +157,47 @@ export function lastEpisodeOf(details) {
   const e = details?.last_episode_to_air;
   return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && e.season_number >= 0 && e.episode_number > 0
     ? { season: e.season_number, episode: e.episode_number, aired: e.air_date } : null;
+}
+
+export function nextEpisodeOf(details) {
+  const e = details?.next_episode_to_air;
+  return e && /^\d{4}-\d{2}-\d{2}$/.test(e.air_date || '') && Number.isInteger(e.season_number) && e.season_number >= 0 && e.episode_number > 0
+    ? { season: e.season_number, episode: e.episode_number, aired: e.air_date, name: e.name || '' } : null;
+}
+
+export function seasonPremieresOf(details, today = madridDay()) {
+  return (details?.seasons || []).filter(s => Number.isInteger(s?.season_number) && s.season_number > 1
+    && /^\d{4}-\d{2}-\d{2}$/.test(s.air_date || '') && s.air_date >= today)
+    .map(s => ({ season: s.season_number, aired: s.air_date }));
+}
+
+export function episodePremiereWindow(episode, today = madridDay()) {
+  const aired = episode?.aired || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(aired) && Date.parse(aired + 'T00:00:00Z') >= Date.parse(today + 'T00:00:00Z') - 86400000;
+}
+
+function scheduledEpisodes(episodes, season, today = madridDay()) {
+  return episodes.filter(e => episodePremiereWindow(e, today))
+    .map(({ episode, aired, name, still, sourceName }) => ({ season, episode, aired, name: sourceName ?? name, still }));
+}
+
+export const episodeTitleKey = (season, episode) => `${season}x${episode}`;
+
+/** Publish the name used by web and Android while keeping the source name for restoring it. */
+export function applyEpisodeTitles(item) {
+  if (item.kind !== 'tv') return item;
+  const apply = episode => {
+    const { sourceName, ...entry } = episode;
+    const title = item.episodeTitles?.[episodeTitleKey(episode.season, episode.episode)];
+    if (title) return { ...entry, name: title, sourceName: sourceName ?? entry.name ?? '' };
+    return sourceName === undefined ? episode : { ...entry, name: sourceName };
+  };
+  const tmdb = item.tmdb;
+  return { ...item, episodes: (item.episodes || []).map(apply), ...(tmdb ? { tmdb: { ...tmdb,
+    ...(tmdb.upcoming ? { upcoming: tmdb.upcoming.map(apply) } : {}),
+    ...(tmdb.nextEpisode ? { nextEpisode: apply(tmdb.nextEpisode) } : {}),
+    ...(tmdb.lastEpisode ? { lastEpisode: apply(tmdb.lastEpisode) } : {}),
+  } } : {}) };
 }
 
 /** The YouTube key of the title's trailer in Spanish (Spain first, then any Spanish), or ''. */
@@ -184,19 +262,62 @@ export async function seasonEpisodes(id, season, key, fetcher = globalThis.fetch
 }
 
 /** The library item of a film (or documentary film) with its video link. */
-export const movieItem = (info, url) => ({ id: `m${info.id}`, kind: 'movie', title: info.title, year: info.year, file: '', url, status: 'matched', tmdb: info });
+export const movieItem = (info, url, id = `m${info.id}`) => ({ id, kind: 'movie', title: info.title, year: info.year, file: '', url, status: 'matched', tmdb: info });
+
+export const findTmdbTitle = (sections, kind, id) => Object.values(sections).flat()
+  .find(item => item.kind === kind && item.status !== 'unmatched' && Number(item.tmdb?.id) === Number(id));
+
+/** Catalogue IDs are permanent even if their TMDB reference changes. */
+export function freeTmdbTitleId(sections, kind, id, reserved = []) {
+  const base = `${kind === 'tv' ? 's' : 'm'}${id}`;
+  const occupied = new Set([...Object.values(sections).flat().map(item => item.id), ...reserved]);
+  let candidate = base;
+  for (let n = 2; occupied.has(candidate); n++) candidate = `${base}-${n}`;
+  return candidate;
+}
+
+export async function correctTmdbTitle(item, tmdbId, key, fetcher = globalThis.fetch) {
+  const { info, seasons } = await tmdbDetails(tmdbId, item.kind, key, fetcher);
+  const { trend, ...previous } = item;
+  const next = { ...previous, title: info.title, year: info.year, status: 'matched', tmdb: info };
+  if (item.kind !== 'tv') return next;
+  const saved = item.episodes || [];
+  const catalogSeasons = new Set(seasons.map(s => s.season));
+  const seasonNumbers = [...new Set(saved.map(e => e.season))].filter(season => catalogSeasons.has(season));
+  const episodeData = new Map(await Promise.all(seasonNumbers.map(async season => [
+    season, new Map((await seasonEpisodes(info.id, season, key, fetcher)).map(e => [e.episode, e])),
+  ])));
+  next.episodes = saved.map(({ name, sourceName, overview, still, runtime, aired, ...episode }) => ({
+    name: '', overview: '', still: '', ...episode, ...episodeData.get(episode.season)?.get(episode.episode),
+  }));
+  return next;
+}
 
 /**
  * A series with the links of one season saved: episodes of other seasons are kept, episodes of this season
- * take the new links, and an episode without a link is left out (it is not shown to viewers).
+ * take the new links. Future episodes are saved separately as metadata, without a play link.
  */
-export function seriesWithSeason(existing, info, season, episodes, links) {
+export const defaultEpisodeId = (id, season, episode) => `e${id.replace(/^s/, '')}x${season}x${episode}`;
+
+export function seriesWithSeason(existing, info, season, episodes, links, id = existing?.tmdb?.id ? existing.id : `s${info.id}`) {
   const others = (existing?.episodes || []).filter((e) => e.season !== season);
-  const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => ({
-    id: `e${info.id}x${season}x${e.episode}`, season, episode: e.episode, name: e.name, overview: e.overview, still: e.still, ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: '', url: String(links[e.episode]).trim() }));
+  const now = episodes.filter((e) => String(links[e.episode] || '').trim()).map((e) => {
+    const url = String(links[e.episode]).trim();
+    const previous = existing?.episodes?.find(saved => saved.season === season && saved.episode === e.episode);
+    const old = previous && videoKey(previous.url) === videoKey(url) ? previous : null;
+    const episodeId = (existing?.tmdb?.id && existing.id === id && previous?.id)
+      || existing?.episodeIds?.[episodeTitleKey(season, e.episode)] || defaultEpisodeId(id, season, e.episode);
+    const saved = { ...old, id: episodeId, season, episode: e.episode, name: e.sourceName ?? e.name, overview: e.overview, still: e.still,
+      ...(e.runtime ? { runtime: e.runtime } : {}), ...(e.aired ? { aired: e.aired } : {}), file: old?.file || '', url };
+    delete saved.sourceName;
+    return saved;
+  });
   const all = [...others, ...now].sort((a, b) => a.season - b.season || a.episode - b.episode);
   // Anything else saved with the series (its LuluStream folder, the intro and credits times) stays.
-  return { ...(existing || {}), id: `s${info.id}`, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: info, episodes: all };
+  const today = madridDay();
+  const upcoming = [...(existing?.tmdb?.upcoming || []).filter(e => e.season !== season && episodePremiereWindow(e, today)),
+    ...scheduledEpisodes(episodes, season, today)];
+  return { ...(existing || {}), id, kind: 'tv', title: info.title, year: info.year, folder: existing?.folder || info.title, status: 'matched', tmdb: upcoming.length ? { ...info, upcoming } : info, episodes: all };
 }
 
 /** The library in Firestore parts of up to ~850 KB: { index, parts: { 'movies-0': {...} } }. */

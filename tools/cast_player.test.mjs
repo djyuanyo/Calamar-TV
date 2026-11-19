@@ -54,6 +54,20 @@ test('local playback stops only after the receiver accepts the source; TV contro
   assert.deepEqual(f.state(), { sent: 1, closed: 1, paused: 1, ended: 1 });
 });
 
+test('Cast sends the active VOD audio and playback position to the provider bridge', async () => {
+  const f = fixture();
+  f.select({ url: 'https://vidara.to/e/AbC123xy', vod: true, position: 42,
+    audio: { lang: 'es-ES', name: 'Español, España' } });
+  await f.button.handlers.click();
+  const request = f.loads[0];
+  const sent = new URL(request.media.contentId);
+  assert.equal(sent.pathname, '/calamar-vidara.php');
+  assert.equal(sent.searchParams.get('cast_audio'), 'es-ES');
+  assert.equal(sent.searchParams.get('cast_audio_name'), 'Español, España');
+  assert.equal(request.currentTime, 42);
+  assert.equal(request.media.streamType, 'buffered');
+});
+
 test('unsupported TS keeps local playback running and does not start a receiver session', async () => {
   const f = fixture();
   f.select({ url: 'https://example.com/a.mkv' });

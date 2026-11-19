@@ -1,13 +1,20 @@
+import { madridDay } from './audience.js';
+import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
+import { renewablePage, zicoChannelPlayer, zicoHost, zicoPublicIframe } from './zico-channel.js';
+export { renewablePage } from './zico-channel.js';
+import { isZicoAgendaEvent } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures, madridWeek, MATCH_SPAN_MS } from './competitions.js';
 import { httpTsSource } from './http-stream.js';
+import { youtubeVideo } from './trailer.js';
 // Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
 const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
 // Same rules as app/src/main/java/es/yuanyo/calamartv/Catalog.java so web and app match.
 export const OWN_GROUP = 'Calamar TV';
 export const GROUP_ORDER = [OWN_GROUP, 'Generalistas', 'Deportes', 'Informativos', 'Infantiles', 'Música', 'Autonómicos'];
+const channelNames = new Intl.Collator('es', { sensitivity: 'base' });
 /** Card background of each category until the administrator picks another one. */
 export const CATEGORY_COLORS = { [OWN_GROUP]: '#5a6b12', Generalistas: '#1f4f8f', Deportes: '#1d7a40', Informativos: '#8f2c2c', Infantiles: '#b35c14', 'Música': '#6a2f8f', 'Autonómicos': '#1c7373' };
 const EXTRA_COLORS = ['#7a5418', '#2d5a8a', '#8a2d63', '#4a6b2a', '#5c3d8a', '#8a4a2d', '#2d7a6b', '#6b6b2d'];
@@ -36,7 +43,7 @@ export function resolveCategory(group, list) {
 function validUrl(value) {
   try {
     const url = new URL(String(value).trim());
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname ? url.href : null;
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname ? zicoChannelPlayer(url.href) || url.href : null;
   } catch {
     return null;
   }
@@ -153,7 +160,7 @@ export function groups(channels, order = []) {
   for (const g of [...extra.keys()].sort()) map.set(g, extra.get(g));
   for (const [g, list] of map) {
     if (!list.length) map.delete(g);
-    else list.sort((a, b) => Number(b.playable) - Number(a.playable));
+    else list.sort((a, b) => channelNames.compare(a.name, b.name));
   }
   return map;
 }
@@ -229,16 +236,21 @@ export const LULU_ENDPOINT = 'https://calamarmenciano.com/calamar-lulu.php';
  * video (CORS), so the hosting reads the page and relays its HLS list (calamar-player.php).
  */
 export const PLAYER_ENDPOINT = 'https://calamarmenciano.com/calamar-player.php';
-export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
-
-/** Only the public player endpoint. Other provider pages keep their own player. */
-export function renewablePage(address) {
+export const PLAYER_ALTERNATE_ENDPOINT = 'https://www.calamarmenciano.com/calamar-player.php';
+export function playerEndpoint(address) {
   try {
     const u = new URL(address);
-    return u.protocol === 'https:' && !u.username && !u.password
-      && (u.hostname === 'zicotv.cc' || u.hostname.endsWith('.zicotv.cc'))
-      && /^\/api\/player\/\d+\/?$/.test(u.pathname);
-  } catch { return false; }
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port
+      && ['calamarmenciano.com','www.calamarmenciano.com'].includes(u.hostname) && u.pathname === '/calamar-player.php'
+      ? u.origin + u.pathname : null;
+  } catch { return null; }
+}
+export const playerPageRelay = (url) => `${PLAYER_ENDPOINT}?page=${encodeURIComponent(String(url).trim())}&hls=1`;
+
+/** The published RFAF source authorizes the hosting to serve its playlist and segments. */
+export function rfafHostedAddress(url) {
+  return /^https:\/\/cdnlive\.codev8\.net\/rfaf20live\/smil:channel11\.smil\/(?:playlist|chunklist_b1500000)\.m3u8$/.test(url)
+    ? playerPageRelay(url) : null;
 }
 
 // AnonMP4 (anonmp4.art, anonmp4.to…): its API gives each video an embed page (embed_url) for other sites.
@@ -252,14 +264,6 @@ export function anonmp4Embed(url) {
   } catch { return null; }
 }
 
-const FRAME_HOSTS = ['zicotv.cc'];
-export function framedPage(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' && FRAME_HOSTS.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
-  } catch { return false; }
-}
-
 /** `pages`: player pages play through the hosting (channels) or in a frame; otherwise they need the app. */
 export function webPlayback(url, { pages = false } = {}) {
   let u;
@@ -269,6 +273,15 @@ export function webPlayback(url, { pages = false } = {}) {
     return { ok: false, reason: 'Enlace no válido' };
   }
   const path = u.pathname.toLowerCase();
+  const youtube = youtubeVideo(url);
+  if (youtube) return { ok: true, kind: 'frame', address: youtube.embed, youtube: youtube.watch };
+  if (pages && playerEndpoint(url)
+      && !u.username && !u.password && renewablePage(u.searchParams.get('page')) && u.searchParams.get('cast') === '1')
+    return { ok: true, kind: 'hls', page: true, renewable: true };
+  const dm = pages && dailymotionEmbed(url);
+  if (dm) return { ok: true, kind: 'frame', page: true, address: dm };
+  const vidara = vidaraPlayback(url);
+  if (vidara) return { ok: true, kind: 'hls', address: vidara };
   const anon = anonmp4Embed(url);
   if (anon) return { ok: true, kind: 'frame', address: anon };
   const embed = lulustreamEmbed(url);
@@ -276,21 +289,29 @@ export function webPlayback(url, { pages = false } = {}) {
   // passes the HLS list and its pieces on (calamar-lulu.php); the video plays in our own player.
   if (embed) return { ok: true, kind: 'hls', address: `${LULU_ENDPOINT}?code=${embed.split('/').pop()}&hls=1` };
   // Folder imports use an opaque relay link; the Google API key stays encrypted.
-  if (u.protocol === 'https:' && u.hostname === 'calamarmenciano.com' && u.pathname === '/calamar-drive.php'
-      && /^[A-Za-z0-9_-]{1,200}$/.test(u.searchParams.get('id') || '') && /^[A-Za-z0-9_-]{40,2048}$/.test(u.searchParams.get('v') || '')) return { ok: true, kind: 'video' };
+  if (u.origin === 'https://calamarmenciano.com' && !u.username && !u.password && u.pathname === '/calamar-drive.php'
+      && /^[A-Za-z0-9_-]{1,200}$/.test(u.searchParams.get('id') || '') && /^[A-Za-z0-9_-]{40,2048}$/.test(u.searchParams.get('v') || '')) {
+    const address = `${u.origin}${u.pathname}?${new URLSearchParams({ id: u.searchParams.get('id'), v: u.searchParams.get('v'), hls: '1' })}`;
+    return u.searchParams.get('hls') === '1' ? { ok: true, kind: 'hls', address } : { ok: true, kind: 'video', compatibility: address };
+  }
   // Films and series from Google Drive play straight from the Drive API (it allows browser video).
   if (u.protocol === 'https:' && u.hostname === 'www.googleapis.com' && /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(u.pathname) && u.searchParams.get('alt') === 'media') return { ok: true, kind: 'video' };
   if (VIDEO_FILE.test(path)) return { ok: false, reason: 'Los vídeos MKV, AVI y similares se ven en la app Calamar TV; en el navegador usa MP4' };
   if (httpTsSource(url)) return { ok: true, kind: 'ts', relay: true };
   if (u.protocol === 'http:') return { ok: false, reason: 'Este enlace HTTP no es un flujo TS/IPTV compatible con el puente' };
   if (u.protocol !== 'https:') return { ok: false, reason: 'Este enlace usa http:// y el navegador lo bloquea en una web segura' };
-  if (path.endsWith('.m3u8')) return { ok: true, kind: 'hls' };
+  if (path.endsWith('.m3u8')) {
+    const address = rfafHostedAddress(url);
+    return address ? { ok: true, kind: 'hls', address } : { ok: true, kind: 'hls' };
+  }
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
   if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
+  const iframe = pages && zicoPublicIframe(url);
+  if (iframe) return { ok: true, kind: 'frame', page: true, address: iframe };
   if (pages && zicoEventApi(url)) return { ok: true, kind: 'event', page: true };
   if (pages && renewablePage(url)) return { ok: true, kind: 'hls', page: true, renewable: true };
-  if (pages && framedPage(url)) return { ok: true, kind: 'frame', page: true };
+  if (pages && zicoHost(u.hostname)) return { ok: false, reason: 'Usa el enlace de canal o evento de Zico TV' };
   if (pages) return { ok: true, kind: 'hls', address: playerPageRelay(url), page: true };
   return { ok: false, reason: 'Es la página de un reproductor; se resuelve en la app' };
 }
@@ -335,9 +356,11 @@ export function leagueSlugs(custom) {
   return out;
 }
 
-/** A league's page: its matches of every week that already have a channel or video, soonest first (not finished ones). */
+/** A league's page: every linked match in the current Monday-to-Sunday week in Madrid, in date order. */
 export function leagueEvents(channels, custom, leagueId, now = Date.now()) {
-  return events(channels, custom, now, { allWeeks: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending);
+  const week = madridWeek(new Date(now).toISOString());
+  return events(channels, custom, now, { allWeeks: true, finished: true }).filter((e) => e.leagueId === leagueId && e.playable && !e.pending
+    && Number.isFinite(Date.parse(e.startAt || '')) && madridWeek(e.startAt) === week);
 }
 
 /** The event of a link name: its own, or for an old link without number («local-vs-visitante») the first of that name («…-1»). */
@@ -370,6 +393,7 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
     const streams = [...new Set([...(target?.streams || []), ...(event.streams || [])])];
+    if (isZicoAgendaEvent(event) && !streams.some(url => !zicoEventApi(url) || Array.isArray(event.zicoStreams))) return [];
     if (streams.length) return [{ logo: '', group: '', region: '', web: '', own: true, ...target, ...shared, channelId: target?.id || '', channelName: target?.name || 'Fuentes del evento', meta: eventMeta(event, custom),
       streams, playable: true }];
     if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,
@@ -415,6 +439,20 @@ export function liveEvents(list, now = Date.now()) {
     return day(at) === today || (at < now && now - at < 4 * 3600000);
   }).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
 }
+/** A league search in Inicio uses today's Madrid date, including matches awaiting a channel. */
+export function todayLeagueEvents(channels, custom, query, now = Date.now()) {
+  const key = text => text.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
+  const wanted = key(query);
+  if (!wanted) return null;
+  const leagues = new Set((custom?.leagues || []).filter(league => key(league.name).includes(wanted)).map(league => league.id));
+  if (!leagues.size) return null;
+  const today = madridDay(now);
+  return events(channels, custom, now, { allWeeks: true }).filter(event => {
+    const at = Date.parse(event.startAt);
+    return leagues.has(event.leagueId) && Number.isFinite(at) && madridDay(at) === today;
+  });
+}
+
 /**
  * The league rows of the home page show only this week's events (Monday to Sunday, Madrid): a league with
  * matches in two weeks does not appear yet. Events without a league or a date stay; a match from last week

@@ -1,8 +1,48 @@
+import { GOOGLE_G } from './google-icon.js';
+import { DEVICE_LOGIN_MINUTES, DEVICE_LOGIN_URL, newDeviceKey } from './device-login.js';
 // «Mi cuenta» (#/cuenta): sign in with Google or with email and password, «¿Quién está viendo?» and
 // the profiles of the account (add, rename, colour, delete), as in Netflix.
 import { MAX_PROFILES, PROFILE_COLORS, signedUser, accountProfiles, activeProfile, chooseProfile, addProfile, editProfile, removeProfile } from './profiles.js';
 
 export const profileInitial = (profile) => String(profile?.name || '?').trim().charAt(0).toLocaleUpperCase('es') || '?';
+
+function mobileSignIn(el, firebase, done) {
+  const key = newDeviceKey(), code = newDeviceKey();
+  const controller = new AbortController();
+  const link = DEVICE_LOGIN_URL + key;
+  const status = el('p', { role: 'status' }, 'Esperando a que confirmes el código…');
+  const close = el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cerrar');
+  const dialog = el('dialog', { class: 'auth-card', 'aria-labelledby': 'tizen-login-title' },
+    el('h2', { id: 'tizen-login-title' }, 'Entra con Google desde tu móvil'),
+    el('p', {}, 'Abre esta dirección en el móvil y escribe el código de la tele.'),
+    el('p', {}, el('strong', {}, link.replace('https://', ''))),
+    el('p', { class: 'tizen-code' }, code), status, close);
+  dialog.addEventListener('close', () => { controller.abort(); dialog.remove(); }, { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
+  const deadline = Date.now() + DEVICE_LOGIN_MINUTES * 60000;
+  let checking = false;
+  const poll = async () => {
+    if (controller.signal.aborted || checking) return;
+    if (Date.now() >= deadline) {
+      status.textContent = 'El código ha caducado. Cierra esta ventana y vuelve a pulsar «Entrar con el móvil».';
+      clearInterval(timer);
+      return;
+    }
+    checking = true;
+    try {
+      if (await firebase.acceptDeviceLogin(key + code, controller.signal)) {
+        if (!controller.signal.aborted) dialog.close();
+        done();
+      }
+    } catch (error) {
+      if (error.code !== 'permission-denied')
+        status.textContent = 'No se pudo comprobar el código. Seguimos intentando conectar…';
+    } finally { checking = false; }
+  };
+  const timer = setInterval(poll, 3000);
+  controller.signal.addEventListener('abort', () => clearInterval(timer), { once: true });
+}
 
 function avatar(el, profile, size = '') {
   return el('span', { class: `profile-avatar${size ? ` ${size}` : ''}`, style: `--profile:${profile.color}`, 'aria-hidden': 'true' }, profileInitial(profile));
@@ -16,14 +56,15 @@ function colorPicker(el, chosen) {
   return { node: el('div', { class: 'color-picker', role: 'group', 'aria-label': 'Color del perfil' }, buttons), value: () => value };
 }
 
-const GOOGLE_G = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+
 
 /**
  * Sign-in, as a card: the brand, «Iniciar sesión» / «Crear cuenta», Google, and below «O continuar con»
  * the email and password (with «¿Olvidaste tu contraseña?» and the eye that shows it).
  */
-function signIn(el, f, done) {
+export function signIn(el, f, done) {
   let mode = 'login';
+  let emailValue = '';
   const card = el('section', { class: 'auth-card' });
   const draw = () => {
     const note = el('p', { class: 'auth-note', role: 'status' });
@@ -34,25 +75,62 @@ function signIn(el, f, done) {
     };
     const creating = mode === 'create';
     const field = (label, input, extra = null) => el('label', { class: 'auth-field' }, el('span', { class: 'auth-label' }, el('span', {}, label), extra), input);
-    const email = el('input', { type: 'email', autocomplete: 'email', required: true, placeholder: 'Tu email' });
+    const email = el('input', { type: 'email', autocomplete: 'email', required: true, placeholder: 'Tu email', value: emailValue });
     const password = el('input', { type: 'password', autocomplete: creating ? 'new-password' : 'current-password', minlength: '6', required: true, placeholder: 'Contraseña' });
+    const confirmation = creating ? el('input', { type: 'password', autocomplete: 'new-password', required: true, placeholder: 'Repite la contraseña' }) : null;
     const name = el('input', { type: 'text', autocomplete: 'given-name', placeholder: 'Cómo te llamas', maxlength: '24' });
-    const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': 'Mostrar la contraseña', onclick: () => {
-      const shown = password.type === 'text';
-      password.type = shown ? 'password' : 'text';
-      eye.setAttribute('aria-label', shown ? 'Mostrar la contraseña' : 'Ocultar la contraseña');
-      eye.classList.toggle('on', !shown);
-    } });
-    eye.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    const passwordInput = (input, label) => {
+      const eye = el('button', { class: 'auth-eye', type: 'button', 'aria-label': `Mostrar ${label}`, onclick: () => {
+        const shown = input.type === 'text';
+        input.type = shown ? 'password' : 'text';
+        eye.setAttribute('aria-label', shown ? `Mostrar ${label}` : `Ocultar ${label}`);
+        eye.classList.toggle('on', !shown);
+      } });
+      eye.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+      return el('span', { class: 'auth-password' }, input, eye);
+    };
     const forgot = creating ? null : el('button', { class: 'auth-link', type: 'button', onclick: async () => {
       if (!email.value.trim()) { say('Escribe tu email y vuelve a pulsar «¿Olvidaste tu contraseña?».', true); email.focus(); return; }
       try { await f.resetPassword(email.value.trim()); say(`Te hemos enviado un correo a ${email.value.trim()} para cambiar la contraseña.`); }
       catch (error) { say(f.explain(error), true); }
     } }, '¿Olvidaste tu contraseña?');
     const submit = el('button', { class: 'auth-submit', type: 'submit' }, creating ? 'Crear cuenta' : 'Iniciar sesión');
-    const google = el('button', { class: 'auth-provider', type: 'button', onclick: () => busy(google, () => f.loginGoogle()) });
+    const tizen = document.documentElement.dataset.platform === 'tizen';
+    const google = el('button', { class: 'auth-provider', type: 'button',
+      onclick: () => tizen ? mobileSignIn(el, f, done) : busy(google, () => f.loginGoogle()) });
+    const resend = creating ? null : el('button', { class: 'auth-link', type: 'submit' }, 'Reenviar correo de verificación');
+    const notice = (title, message) => {
+      const dialog = el('dialog', { class: 'auth-verification auth-card', 'aria-label': title },
+        el('h2', {}, title), el('p', {}, message),
+        el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Entendido'));
+      dialog.addEventListener('close', () => dialog.remove(), { once: true });
+      document.body.append(dialog);
+      dialog.showModal();
+    };
+    const emailAction = async (resending) => {
+      for (const action of [submit, google, resend]) if (action) action.disabled = true;
+      say(resending ? 'Enviando correo…' : '');
+      emailValue = email.value.trim();
+      try {
+        const result = creating
+          ? await f.registerEmail(emailValue, password.value, name.value.trim())
+          : await f.loginEmail(emailValue, password.value, resending);
+        if (!result.verification) { done(); return; }
+        if (creating) { mode = 'login'; draw(); }
+        const message = result.sent
+          ? `Abre el enlace que enviamos a ${emailValue} para poder iniciar sesión. Si no lo ves, revisa la carpeta de spam.`
+          : creating
+            ? 'Tu cuenta está creada, pero no se pudo enviar el correo. Escribe tu correo y contraseña y pulsa «Reenviar correo de verificación». Revisa también la carpeta de spam.'
+            : 'Abre el enlace de verificación para poder iniciar sesión. Revisa la carpeta de spam o pulsa «Reenviar correo de verificación».';
+        notice('Verifica tu correo', message);
+      } catch (error) {
+        if (creating && error.code === 'auth/email-already-in-use') notice('Correo ya en uso', f.explain(error));
+        else say(f.explain(error), true);
+      }
+      finally { for (const action of [submit, google, resend]) if (action) action.disabled = false; }
+    };
     google.innerHTML = GOOGLE_G;
-    google.append('Google');
+    google.append(tizen ? 'Entrar con el móvil' : 'Google');
     const tab = (key, label) => el('button', { class: 'auth-tab', type: 'button', role: 'tab', 'aria-selected': String(mode === key),
       onclick: () => { if (mode !== key) { mode = key; draw(); } } }, label);
     card.replaceChildren(
@@ -66,19 +144,23 @@ function signIn(el, f, done) {
       el('p', { class: 'auth-method' }, 'Email y contraseña'),
       el('form', { class: 'auth-form', onsubmit: (event) => {
         event.preventDefault();
-        busy(submit, () => {
-          if (!email.value.trim() || password.value.length < 6) throw Error('Escribe tu email y una contraseña de al menos 6 caracteres.');
-          return creating ? f.registerEmail(email.value.trim(), password.value, name.value.trim()) : f.loginEmail(email.value.trim(), password.value);
-        });
+        if (!email.value.trim() || password.value.length < 6) { say('Escribe tu email y una contraseña de al menos 6 caracteres.', true); return; }
+        if (confirmation && confirmation.value !== password.value) {
+          say('Las contraseñas no coinciden.', true);
+          confirmation.focus();
+          return;
+        }
+        void emailAction(resend !== null && event.submitter === resend);
       } },
         creating ? field('Nombre', name) : null,
         field('Email', email),
-        field('Contraseña', el('span', { class: 'auth-password' }, password, eye), forgot),
-        submit),
+        field('Contraseña', passwordInput(password, 'la contraseña'), forgot),
+        confirmation ? field('Repite la contraseña', passwordInput(confirmation, 'la confirmación de contraseña')) : null,
+        submit, resend),
       note);
   };
   draw();
-  return [card, el('p', { class: 'auth-foot' }, 'Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.')];
+  return [card];
 }
 
 /** A profile's form: name and colour, «Guardar», and «Borrar perfil» (never the main one). */
@@ -108,10 +190,10 @@ const svg = (el, name, cls = '') => { const span = el('span', { class: cls, 'ari
 
 /**
  * #/cuenta. Without an account: the sign-in. With one, as the «Perfil» sheet of Netflix: the profile watching
- * (✎ to edit it), the others and «Añadir», «Administrar perfiles», and «Cuenta», «Ayuda», «Administración»
- * (for the administrator) and «Cerrar sesión». `chosen` runs after picking a profile (back to the home page).
+ * (✎ to edit it), the others and «Añadir», «Administrar perfiles», «Cuenta», «Ayuda» and «Cerrar sesión».
+ * `chosen` runs after picking a profile (back to the home page).
  */
-export function accountPage(el, f, { rerender, chosen, editing = null, setEditing = () => {} }) {
+export function accountPage(el, f, { rerender, chosen, dashboard = () => [], editing = null, setEditing = () => {} }) {
   const user = signedUser();
   if (!user) return signIn(el, f, rerender);
   const note = el('p', { class: 'note', role: 'status' });
@@ -141,7 +223,7 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
   }
   if (editing === 'cuenta') {
     const provider = (user.providerData || []).some((p) => p.providerId === 'google.com') ? 'Google' : 'Email y contraseña';
-    return [el('section', { class: 'profile-sheet' }, head('Cuenta', 'perfil'),
+    return [el('section', { class: 'profile-sheet' }, head('Datos de la cuenta', 'perfil'),
       el('dl', { class: 'sheet-facts' }, el('dt', {}, 'Email'), el('dd', {}, user.email || '—'), el('dt', {}, 'Acceso'), el('dd', {}, provider),
         el('dt', {}, 'Perfiles'), el('dd', {}, `${profiles.length} de ${MAX_PROFILES}`)),
       provider === 'Google' ? null : el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
@@ -161,16 +243,16 @@ export function accountPage(el, f, { rerender, chosen, editing = null, setEditin
   if (profiles.length < MAX_PROFILES) others.push(el('button', { class: 'sheet-profile', type: 'button', onclick: () => go('new') },
     el('span', { class: 'profile-avatar mid tool', 'aria-hidden': 'true' }, '+'), el('span', {}, 'Añadir')));
   const item = (icon, label, action) => el('li', {}, el('button', { class: 'sheet-item', type: 'button', onclick: action }, svg(el, icon, 'sheet-icon'), el('span', {}, label), el('span', { class: 'sheet-chevron', 'aria-hidden': 'true' }, '›')));
-  return [el('section', { class: 'profile-sheet' }, head('Perfil'),
-    el('div', { class: 'sheet-current' },
-      el('button', { class: 'sheet-edit', type: 'button', 'aria-label': `Editar ${current.name}`, onclick: () => go(current.id) }, svg(el, 'pencil')),
-      avatar(el, current, 'big'), el('p', { class: 'sheet-name' }, current.name), el('p', { class: 'sheet-mail' }, user.email || user.displayName || '')),
+  return [el('section', { class: 'profile-sheet account-dashboard' }, head('Mi Cuenta'),
+    el('details', { class: 'account-profiles' }, el('summary', { 'aria-label': `Cambiar de perfil · ${current.name}` },
+      avatar(el, current, 'mid'), el('strong', {}, current.name)),
     el('div', { class: 'sheet-profiles' }, others),
-    el('button', { class: 'sheet-manage', type: 'button', onclick: () => go('all') }, 'Administrar perfiles'),
+    el('button', { class: 'sheet-manage', type: 'button', onclick: () => go('all') }, 'Administrar perfiles')),
+    ...dashboard(),
     el('ul', { class: 'sheet-menu' },
-      item('account', 'Cuenta', () => go('cuenta')),
+      item('account', 'Datos de la cuenta', () => go('cuenta')),
       item('help', 'Ayuda', () => go('ayuda')),
-      f.administrator?.(user) ? item('admin', 'Administración', () => { setEditing(null); location.hash = '#/admin'; }) : null,
+      f.administrator(user) ? item('admin', 'Administración', () => { setEditing(null); location.hash = '#/admin'; }) : null,
       item('out', 'Cerrar sesión', async () => { await f.logout(); setEditing(null); rerender(); })),
     note)];
 }
@@ -180,7 +262,7 @@ export function paintAccountButton(el, link) {
   const profile = activeProfile();
   if (!signedUser()) { link.replaceChildren('Entrar'); link.title = 'Entrar o crear una cuenta'; link.setAttribute('aria-label', 'Entrar'); return; }
   link.replaceChildren(profile ? avatar(el, profile) : el('span', { class: 'profile-avatar' }, '?'));
-  link.title = profile ? `${profile.name} · Cambiar de perfil` : '¿Quién está viendo?';
+  link.title = 'Mi Cuenta';
   link.setAttribute('aria-label', link.title);
 }
 
@@ -195,12 +277,13 @@ export function profileGate(el, { slides = [], chosen, manage }) {
   const tool = (symbol, label, action) => el('button', { class: 'gate-profile gate-tool', type: 'button', onclick: action },
     el('span', { class: 'profile-avatar big tool', 'aria-hidden': 'true' }, symbol), el('span', {}, label));
   const tools = [accountProfiles().length < MAX_PROFILES ? tool('+', 'Añadir', () => manage('new')) : null, tool('✎', 'Modificar', () => manage('all'))];
-  const backdrops = slides.map((slide, i) => el('div', { class: `gate-slide${i === 0 ? ' on' : ''}`, style: `background-image:url("${slide.image.replace(/"/g, '%22')}")` }));
+  const backdrops = slides.map(() => el('div', { class: 'gate-slide' }));
   const title = el('p', { class: 'gate-title' }), rank = el('span', { class: 'gate-rank-text' });
   const feature = el('div', { class: 'gate-feature', 'aria-live': 'polite' }, title,
     el('p', { class: 'gate-rank' }, el('span', { class: 'gate-top', 'aria-hidden': 'true' }, 'TOP', el('b', {}, '10')), rank));
   let at = 0;
   const show = (i) => {
+    if (backdrops[i]) backdrops[i].style.backgroundImage = `url("${slides[i].image.replace(/"/g, '%22')}")`;
     backdrops.forEach((b, n) => b.classList.toggle('on', n === i));
     title.textContent = slides[i]?.title || '';
     rank.textContent = slides[i]?.label || '';

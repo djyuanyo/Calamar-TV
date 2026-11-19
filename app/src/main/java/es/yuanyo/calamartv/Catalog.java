@@ -1,5 +1,6 @@
 package es.yuanyo.calamartv;
 
+import java.text.Collator;
 import java.util.*;
 import org.json.*;
 
@@ -66,7 +67,7 @@ public final class Catalog {
   public static final class Channel {
     public final int color;
     public final String category;
-    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId;
+    public final String id, name, group, region, logo, web, cover, channelId, meta, startAt, status, leagueId, matchUrl, matchId, sport;
     /** Events without a cover: the league's background and both crests. */
     public final String background, homeLogo, awayLogo, leagueLogo;
     public final boolean highlighted;
@@ -88,6 +89,7 @@ public final class Catalog {
       pending = o.optBoolean("pending");
       channelId = o.optString("channelId", o.optString("id"));
       leagueId = o.optString("leagueId");
+      sport = o.optString("sport");
       matchUrl = o.optString("matchUrl"); matchId = o.optString("matchId");
       meta = o.optString("meta"); startAt = o.optString("startAt"); status = o.optString("status", "scheduled");
       highlighted = o.optBoolean("featured");
@@ -214,11 +216,28 @@ public final class Catalog {
    * next match (all of them with allWeeks, for links); without a channel they say «Canal por confirmar».
    */
   public static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks) {
+    return events(channels, custom, now, allWeeks, false);
+  }
+
+  static boolean isZicoAgendaEvent(JSONObject event) {
+    return event.optString("id").matches("zico-event-[0-9]+");
+  }
+
+  /** The importer records a lookup URL only when the feed reports a source. */
+  private static boolean hasAgendaSource(JSONObject event, List<String> sources) {
+    if (sources.stream().anyMatch(link -> VideoResolver.eventApi(link) == null)) return true;
+    JSONArray imported = event.optJSONArray("zicoStreams");
+    if (imported != null) for (int i = 0; i < imported.length(); i++)
+      if (sources.contains(imported.optString(i))) return true;
+    return false;
+  }
+
+  static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks, boolean includeFinished) {
     List<Channel> out = new ArrayList<>();
     if (custom == null) return out;
     List<JSONObject> all = new ArrayList<>(), imported = new ArrayList<>();
     for (JSONObject event : Competitions.all(custom)) {
-      if (!event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"), now)) continue;
+      if (!includeFinished && !event.optString("matchUrl").isEmpty() && MatchScores.expired(event.optString("matchId"), now)) continue;
       all.add(event);
       if (event.optBoolean("imported")) imported.add(event);
     }
@@ -231,9 +250,10 @@ public final class Catalog {
       if (target != null) sources.addAll(target.streams);
       JSONArray extra = event.optJSONArray("streams");
       if (extra != null) for (int i = 0; i < extra.length(); i++) {
-        String link = extra.optString(i).trim();
-        if ((link.startsWith("https://") || link.startsWith("http://")) && !sources.contains(link)) sources.add(link);
+        String link = UserChannels.normalizeEventSource(extra.optString(i).trim());
+        if (link != null && !sources.contains(link)) sources.add(link);
       }
+      if (isZicoAgendaEvent(event) && !hasAgendaSource(event, sources)) continue;
       if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
         JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));
@@ -275,6 +295,32 @@ public final class Catalog {
     return out;
   }
 
+  /** Null if the query does not name a league, otherwise its events for the current Madrid day. */
+  static List<Channel> todayLeagueEvents(List<Channel> channels, JSONObject custom, String query, long now) {
+    String wanted = leagueSearchKey(query);
+    JSONArray leagues = custom == null ? null : custom.optJSONArray("leagues");
+    if (wanted.isEmpty() || leagues == null) return null;
+    Set<String> ids = new HashSet<>();
+    for (int i = 0; i < leagues.length(); i++) {
+      JSONObject league = leagues.optJSONObject(i);
+      if (league != null && leagueSearchKey(league.optString("name")).contains(wanted)) ids.add(league.optString("id"));
+    }
+    if (ids.isEmpty()) return null;
+    java.text.SimpleDateFormat format = SportsCatalog.dateFormat("yyyy-MM-dd");
+    String today = format.format(new Date(now));
+    List<Channel> found = new ArrayList<>();
+    for (Channel event : events(channels, custom, now, true)) {
+      long at = SportsCatalog.instant(event.startAt);
+      if (ids.contains(event.leagueId) && at != Long.MAX_VALUE && today.equals(format.format(new Date(at)))) found.add(event);
+    }
+    return found;
+  }
+
+  private static String leagueSearchKey(String text) {
+    return java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD).toLowerCase(Locale.ROOT)
+        .replaceAll("[^\\p{L}\\p{N}]", "");
+  }
+
   /**
    * The league rows of the home page show only this week's events (Monday to Sunday, Madrid), as on the web:
    * a league with matches in two weeks does not appear yet. Events without a league or a date stay, and a
@@ -298,10 +344,14 @@ public final class Catalog {
     EventRow(String id, String name, String logo) { this.id = id; this.name = name; this.logo = logo; }
   }
 
-  /** A league's page: its matches of every week that already have a channel or video (as leagueEvents on the web). */
+  /** A league's page: all linked matches of the current Monday-to-Sunday week in Madrid. */
   public static List<Channel> leagueEvents(List<Channel> channels, JSONObject custom, String leagueId, long now) {
     List<Channel> out = new ArrayList<>();
-    for (Channel e : events(channels, custom, now, true)) if (e.leagueId.equals(leagueId) && e.playable() && !e.pending) out.add(e);
+    String week = Competitions.week(now);
+    for (Channel e : events(channels, custom, now, true, true)) {
+      long start = SportsCatalog.instant(e.startAt);
+      if (e.leagueId.equals(leagueId) && e.playable() && !e.pending && start != Long.MAX_VALUE && Competitions.week(start).equals(week)) out.add(e);
+    }
     return out;
   }
 
@@ -363,16 +413,10 @@ public final class Catalog {
     out.putAll(extra);
     Iterator<Map.Entry<String, List<Channel>>> it = out.entrySet().iterator();
     while (it.hasNext()) if (it.next().getValue().isEmpty()) it.remove();
-    for (List<Channel> bucket : out.values()) {
-      // Playable channels first; stable sort keeps the source order otherwise.
-      Collections.sort(
-          bucket,
-          new Comparator<Channel>() {
-            public int compare(Channel a, Channel b) {
-              return Boolean.compare(b.playable(), a.playable());
-            }
-          });
-    }
+    Collator names = Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    names.setStrength(Collator.PRIMARY);
+    for (List<Channel> bucket : out.values())
+      Collections.sort(bucket, (a, b) -> names.compare(a.name, b.name));
     return out;
   }
 

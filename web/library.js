@@ -1,14 +1,20 @@
+import { suggestedVidaraSection, vidaraFolders } from './library-vidara.js';
+import { coverFromFile } from './image-file.js';
+import { withArtwork, keepArtwork } from './library-art.js';
 import { youtubeId, trailerId } from './trailer.js';
 // Films, series and documentaries chosen in TMDB by the administrator, each with its video link
 // (LuluStream or a direct video), with synopsis, genres, cast, rating and posters from TMDB. The administrator shows or hides the whole catalog (catalog field
 // `libraryVisible`); while hidden the menu does not offer it. Published by the admin page to Firestore (calamarLibrary: an index and parts), read here without
 // signing in; the videos play from Google Drive. Nothing depends on the hosting.
 import { firebaseConfig } from './firebase-config.js';
-import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded } from './library-tmdb.js';
-import { luluFolder, scanLulu, libraryFromScan, matchUnmatched } from './library-lulu.js';
+import { searchTmdb, tmdbDetails, seasonEpisodes, movieItem, seriesWithSeason, libraryParts, checkTmdbKey, tmdbTrending, tmdbFacts, stampAdded,
+  findTmdbTitle, freeTmdbTitleId, correctTmdbTitle, episodePremiereWindow, episodeTitleKey, applyEpisodeTitles } from './library-tmdb.js';
+import { luluFolder, scanLulu, libraryFromScan, matchUnmatched, rememberFolderMatches } from './library-lulu.js';
 import { scanFolders, folderReference } from './library-folders.js';
+import { videoKey } from './library-sync.js';
 import { lulustreamEmbed, webPlayback, LULU_ENDPOINT } from './catalog.js';
 import { madridDay } from './audience.js';
+import { playbackTimer } from './sleep-timer.js';
 
 export const LIBRARY_DOCS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/calamarLibrary/`;
 export const LIBRARY_SECTIONS = [
@@ -57,9 +63,10 @@ export const seasonLabel = (e) => `Temporada ${e.season}`;
 export const episodePath = (section, item, e) => `#/${section.page}/${encodeURIComponent(item.id)}/capitulo/${encodeURIComponent(e.id)}`;
 /** The next episode of the series (episodes come in season and episode order), or null after the last. */
 export function nextEpisode(item, episode) {
-  const list = item.episodes || [];
+  const list = listedEpisodes(item);
   const i = list.findIndex((e) => e.id === episode.id);
-  return i >= 0 ? list[i + 1] || null : null;
+  const next = i >= 0 ? list[i + 1] : null;
+  return next && episodeAvailable(next) ? next : null;
 }
 
 // ---- Saltar intro y siguiente capítulo --------------------------------------------------------------
@@ -258,45 +265,52 @@ export function continueRow(el, entries, { open, remove }, title = 'Continuar vi
 // ---- Portada: destacadas y Top 10 ----------------------------------------------------------------
 // The administrator marks titles «En portada» (item.featured: when it was marked, so they keep that
 // order) and they join the featured slider of the home page. item.trend is the title's place in the
-// weekly top of its section (1 = first), set from TMDB in the admin page; the home page shows the first
-// 10 films and the first 10 series (or as many as there are).
+// weekly top of its section (1 = first), set from TMDB in the admin page.
 const everyItem = (library) => LIBRARY_SECTIONS.flatMap((section) => (library?.sections?.[section.key] || []).map((item) => ({ section, item })));
 export const libraryFeatured = (library) => everyItem(library).filter(({ item }) => item.featured).sort((a, b) => a.item.featured - b.item.featured);
 export const TOP_SIZE = 10;
-/** The sections with a weekly top on the home page. */
-export const TOP_SECTIONS = ['movies', 'series'];
-export const libraryTop = (library, sectionKey) => everyItem(library).filter(({ section, item }) => section.key === sectionKey && item.trend > 0)
-  .sort((a, b) => a.item.trend - b.item.trend).slice(0, TOP_SIZE);
+function topItems(sectionKey, items) {
+  const ranked = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend);
+  if (!ranked.length && sectionKey === 'documentaries') {
+    // Until the first weekly ranking is published, use the TMDB votes already in the catalogue.
+    ranked.push(...items.filter((item) => !unidentifiedItem(item)).sort((a, b) =>
+      (b.tmdb.votes || 0) - (a.tmdb.votes || 0) || (b.tmdb.rating || 0) - (a.tmdb.rating || 0)
+      || (a.id < b.id ? -1 : Number(a.id > b.id))));
+  }
+  return ranked.slice(0, TOP_SIZE);
+}
+export function libraryTop(library, sectionKey) {
+  const section = LIBRARY_SECTIONS.find(({ key }) => key === sectionKey);
+  return section ? topItems(sectionKey, library?.sections?.[sectionKey] || []).map((item) => ({ section, item })) : [];
+}
+const documentaryTopTitle = (size) => `Top ${size} de documentales`;
 /** «Película · 2024 · Drama, Comedia · ★ 7,4» */
 export const itemLine = (section, item) => [section.one[0].toUpperCase() + section.one.slice(1), itemYear(item), (item.tmdb?.genres || []).slice(0, 2).join(', '),
   item.tmdb?.rating ? `★ ${item.tmdb.rating.toLocaleString('es-ES')}` : ''].filter(Boolean).join(' · ');
 export const itemPath = (section, item) => `#/${section.page}/${encodeURIComponent(item.id)}`;
 
 /**
- * The weekly top of films and of series among the library's titles, each on its own: first those in TMDB's
+ * The weekly top of each section among the library's titles: first those in TMDB's
  * trending of the week (in its order), then the rest by TMDB popularity. `trending` is [{ id, kind }] and
- * `popularity` maps «movie:123» to a number. Documentaries have no top.
+ * `popularity` maps «movie:123» to a number.
  */
 export function rankTop(sections, trending, popularity, size = TOP_SIZE) {
   const place = new Map(trending.map((t, i) => [`${t.kind}:${t.id}`, i]));
   const keyOf = (item) => item.tmdb?.id && item.status !== 'unmatched' ? `${item.kind === 'tv' ? 'tv' : 'movie'}:${item.tmdb.id}` : null;
-  const rank = new Map();
-  for (const sectionKey of TOP_SECTIONS) {
-    (sections[sectionKey] || []).filter((item) => keyOf(item))
+  return Object.fromEntries(Object.entries(sections).map(([key, items]) => {
+    const rank = new Map();
+    if (LIBRARY_SECTIONS.some((section) => section.key === key)) items.filter((item) => keyOf(item))
       .map((item) => ({ item, trend: place.get(keyOf(item)) ?? Infinity, popularity: popularity[keyOf(item)] || 0 }))
       .sort((a, b) => a.trend - b.trend || b.popularity - a.popularity)
       .slice(0, size)
       .forEach((r, i) => rank.set(r.item.id, i + 1));
-  }
-  return Object.fromEntries(Object.entries(sections).map(([key, items]) => [key, items.map((item) => {
-    const { trend, ...rest } = item;
-    return rank.has(item.id) ? { ...rest, trend: rank.get(item.id) } : rest;
-  })]));
+    return [key, items.map(({ trend, ...item }) => rank.has(item.id) ? { ...item, trend: rank.get(item.id) } : item)];
+  }));
 }
 
-/** A home page row of the weekly top («películas» or «series»): big numbers next to the posters, as on Netflix. */
-export function topRow(el, entries, what, title = `Top ${entries.length} ${what} de la semana`) {
-  return [el('div', { class: 'section-head' }, el('h2', {}, title), el('span', {}, 'Según TMDB')),
+/** A top row with big numbers next to the posters, as on Netflix. */
+export function topRow(el, entries, what, title = what === 'documentales' ? documentaryTopTitle(entries.length) : `Top ${entries.length} ${what} de la semana`) {
+  return [el('div', { class: 'section-head' }, el('h2', {}, title)),
     el('div', { class: 'rail top-rail' }, entries.map(({ section, item }, i) => el('a', { class: 'top-card', href: itemPath(section, item), title: itemTitle(item) },
       el('span', { class: 'top-rank', 'aria-hidden': 'true' }, String(i + 1)),
       el('span', { class: 'poster-frame' }, poster(el, item), posterLabel(item) ? el('span', { class: 'poster-new' }, posterLabel(item)) : null),
@@ -430,12 +444,13 @@ export function browseRows(section, items, { now = Date.now(), watchedIds = [], 
   const genre = (row, kind = 'poster') => { row.genres.forEach((g) => used.add(g)); add(row.key, row.title(section), items.filter((item) => (item.tmdb?.genres || []).some((g) => row.genres.includes(g))).sort(byInterest), kind); };
   add('spanish', SPANISH_ROW[section.key] || `${section.label} españolas`, items.filter(isSpanish).sort(byInterest));
   add('today', 'Recomendaciones de hoy para ti', todaysPicks(items, watchedIds, madridDay(now)));
-  if (TOP_SECTIONS.includes(section.key)) {
-    const top = items.filter((item) => item.trend > 0).sort((a, b) => a.trend - b.trend).slice(0, TOP_SIZE);
-    add('top', top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`, top, 'top');
-  }
-  // Horror has the dark banner of «Especial Halloween», with «Descubrir todo».
-  genre(GENRE_ROWS.terror, 'horror');
+  const top = topItems(section.key, items);
+  const topTitle = section.key === 'documentaries' ? documentaryTopTitle(top.length)
+    : top.length > 1 ? `Las ${top.length} ${section.label.toLowerCase()} más populares de la semana` : `La ${section.one} más popular de la semana`;
+  add('top', topTitle, top, 'top');
+  // Movies offer horror through the category picker without a dedicated row.
+  if (section.key === 'movies') GENRE_ROWS.terror.genres.forEach(g => used.add(g));
+  else genre(GENRE_ROWS.terror, 'horror');
   // Large posters: what arrived lately («Recién llegada») and series with a new episode, the newest first.
   add('new', 'Novedades en Calamar TV', freshTitles(items, now), 'big');
   add('continue', name ? `Seguir viendo para ${name}` : 'Seguir viendo', [], 'continue');
@@ -512,7 +527,7 @@ export function librarySearch(library, q, size = 30) {
 export function browseCard(el, section, item, { big = false } = {}) {
   return el('a', { class: `poster-card browse-card${big ? ' big' : ''}`, href: itemPath(section, item), title: itemTitle(item), 'aria-label': itemTitle(item) },
     el('span', { class: 'poster-frame' }, poster(el, item),
-      item.trend > 0 && TOP_SECTIONS.includes(section.key) ? el('span', { class: 'poster-top', 'aria-hidden': 'true' }, el('small', {}, 'TOP'), el('b', {}, '10')) : null,
+      item.trend > 0 ? el('span', { class: 'poster-top', 'aria-hidden': 'true' }, el('small', {}, 'TOP'), el('b', {}, '10')) : null,
       posterLabel(item) ? el('span', { class: 'poster-new' }, posterLabel(item)) : null));
 }
 
@@ -589,7 +604,7 @@ export function libraryPage(el, section, library, { watching = [], name = '', op
   draw();
   return [el('div', { class: 'browse-head' }, el('h1', { class: 'browse-title' }, section.label),
     el('div', { class: 'browse-controls' }, genres.length ? el('label', { class: 'browse-select' }, picker) : null, toggle)),
-    filters, body, attribution(el, library)];
+    filters, body];
 }
 
 /** The tagline of a slide: «Nuevo episodio disponible», «Recién llegada», «Nº 1 de la semana»… */
@@ -655,7 +670,6 @@ export function platformPage(el, library, name, random = Math.random, settings =
   for (const row of rows) nodes.push(el('div', { class: 'section-head' }, el('h2', {}, row.title)),
     el('div', { class: 'rail browse-rail' }, row.entries.map(({ section, item }) => browseCard(el, section, item))));
   if (!all.length) nodes.push(el('p', { class: 'status' }, `Todavía no hay títulos de ${name}.`));
-  nodes.push(attribution(el, library));
   return nodes;
 }
 
@@ -689,7 +703,6 @@ export function horrorBanner(el, title, entries, { href = '#', onclick = null } 
     el('a', { class: 'halloween-all', href, onclick }, 'Descubrir todo'))];
 }
 
-const attribution = (el, library) => el('p', { class: 'note library-credit' }, library.attribution || 'Datos de TMDB.');
 
 /**
  * «Similares»: other titles of the same section that share genres with this one, the closest first
@@ -722,7 +735,7 @@ export function gateSlides(library, size = 12) {
   const tops = [['movies', 'películas'], ['series', 'series']].map(([key, what]) => libraryTop(library, key)
     .filter(({ item }) => art(item)).map(({ item }, i) => ({ title: itemTitle(item), image: art(item), label: `N.º ${i + 1} en ${what} hoy` })));
   const docs = (library?.sections?.documentaries || []).filter((item) => art(item) && !unidentifiedItem(item))
-    .sort((a, b) => (b.trend ? 1000 - b.trend : 0) - (a.trend ? 1000 - a.trend : 0) || (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0))
+    .sort((a, b) => (b.tmdb?.rating || 0) - (a.tmdb?.rating || 0))
     .slice(0, 3).map((item) => ({ title: itemTitle(item), image: art(item), label: 'Documental destacado' }));
   const out = [];
   for (let i = 0; out.length < size && (i < tops[0].length || i < tops[1].length); i++) {
@@ -767,11 +780,65 @@ export function similarTitles(library, section, item, size = 12) {
   return (close.length ? close : scored).sort((a, b) => b[1] - a[1] || b[2] - a[2] || (b[0].tmdb?.rating || 0) - (a[0].tmdb?.rating || 0)).slice(0, size).map(([other]) => other);
 }
 
-/** The episode to play from a series' page: the one left half watched most recently, else the first. */
-export function resumeEpisode(item, saved = () => null) {
-  const episodes = [...(item.episodes || [])].sort((a, b) => a.season - b.season || a.episode - b.episode);
-  const started = episodes.map((e) => [e, saved(e.id)]).filter(([, s]) => s).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
-  return started ? started[0] : episodes[0] || null;
+const hasPremiereDate = (episode, today = madridDay()) => episodePremiereWindow(episode, today) && episode.aired >= today;
+export const isUpcomingEpisode = (episode, today = madridDay()) => hasPremiereDate(episode, today) && episode.aired > today;
+const hasEpisodeVideo = episode => !!(episode?.id && episode.url?.trim());
+export const episodeAvailable = (episode, today = madridDay()) => hasEpisodeVideo(episode) && !isUpcomingEpisode(episode, today);
+
+export function listedEpisodes(item, today = madridDay()) {
+  const numbered = episode => `${episode.season}/${episode.episode}`;
+  const episodes = new Map((item.episodes || []).map(episode => [numbered(episode), episode]));
+  for (const entry of [item.tmdb?.lastEpisode, ...(item.tmdb?.upcoming || []), item.tmdb?.nextEpisode]) {
+    if (!episodePremiereWindow(entry, today)) continue;
+    const key = numbered(entry);
+    const linked = episodes.get(key);
+    episodes.set(key, linked?.id ? { ...linked, aired: entry.aired } : entry);
+  }
+  return [...episodes.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
+}
+
+export function nextPremiere(episodes, today = madridDay()) {
+  return episodes.filter(e => hasPremiereDate(e, today)).sort((a, b) => a.aired.localeCompare(b.aired) || a.season - b.season || (a.episode || 0) - (b.episode || 0))[0];
+}
+
+const releaseDate = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const formattedRelease = aired => releaseDate.format(new Date(aired + 'T00:00:00Z'));
+export function episodePremiereLabel(episode, today = madridDay()) {
+  if (!episodePremiereWindow(episode, today)) return '';
+  if (episode.aired === today) return hasEpisodeVideo(episode) ? 'Estrenado Hoy' : 'Estreno Hoy';
+  return episode.aired < today ? 'Estrenado Ayer' : `Estreno el ${formattedRelease(episode.aired)}`;
+}
+
+function episodePremiereBadge(el, episode, today) {
+  const label = episodePremiereLabel(episode, today);
+  return label ? el('time', { class: 'episode-state upcoming', datetime: episode.aired }, label) : null;
+}
+
+function nextSeasonPremiere(item, episodes, today) {
+  const premieres = new Map(episodes.filter(e => e.season > 1 && e.episode === 1 && hasPremiereDate(e, today))
+    .map(e => [e.season, e]));
+  for (const season of item.tmdb?.seasonPremieres || [])
+    if (season?.season > 1 && hasPremiereDate(season, today)) premieres.set(season.season, season);
+  return nextPremiere([...premieres.values()], today);
+}
+const watchedEpisode = (history, episode) => Number.isFinite(history?.watched?.[episode.id]);
+const latestEpisodeProgress = (episodes, saved) => episodes.map(e => [e, saved(e.id)])
+  .filter(([, state]) => state).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
+
+export function defaultEpisodeSeason(item, saved, history) {
+  const episodes = listedEpisodes(item);
+  const started = latestEpisodeProgress(episodes, saved);
+  const recent = episodes.find(e => e.id && e.id === history?.recent?.episode);
+  if (recent && (!started || (history.recent.at || 0) > (started[1].at || 0))) return recent.season;
+  return started?.[0].season ?? episodes[0]?.season;
+}
+
+/** Resume the episode in progress, or offer the first one the profile has not finished. */
+export function resumeEpisode(item, saved = () => null, history = {}, today = madridDay()) {
+  const episodes = listedEpisodes(item, today).filter(episode => episodeAvailable(episode, today));
+  const started = latestEpisodeProgress(episodes, saved);
+  if (started && (!watchedEpisode(history, started[0]) || (started[1].at || 0) > history.watched[started[0].id])) return started[0];
+  return episodes.find(episode => !watchedEpisode(history, episode)) || episodes[0] || null;
 }
 
 /**
@@ -779,19 +846,27 @@ export function resumeEpisode(item, saved = () => null) {
  * button, the synopsis, «Protagonizada por» and «Creada por» / «Dirigida por», and the tabs «Episodios»
  * (series: the season drop-down and its episodes), «Tráileres y más» (the trailer in Spanish) and «Similares».
  */
-export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = []) {
+export function libraryDetail(el, section, library, item, play, saved = () => null, initialSeason = null, extras = [], history = {}) {
   const info = item.tmdb || {};
+  const overview = info.overview?.trim();
+  const title = itemTitle(item);
   const trailer = trailerId(item);
   const series = item.kind === 'tv';
-  const seasons = series ? [...new Set(item.episodes.map((e) => e.season))].sort((a, b) => a - b) : [];
+  const today = madridDay();
+  const episodes = series ? listedEpisodes(item, today) : [];
+  const newSeason = series ? nextSeasonPremiere(item, episodes, today) : null;
+  const premiere = newSeason || nextPremiere(episodes, today);
+  const seasons = [...new Set(episodes.map(e => e.season))];
+  let chosen = seasons.includes(initialSeason) ? initialSeason : defaultEpisodeSeason(item, saved, history);
   const facts = [itemYear(item), series ? (seasons.length === 1 ? '1 temporada' : `${seasons.length} temporadas`) : info.runtime ? `${info.runtime} min` : '',
-    info.rating ? `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}` : ''].filter(Boolean).join(' · ');
+    (info.genres || []).slice(0, 2).join(', ')].filter(Boolean).join(' · ');
   const brand = (info.providers || [])[0];
   // «Reproducir»: the film, or the episode of the series left half watched most recently (else the first).
   let action;
   if (series) {
-    const next = resumeEpisode(item, saved);
-    const left = next && saved(next.id);
+    const next = resumeEpisode(item, saved, history);
+    const progress = next && saved(next.id);
+    const left = progress && (!watchedEpisode(history, next) || progress.at > history.watched[next.id]) ? progress : null;
     action = next ? el('div', { class: 'library-actions' },
       el('button', { class: 'btn lg title-play', type: 'button', onclick: () => play(item, next, false) },
         left ? `▶ Continuar T${next.season}:E${next.episode} · ${clock(left.position)}` : `▶ Reproducir T${next.season}:E${next.episode}`), bar(el, left)) : null;
@@ -804,63 +879,72 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
     starring.append('… ', more);
   }
   const creators = (info.creators || []).filter(Boolean);
-  const share = el('button', { class: 'title-action', type: 'button', onclick: async () => {
-    const url = new URL(itemPath(section, item), location.href).href;
-    try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.lastChild.textContent = 'Enlace copiado'; } } catch {}
-  } }, el('span', { 'aria-hidden': 'true' }, '⤴'), el('span', {}, 'Compartir'));
+  const share = el('button', { class: 'title-share', type: 'button', 'aria-label': 'Compartir', onclick: async () => {
+    const url = new URL(`${section.page}/${encodeURIComponent(item.id)}/`, new URL('./', location.href)).href;
+    try { if (navigator.share) await navigator.share({ title: itemTitle(item), url }); else { await navigator.clipboard.writeText(url); share.setAttribute('aria-label', 'Enlace copiado'); } } catch {}
+  } }, '⤴');
+  const trailerButton = trailer ? el('button', { class: 'title-action', type: 'button', onclick: () => {
+    open('trailers');
+    panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  } }, el('span', { 'aria-hidden': 'true' }, '▣'), el('span', {}, 'Tráiler')) : null;
   const head = el('section', { class: 'title-page' },
     el('div', { class: 'title-backdrop' }, info.backdrop ? el('img', { src: info.backdrop, alt: '', referrerpolicy: 'no-referrer' }) : poster(el, item, 'library-poster'),
-      el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹')),
+      el('a', { class: 'library-back title-back', href: `#/${section.page}`, 'aria-label': `Volver a ${section.label}` }, '‹'), share),
     el('div', { class: 'title-body' },
       brand ? el('p', { class: 'title-brand' }, info.logos?.[brand] ? el('img', { class: 'title-platform-logo', src: info.logos[brand], alt: brand, referrerpolicy: 'no-referrer', onerror: (event) => { event.target.replaceWith(brand); } }) : brand) : null,
-      el('h1', {}, itemTitle(item)),
+      el('h1', {}, info.titleLogo ? el('img', { class: 'title-logo', src: info.titleLogo, alt: title, referrerpolicy: 'no-referrer',
+        onerror: (event) => event.target.replaceWith(title) }) : title),
       facts ? el('p', { class: 'library-facts' }, facts) : null,
-      action, !series ? soundNote(el, item.file) : null,
-      el('p', { class: 'library-overview' }, info.overview || 'Sin sinopsis. El administrador puede buscar este título en TMDB.'),
-      starring,
-      creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
-      info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
-      el('div', { class: 'title-actions' }, ...extras, share)));
-  if (trailer) {
-    const backdrop = head.querySelector('.title-backdrop');
-    const frame = el('iframe', { class: 'title-preview', src: `./trailer.html?v=${trailer}`, title: `Tráiler de ${itemTitle(item)}`,
-      allow: 'autoplay; encrypted-media; fullscreen; picture-in-picture', allowfullscreen: true });
-    backdrop.insertBefore(frame, backdrop.firstChild.nextSibling);
-    // Route changes remove the header; stop YouTube and release its frame immediately.
-    const onState = (event) => {
-      if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.type !== 'calamar-trailer') return;
-      frame.classList.toggle('ready', event.data.state === 'playing' || event.data.state === 'blocked');
-    };
-    window.addEventListener('message', onState);
-    const observer = new MutationObserver(() => { if (!head.isConnected) { window.removeEventListener('message', onState); frame.remove(); observer.disconnect(); } });
-    queueMicrotask(() => { if (head.isConnected) observer.observe(document.body, { childList: true, subtree: true }); });
-    head.addEventListener('click', (event) => { if (event.target.closest('.title-play, .library-actions button')) frame.contentWindow?.postMessage('pause-trailer', location.origin); });
-  }
+      premiere ? el('p', { class: 'title-premiere' }, ...(newSeason
+        ? [el('strong', {}, `Temporada ${newSeason.season}`), ' el ', el('time', { datetime: newSeason.aired }, formattedRelease(newSeason.aired))]
+        : premiere.aired === today
+          ? [el('strong', {}, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))), ` · T${premiere.season}:E${premiere.episode}`]
+          : [el('strong', {}, 'Próximo estreno'), ` · T${premiere.season}:E${premiere.episode} · `, el('time', { datetime: premiere.aired }, episodePremiereLabel(premiere, today))])) : null,
+      action,
+      el('div', { class: 'title-actions' }, trailerButton, extras[0]),
+      overview ? el('p', { class: 'library-overview' }, overview) : null));
   // The tabs.
   const panel = el('div', { class: 'title-panel' });
   const tabs = [];
   if (series) tabs.push(['episodes', 'Episodios', () => {
-    let chosen = seasons.includes(initialSeason) ? initialSeason : (resumeEpisode(item, saved)?.season ?? seasons[0]);
     const picker = el('select', { class: 'season-picker', 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: String(s) }, `Temporada ${s}`)));
     picker.value = String(chosen);
     const list = el('div', { class: 'episode-list' });
-    const draw = () => list.replaceChildren(...item.episodes.filter((e) => e.season === chosen).sort((a, b) => a.episode - b.episode).map((e) => el('a', { class: 'episode', href: episodePath(section, item, e) },
-      el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
-        el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), bar(el, saved(e.id))),
-      el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), e.runtime ? el('small', {}, `${e.runtime} min`) : null),
-      e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null)));
+    const draw = () => list.replaceChildren(...episodes.filter(e => e.season === chosen).map(e => {
+      const upcoming = !episodeAvailable(e, today), watched = !upcoming && watchedEpisode(history, e);
+      const badge = episodePremiereBadge(el, e, today);
+      return el(upcoming ? 'div' : 'a', { class: upcoming ? 'episode episode-upcoming' : 'episode', href: upcoming ? null : episodePath(section, item, e) },
+        el('span', { class: 'episode-art' }, e.still ? el('img', { class: 'episode-still', src: e.still, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { class: 'episode-still episode-number' }, episodeLabel(e)),
+          upcoming ? null : el('span', { class: 'episode-play-icon', 'aria-hidden': 'true' }, '▶'), upcoming || watched ? null : bar(el, saved(e.id))),
+        el('span', { class: 'episode-text' }, el('b', {}, e.name ? `${e.episode}. ${e.name}` : episodeLabel(e)), badge,
+          watched ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null, e.runtime ? el('small', {}, `${e.runtime} min`) : null),
+        e.overview ? el('span', { class: 'episode-overview' }, e.overview) : null);
+    }));
     picker.addEventListener('change', () => { chosen = Number(picker.value); draw(); });
     draw();
     return [el('label', { class: 'browse-select season-select' }, picker), list];
   }]);
-  tabs.push(['trailers', 'Tráileres y más', () => (trailer
-    ? [el('div', { class: 'title-trailer' }, el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
-      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' }))]
-    : [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')])]);
-  tabs.push(['similar', 'Similares', () => {
+  tabs.push(['similar', 'Sugerencias', () => {
     const found = similarTitles(library, section, item);
     return found.length ? [el('div', { class: 'poster-grid similar-grid' }, found.map((other) => browseCard(el, section, other)))] : [el('p', { class: 'status' }, 'Todavía no hay títulos parecidos.')];
   }]);
+  tabs.push(['trailers', 'Extras', () => {
+    if (!trailer) return [el('p', { class: 'status' }, 'Este título no tiene tráiler en español.')];
+    const frame = el('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer)}?rel=0`, title: `Tráiler de ${itemTitle(item)}`,
+      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true, loading: 'lazy', referrerpolicy: 'strict-origin-when-cross-origin' });
+    const controls = el('div', { class: 'trailer-timer' });
+    const timer = playbackTimer(controls, () => { frame.src = frame.src; });
+    const trailerPlayer = el('div', { class: 'title-trailer' }, frame);
+    return timer ? [trailerPlayer, controls] : [trailerPlayer];
+  }]);
+  tabs.push(['details', 'Detalles', () => [
+    info.rating ? el('p', { class: 'title-credit' }, `★ ${info.rating.toLocaleString('es-ES')}${info.votes ? ` (${info.votes.toLocaleString('es-ES')} votos)` : ''}`) : null,
+    starring,
+    creators.length ? el('p', { class: 'title-credit' }, el('b', {}, series ? 'Creada por: ' : 'Dirigida por: '), creators.join(', ')) : null,
+    info.genres?.length ? el('p', { class: 'title-credit' }, el('b', {}, 'Géneros: '), info.genres.join(', ')) : null,
+    !series ? soundNote(el, item.file, item.url) : null,
+    ...extras.slice(1),
+  ].filter(Boolean)]);
   const bar_ = el('div', { class: 'title-tabs', role: 'tablist' });
   const open = (key) => {
     for (const b of bar_.children) b.setAttribute('aria-selected', String(b.dataset.tab === key));
@@ -868,12 +952,14 @@ export function libraryDetail(el, section, library, item, play, saved = () => nu
   };
   for (const [key, label] of tabs) bar_.append(el('button', { class: 'title-tab', type: 'button', role: 'tab', 'data-tab': key, onclick: () => open(key) }, label));
   open(series ? 'episodes' : 'similar');
-  return [head, bar_, panel, attribution(el, library)];
+  return [head, bar_, panel];
 }
 
 /** Browsers often play MKV/AVI without sound (AC3/DTS audio); the app plays them with sound. */
-const soundNote = (el, file) => /\.(mkv|avi|mov|wmv|flv|mpg|mpeg|m2ts|vob)$/i.test(file || '')
-  ? el('p', { class: 'note library-sound' }, 'Este vídeo es MKV: si en el navegador no se oye, ábrelo en la app Calamar TV, donde se oye bien.') : null;
+const soundNote = (el, file, url) => webPlayback(url).compatibility
+  ? el('p', { class: 'note library-sound' }, 'Si el vídeo no se oye bien, elige Modo compatible en Fuentes.')
+  : /\.(mkv|avi|mov|wmv|flv|mpg|mpeg|m2ts|vob)$/i.test(file || '')
+  ? el('p', { class: 'note library-sound' }, 'Si el navegador no reproduce el vídeo o su audio, prueba a abrirlo en la app Calamar TV.') : null;
 
 /** «▶ Ver», or «▶ Continuar · 12:34» and «Desde el principio» when it was left half watched. */
 function playButtons(el, saved, play) {
@@ -884,19 +970,22 @@ function playButtons(el, saved, play) {
 }
 
 /** An episode's own page: its image, «Capítulo N», its name and synopsis, and the play button. */
-export function libraryEpisode(el, section, library, item, episode, play, saved = () => null) {
+export function libraryEpisode(el, section, item, episode, play, saved = () => null, history = {}) {
   const info = item.tmdb || {};
   const image = episode.still || info.backdrop || '';
   const next = nextEpisode(item, episode);
+  const today = madridDay();
+  const upcoming = !episodeAvailable(episode, today);
   return [el('section', { class: 'library-hero episode-hero', style: image ? `--backdrop:url("${image.replace(/"/g, '')}")` : null },
     el('div', { class: 'library-info' },
       el('a', { class: 'library-back', href: `#/${section.page}/${encodeURIComponent(item.id)}/temporada/${episode.season}` }, `‹ ${itemTitle(item)}`),
       el('p', { class: 'library-facts' }, `${itemTitle(item)} · ${seasonLabel(episode)}`),
       el('h1', {}, episodeTitle(episode)),
       el('p', { class: 'library-overview' }, episode.overview || info.overview || 'Sin descripción.'),
-      playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), soundNote(el, episode.file),
-      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null)),
-    attribution(el, library)];
+      episodePremiereBadge(el, episode, today),
+      !upcoming && watchedEpisode(history, episode) ? el('span', { class: 'episode-state seen' }, '✓ Visto') : null,
+      upcoming ? null : playButtons(el, saved(episode.id), (restart) => play(item, episode, restart)), upcoming ? null : soundNote(el, episode.file, episode.url),
+      next ? el('a', { class: 'episode-next', href: episodePath(section, item, next) }, `Siguiente: ${seasonLabel(next)} · ${episodeTitle(next)} ›`) : null))];
 }
 
 // ---- Administration ---------------------------------------------------------------------------
@@ -933,7 +1022,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     catch (error) { toggle.checked = !toggle.checked; say(error.message, true); }
     finally { toggle.disabled = false; }
   });
-  let settings = {}, current = { sections: {} };
+  let settings = {}, current = { sections: {} }, remembered = {};
   const key = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de TMDB (v3) o token de lectura (v4)' });
   const saveKey = el('button', { class: 'btn secondary', type: 'button' }, 'Guardar clave');
   const tmdbKey = () => { if (!settings.tmdb) throw new Error('Primero añade la clave de TMDB en «Configuración».'); return settings.tmdb; };
@@ -942,9 +1031,22 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const store = async (sections) => {
     // Each title keeps the day it arrived: new ones are «Recién llegada» for a month if they are from this year.
     // LuluStream links are saved on its current site (luluvido.com), whatever name they were pasted with.
-    const next = stampAdded(luluvidoLinks(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, sections[s.key] || []]))).sections, current.sections);
-    await publish(libraryParts(next));
-    current = { ...current, sections: next };
+    const prepared = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (sections[s.key] || []).map(item =>
+      applyEpisodeTitles(keepArtwork(Object.values(current.sections).flat().find(old => old.id === item.id), item)))]));
+    const next = stampAdded(luluvidoLinks(prepared).sections, current.sections);
+    const publicSections = {}, pending = {};
+    for (const [section, items] of Object.entries(next)) {
+      publicSections[section] = items.filter(item => !item.pendingIdentification);
+      pending[section] = items.filter(item => item.pendingIdentification);
+    }
+    const matches = rememberFolderMatches(remembered, current.sections, next);
+    const importState = JSON.stringify({ matches, pending });
+    const publication = libraryParts(publicSections);
+    await publish({ ...publication, importState, beforeUpdatedAt: current.updatedAt || '' });
+    remembered = matches;
+    cached = { sections: publicSections, attribution: publication.index.attribution, updatedAt: publication.index.updatedAt };
+    cachedAt = Date.now();
+    current = { ...cached, sections: next };
     drawList();
   };
   const sectionOf = (id) => LIBRARY_SECTIONS.find((s) => (current.sections[s.key] || []).some((item) => item.id === id))?.key || null;
@@ -954,18 +1056,34 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     if (before && Object.hasOwn(before, 'trailerUrl') && !Object.hasOwn(item, 'trailerUrl')) item = { ...item, trailerUrl: before.trailerUrl };
     if (before?.featured && item.featured === undefined) item = { ...item, featured: before.featured };
     if (before?.trend && item.trend === undefined) item = { ...item, trend: before.trend };
+    if (before?.kind === 'movie') {
+      for (const name of ['folder', 'files', 'file']) if (before[name] && !item[name]) item = { ...item, [name]: before[name] };
+    }
+    if (before?.url && videoKey(before.url) === videoKey(item.url)) {
+      for (const name of ['fromFolder', 'folderSources', 'mirrors', 'addedAt'])
+        if (Object.hasOwn(before, name) && !Object.hasOwn(item, name)) item = { ...item, [name]: before[name] };
+    }
     const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id)]));
     sections[section] = [...sections[section], item].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
     await store(sections);
   };
+  const savedIdentity = (kind, tmdbId) => {
+    const hits = Object.entries(remembered).filter(([id, entry]) => entry.kind === kind && entry.tmdbId === Number(tmdbId) && !sectionOf(id));
+    return hits.length === 1 ? { id: hits[0][0], ...hits[0][1] } : null;
+  };
+  const availableId = (kind, tmdbId) => freeTmdbTitleId(current.sections, kind, tmdbId, Object.keys(remembered));
   const remove = async (id) => store(Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== id)])));
-  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://luluvido.com/… o https://anonmp4.art/v/…', 'aria-label': label, class: 'library-link' });
+  const linkInput = (value, label) => el('input', { type: 'url', value: value || '', placeholder: 'https://www.youtube.com/watch?v=…', 'aria-label': label, class: 'library-link' });
   const checkLinks = (inputs) => {
     const bad = inputs.find((i) => i.value.trim() && !validVideoLink(i.value));
-    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega el enlace del vídeo de LuluStream (https://luluvido.com/…), de AnonMP4 (https://anonmp4.art/v/…) o un vídeo MP4/HLS por HTTPS.`); }
+    if (bad) { bad.focus(); throw new Error(`Enlace no válido: ${bad.value.trim()}. Pega un enlace de vídeo de YouTube, LuluStream, Vidara, AnonMP4 o un vídeo MP4/HLS por HTTPS.`); }
   };
 
-  // ---- Search ----
+  // ---- Search published titles; add new titles separately ----
+  const publishedQuery = el('input', { type: 'search', class: 'library-link', placeholder: 'Buscar por título', 'aria-label': 'Buscar títulos publicados', oninput: () => drawList() });
+  const publishedType = el('select', { 'aria-label': 'Tipo de título', onchange: () => drawList() }, el('option', { value: '' }, 'Todo el catálogo'),
+    LIBRARY_SECTIONS.map(s => el('option', { value: s.key }, s.label)));
+  const publishedSearch = el('div', { class: 'library-published-search library-search-form' }, el('div', { class: 'library-search-row' }, publishedType, publishedQuery));
   const sectionPick = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key }, s.label)));
   const query = el('input', { type: 'search', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar en TMDB' });
   const searchButton = el('button', { class: 'btn', type: 'submit' }, 'Buscar en TMDB');
@@ -987,14 +1105,19 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   } }, el('div', { class: 'library-search-row' }, sectionPick, query, searchButton));
 
   // ---- Editor: a film's link, or a series' episode links season by season ----
-  async function openEditor(section, tmdbId, kind) {
+  async function openEditor(section, tmdbId, kind, savedItem) {
     editor.hidden = false;
-    editor.replaceChildren(el('p', { class: 'note' }, 'Cargando la ficha de TMDB…'));
+    editor.replaceChildren(el('p', { class: 'note' }, 'Cargando la ficha…'));
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
     try {
-      const { info, seasons } = await tmdbDetails(tmdbId, kind, tmdbKey());
-      const id = `${kind === 'tv' ? 's' : 'm'}${info.id}`;
-      const existing = Object.values(current.sections).flat().find((item) => item.id === id);
+      const storedDetails = () => ({ info: { ...savedItem.tmdb, title: itemTitle(savedItem), year: itemYear(savedItem) }, seasons: [] });
+      let details;
+      try { details = savedItem && !tmdbId ? storedDetails() : await tmdbDetails(tmdbId, kind, tmdbKey()); }
+      catch (error) { if (!savedItem || kind !== 'tv') throw error; details = storedDetails(); }
+      const { info, seasons } = details;
+      const existing = savedItem || findTmdbTitle(current.sections, kind, info.id);
+      const memory = !existing && savedIdentity(kind, info.id);
+      const id = existing?.id || memory?.id || availableId(kind, info.id);
       const inSection = existing ? sectionOf(id) : section;
       const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
       const del = existing ? el('button', { class: 'ghost danger', type: 'button', onclick: async () => {
@@ -1004,7 +1127,8 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       const where = el('select', { 'aria-label': 'Sección' }, LIBRARY_SECTIONS.map((s) => el('option', { value: s.key, selected: s.key === inSection }, s.label)));
       const head = el('div', { class: 'library-editor-head' },
         info.poster ? el('img', { src: info.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
-        el('div', {}, el('h3', {}, `${info.title}${info.year ? ` (${info.year})` : ''}`), el('p', { class: 'note' }, info.overview.slice(0, 260) || 'Sin sinopsis.'), field('Sección', where)));
+        el('div', {}, el('h3', {}, `${info.title}${info.year ? ` (${info.year})` : ''}`),
+          info.overview?.trim() ? el('p', { class: 'note' }, info.overview.slice(0, 260)) : null, field('Sección', where)));
       const note = el('p', { class: 'note', role: 'status' });
       if (kind !== 'tv') {
         const link = linkInput(existing?.url, 'Enlace del vídeo');
@@ -1013,49 +1137,86 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
             if (!link.value.trim()) throw new Error('Pega el enlace del vídeo.');
             checkLinks([link]);
             save.disabled = true; note.textContent = 'Guardando…';
-            await upsert(where.value, movieItem(info, link.value.trim()));
+            await upsert(where.value, movieItem(info, link.value.trim(), id));
             note.textContent = 'Guardado y publicado.'; say(`«${info.title}» guardada.`);
           } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
         } }, existing ? 'Guardar cambios' : 'Guardar');
-        editor.replaceChildren(head, field('Enlace del vídeo (LuluStream)', link, 'El enlace de la página del vídeo de LuluStream (luluvido.com, lulustream.com, luluvdo.com…) o de AnonMP4 (anonmp4.art/v/…).'),
+        editor.replaceChildren(head, field('Enlace del vídeo', link, 'Pega un enlace de LuluStream, Vidara, AnonMP4 o un vídeo directo.'),
           el('div', { class: 'actions' }, save, del, close), note);
         link.focus();
         return;
       }
       // Series: choose the season, then paste the link of each episode.
-      const seasonPick = el('select', { 'aria-label': 'Temporada' }, seasons.map((s) => el('option', { value: s.season },
+      const tmdbSeasons = new Set(seasons.map(s => s.season));
+      const extraSeasons = [...new Set([...(existing?.episodes || []), ...(existing?.tmdb?.upcoming || [])].map(e => e.season))]
+        .filter(season => !tmdbSeasons.has(season)).map(season => ({ season, name: `Temporada ${season}` }));
+      const editableSeasons = [...seasons, ...extraSeasons];
+      const seasonPick = el('select', { 'aria-label': 'Temporada' }, editableSeasons.map((s) => el('option', { value: s.season },
         `${s.name}${s.episodes ? ` · ${s.episodes} capítulos` : ''}${(existing?.episodes || []).some((e) => e.season === s.season) ? ' ✓' : ''}`)));
-      const firstWithLinks = seasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
-      seasonPick.value = String((firstWithLinks || seasons.find((s) => s.season > 0) || seasons[0])?.season ?? 1);
+      const firstWithLinks = editableSeasons.find((s) => (existing?.episodes || []).some((e) => e.season === s.season));
+      seasonPick.value = String((firstWithLinks || editableSeasons.find((s) => s.season > 0) || editableSeasons[0])?.season ?? 1);
       const rows = el('div', { class: 'library-episodes' });
-      let episodes = [], inputs = {};
+      const readSaved = () => Object.values(current.sections).flat().find(item => item.id === id);
+      let draft, request = 0;
       const loadSeason = async () => {
+        const mine = ++request;
+        draft = null;
+        save.disabled = true;
         rows.replaceChildren(el('p', { class: 'note' }, 'Cargando capítulos…'));
         const season = Number(seasonPick.value);
         try {
-          episodes = await seasonEpisodes(info.id, season, tmdbKey());
-          const saved = new Map((current.sections[sectionOf(id)] || []).find((item) => item.id === id)?.episodes?.filter((e) => e.season === season).map((e) => [e.episode, e.url]) || []);
-          inputs = Object.fromEntries(episodes.map((e) => [e.episode, linkInput(saved.get(e.episode), `Enlace del capítulo ${e.episode}`)]));
-          rows.replaceChildren(...episodes.map((e) => el('label', { class: 'library-episode-row' },
-            el('span', {}, el('b', {}, `${e.episode}.`), ` ${e.name || `Capítulo ${e.episode}`}`), inputs[e.episode])));
-          if (!episodes.length) rows.append(el('p', { class: 'note' }, 'TMDB no tiene capítulos para esta temporada.'));
-        } catch (error) { rows.replaceChildren(el('p', { class: 'error' }, error.message)); }
+          const item = readSaved();
+          const saved = new Map((item?.episodes || []).filter(e => e.season === season).map(e => [e.episode, e]));
+          const stored = new Map([...(item?.tmdb?.upcoming || []).filter(e => e.season === season).map(e => [e.episode, e]), ...saved]);
+          const remote = tmdbSeasons.has(season) ? await seasonEpisodes(info.id, season, tmdbKey()).catch(error => {
+            if (!stored.size) throw error;
+            return [];
+          }) : [];
+          if (mine !== request) return;
+          const episodes = [...new Map([...stored, ...remote.map(e => [e.episode, e])]).values()].sort((a, b) => a.episode - b.episode);
+          const fields = episodes.map(e => {
+            const original = e.sourceName ?? e.name ?? '';
+            const title = el('input', { type: 'text', class: 'library-link', maxlength: '250',
+              'aria-label': `Título del capítulo ${e.episode}`, placeholder: original || episodeLabel(e),
+              value: (item?.episodeTitles || memory?.episodeTitles)?.[episodeTitleKey(season, e.episode)] || original });
+            return { episode: e.episode, original, title, link: linkInput(saved.get(e.episode)?.url, `Enlace del capítulo ${e.episode}`) };
+          });
+          draft = { season, episodes, fields };
+          rows.replaceChildren(...fields.map(({ episode, title, link }) => el('div', { class: 'library-episode-row' },
+            el('b', {}, `Capítulo ${episode}`), el('label', {}, 'Título', title), el('label', {}, 'Enlace del vídeo', link))));
+          if (!fields.length) rows.append(el('p', { class: 'note' }, 'No hay capítulos para esta temporada.'));
+          save.disabled = !fields.length;
+        } catch (error) { if (mine === request) rows.replaceChildren(el('p', { class: 'error' }, error.message)); }
       };
       seasonPick.addEventListener('change', loadSeason);
       const save = el('button', { class: 'btn', type: 'button', onclick: async () => {
         try {
-          checkLinks(Object.values(inputs));
-          const links = Object.fromEntries(Object.entries(inputs).map(([n, input]) => [n, input.value]));
-          const season = Number(seasonPick.value);
-          const before = Object.values(current.sections).flat().find((item) => item.id === id);
-          const item = seriesWithSeason(before, info, season, episodes, links);
+          if (!draft) return;
+          const { season, episodes, fields } = draft;
+          checkLinks(fields.map(f => f.link));
+          const links = Object.fromEntries(fields.map(f => [f.episode, f.link.value]));
+          const before = readSaved();
+          const restored = memory ? { id, tmdb: info, episodeIds: memory.episodeIds, episodeTitles: memory.episodeTitles, skip: memory.skip } : null;
+          const item = seriesWithSeason(before || restored, info, season, episodes, links, id);
+          if (before && unidentifiedItem(before)) {
+            item.status = before.status || 'unmatched';
+            if (!before.tmdb) delete item.tmdb;
+          }
+          const titles = { ...(before || restored)?.episodeTitles };
+          for (const { episode, title, original } of fields) {
+            const key = episodeTitleKey(season, episode), name = title.value.trim();
+            if (name && name !== original) titles[key] = name;
+            else delete titles[key];
+          }
+          if (Object.keys(titles).length) item.episodeTitles = titles;
+          else delete item.episodeTitles;
           if (!item.episodes.length) throw new Error('Pega el enlace de al menos un capítulo.');
-          save.disabled = true; note.textContent = 'Guardando…';
+          save.disabled = seasonPick.disabled = true; note.textContent = 'Guardando…';
           await upsert(where.value, item);
           const count = item.episodes.filter((e) => e.season === season).length;
-          note.textContent = `Temporada ${season} guardada y publicada: ${count} ${count === 1 ? 'capítulo' : 'capítulos'} con enlace.`;
+          note.textContent = `Temporada ${season} ${item.pendingIdentification ? 'guardada, pendiente de identificar' : 'guardada y publicada'}: ${count} ${count === 1 ? 'capítulo' : 'capítulos'} con enlace.`;
           [...seasonPick.options].find((o) => Number(o.value) === season).textContent = `${seasons.find((s) => s.season === season)?.name || `Temporada ${season}`} · ${count} con enlace ✓`;
-        } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+        } catch (error) { note.textContent = error.message; } finally { save.disabled = seasonPick.disabled = false; }
       } }, 'Guardar temporada');
       // «Saltar intro» and «Siguiente capítulo»: times for the whole series, or for one season that differs.
       const introFrom = el('input', { type: 'text', inputmode: 'numeric', placeholder: '0:30', 'aria-label': 'La intro empieza en', class: 'library-clock' });
@@ -1103,7 +1264,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         el('div', { class: 'library-skip-row' }, field('Intro desde', introFrom), field('hasta', introTo), field('Créditos (duración)', credits)),
         el('div', { class: 'actions' }, scope, saveSkip), skipNote);
       fillSkip();
-      editor.replaceChildren(head, field('Temporada', seasonPick, 'Elige la temporada que quieres subir y pega el enlace de cada capítulo. Los capítulos sin enlace no se muestran.'),
+      editor.replaceChildren(head, field('Temporada', seasonPick, 'Edita el título y el enlace de cada capítulo. Deja el título vacío para usar el original.'),
         rows, el('div', { class: 'actions' }, save, del, close), note, skipBox);
       await loadSeason();
     } catch (error) { editor.replaceChildren(el('p', { class: 'error' }, error.message)); }
@@ -1123,9 +1284,62 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   } }, 'Guardar clave de Google Drive');
   const folderInputs = LIBRARY_SECTIONS.map(section => ({ section,
     input: el('textarea', { rows: 3, placeholder: 'Un enlace de carpeta por línea, de Google Drive o LuluStream', 'aria-label': `Carpetas de ${section.label}` }) }));
-  const configuredFolders = () => folderInputs.flatMap(({section,input}) => input.value.split(/\r?\n/).map(url=>url.trim()).filter(Boolean)
-    .map(url => { folderReference(url); return { section:section.key, url }; }));
+  const vidaraKey = el('input', { type: 'password', autocomplete: 'off', placeholder: 'Clave de la API de Vidara' });
+  const vidaraRows = el('div', { class: 'library-vidara-folders' });
+  const vidaraNote = el('p', { class: 'note', role: 'status' });
+  let vidaraChoices = [];
+  const vidaraSources = () => vidaraChoices.filter(choice => choice.select.value).map(({ folder, select }) => ({
+    provider: 'vidara', id: folder.id, name: folder.name, section: select.value,
+  }));
+  const vidaraCategories = () => vidaraChoices.map(({ folder, select }) => ({ id: folder.id, section: select.value }));
+  const drawVidaraFolders = (folders, selected) => {
+    const sections = new Map(selected.map(folder => [String(folder.id), folder.section]));
+    vidaraChoices = folders.map(folder => {
+      const select = el('select', { 'aria-label': `Categoría para ${folder.name}` },
+        el('option', { value: '' }, 'No importar'),
+        LIBRARY_SECTIONS.map(section => el('option', { value: section.key }, section.label)));
+      select.value = sections.get(folder.id) ?? (folder.parentId ? '' : suggestedVidaraSection(folder.name));
+      return { folder, select };
+    });
+    vidaraRows.replaceChildren(...vidaraChoices.map(({ folder, select }) => field(`Categoría para ${folder.name}`, select,
+      [folder.count == null ? '' : `Archivos en Vidara · ${folder.count}`,
+        folder.parentId ? 'Incluida al importar la carpeta superior.' : ''].filter(Boolean).join(' '))));
+  };
+  const readVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    readVidara.disabled = true;
+    vidaraNote.textContent = 'Leyendo carpetas…';
+    try {
+      const selected = vidaraCategories();
+      const folders = await vidaraFolders(settings.vidara);
+      drawVidaraFolders(folders, selected);
+      vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
+    } catch (error) { vidaraNote.textContent = error.message; }
+    finally { readVidara.disabled = false; }
+  } }, 'Cargar carpetas de Vidara');
+  const saveVidara = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
+    saveVidara.disabled = true;
+    say('Comprobando la clave en Vidara…');
+    try {
+      const value = vidaraKey.value.trim();
+      const folders = await vidaraFolders(value);
+      const next = { ...settings, vidara: value };
+      await saveSettings(next);
+      settings = next;
+      vidaraKey.value = '';
+      vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      drawVidaraFolders(folders, vidaraCategories());
+      say('Clave de Vidara guardada en la configuración privada.');
+      vidaraNote.textContent = folders.length ? 'Elige la categoría de cada carpeta que quieras importar.' : 'Tu cuenta de Vidara todavía no tiene carpetas.';
+    } catch (error) { say(error.message, true); }
+    finally { saveVidara.disabled = false; }
+  } }, 'Guardar clave de Vidara');
+  const configuredFolders = () => [
+    ...folderInputs.flatMap(({ section, input }) => input.value.split(/\r?\n/).map(url => url.trim()).filter(Boolean)
+      .map(url => { folderReference(url); return { section: section.key, url }; })),
+    ...vidaraSources(),
+  ];
   const folderNote = el('p', { class: 'note', role: 'status' });
+  const folderReport = el('div', { class: 'library-folder-report' });
   const saveFolders = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     saveFolders.disabled = true;
     try { const next = {...settings, sourceFolders: configuredFolders()}; await saveSettings(next); settings=next; folderNote.textContent='Carpetas guardadas.'; }
@@ -1134,42 +1348,51 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   const mixedScan = el('button', { class:'btn', type:'button', onclick: async () => {
     if (scanButton.disabled) return;
     mixedScan.disabled = true; scanButton.disabled = true; saveFolders.disabled = true;
+    folderReport.replaceChildren();
     try {
       const sources = configuredFolders();
-      if (!sources.length) throw Error('Añade al menos un enlace de carpeta.');
+      if (!sources.length) throw Error('Añade o selecciona al menos una carpeta.');
       const tmdb = tmdbKey();
       const next = {...settings, sourceFolders:sources}; await saveSettings(next); settings=next;
       folderNote.textContent='Leyendo carpetas…';
       const scan = await scanFolders(sources, settings, {onFolder:name=>{folderNote.textContent=`Leyendo «${name}»…`;}});
-      const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true,
+      folderReport.replaceChildren(...scan.vidaraReport.map(({ name, count, unavailable, error }) =>
+        el('p', { class: 'note' }, error ? `Vidara · «${name}» · ${error}`
+          : `Vidara · «${name}» · ${count} ${count === 1 ? 'archivo detectado' : 'archivos detectados'}${unavailable ? ` (${unavailable} sin reproducción disponible)` : ''}.`)));
+      if (!scan.inventory.length) {
+        folderNote.textContent = 'No se pudo leer ninguna de las carpetas seleccionadas.';
+        return;
+      }
+      const result = await libraryFromScan(scan, current.sections, tmdb, {skipDuplicates:true, remembered,
         onProgress:(n,total,title)=>{folderNote.textContent=`Buscando ${n} de ${total}: ${title}…`;}});
-      if (result.added.films || result.added.shows || result.added.pending) await store(result.sections);
-      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.`;
-      scanReport.replaceChildren(...result.unknown.map(line=>el('p',{class:'note'},line)));
+      if (result.changed) await store(result.sections);
+      const pending = result.added.pending ? ' Elige su ficha en «No identificadas» para publicarlos.' : '';
+      folderNote.textContent=`Hecho: ${result.added.films} películas o documentales, ${result.added.episodes} capítulos nuevos y ${result.added.pending} títulos sin ficha. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos. Omitidos: ${result.skipped.films} títulos y ${result.skipped.episodes} capítulos duplicados.${pending}`;
+      if (scan.partialVidara) folderNote.append(' Se conservaron los enlaces de Vidara que el escaneo no pudo verificar.');
+      folderReport.append(...result.unknown.map(line => el('p', { class: 'note' }, line)));
     } catch(error) { folderNote.textContent=error.message; }
     finally { mixedScan.disabled=false; scanButton.disabled=false; saveFolders.disabled=false; }
-  } }, 'Buscar e importar de ambos sitios');
+  } }, 'Buscar e importar carpetas');
 
   // ---- LuluStream folders: Peliculas/, Series/<Nombre>/Temporada N/, Documentales/ ----
   const scanNote = el('p', { class: 'note', role: 'status' });
   const scanReport = el('div', { class: 'library-scan-report' });
   const scanButton = el('button', { class: 'btn', type: 'button', onclick: async () => {
-    scanButton.disabled = true; scanReport.replaceChildren();
+    if (mixedScan.disabled) return;
+    scanButton.disabled = true; mixedScan.disabled = true; saveFolders.disabled = true; scanReport.replaceChildren();
     try {
       if (!settings.lulu) throw new Error('Primero añade la clave de la API de LuluStream en «Configuración».');
       const key = tmdbKey();
       scanNote.textContent = 'Leyendo las carpetas de LuluStream…';
       const scan = await scanLulu(settings.lulu, { onFolder: (name) => { scanNote.textContent = `Leyendo «${name}» en LuluStream…`; } });
-      const found = scan.films.length + scan.series.length;
-      if (!found) throw new Error('No hay vídeos en las carpetas Peliculas, Series o Documentales.');
-      const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, onProgress: (n, total, title) => { scanNote.textContent = `Buscando en TMDB ${n} de ${total}: ${title}…`; } });
+      const result = await libraryFromScan(scan, current.sections, key, { skipDuplicates:true, remembered, onProgress: (n, total, title) => { scanNote.textContent = `Revisando ${n} de ${total}: ${title}…`; } });
       scanNote.textContent = 'Publicando…';
-      await store(result.sections);
+      if (result.changed) await store(result.sections);
       const { films, shows, episodes, pending } = result.added;
-      scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados${pending ? `, y ${pending} sin ficha de TMDB` : ''}. Revisa la lista de abajo; puedes editar o quitar cualquiera.`;
-      if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Para revisar (${result.unknown.length}). Los que están «sin ficha de TMDB» ya se ven con su nombre de archivo: en la lista de abajo pulsa «Buscar en TMDB» y elige su ficha.`),
+      scanNote.textContent = `Hecho: ${films} ${films === 1 ? 'película o documental' : 'películas y documentales'} y ${shows} ${shows === 1 ? 'serie' : 'series'} (${episodes} capítulos) publicados${pending ? `, y ${pending} sin ficha de TMDB` : ''}. Retirados: ${result.removed.films} películas o documentales, ${result.removed.shows} series y ${result.removed.episodes} capítulos.`;
+      if (result.unknown.length) scanReport.replaceChildren(el('p', { class: 'note' }, `Para revisar (${result.unknown.length}). En «No identificadas», pulsa «Buscar en TMDB» y elige la ficha de cada título pendiente para publicarlo.`),
         el('ul', {}, result.unknown.map((line) => el('li', {}, line))));
-    } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; }
+    } catch (error) { scanNote.textContent = error.message; } finally { scanButton.disabled = false; mixedScan.disabled = false; saveFolders.disabled = false; }
   } }, 'Leer carpetas de LuluStream');
   // LuluStream moved to luluvido.com: the links saved before (lulustream.com, luluvdo.com…) move there in one go.
   const moveButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
@@ -1183,12 +1406,13 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } catch (error) { scanNote.textContent = error.message; } finally { moveButton.disabled = false; }
   } }, 'Cambiar los enlaces a luluvido.com');
 
-  // ---- A title TMDB did not recognise: search TMDB and choose its record; its links go with it ----
+  // ---- Identify a pending title or correct an existing TMDB record ----
   function openMatcher(sectionKey, item) {
     editor.hidden = false;
     const kind = item.kind === 'tv' ? 'tv' : 'movie';
-    const words = el('input', { type: 'search', value: item.title || '', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar su ficha en TMDB' });
-    let lookup = 0;
+    const correcting = !unidentifiedItem(item);
+    const words = el('input', { type: 'search', value: itemTitle(item) || '', placeholder: 'Título o enlace de una ficha de TMDB', 'aria-label': 'Buscar su ficha en TMDB' });
+    let lookup = 0, applying = false;
     const found = el('div', { class: 'library-results' });
     const note = el('p', { class: 'note', role: 'status' });
     const close = el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar');
@@ -1198,7 +1422,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     } }, 'Quitar');
     const search = async (event) => {
       event?.preventDefault();
-      if (!words.value.trim()) return;
+      if (applying || !words.value.trim()) return;
       const request = ++lookup;
       found.replaceChildren(el('p', { class: 'note' }, 'Buscando…'));
       try {
@@ -1211,27 +1435,102 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       } catch (error) { if (request === lookup) found.replaceChildren(el('p', { class: 'error' }, error.message)); }
     };
     const choose = async (r) => {
+      if (applying) return;
+      applying = true;
       lookup++;
-      found.replaceChildren(); note.textContent = 'Pasando los enlaces a la ficha de TMDB…';
+      note.textContent = 'Guardando la ficha de TMDB…';
       try {
-        const existing = Object.values(current.sections).flat().find((x) => x.id === `${kind === 'tv' ? 's' : 'm'}${r.id}`);
-        const next = await matchUnmatched(item, r.id, existing, tmdbKey());
+        const latest = current.sections[sectionKey]?.find(x => x.id === item.id);
+        if (!latest) throw new Error('Este título ya no está en el catálogo.');
+        const existing = findTmdbTitle(current.sections, kind, r.id);
+        if (correcting) {
+          if (existing?.id === item.id) { note.textContent = 'Esta ficha ya está vinculada al título.'; return; }
+          if (existing) throw new Error(`La ficha ya está vinculada a «${itemTitle(existing)}» en el catálogo.`);
+          const next = keepArtwork(latest, await correctTmdbTitle(latest, r.id, tmdbKey()));
+          if (!found.isConnected) return;
+          await upsert(sectionKey, next);
+          say(`Ficha corregida. «${itemTitle(next)}» conserva sus enlaces de vídeo.`);
+          openTitleEditor(sectionKey, next);
+          return;
+        }
+        const memory = !existing && savedIdentity(kind, r.id);
+        const id = existing?.id || memory?.id || availableId(kind, r.id);
+        const source = memory && kind === 'tv' ? {
+          ...latest, episodeIds: memory.episodeIds, episodeTitles: { ...memory.episodeTitles, ...latest.episodeTitles }, skip: memory.skip,
+        } : latest;
+        const next = keepArtwork(latest, await matchUnmatched(source, r.id, existing, tmdbKey(), globalThis.fetch, id));
         const sections = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.key, (current.sections[s.key] || []).filter((x) => x.id !== item.id && x.id !== next.id)]));
         const where = existing ? sectionOf(existing.id) : sectionKey;
         sections[where] = [...sections[where], next].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b), 'es', { sensitivity: 'base' }));
         await store(sections);
         say(`«${item.title}» es ahora «${itemTitle(next)}», con ${kind === 'tv' ? `sus ${item.episodes.length} capítulos` : 'su vídeo'}.`);
-        await openEditor(where, r.id, kind);
+        await openEditor(where, r.id, kind, next);
       } catch (error) { note.textContent = error.message; }
+      finally { applying = false; }
     };
     editor.replaceChildren(
       el('div', { class: 'library-editor-head' }, el('span', { class: 'thumb' }),
-        el('div', {}, el('h3', {}, item.title), el('p', { class: 'note' },
-          `Sin ficha de TMDB. ${kind === 'tv' ? `Carpeta «${item.folder || item.title}», ${item.episodes.length} capítulos.` : `Archivo «${item.file || item.title}».`} Busca su ficha o pega su enlace de TMDB y elígela: ${kind === 'tv' ? 'los capítulos' : 'el vídeo'} pasarán a ella.`))),
+        el('div', {}, el('h3', {}, correcting ? `Corregir ficha de TMDB · ${itemTitle(item)}` : itemTitle(item)),
+          correcting ? el('a', { href: `https://www.themoviedb.org/${kind}/${Number(item.tmdb.id)}`, target: '_blank', rel: 'noopener noreferrer' }, `Ver ficha actual de TMDB · ${item.tmdb.id}`) : null,
+          el('p', { class: 'note' }, correcting
+            ? 'Busca el título correcto o pega el enlace exacto de TMDB. Al elegir la ficha se conservan los vídeos y el progreso.'
+            : `Sin ficha de TMDB. ${kind === 'tv' ? `Carpeta «${item.folder || item.title}», ${item.episodes.length} capítulos.` : `Archivo «${item.file || item.title}».`} Busca su ficha o pega su enlace de TMDB y elígela.`))),
       el('form', { class: 'library-search-form', onsubmit: search }, el('div', { class: 'library-search-row' }, words, el('button', { class: 'btn', type: 'submit' }, 'Buscar'))),
       found, el('div', { class: 'actions' }, del, close), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    search();
+    if (correcting) words.focus(); else search();
+  }
+
+  function openTitleEditor(sectionKey, item) {
+    editor.hidden = false;
+    const note = el('p', { class: 'note', role: 'status' });
+    const fields = {};
+    let preparing = 0;
+    const artwork = (key, title, hint) => {
+      let chosen = (item.tmdb?.[key] || '').startsWith('data:image/') ? item.tmdb[key] : '';
+      const url = el('input', { type: 'url', value: chosen ? '' : item.tmdb?.[key] || '', placeholder: 'https://…', 'aria-label': `Enlace de ${title.toLowerCase()}` });
+      const upload = el('input', { type: 'file', accept: 'image/*', 'aria-label': `Subir ${title.toLowerCase()}` });
+      const preview = el('img', { class: `library-art-preview ${key}`, alt: `Vista previa de ${title.toLowerCase()}`, referrerpolicy: 'no-referrer' });
+      let request = 0;
+      const paint = () => { const value = chosen || url.value; preview.hidden = !value; if (value) preview.src = value; else preview.removeAttribute('src'); };
+      url.addEventListener('input', () => { request++; chosen = ''; paint(); }); paint();
+      upload.addEventListener('change', async () => {
+        if (!upload.files[0]) return;
+        const currentRequest = ++request; preparing++;
+        try { note.textContent = 'Preparando imagen…'; const data = await coverFromFile(upload.files[0]); if (request === currentRequest) { chosen = data; url.value = ''; paint(); note.textContent = 'Imagen preparada. Pulsa Guardar cambios para publicarla.'; } }
+        catch (error) { note.textContent = error.message; }
+        finally { preparing--; }
+      });
+      const clear = el('button', { type: 'button', class: 'ghost', onclick: () => { request++; chosen = ''; url.value = ''; upload.value = ''; paint(); } }, 'Quitar imagen');
+      fields[key] = () => chosen || url.value.trim();
+      return el('div', { class: 'library-art-field' }, field(`Subir ${title.toLowerCase()}`, upload, hint), field(`Enlace de ${title.toLowerCase()}`, url), preview, clear);
+    };
+    const save = el('button', { type: 'button', class: 'btn', onclick: async () => {
+      try {
+        if (preparing) throw new Error('Espera a que termine de prepararse la imagen.');
+        const latest = current.sections[sectionKey]?.find((x) => x.id === item.id);
+        if (!latest) throw new Error('Este título ya no está en el catálogo.');
+        const next = withArtwork(latest, Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input()])));
+        save.disabled = true; note.textContent = 'Guardando…';
+        await upsert(sectionKey, next); item = next;
+        note.textContent = 'Carátula y portada guardadas y publicadas.';
+      } catch (error) { note.textContent = error.message; } finally { save.disabled = false; }
+    } }, 'Guardar cambios');
+    const del = el('button', { type: 'button', class: 'btn danger', onclick: async () => {
+      if (!confirm(`¿Eliminar «${itemTitle(item)}» del catálogo?`)) return;
+      del.disabled = true;
+      try { await remove(item.id); say(`«${itemTitle(item)}» eliminada del catálogo.`); editor.hidden = true; editor.replaceChildren(); }
+      catch (error) { note.textContent = error.message; del.disabled = false; }
+    } }, 'Eliminar del catálogo');
+    editor.replaceChildren(el('h3', {}, `Editar · ${itemTitle(item)}`),
+      el('div', { class: 'library-art-grid' }, artwork('poster', 'Carátula', 'Imagen vertical para las tarjetas del catálogo.'), artwork('backdrop', 'Imagen de portada', 'Imagen horizontal para la cabecera y el enlace compartido.')),
+      el('div', { class: 'actions' }, save, del,
+        el('button', { type: 'button', class: 'ghost', onclick: () => openMatcher(sectionKey, item) },
+          unidentifiedItem(item) ? 'Buscar en TMDB' : 'Corregir ficha de TMDB'),
+        unidentifiedItem(item) && item.kind !== 'tv' ? null : el('button', { type: 'button', class: 'ghost',
+          onclick: () => openEditor(sectionKey, unidentifiedItem(item) ? null : item.tmdb.id, item.kind === 'tv' ? 'tv' : 'movie', item) }, 'Editar enlaces y temporadas'),
+        el('button', { type: 'button', class: 'ghost', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
+    editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function editTrailer(sectionKey, item) {
@@ -1249,7 +1548,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
         note.textContent = 'Tráiler guardado y publicado.';
       } catch (e) { note.textContent = e.message; } finally { save.disabled = false; }
     } }, 'Guardar tráiler');
-    editor.replaceChildren(el('h3', {}, `Tráiler · ${itemTitle(item)}`), field('Enlace del tráiler de YouTube', input, 'Se reproduce automáticamente en la cabecera. Déjalo vacío para mostrar la imagen.'),
+    editor.replaceChildren(el('h3', {}, `Tráiler · ${itemTitle(item)}`), field('Enlace del tráiler de YouTube', input, 'Disponible en la pestaña Tráileres y más.'),
       el('div', { class: 'actions' }, save, el('button', { class: 'ghost', type: 'button', onclick: () => { editor.hidden = true; editor.replaceChildren(); } }, 'Cerrar')), note);
     editor.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -1266,7 +1565,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   }
 
   // ---- Top 10 de la semana: TMDB's trending of the week among the library's titles ----
-  const TOP_REFRESHED = 'calamar-top-refreshed-v2'; // v2: a top for films and another for series
+  const TOP_REFRESHED = 'calamar-top-refreshed-v6'; // Publish the documentary top on the next admin visit.
   const topNote = el('p', { class: 'note', role: 'status' });
   async function refreshTop(quiet = false) {
     const key = tmdbKey();
@@ -1276,7 +1575,7 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     // The same request brings the release date and the platforms of each title (the filters of the lists).
     const popularity = {}, facts = {};
     for (const [n, item] of titles.entries()) {
-      if (!quiet) topNote.textContent = `Popularidad y plataformas en TMDB ${n + 1} de ${titles.length}: ${itemTitle(item)}…`;
+      if (!quiet) topNote.textContent = `Consultando plataformas y logos en TMDB (${n + 1} de ${titles.length}) · ${itemTitle(item)}`;
       const kind = item.kind === 'tv' ? 'tv' : 'movie';
       const found = await tmdbFacts(item.tmdb.id, kind, key).catch(() => null);
       popularity[`${kind}:${item.tmdb.id}`] = found?.popularity || 0;
@@ -1286,19 +1585,23 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
       ? { ...item, tmdb: { ...item.tmdb, providers: facts[item.id].providers, ...(facts[item.id].released ? { released: facts[item.id].released } : {}),
         ...(facts[item.id].countries.length ? { countries: facts[item.id].countries } : {}), ...(facts[item.id].language ? { language: facts[item.id].language } : {}),
         logos: facts[item.id].logos, trailer: facts[item.id].trailer, ...(facts[item.id].creators.length ? { creators: facts[item.id].creators } : {}),
-        ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}) } } : item)]));
+        ...(facts[item.id].titleLogo !== undefined ? { titleLogo: facts[item.id].titleLogo } : {}),
+        ...(facts[item.id].lastEpisode ? { lastEpisode: facts[item.id].lastEpisode } : {}),
+        ...(item.kind === 'tv' ? { nextEpisode: facts[item.id].nextEpisode, seasonPremieres: facts[item.id].seasonPremieres,
+          ...(facts[item.id].upcoming ? { upcoming: [...(item.tmdb.upcoming || [])
+            .filter(episode => episode.season !== facts[item.id].nextEpisode.season && episodePremiereWindow(episode)), ...facts[item.id].upcoming] } : {}) } : {}) } } : item)]));
     const ranked = rankTop(withFacts, trending, popularity);
     const changed = JSON.stringify(ranked) !== JSON.stringify(current.sections);
     if (changed) await store(ranked);
     try { localStorage.setItem(TOP_REFRESHED, new Date().toISOString().slice(0, 10)); } catch {}
-    const lines = TOP_SECTIONS.map((key) => [LIBRARY_SECTIONS.find((sec) => sec.key === key).label, libraryTop({ sections: ranked }, key)])
+    const lines = LIBRARY_SECTIONS.map(({ key, label }) => [label, libraryTop({ sections: ranked }, key)])
       .filter(([, top]) => top.length).map(([label, top]) => `${label}: ${top.map(({ item }, i) => `${i + 1}. ${itemTitle(item)}`).join(' · ')}`);
-    topNote.textContent = lines.length ? `Top actualizado. ${lines.join(' — ')}` : 'Todavía no hay películas ni series con ficha de TMDB para el top.';
+    topNote.textContent = lines.length ? `Top actualizado. ${lines.join(' — ')}` : 'Todavía no hay títulos con ficha de TMDB para el top.';
   }
   const topButton = el('button', { class: 'btn secondary', type: 'button', onclick: async () => {
     topButton.disabled = true;
     try { await refreshTop(); } catch (error) { topNote.textContent = error.message; } finally { topButton.disabled = false; }
-  } }, 'Actualizar el top y las plataformas con TMDB');
+  } }, 'Actualizar top, plataformas y estrenos con TMDB');
 
   // ---- What is in the library ----
   const list = el('div', { class: 'library-admin-list' }, el('p', { class: 'note' }, 'Cargando la biblioteca…'));
@@ -1312,31 +1615,46 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
     reviewNav.replaceChildren(...[{ page: '', label: 'Todas', count: total }, ...LIBRARY_SECTIONS.map((s) => ({ ...s, count: counts[s.key] }))].map((s) =>
       el('a', { href: reviewPath + (s.page ? '/' + s.page : ''), class: `btn ${unidentifiedSection === s.page ? '' : 'secondary'}`,
         'aria-current': unidentifiedSection === s.page ? 'page' : null }, `${s.label} · ${s.count}`)));
-    list.replaceChildren(...LIBRARY_SECTIONS.filter((s) => !unidentified || !unidentifiedSection || s.page === unidentifiedSection).flatMap((section) => {
-      const items = (current.sections[section.key] || []).filter((item) => !unidentified || unidentifiedItem(item));
-      return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item' },
+    const search = unidentified ? '' : norm(publishedQuery.value.trim());
+    const type = unidentified ? '' : publishedType.value;
+    list.replaceChildren(...LIBRARY_SECTIONS.filter(s => (!type || s.key === type)
+      && (!unidentified || !unidentifiedSection || s.page === unidentifiedSection)).flatMap((section) => {
+      const items = (current.sections[section.key] || []).filter(item => (unidentified ? unidentifiedItem(item) : !item.pendingIdentification)
+        && (!search || norm(`${itemTitle(item)} ${itemYear(item)}`).includes(search)));
+      if (search && !items.length) return [];
+      return [el('h3', {}, `${section.label} · ${items.length}`), ...(items.length ? items.map((item) => el('div', { class: 'library-item', 'data-library-id': item.id },
         el('div', { class: 'library-item-row' },
           item.tmdb?.poster ? el('img', { src: item.tmdb.poster, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'thumb' }),
           el('span', { class: 'meta' }, el('b', {}, `${itemTitle(item)}${itemYear(item) ? ` (${itemYear(item)})` : ''}`),
             el('span', { class: 'note' }, `${unidentifiedItem(item) ? 'Sin ficha de TMDB · ' : ''}${item.kind === 'tv' ? `${new Set(item.episodes.map((e) => e.season)).size} temporadas · ${item.episodes.length} capítulos con enlace` : 'Con enlace'}`)),
-          el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
+          item.pendingIdentification ? null : el('button', { class: `btn small ${item.featured ? '' : 'secondary'}`, type: 'button', 'aria-pressed': String(!!item.featured),
             title: item.featured ? 'Quitar de la portada' : 'Mostrar en la portada de inicio', onclick: (event) => toggleFeatured(section.key, item, event.currentTarget) },
             item.featured ? '★ En portada' : '☆ Destacar'),
-          el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
+          item.pendingIdentification ? null : el('button', { class: 'btn small secondary', type: 'button', onclick: () => editTrailer(section.key, item) }, 'Tráiler'),
           unidentifiedItem(item)
-            ? el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')
-            : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openEditor(section.key, item.tmdb?.id, item.kind === 'tv' ? 'tv' : 'movie') }, 'Editar')))) : [el('p', { class: 'note' }, unidentified ? 'No quedan títulos sin identificar en esta sección.' : 'Todavía no hay ninguno.')])];
+            ? [el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar'), el('button', { class: 'btn small', type: 'button', onclick: () => openMatcher(section.key, item) }, 'Buscar en TMDB')]
+            : el('button', { class: 'btn small secondary', type: 'button', onclick: () => openTitleEditor(section.key, item) }, 'Editar')))) : [el('p', { class: 'note' }, unidentified ? 'No quedan títulos sin identificar en esta sección.' : 'Todavía no hay ninguno.')])];
     }));
+    if (search && !list.children.length) list.append(el('p', { class: 'note', role: 'status' }, 'No hay títulos publicados que coincidan.'));
   }
 
   (async () => {
     try {
-      settings = await readSettings();
+      const library = await fetchLibrary({ fresh: true });
+      const { importState, ...configuration } = await readSettings();
+      settings = configuration;
+      const { matches = {}, pending = {} } = JSON.parse(importState || '{}');
+      remembered = matches;
       if (settings.tmdb) key.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      if (settings.vidara) vidaraKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
+      const savedVidara = (settings.sourceFolders || []).filter(source => source.provider === 'vidara');
+      drawVidaraFolders(savedVidara.map(source => ({ id: String(source.id), name: source.name || `Carpeta ${source.id}` })), savedVidara);
       if (settings.drive) driveKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
-      for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key).map(s=>s.url).join('\n');
+      for (const {section,input} of folderInputs) input.value=(settings.sourceFolders||[]).filter(s=>s.section===section.key && s.url).map(s=>s.url).join('\n');
       if (settings.lulu) luluKey.placeholder = 'Clave guardada (escribe otra para cambiarla)';
-      current = await fetchLibrary({ fresh: true });
+      current = { ...library, sections: Object.fromEntries(LIBRARY_SECTIONS.map(({ key }) => [
+        key, [...(library.sections[key] || []), ...(pending[key] || [])],
+      ])) };
       drawList();
       // The top follows TMDB by itself: once a day, when the administrator opens this page.
       let last = '';
@@ -1368,27 +1686,35 @@ export function libraryAdmin(el, { visible, setVisible, field, readSettings, sav
   });
   if (unidentified) return [el('div', { class: 'section-head' }, el('h2', {}, 'No identificadas'),
     el('a', { href: '#/admin/biblioteca', class: 'btn secondary' }, 'Volver a Pelis y series')),
-    el('p', { class: 'note' }, 'Elige un tipo y pulsa «Buscar en TMDB» en el título pendiente. Puedes buscar por nombre o pegar el enlace de su ficha. Los vídeos y capítulos se conservan al identificarlo.'),
+    el('p', { class: 'note' }, 'Elige un tipo y pulsa «Buscar en TMDB» en el título pendiente. Puedes buscar por nombre o pegar el enlace de su ficha. Al elegir la ficha se publican sus vídeos y capítulos.'),
     reviewNav, editor, status, list];
   return [el('div', { class: 'section-head' }, el('h2', {}, 'Pelis y series')),
     el('div', { class: 'actions' }, reviewLink),
     el('label', { class: 'actions library-switch' }, toggle, 'Mostrar Películas, Series y Documentales a los usuarios (web y app)'),
-    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB, LuluStream y Google Drive'),
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Configuración: TMDB, LuluStream, Google Drive y Vidara'),
       el('p', { class: 'note' }, 'Crea una clave gratuita en themoviedb.org → Ajustes → API y pégala aquí. Se guarda en Firebase, visible solo para el administrador.'),
       field('Clave de TMDB', key), el('div', { class: 'actions' }, saveKey),
       el('p', { class: 'note' }, 'La clave de la API de LuluStream (LuluStream → API) sirve para leer tus carpetas. También es privada.'),
       field('Clave de LuluStream', luluKey), el('div', { class: 'actions' }, saveLulu),
       el('p', {class:'note'}, 'Para Drive, añade una clave de Google Cloud con Google Drive API habilitada. Se guarda solo para el administrador y viaja cifrada en los enlaces de vídeo.'),
-      field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive)),
+      field('Clave de Google Drive',driveKey), el('div',{class:'actions'},saveDrive),
+      el('p', { class: 'note' }, 'Pega tu clave de Vidara. Se guarda en la configuración privada del administrador.'),
+      field('Clave de Vidara', vidaraKey), el('div', { class: 'actions' }, saveVidara)),
     el('h3',{},'Carpetas de Google Drive y LuluStream'),
-    el('p',{class:'note'},'Puedes mezclar los dos sitios. Se conserva el vídeo de los títulos y capítulos que ya existen; solo se añaden los nuevos. En series: Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace. Los vídeos se abren en el reproductor de Calamar TV.'),
+    el('p',{class:'note'},'Puedes importar de Google Drive, LuluStream y Vidara en la misma búsqueda. Al actualizar se añaden los vídeos nuevos y se retiran los borrados de las carpetas leídas. Si falla una carpeta de Vidara, se conservan sus enlaces y puedes importar las demás. Si queda otra copia del mismo título o capítulo, se conserva. En series, usa Nombre de serie/Temporada 1/1x01.mp4. Las carpetas de Drive deben permitir lectura a cualquiera con el enlace.'),
+    el('p',{class:'note'},'Haz una primera actualización con todas tus carpetas para registrar las copias de los títulos que ya tienes. Los enlaces antiguos sin origen de carpeta se conservan hasta encontrarlos en una lectura.'),
     ...folderInputs.map(({section,input})=>field(`Carpetas de ${section.label}`,input)),
-    el('div',{class:'actions'},saveFolders,mixedScan),folderNote,
+    el('h3', {}, 'Carpetas de Vidara'),
+    el('p', { class: 'note' }, 'Carga las carpetas, revisa su categoría y pulsa «Buscar e importar carpetas». Si Vidara lista las temporadas por separado, se proponen como Series las carpetas con nombres como «Tulsa King (Temporada 1)». Los capítulos pueden llamarse «Tulsa King 1x01» o «Capítulo 1».'),
+    readVidara, vidaraNote, vidaraRows,
+    el('div',{class:'actions'},saveFolders,mixedScan),folderNote,folderReport,
     el('h3', {}, 'Leer las carpetas de LuluStream'),
-    el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Lo que se reconozca en TMDB se publica; lo demás se lista para añadirlo a mano.'),
+    el('p', { class: 'note' }, 'Peliculas/ con un vídeo por película, Series/Nombre/Temporada 1/ con los capítulos (1x01, S01E01…) y Documentales/. Los títulos nuevos quedan en «No identificadas» hasta que elijas su ficha. Los títulos ya identificados conservan la ficha aunque cambien de proveedor.'),
     el('div', { class: 'actions' }, scanButton, moveButton), scanNote, scanReport,
-    el('h3', {}, 'Portada y Top 10 de películas y series'),
-    el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en cualquier título de la lista de abajo para que salga en la portada de inicio, junto a los eventos destacados. La portada muestra el top de la semana de tus películas y el de tus series (hasta 10 de cada, o las que haya), ordenadas por las tendencias de la semana en TMDB y su popularidad; se actualiza solo una vez al día al abrir esta página.'),
+    el('h3', {}, 'Portada y Top 10 de películas, series y documentales'),
+    el('p', { class: 'note' }, 'Pulsa «☆ Destacar» en un título para que salga en Inicio junto a los eventos destacados. Los tops de películas, series y documentales siguen las tendencias de la semana y la popularidad de TMDB. Se actualizan una vez al día al abrir esta página.'),
     el('div', { class: 'actions' }, topButton), topNote,
-    el('h3', {}, 'Añadir una película, serie o documental'), searchForm, results, editor, status, list];
+    el('h3', {}, 'Títulos publicados'), publishedSearch,
+    el('details', { class: 'image-settings' }, el('summary', {}, 'Añadir un título con TMDB'), searchForm, results),
+    editor, status, list];
 }

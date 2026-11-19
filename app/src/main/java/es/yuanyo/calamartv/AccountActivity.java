@@ -27,6 +27,7 @@ import androidx.credentials.exceptions.GetCredentialException;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.Source;
@@ -34,20 +35,27 @@ import org.json.JSONObject;
 
 /**
  * «Mi cuenta», as on the web (#/cuenta): sign in with Google, with email and password or from the phone
- * (QR and code, for televisions), then the profiles of the account (add, rename, colour, delete) and
- * «Administración». Whatever each profile saves is in Profiles.
+ * (QR and code, for televisions), then the profiles of the account (add, rename, colour, delete).
  */
 public class AccountActivity extends Activity {
   private LinearLayout body;
   private TextView status;
   private String editing; // null, "new" or the id of the profile being edited
   private final Profiles.Listener redraw = () -> runOnUiThread(this::draw);
+  static final String REQUIRED = "required_sign_in";
   private FirebaseAuth.AuthStateListener authListener;
-
+  private boolean required;
+  private boolean emailWorking;
+  private String emailValue = "";
+  private Runnable stopAccess;
+  private Library.Data library;
+  private boolean loadingLibrary;
+  private final java.util.concurrent.ExecutorService posterWorker = java.util.concurrent.Executors.newFixedThreadPool(3);
   @Override
   protected void onCreate(Bundle state) {
     super.onCreate(state);
     Profiles.start(this);
+    required = getIntent().getBooleanExtra(REQUIRED, false);
     editing = getIntent().getStringExtra("editing");
     draw();
   }
@@ -56,6 +64,12 @@ public class AccountActivity extends Activity {
   protected void onStart() {
     super.onStart();
     Profiles.listen(redraw);
+    if (required) stopAccess = AppAccess.observe(this, state -> {
+      if (state == AppAccess.State.ALLOWED || state == AppAccess.State.BLOCKED || state == AppAccess.State.ERROR) {
+        setResult(RESULT_OK);
+        finish();
+      }
+    });
     try {
       authListener = auth -> runOnUiThread(this::draw);
       SharedCatalog.auth(this).addAuthStateListener(authListener);
@@ -64,10 +78,16 @@ public class AccountActivity extends Activity {
 
   @Override
   protected void onStop() {
+    if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     Profiles.forget(redraw);
     if (authListener != null) SharedCatalog.auth(this).removeAuthStateListener(authListener);
     stopPhoneLogin();
     super.onStop();
+  }
+
+  @Override protected void onDestroy() {
+    posterWorker.shutdownNow();
+    super.onDestroy();
   }
 
   private int dp(int n) { return Ui.dp(this, n); }
@@ -118,78 +138,130 @@ public class AccountActivity extends Activity {
     v.setGravity(Gravity.CENTER);
     int color;
     try { color = Color.parseColor(profile.optString("color", ProfileData.COLORS[0])); } catch (IllegalArgumentException bad) { color = 0xffe50914; }
-    v.setBackground(Ui.shape(a, color, 12, 0, 0));
+    v.setBackground(Ui.shape(a, color, sizeDp <= 34 ? 8 : 12, 0, 0));
     return v;
   }
 
   private static final int SHEET = 0xff232323, CARD = 0xff2e2e2e;
 
   private void draw() {
-    if (isFinishing()) return;
+    if (isFinishing() || emailWorking) return;
     if (phone != null && !phoneInline) return; // The phone sign-in screen stays until it ends.
-    if (Profiles.user(this) == null) { signIn(); return; }
-    if (editing != null && !editing.equals("all") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
+    if (required || Profiles.user(this) == null) { signIn(); return; }
+    if (editing != null && !editing.equals("all") && !editing.equals("elegir") && !editing.equals("cuenta") && !editing.equals("ayuda")) { profileForm(); return; }
     JSONObject current = Profiles.active();
     if ("all".equals(editing) || current == null) { manage(current == null); return; }
+    if ("elegir".equals(editing)) { chooseProfile(); return; }
     if ("cuenta".equals(editing)) { accountFacts(); return; }
     if ("ayuda".equals(editing)) { help(); return; }
-    sheet("Perfil", null);
-    // The profile watching: big, with its name, the account's email and ✎ to edit it.
-    FrameLayout card = new FrameLayout(this);
-    card.setBackground(Ui.shape(this, CARD, 26, 0, 0));
-    LinearLayout who = new LinearLayout(this);
-    who.setOrientation(LinearLayout.VERTICAL);
-    who.setGravity(Gravity.CENTER_HORIZONTAL);
-    who.setPadding(dp(16), dp(22), dp(16), dp(24));
-    who.addView(avatar(this, current, 120), new LinearLayout.LayoutParams(dp(120), dp(120)));
-    TextView name = label(current.optString("name"), 22, Ui.FG);
-    name.setGravity(Gravity.CENTER);
-    who.addView(name);
-    String mail = Profiles.user(this).getEmail();
-    TextView email = label(mail == null ? "" : mail, 15, 0x99ffffff);
-    email.setGravity(Gravity.CENTER);
-    email.setPadding(0, 0, 0, 0);
-    who.addView(email);
-    card.addView(who, new FrameLayout.LayoutParams(-1, -2));
-    TextView pencil = label("✎", 26, Ui.FG);
-    pencil.setFocusable(true);
-    pencil.setClickable(true);
-    pencil.setPadding(dp(12), dp(6), dp(12), dp(6));
-    pencil.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 999, 0));
-    pencil.setContentDescription("Editar " + current.optString("name"));
-    final String currentId = current.optString("id");
-    pencil.setOnClickListener(v -> { editing = currentId; draw(); });
-    card.addView(pencil, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
-    LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-    cp.setMargins(0, dp(8), 0, dp(18));
-    body.addView(card, cp);
-    // The other profiles (pick one) and «Añadir».
-    LinearLayout others = new LinearLayout(this);
-    others.setGravity(Gravity.CENTER);
-    for (JSONObject profile : Profiles.profiles()) {
-      if (profile.optString("id").equals(currentId)) continue;
-      final String id = profile.optString("id");
-      others.addView(tile(avatar(this, profile, 76), profile.optString("name"), 76, () -> { Profiles.choose(this, id, true); draw(); }));
-    }
-    if (Profiles.profiles().size() < ProfileData.MAX_PROFILES) others.addView(tile(tool("+", 76), "Añadir", 76, () -> { editing = "new"; draw(); }));
-    HorizontalScrollView othersScroll = new HorizontalScrollView(this);
-    othersScroll.setHorizontalScrollBarEnabled(false);
-    othersScroll.addView(others);
-    LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, -2);
-    op.gravity = Gravity.CENTER_HORIZONTAL;
-    body.addView(othersScroll, op);
-    Button manage = Ui.pill(this, "Administrar perfiles", Ui.Kind.SURFACE, false);
-    manage.setOnClickListener(v -> { editing = "all"; draw(); });
-    LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-2, dp(52));
-    mp.gravity = Gravity.CENTER_HORIZONTAL;
-    mp.setMargins(0, dp(16), 0, dp(20));
-    body.addView(manage, mp);
-    menuItem("👤", "Cuenta", () -> { editing = "cuenta"; draw(); });
+    sheet("Mi Cuenta", null);
+    body.setBackgroundColor(Ui.BG);
+    LinearLayout profile = new LinearLayout(this);
+    profile.setGravity(Gravity.CENTER_VERTICAL);
+    profile.addView(avatar(this, current, 44), new LinearLayout.LayoutParams(dp(44), dp(44)));
+    Button profiles = Ui.pill(this, current.optString("name") + "   ▾", Ui.Kind.GHOST, true);
+    profiles.setContentDescription("Cambiar de perfil · " + current.optString("name"));
+    profiles.setOnClickListener(v -> { editing = "elegir"; draw(); });
+    profile.addView(profiles);
+    body.addView(profile);
+    accountRows();
+    menuItem("✎", "Administrar perfiles", () -> { editing = "all"; draw(); });
+    menuItem("👤", "Datos de la cuenta", () -> { editing = "cuenta"; draw(); });
     menuItem("？", "Ayuda", () -> { editing = "ayuda"; draw(); });
-    if (SharedCatalog.administrator(Profiles.user(this))) menuItem("⚙", "Administración", () -> startActivity(new Intent(this, AdminActivity.class)));
+    if (SharedCatalog.administrator(Profiles.user(this))) {
+      menuItem("⚙", "Administración", () -> startActivity(new Intent(this, AdminActivity.class)));
+    }
     menuItem("⇥", "Cerrar sesión", () -> SharedCatalog.auth(this).signOut());
     body.addView(status);
-    manage.requestFocus();
+    profiles.requestFocus();
+  }
+
+  private void chooseProfile() {
+    sheet("Cambiar de perfil", "");
+    for (JSONObject profile : Profiles.profiles()) {
+      String id = profile.optString("id");
+      String name = profile.optString("name", "Perfil");
+      menuItem("●", name, () -> {
+        Profiles.choose(this, id, true);
+        editing = null;
+        draw();
+      });
+    }
+    if (Profiles.profiles().size() < ProfileData.MAX_PROFILES)
+      button("Añadir perfil", Ui.Kind.SURFACE, () -> { editing = "new"; draw(); });
+  }
+
+  private void accountRows() {
+    java.util.List<JSONObject> liked = ProfileData.entries(Profiles.data(), "ratings");
+    liked.removeIf(entry -> entry.optInt("value") <= 0);
+    java.util.List<JSONObject> mine = ProfileData.entries(Profiles.data(), "list");
+    if ((!liked.isEmpty() || !mine.isEmpty()) && library == null && !loadingLibrary
+        && AppAccess.current() == AppAccess.State.ALLOWED) {
+      loadingLibrary = true;
+      new Thread(() -> {
+        try {
+          Library.Data result = Library.download();
+          runOnUiThread(() -> { library = result; if (editing == null && !isDestroyed()) draw(); });
+        } catch (Exception unavailable) { /* The list can be loaded the next time this screen opens. */ }
+      }).start();
+    }
+    accountRail("Seguir viendo", Library.Progress.list(Library.Progress.load(this)), true);
+    accountRail("Series y películas que te han gustado", liked, false);
+    accountRail("Mi lista", mine, false);
+  }
+
+  private void accountRail(String heading, java.util.List<JSONObject> entries, boolean resume) {
+    LinearLayout rail = new LinearLayout(this);
+    for (JSONObject entry : entries) {
+      String[] location = library == null ? null : library.locate(entry);
+      Library.Item title = location == null ? null : library.find(location[0], location[1]);
+      if (title == null && !resume) continue;
+      String name = title == null ? entry.optString("name") : title.title;
+      String art = title == null ? entry.optString("image") : title.poster.isEmpty() ? title.backdrop : title.poster;
+      LinearLayout card = new LinearLayout(this);
+      card.setOrientation(LinearLayout.VERTICAL);
+      card.setFocusable(true);
+      card.setContentDescription(name);
+      card.setBackground(Ui.focusFill(this, CARD, 0x22ffffff, Ui.ACC, 8, 0));
+      ImageView image = new ImageView(this);
+      image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      image.setBackground(Ui.artBackground(this, Palette.hue(name), 8));
+      card.addView(image, new LinearLayout.LayoutParams(-1, dp(150)));
+      if (art.startsWith("https://")) posterWorker.execute(() -> {
+        android.graphics.Bitmap cover = MainActivity.readBitmap(art);
+        if (cover != null) runOnUiThread(() -> { if (!isDestroyed()) image.setImageBitmap(cover); });
+      });
+      TextView titleLabel = label(name, 14, Ui.FG);
+      titleLabel.setMaxLines(2);
+      card.addView(titleLabel);
+      if (resume && entry.optLong("duration") > 0) {
+        android.widget.ProgressBar track = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        track.setProgress((int)Math.min(100, entry.optLong("position") * 100d / entry.optLong("duration")));
+        card.addView(track, new LinearLayout.LayoutParams(-1, dp(5)));
+      }
+      card.setOnClickListener(v -> {
+        if (location == null && entry.optString("section").isEmpty()) return;
+        String page = location == null ? Library.page(entry.optString("section")) : Library.page(location[0]);
+        String id = location == null ? entry.optString("item") : location[1];
+        Intent open = new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+            .setData(android.net.Uri.parse("https://djyuanyo.github.io/Calamar-TV/" + page + "/" + android.net.Uri.encode(id) + "/"));
+        if (resume) open.putExtra("account_resume", entry.toString());
+        startActivity(open);
+        finish();
+      });
+      LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(dp(104), -2);
+      margin.rightMargin = dp(8);
+      rail.addView(card, margin);
+      if (rail.getChildCount() >= 20) break;
+    }
+    if (rail.getChildCount() == 0) return;
+    TextView title = label(heading, 20, Ui.FG);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    body.addView(title);
+    HorizontalScrollView scroll = new HorizontalScrollView(this);
+    scroll.setHorizontalScrollBarEnabled(false);
+    scroll.addView(rail);
+    body.addView(scroll);
   }
 
   /** A dark sheet as Netflix's «Perfil»: its title, ✕ to close and, inside it, ‹ to go back. */
@@ -313,7 +385,7 @@ public class AccountActivity extends Activity {
   }
 
   private void accountFacts() {
-    sheet("Cuenta", "");
+    sheet("Datos de la cuenta", "");
     com.google.firebase.auth.FirebaseUser user = Profiles.user(this);
     boolean google = false;
     for (com.google.firebase.auth.UserInfo info : user.getProviderData()) if ("google.com".equals(info.getProviderId())) google = true;
@@ -354,6 +426,20 @@ public class AccountActivity extends Activity {
       lp.setMargins(0, dp(6), 0, dp(6));
       body.addView(box, lp);
     }
+    button("Créditos", Ui.Kind.SURFACE, this::credits);
+  }
+
+  private void credits() {
+    LinearLayout content = new LinearLayout(this);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setPadding(dp(24), dp(16), dp(24), dp(8));
+    ImageView logo = new ImageView(this);
+    logo.setImageResource(R.drawable.tmdb_logo);
+    logo.setContentDescription("The Movie Database (TMDB)");
+    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    content.addView(logo, new LinearLayout.LayoutParams(dp(80), dp(58)));
+    content.addView(label("Datos e imágenes de TMDB. Este producto usa la API de TMDB, pero TMDB no lo respalda ni certifica.", 15, Ui.FG));
+    new AlertDialog.Builder(this).setTitle("Créditos").setView(content).setPositiveButton("Cerrar", null).show();
   }
 
   private void profileForm() {
@@ -408,6 +494,7 @@ public class AccountActivity extends Activity {
   private boolean creating, byQr, phoneInline;
 
   private void signIn() {
+    if (emailWorking) return;
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(Ui.BG);
     scroll.setFillViewport(true);
@@ -419,9 +506,12 @@ public class AccountActivity extends Activity {
     scroll.addView(outer);
     setContentView(scroll);
     body = outer;
-    Button back = button("‹ Volver", Ui.Kind.GHOST, () -> { stopPhoneLogin(); finish(); });
-    LinearLayout.LayoutParams bl = (LinearLayout.LayoutParams) back.getLayoutParams();
-    bl.width = -2; bl.gravity = Gravity.START;
+    if (!required) {
+      Button back = button("‹ Volver", Ui.Kind.GHOST, () -> { stopPhoneLogin(); finish(); });
+      LinearLayout.LayoutParams bl = (LinearLayout.LayoutParams) back.getLayoutParams();
+      bl.width = -2;
+      bl.gravity = Gravity.START;
+    }
     // The brand, half over the card.
     LinearLayout brand = new LinearLayout(this);
     brand.setGravity(Gravity.CENTER_VERTICAL);
@@ -467,12 +557,15 @@ public class AccountActivity extends Activity {
     tabs.addView(tab("Iniciar sesión", !creating, () -> { creating = false; signIn(); }), new LinearLayout.LayoutParams(0, dp(46), 1));
     tabs.addView(tab("Crear cuenta", creating, () -> { creating = true; byQr = false; stopPhoneLogin(); signIn(); }), new LinearLayout.LayoutParams(0, dp(46), 1));
     card.addView(tabs, new LinearLayout.LayoutParams(-1, -2));
+    body.addView(label("Con tu cuenta, el historial de reproducción y la actividad en directo se muestran en administración.", 13, Ui.MUTED));
     TextView title = label(creating ? "Crea tu cuenta" : "Entra", 32, Ui.FG);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setPadding(0, dp(22), 0, dp(2));
     card.addView(title);
     card.addView(label(creating ? "Regístrate con:" : "Inicia sesión o regístrate con:", 15, 0xaaffffff));
-    Button google = Ui.pill(this, "G   Google", Ui.Kind.GHOST, false);
+    Button google = Ui.pill(this, "Continuar con Google", Ui.Kind.GHOST, false);
+    google.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_google, 0, 0, 0);
+    google.setCompoundDrawablePadding(dp(12));
     google.setOnClickListener(v -> google());
     card.addView(google, new LinearLayout.LayoutParams(-1, dp(52)));
     // «O continuar con».
@@ -502,7 +595,7 @@ public class AccountActivity extends Activity {
     TextView foot = label("Con tu cuenta, lo que ves, tu lista, tus «Me gusta» y tus canales favoritos te siguen en la web, el móvil y la tele.", 13, 0x88ffffff);
     foot.setGravity(Gravity.CENTER);
     outer.addView(foot);
-    // No separate administration sign-in: the administrator's own account shows «Administración» in «Perfil».
+    button("Créditos", Ui.Kind.GHOST, this::credits);
     (byQr ? google : tabs.getChildAt(creating ? 1 : 0)).requestFocus();
   }
 
@@ -564,6 +657,7 @@ public class AccountActivity extends Activity {
     if (creating) { fieldLabel(card, "NOMBRE"); name = field(card, "Cómo te llamas", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS); }
     fieldLabel(card, "EMAIL");
     final EditText email = field(card, "Tu email", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+    email.setText(emailValue);
     LinearLayout passRow = new LinearLayout(this);
     passRow.setGravity(Gravity.CENTER_VERTICAL);
     TextView passLabel = label("CONTRASEÑA", 12, 0xbbffffff);
@@ -572,32 +666,12 @@ public class AccountActivity extends Activity {
     passLabel.setPadding(0, dp(14), 0, dp(4));
     passRow.addView(passLabel, new LinearLayout.LayoutParams(0, -2, 1));
     card.addView(passRow, new LinearLayout.LayoutParams(-1, -2));
-    FrameLayout passBox = new FrameLayout(this);
-    final EditText password = new EditText(this);
-    password.setHint("Contraseña");
-    password.setSingleLine(true);
-    password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-    password.setTextColor(Ui.FG);
-    password.setHintTextColor(0x77ffffff);
-    password.setBackground(Ui.focusFill(this, 0xff0f141b, 0xff0f141b, Ui.ACC, 12, 0x1fffffff));
-    password.setPadding(dp(16), dp(14), dp(56), dp(14));
-    passBox.addView(password, new FrameLayout.LayoutParams(-1, -2));
-    ImageView eye = new ImageView(this);
-    eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, 0x99ffffff, dp(22)));
-    eye.setScaleType(ImageView.ScaleType.CENTER);
-    eye.setFocusable(true);
-    eye.setClickable(true);
-    eye.setContentDescription("Mostrar la contraseña");
-    eye.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
-    eye.setOnClickListener(v -> {
-      boolean shown = (password.getInputType() & InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
-      password.setInputType(InputType.TYPE_CLASS_TEXT | (shown ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD));
-      password.setSelection(password.getText().length());
-      eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, shown ? 0x99ffffff : Ui.ACC, dp(22)));
-      eye.setContentDescription(shown ? "Mostrar la contraseña" : "Ocultar la contraseña");
-    });
-    passBox.addView(eye, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END | Gravity.CENTER_VERTICAL));
-    card.addView(passBox, new LinearLayout.LayoutParams(-1, -2));
+    final EditText password = passwordField(card, "Contraseña", "la contraseña");
+    final EditText confirmation;
+    if (creating) {
+      fieldLabel(card, "REPITE LA CONTRASEÑA");
+      confirmation = passwordField(card, "Repite la contraseña", "la confirmación de contraseña");
+    } else confirmation = null;
     if (!creating) {
       TextView forgot = label("¿Olvidaste tu contraseña?", 13, 0xff8ab4ff);
       forgot.setPadding(dp(6), dp(14), dp(2), dp(4));
@@ -618,20 +692,107 @@ public class AccountActivity extends Activity {
     sp.setMargins(0, dp(22), 0, 0);
     card.addView(submit, sp);
     final EditText nameField = name;
-    submit.setOnClickListener(v -> {
-      String e = email.getText().toString().trim(), p = password.getText().toString();
-      if (e.isEmpty() || p.length() < 6) { say("Escribe tu email y una contraseña de al menos 6 caracteres."); return; }
-      if (!creating) {
-        say("Entrando…");
-        SharedCatalog.auth(this).signInWithEmailAndPassword(e, p).addOnFailureListener(error -> say(explain(error)));
-        return;
-      }
-      final String n = nameField == null ? "" : nameField.getText().toString().trim();
-      say("Creando la cuenta…");
-      SharedCatalog.auth(this).createUserWithEmailAndPassword(e, p)
-          .addOnSuccessListener(result -> { if (!n.isEmpty() && result.getUser() != null) result.getUser().updateProfile(new UserProfileChangeRequest.Builder().setDisplayName(n).build()); })
-          .addOnFailureListener(error -> say(explain(error)));
+    submit.setOnClickListener(v -> emailAction(email, password, confirmation, nameField, false));
+    if (!creating) {
+      Button resend = Ui.pill(this, "Reenviar correo de verificación", Ui.Kind.GHOST, false);
+      resend.setOnClickListener(v -> emailAction(email, password, null, null, true));
+      card.addView(resend, new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+  }
+
+  private EditText passwordField(LinearLayout card, String hint, String description) {
+    FrameLayout passBox = new FrameLayout(this);
+    final EditText password = new EditText(this);
+    password.setHint(hint);
+    password.setSingleLine(true);
+    password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    password.setTextColor(Ui.FG);
+    password.setHintTextColor(0x77ffffff);
+    password.setBackground(Ui.focusFill(this, 0xff0f141b, 0xff0f141b, Ui.ACC, 12, 0x1fffffff));
+    password.setPadding(dp(16), dp(14), dp(56), dp(14));
+    passBox.addView(password, new FrameLayout.LayoutParams(-1, -2));
+    ImageView eye = new ImageView(this);
+    eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, 0x99ffffff, dp(22)));
+    eye.setScaleType(ImageView.ScaleType.CENTER);
+    eye.setFocusable(true);
+    eye.setClickable(true);
+    eye.setContentDescription("Mostrar " + description);
+    eye.setBackground(Ui.focusFill(this, 0x00000000, 0x22ffffff, Ui.ACC, 8, 0));
+    eye.setOnClickListener(v -> {
+      boolean shown = (password.getInputType() & InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+      password.setInputType(InputType.TYPE_CLASS_TEXT | (shown ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD));
+      password.setSelection(password.getText().length());
+      eye.setImageDrawable(Ui.icon(Ui.Icon.EYE, shown ? 0x99ffffff : Ui.ACC, dp(22)));
+      eye.setContentDescription(shown ? "Mostrar " + description : "Ocultar " + description);
     });
+    passBox.addView(eye, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END | Gravity.CENTER_VERTICAL));
+    card.addView(passBox, new LinearLayout.LayoutParams(-1, -2));
+    return password;
+  }
+
+  private void emailAction(EditText email, EditText password, EditText confirmation, EditText name, boolean resend) {
+    if (emailWorking) return;
+    final String address = email.getText().toString().trim(), pass = password.getText().toString();
+    if (address.isEmpty() || pass.length() < 6) { say("Escribe tu email y una contraseña de al menos 6 caracteres."); return; }
+    final boolean register = name != null;
+    if (register && !pass.contentEquals(confirmation.getText())) {
+      say("Las contraseñas no coinciden.");
+      confirmation.requestFocus();
+      return;
+    }
+    final String displayName = register ? name.getText().toString().trim() : "";
+    emailWorking = true;
+    emailValue = address;
+    say(register ? "Creando la cuenta…" : resend ? "Enviando correo…" : "Entrando…");
+    FirebaseAuth auth = SharedCatalog.auth(this);
+    auth.setLanguageCode("es");
+    (register ? auth.createUserWithEmailAndPassword(address, pass) : auth.signInWithEmailAndPassword(address, pass))
+        .addOnSuccessListener(result -> {
+          FirebaseUser user = result.getUser();
+          if (user == null) { emailWorking = false; say("No se pudo comprobar la cuenta."); return; }
+          if (user.isEmailVerified()) { emailWorking = false; draw(); return; }
+          if (!register && !resend) {
+            finishVerification(auth, user, address, false, false, null);
+            return;
+          }
+          Runnable send = () -> user.sendEmailVerification().addOnCompleteListener(sent -> {
+            Runnable finish = () -> finishVerification(auth, user, address, register, sent.isSuccessful(), sent.getException());
+            if (register) UserDirectory.touch(getApplicationContext(), user).addOnCompleteListener(ignored -> finish.run());
+            else finish.run();
+          });
+          if (!displayName.isEmpty()) user.updateProfile(new UserProfileChangeRequest.Builder().setDisplayName(displayName).build())
+              .addOnCompleteListener(ignored -> send.run());
+          else send.run();
+        })
+        .addOnFailureListener(error -> {
+          emailWorking = false;
+          if (isFinishing() || isDestroyed()) return;
+          if (register && error instanceof com.google.firebase.auth.FirebaseAuthException
+              && "ERROR_EMAIL_ALREADY_IN_USE".equals(((com.google.firebase.auth.FirebaseAuthException) error).getErrorCode())) {
+            say("");
+            new AlertDialog.Builder(this).setTitle("Correo ya en uso").setMessage(explain(error))
+                .setPositiveButton("Entendido", null).show();
+          } else say(explain(error));
+        });
+  }
+
+  private void finishVerification(FirebaseAuth auth, FirebaseUser user, String address, boolean register, boolean sent, Exception failure) {
+    FirebaseUser current = auth.getCurrentUser();
+    if (current != null && user.getUid().equals(current.getUid())) auth.signOut();
+    emailWorking = false;
+    creating = false;
+    byQr = false;
+    if (isFinishing() || isDestroyed()) return;
+    signIn();
+    String message = sent
+        ? "Abre el enlace que enviamos a " + address + " para poder iniciar sesión. Si no lo ves, revisa la carpeta de spam."
+        : register
+            ? "Tu cuenta está creada, pero no se pudo enviar el correo. Escribe tu correo y contraseña y pulsa «Reenviar correo de verificación». Revisa también la carpeta de spam."
+            : failure == null
+                ? "Abre el enlace de verificación para poder iniciar sesión. Revisa la carpeta de spam o pulsa «Reenviar correo de verificación»."
+                : "No se pudo reenviar el correo. " + explain(failure);
+    new AlertDialog.Builder(this).setTitle("Verifica tu correo").setMessage(message)
+        .setPositiveButton("Entendido", (dialog, which) -> {}).show();
   }
 
   /** «Con QR»: the phone's camera opens the page, signs in with Google and confirms the code. */
@@ -679,6 +840,7 @@ public class AccountActivity extends Activity {
   }
 
   private void google() {
+    if (emailWorking) return;
     say("Abriendo Google…");
     try {
       GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(SharedCatalog.GOOGLE_CLIENT_ID).build();

@@ -2,12 +2,13 @@ package es.yuanyo.calamartv;
 
 /** Multi-screen layout, as multiGrid() in web/multi-view.js: 2 top and bottom, more in a grid. */
 final class MultiScreen {
-  static final int MAX = 6;
+  static final int MAX = 4;
 
   private MultiScreen() {}
 
-  /** {rows, columns} for n videos: 2 -> 2x1, 3-4 -> 2x2, 5-6 -> 2x3. */
+  /** {rows, columns} for n videos: 2 -> 2x1, 3-4 -> 2x2; larger requests are clamped to four. */
   static int[] grid(int n) {
+    n = Math.min(MAX, n);
     if (n <= 1) return new int[] {1, 1};
     if (n == 2) return new int[] {2, 1};
     int cols = (int) Math.ceil(Math.sqrt(n));

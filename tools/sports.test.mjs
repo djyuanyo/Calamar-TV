@@ -58,6 +58,15 @@ test('category order saved by the administrator comes first, unknown categories 
   const data=make(); data.groupOrder=['Zeta','Deportes']; validateCatalog(data);
   for (const bad of [['A','A'],[''],[1],'Deportes']) { data.groupOrder=bad; assert.throws(()=>validateCatalog(data)); }
 });
+test('channels are ordered by their displayed name across regions and playback types',()=>{
+  const list=[
+    {name:'Zeta',group:'Autonómicos',region:'Andalucía',playable:true},
+    {name:'betis',group:'Autonómicos',region:'Galicia',playable:true},
+    {name:'Álfa',group:'Autonómicos',region:'Valencia',playable:false},
+  ];
+  assert.deepEqual(groups(list).get('Autonómicos').map(c=>c.name),['Álfa','betis','Zeta']);
+  assert.deepEqual(list.map(c=>c.name),['Zeta','betis','Álfa']);
+});
 test('each category has one colour for all its cards, and can be renamed, recoloured and reordered',()=>{
   const tdt={channels:[{id:'gol',name:'Gol',group:'Deportes',streams:['https://example.com/g.m3u8']},{id:'tele',name:'Tele',group:'Deportes',streams:['https://example.com/t.m3u8']},{id:'la-1',name:'La 1',group:'Generalistas',streams:['https://example.com/l.m3u8']}]};
   let all=merge(tdt,{channels:[],featured:[],hidden:[]});

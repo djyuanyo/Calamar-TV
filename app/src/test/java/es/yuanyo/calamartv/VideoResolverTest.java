@@ -6,6 +6,17 @@ import java.util.List;
 import org.junit.Test;
 
 public class VideoResolverTest {
+  @Test public void channelDetailsUseTheSameRenewablePlayerId() {
+    String page = "https://bp.zicotv.cc/channels/1";
+    assertTrue(VideoResolver.renewablePage(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", VideoResolver.channelPlayer(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", UserChannels.normalize(page));
+    assertEquals("https://bp.zicotv.cc/api/player/1", UserChannels.normalizeEventSource(page));
+    assertEquals(300000L, VideoResolver.pageRenewalDelay(page, "https://cdn.example/live.m3u8", 1000));
+    for (String invalid : new String[]{"http://bp.zicotv.cc/channels/1", "https://bp.zicotv.cc.evil.test/channels/1",
+        "https://u:p@bp.zicotv.cc/channels/1", "https://bp.zicotv.cc:444/channels/1", "https://bp.zicotv.cc/channels/1/more"})
+      assertNull(VideoResolver.channelPlayer(invalid));
+  }
   @Test public void eventIncludesNestedChannelsWithNamesAndLanguages() throws Exception {
     String json = "{\"data\":{\"sources\":["
         + "{\"name\":\"Canales del partido\",\"streams\":["
@@ -35,6 +46,35 @@ public class VideoResolverTest {
     assertEquals("Fuente del evento", sources.get(0).label);
     assertEquals("https://bp.zicotv.cc/api/player/4", sources.get(0).url);
   }
+  @Test
+  public void eventDropsExternalPlayersAndClipsButKeepsLiveLinks() throws Exception {
+    String page = "https://bp.zicotv.cc/api/player/28";
+    String hls = "https://example.com/partido.m3u8", ts = "https://example.com/partido.ts";
+    org.json.JSONArray entries = new org.json.JSONArray();
+    for (String url : new String[] {"https://example.com/embed", "https://example.com/preroll.mp4",
+        "https://bp.zicotv.cc/watch", page, hls, ts}) entries.put(new org.json.JSONObject().put("url", url));
+    String json = new org.json.JSONObject().put("data", new org.json.JSONObject().put("sources", entries)).toString();
+    List<VideoResolver.Source> sources = VideoResolver.eventPlayers(json);
+    assertEquals(3, sources.size());
+    assertEquals(page, sources.get(0).url);
+    assertEquals(hls, sources.get(1).url);
+    assertEquals(ts, sources.get(2).url);
+  }
+
+  @Test
+  public void zicoNeverUsesGenericVideoDetection() throws Exception {
+    String page = "https://bp.zicotv.cc/api/player/28";
+    String ad = "<video src='https://example.com/preroll.mp4'>";
+    assertTrue(VideoResolver.parse(ad, page).isEmpty());
+    assertEquals(1, VideoResolver.parse(ad, "https://example.com/player").size());
+    String config = "var ZT_SOURCES = [{\"url\":\"https://example.com/preroll.mp4\"},"
+        + "{\"url\":\"https://example.com/live.m3u8\"},"
+        + "{\"url\":\"https://example.com/hidden.m3u8\",\"hidden\":true}];";
+    List<VideoResolver.Source> sources = VideoResolver.parse(ad + config, page);
+    assertEquals(1, sources.size());
+    assertEquals("https://example.com/live.m3u8", sources.get(0).url);
+  }
+
   @Test
   public void readsEscapedSourceAndSkipsLockedPremium() throws Exception {
     String html =
@@ -144,11 +184,12 @@ public class VideoResolverTest {
     assertTrue(VideoResolver.parse(page, "https://lulustream.com/e/abcd1234efgh").isEmpty());
     assertFalse(VideoResolver.processing("<script>p.setup({sources:[{file:'https://cdn.example.net/v.m3u8'}]})</script>"));
   }
-  @Test public void renewablePagesAreOnlyPublicPlayerEndpoints() {
+  @Test public void renewablePagesAreOnlyTrustedPlayerAndChannelEndpoints() {
     assertTrue(VideoResolver.renewablePage("https://zicotv.cc/api/player/28"));
     assertTrue(VideoResolver.renewablePage("https://bp.zicotv.cc/api/player/1?token=abc"));
+    assertTrue(VideoResolver.renewablePage("https://zicotv.cc/channels/1"));
     for (String address : new String[] {"http://zicotv.cc/api/player/28", "https://zicotv.cc.evil.example/api/player/28",
-        "https://zicotv.cc/channels/1", "https://user:pass@zicotv.cc/api/player/28", "https://cdn.zicotv.cc/a.m3u8"})
+        "https://user:pass@zicotv.cc/api/player/28", "https://cdn.zicotv.cc/a.m3u8"})
       assertFalse(VideoResolver.renewablePage(address));
   }
 }

@@ -2,7 +2,7 @@ name: Calamar TV · Web y catálogo
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
+    paths: ['web/**', 'tizen/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/calamar-vidara.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
   schedule:
     - cron: '17 */6 * * *'
     # Event preview pages (evento/<slug>/) follow the catalog edited in the admin within ~15 minutes.
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -31,9 +31,11 @@ jobs:
           php -l hosting/calamar-http-source.php
           php -l hosting/calamar-tv-relay.php
           php -l hosting/calamar-lulu.php
+          php -l hosting/calamar-vidara.php
           php -l hosting/calamar-player.php
           php -l hosting/calamar-lineups.php
           php -l hosting/calamar-votes.php
+          php -l hosting/calamar-cast-audio.php
           php -l hosting/calamar-cast.php
           php -l hosting/calamar-cast-install.php
       # Pillow draws the preview images of shared links (tools/share_images.py).
@@ -48,7 +50,7 @@ jobs:
       - name: Probar el lector de TDTChannels
         run: python -m unittest discover -s tools -p 'test_*.py'
       - name: Probar los enlaces de los canales
-        run: node --test tools/library_folders.test.mjs tools/hosted_sources.test.mjs tools/renewable_player.test.mjs tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/github_images.test.mjs tools/library.test.mjs tools/progress_sync.test.mjs tools/library_home.test.mjs tools/tdt_events.test.mjs tools/polymarket.test.mjs tools/votes.test.mjs tools/match_center.test.mjs tools/library_tmdb.test.mjs tools/library_lulu.test.mjs tools/library_browse.test.mjs tools/autoplay.test.mjs tools/trailer.test.mjs tools/event_sources.test.mjs tools/player_tracks.test.mjs tools/profiles.test.mjs
+        run: node --test tools/access_policy.test.mjs tools/multi_view.test.mjs tools/app_links.test.mjs tools/library_folders.test.mjs tools/library_vidara.test.mjs tools/hosted_sources.test.mjs tools/hls_continuity.test.mjs tools/zico_channel.test.mjs tools/renewable_player.test.mjs tools/match_scores.test.mjs tools/sports.test.mjs tools/events.test.mjs tools/catalog_slugs.test.mjs tools/stream_errors.test.mjs tools/direct_player.test.mjs tools/player_sources.test.mjs tools/ts_player.test.mjs tools/cast_player.test.mjs tools/audience.test.mjs tools/github_images.test.mjs tools/library.test.mjs tools/progress_sync.test.mjs tools/library_home.test.mjs tools/tdt_events.test.mjs tools/polymarket.test.mjs tools/votes.test.mjs tools/match_center.test.mjs tools/library_tmdb.test.mjs tools/library_lulu.test.mjs tools/library_browse.test.mjs tools/autoplay.test.mjs tools/trailer.test.mjs tools/event_sources.test.mjs tools/player_tracks.test.mjs tools/profiles.test.mjs
       - name: Actualizar canales TDT
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
         run: |
@@ -67,6 +69,8 @@ jobs:
           cp -r data _site/data
           mkdir -p _site/downloads
           (cd hosting && zip ../_site/downloads/Calamar-Imagenes-GitHub.zip calamar-images.php README-Imagenes-GitHub.txt)
+          (cd hosting && zip ../_site/downloads/Calamar-Vidara-hosting.zip calamar-vidara.php calamar-cast-audio.php calamar-http-source.php)
+          (cd hosting && zip ../_site/downloads/Calamar-Audio-Chromecast.zip calamar-lulu.php calamar-vidara.php calamar-cast-audio.php calamar-http-source.php)
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event and channel with its card drawn as image, so shared links show it in WhatsApp.
@@ -74,6 +78,16 @@ jobs:
           # Copies of the administrator's logos on this web: some logo sites are blocked in Spain.
           python tools/logo_mirror.py _site .share-cache
           python -c "import json; [json.load(open(f'_site/data/{n}.json')) for n in ('tdt', 'custom')]"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tizen/package-lock.json
+      - name: Empaquetar Calamar TV para Samsung Tizen
+        run: |
+          npm ci --prefix tizen --no-audit --no-fund
+          node tizen/build.mjs _site/downloads/Calamar-TV-Tizen.wgt
+          unzip -tq _site/downloads/Calamar-TV-Tizen.wgt
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

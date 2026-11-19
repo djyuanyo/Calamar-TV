@@ -12,6 +12,18 @@ public class CastSourceTest {
     assertFalse(CastSource.onDemand("https://example.com/live.m3u8"));
     assertFalse(CastSource.onDemand("https://calamarmenciano.com/calamar-lulu.php?introdb=1"));
   }
+  @Test public void onlySignedDriveVideosHaveACompatiblePlaylist() {
+    String original = "https://calamarmenciano.com/calamar-drive.php?id=clip&v=" + "a".repeat(80);
+    String compatible = original + "&hls=1";
+    assertEquals(compatible, CastSource.driveCompatibility(original));
+    assertEquals(compatible, CastSource.driveCompatibility(compatible));
+    assertEquals("application/x-mpegURL", CastSource.contentType(compatible));
+    assertTrue(CastSource.onDemand(compatible));
+    assertFalse(CastSource.onDemand(original));
+    assertNull(CastSource.driveCompatibility(original.replace("calamarmenciano.com", "example.com")));
+    assertNull(CastSource.driveCompatibility("https://calamarmenciano.com/calamar-drive.php?id=clip&v=invalid"));
+  }
+
   @Test public void supportsDirectMediaWithoutChangingSignedLinks() {
     assertEquals("application/x-mpegURL", CastSource.contentType("https://example.com/a.M3U8?token=A%2Bb&x=1"));
     assertEquals("application/dash+xml", CastSource.contentType("https://example.com/a.mpd"));

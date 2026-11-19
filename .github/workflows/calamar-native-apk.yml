@@ -2,9 +2,9 @@ name: Calamar TV · APK Android y TV
 on:
   workflow_dispatch:
   push:
-    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'tools/check_multi_playback.sh', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
   pull_request:
-    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
+    paths: ['app/**', 'hosting/calamar-player.php', 'hosting/calamar-http-source.php', 'hosting/calamar-tv-relay.php', 'tools/test_tv_relay.py', 'tools/check_multi_playback.sh', 'data/tdt.json', '*.gradle', 'gradle.properties', '.github/workflows/calamar-native-apk.yml']
 permissions:
   contents: write
 jobs:
@@ -44,7 +44,7 @@ jobs:
           fi
       - name: Compilar release y debug con validación
         run: |
-          gradle --no-daemon :app:assembleRelease :app:assembleDebug :app:lintDebug :app:testDebugUnitTest || {
+          gradle --no-daemon :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:testDebugUnitTest || {
             cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt 2>/dev/null || true
             exit 1
           }
@@ -55,14 +55,6 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Reproducir TS por HTTP y recuperar conexión atascada en Android
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Reproducir y cambiar señales con mando en Android TV API 31
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -70,17 +62,33 @@ jobs:
           arch: x86
           target: android-tv
           avd-name: calamar-tv-api31
+          disk-size: 2048M
+          emulator-boot-timeout: 300
           disable-animations: true
           script: |
             adb shell pm list features | grep -q android.software.leanback
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=es.yuanyo.calamartv.HostingPlaybackTest,es.yuanyo.calamartv.TvCatalogTest,es.yuanyo.calamartv.IptvHostedPlaybackTest,es.yuanyo.calamartv.HttpIptvDataSourceTest
+            bash tools/check_multi_playback.sh tv
+      - name: Liberar el emulador TV antes de probar Android móvil
+        run: |
+          rm -rf "$HOME/.android/avd/calamar-tv-api31.avd" "$HOME/.android/avd/calamar-tv-api31.ini"
+          df -h /
+      - name: Reproducir TS por HTTP y recuperar conexión atascada en Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disk-size: 2048M
+          emulator-boot-timeout: 300
+          disable-animations: true
+          script: bash tools/check_multi_playback.sh
       - name: Mostrar errores del reproductor en el emulador
         if: failure()
         run: |
           python - <<'PYCODE'
           import pathlib, re, html
           root = pathlib.Path('app/build/reports/androidTests/connected')
-          for name in ('HostingPlaybackTest', 'ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
+          for name in ('MultiPlaybackTest', 'HostingPlaybackTest', 'ResolvedPlaybackTest', 'ChromiumPlaybackTest', 'TvCatalogTest'):
               for path in root.rglob('*' + name + '.html'):
                   print('Informe:', path)
                   print(html.unescape(re.sub(r'<[^>]+>', '', path.read_text()))[:40000])
@@ -129,7 +137,6 @@ jobs:
             "$apksigner" verify --print-certs "$apk" | grep -E 'SHA-256|SHA-1' | sed "s|^|$(basename "$apk"): |"
           done
       - name: Publicar APK en GitHub Releases
-        continue-on-error: true
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,6 +145,7 @@ jobs:
           mkdir -p dist
           if [ -n "$CALAMAR_KEYSTORE_PATH" ]; then
             cp app/build/outputs/apk/release/app-release.apk "dist/Calamar-TV-$version.apk"
+            cp app/build/outputs/apk/release/app-release.apk dist/Calamar-TV.apk
           else
             cp app/build/outputs/apk/release/*.apk "dist/Calamar-TV-$version-sin-firmar.apk"
           fi
@@ -161,14 +169,25 @@ jobs:
           pathlib.Path('dist/Calamar-TV-update.json').write_text(json.dumps(manifest, indent=2) + '\n')
           PYUPDATE
           fi
-          gh release view "v$version" >/dev/null 2>&1 || gh release create "v$version" \
-            --target "$GITHUB_SHA" --title "Calamar TV $version" \
-            --notes "APK de Calamar TV $version para Android y Android TV. Instala Calamar-TV-$version.apk (firmada) para poder actualizar encima de versiones anteriores."
+          if ! gh release view "v$version" >/dev/null 2>&1; then
+            # Keep the tested commit reachable from a branch while creating its tag.
+            # A newer main commit may otherwise make GitHub require workflows:write
+            # to release this older SHA; GITHUB_TOKEN only needs contents:write here.
+            release_ref="releases/build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/heads/$release_ref" -f sha="$GITHUB_SHA" >/dev/null
+            trap 'gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$release_ref" >/dev/null || true' EXIT
+            gh release create "v$version" --draft \
+              --target "$release_ref" --title "Calamar TV $version" \
+              --notes "APK de Calamar TV $version para Android y Android TV. Instala Calamar-TV-$version.apk (firmada) para poder actualizar encima de versiones anteriores."
+          fi
           gh release upload "v$version" dist/*.apk dist/*.zip --clobber
           # Publish metadata last, so a checker can never see a version without its APK.
           if [ -f dist/Calamar-TV-update.json ]; then
             gh release upload "v$version" dist/Calamar-TV-update.json --clobber
           fi
+          # Make the version visible to the updater only after all assets exist.
+          gh release edit "v$version" --draft=false --latest
       - uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
@@ -178,6 +197,7 @@ jobs:
           path: |
             dist/*.apk
             dist/*.zip
+            dist/Calamar-TV-update.json
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
           if-no-files-found: error

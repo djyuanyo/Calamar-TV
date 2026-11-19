@@ -1,11 +1,12 @@
 import { externalizeImages, imageRequest } from './github-images.js';
 import { firebaseConfig } from './firebase-config.js';
 import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js';
-import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf } from './audience.js';
+import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf, viewingSummary } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
+import { REMINDER_ENDPOINT, verificationCode, verificationDraft } from './verification-reminder.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -13,7 +14,15 @@ const db = getFirestore(app);
 const catalog = doc(db, CATALOG_PATH);
 export const ready = auth.authStateReady();
 export const administrator = (user = auth.currentUser) => !!user && user.email === ADMIN_EMAIL && user.emailVerified && user.providerData.some((p) => p.providerId === 'google.com');
-export const watchAuth = (changed) => onAuthStateChanged(auth, changed);
+const verifiedUser = user => user?.emailVerified === true ? user : null;
+export const currentUser = () => verifiedUser(auth.currentUser);
+export const watchAuth = (changed) => {
+  let previous;
+  return onAuthStateChanged(auth, user => {
+    const next = verifiedUser(user);
+    if (next !== previous) { previous = next; changed(next); }
+  });
+};
 // «Continuar viendo» of the signed-in account (calamarProgress/<uid>), the same document the app uses.
 export const PROGRESS_PATH = 'calamarProgress';
 // The main profile keeps it there (the app reads it); every other profile in calamarUsers/<uid>/progress/<profile>.
@@ -25,18 +34,17 @@ const readJson = async (ref, fallback) => {
   try { return JSON.parse(snapshot.data().json); } catch { return fallback; }
 };
 export async function readCloudProgress(profile = 'main') {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) return null;
   return readJson(progressDoc(user, profile), { entries: {}, removed: {} });
 }
 export async function writeCloudProgress(data, profile = 'main') {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) return;
   await setDoc(progressDoc(user, profile), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
 }
 
 // ---- Accounts and profiles: calamarUsers/<uid> (the profiles) and .../profiles/<id> (My list, likes, favourites) ----
-export const currentUser = () => auth.currentUser;
 /** Any Google account (the admin page asks for the administrator's own). */
 export function loginGoogle() {
   const provider = new GoogleAuthProvider();
@@ -44,30 +52,68 @@ export function loginGoogle() {
   return signInWithPopup(auth, provider);
 }
 export async function registerEmail(email, password, name) {
-  const result = await createUserWithEmailAndPassword(auth, email, password);
-  if (name) await updateProfile(result.user, { displayName: name });
-  return result;
+  auth.languageCode = 'es';
+  const { user } = await createUserWithEmailAndPassword(auth, email, password);
+  try {
+    if (name) await updateProfile(user, { displayName: name }).catch(() => {});
+    // Start recording the pending member while their temporary sign-in is still valid.
+    const member = recordMember().catch(() => {});
+    const sent = await sendEmailVerification(user).then(() => true, () => false);
+    await member;
+    return { verification: true, sent };
+  } finally {
+    if (auth.currentUser?.uid === user.uid) await signOut(auth);
+  }
 }
-export const loginEmail = (email, password) => signInWithEmailAndPassword(auth, email, password);
+export async function loginEmail(email, password, resend = false) {
+  auth.languageCode = 'es';
+  const { user } = await signInWithEmailAndPassword(auth, email, password);
+  if (verifiedUser(user)) return { verification: false };
+  try {
+    if (resend) await sendEmailVerification(user);
+    return { verification: true, sent: resend };
+  } finally {
+    if (auth.currentUser?.uid === user.uid) await signOut(auth);
+  }
+}
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email);
 export async function readAccount() {
-  const user = auth.currentUser;
+  const user = currentUser();
   return user ? readJson(doc(db, USERS_PATH, user.uid), null) : null;
 }
 export async function writeAccount(data) {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (user) await setDoc(doc(db, USERS_PATH, user.uid), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
 }
+// Episode history lives per title and profile so older app versions can still write their progress.
+export async function syncEpisodeHistory(context, local, merge) {
+  const user = currentUser();
+  if (!user || user.uid !== context.uid || !context.profile) return local;
+  const bytes = new TextEncoder().encode(JSON.stringify([context.profile, context.page, context.item]));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('');
+  const ref = doc(db, USERS_PATH, user.uid, 'progress', 'eh' + hash.slice(0, 18));
+  if (!local.recent) return readJson(ref, local);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    let remote = null;
+    try { if (snapshot.exists()) remote = JSON.parse(snapshot.data().json); } catch {}
+    const combined = merge(local, remote);
+    if (JSON.stringify(combined) !== JSON.stringify(remote)) {
+      transaction.set(ref, { json: JSON.stringify(combined), updatedAt: serverTimestamp() });
+    }
+    return combined;
+  });
+}
 export async function readProfileData(profile) {
-  const user = auth.currentUser;
+  const user = currentUser();
   return user ? readJson(doc(db, USERS_PATH, user.uid, 'profiles', profile), null) : null;
 }
 export async function writeProfileData(profile, data) {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (user) await setDoc(doc(db, USERS_PATH, user.uid, 'profiles', profile), { json: JSON.stringify(data), updatedAt: serverTimestamp() });
 }
 export async function deleteProfileData(profile) {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) return;
   await deleteDoc(doc(db, USERS_PATH, user.uid, 'profiles', profile)).catch(() => {});
   await deleteDoc(doc(db, USERS_PATH, user.uid, 'progress', profile)).catch(() => {});
@@ -89,6 +135,15 @@ export async function publishDeviceLogin(id) {
 /** Calls back with false once the app has used (deleted) the sign-in. */
 export const watchDeviceLogin = (id, changed) => onSnapshot(doc(db, DEVICE_LOGIN_PATH, id), (s) => changed(s.exists()), () => changed(null));
 export const cancelDeviceLogin = (id) => deleteDoc(doc(db, DEVICE_LOGIN_PATH, id)).catch(() => {});
+export async function acceptDeviceLogin(id, signal) {
+  const ref = doc(db, DEVICE_LOGIN_PATH, id);
+  const snapshot = await getDocFromServer(ref);
+  const token = snapshot.data()?.idToken;
+  if (!token || signal.aborted) return false;
+  await signInWithCredential(auth, GoogleAuthProvider.credential(token));
+  await cancelDeviceLogin(id);
+  return true;
+}
 export function login() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
@@ -102,7 +157,7 @@ function unpack(snapshot, fallback) {
 }
 let migratedImages;
 async function imageManifest() {
-  if (!migratedImages) migratedImages = fetch(new URL('./images/manifest.json', import.meta.url), { cache: 'no-store' })
+  if (!migratedImages) migratedImages = fetch(new URL('./images/manifest.json', document.baseURI), { cache: 'no-store' })
     .then(r => { if (!r.ok) throw Error(); return r.json(); }).catch(() => ({}));
   return migratedImages;
 }
@@ -131,7 +186,8 @@ export async function publishCatalog(data, expectedRevision) {
   await runTransaction(db, async (tx) => {
     const current = await tx.get(catalog);
     const revision = current.exists() ? current.data().revision : 0;
-    if (revision !== expectedRevision) throw new Error('El catálogo cambió en otro dispositivo. Se ha recargado; vuelve a aplicar el cambio.');
+    if (revision !== expectedRevision) throw Object.assign(
+      new Error('El catálogo cambió en otro dispositivo. Se ha recargado; vuelve a aplicar el cambio.'), { code: 'catalog-conflict' });
     tx.set(catalog, { json, revision: revision + 1, updatedAt: serverTimestamp() });
   });
   Object.assign(data, prepared);
@@ -148,18 +204,23 @@ export async function readLibrarySettings() {
 }
 export async function saveLibrarySettings(settings) {
   if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
-  await setDoc(librarySettings, settings);
+  await setDoc(librarySettings, settings, { merge: true });
 }
-/** Writes the parts and then the index that names them; parts of an older, longer library are removed. */
-export async function publishLibraryParts({ index, parts }) {
+/** Publish the index, catalog parts and private import state together. */
+export async function publishLibraryParts({ index, parts, importState, beforeUpdatedAt }) {
   if (!administrator()) throw new Error('Entra con la cuenta de administrador.');
   const indexRef = doc(db, 'calamarLibrary', 'index');
-  const before = await getDocFromServer(indexRef).then((s) => s.exists() ? JSON.parse(s.data().json) : null).catch(() => null);
-  for (const [name, part] of Object.entries(parts)) await setDoc(doc(db, 'calamarLibrary', name), { json: JSON.stringify(part), updatedAt: serverTimestamp() });
-  await setDoc(indexRef, { json: JSON.stringify(index), updatedAt: serverTimestamp() });
-  for (const [section, count] of Object.entries(before?.sections || {})) {
-    for (let n = index.sections[section] ?? 0; n < count; n++) await deleteDoc(doc(db, 'calamarLibrary', `${section}-${n}`)).catch(() => {});
-  }
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(indexRef);
+    const before = snapshot.exists() ? JSON.parse(snapshot.data().json) : null;
+    if ((before?.updatedAt || '') !== beforeUpdatedAt) throw new Error('El catálogo ha cambiado. Recarga la página antes de guardar.');
+    for (const [name, part] of Object.entries(parts)) transaction.set(doc(db, 'calamarLibrary', name), { json: JSON.stringify(part), updatedAt: serverTimestamp() });
+    transaction.set(indexRef, { json: JSON.stringify(index), updatedAt: serverTimestamp() });
+    transaction.set(librarySettings, { importState }, { merge: true });
+    for (const [section, count] of Object.entries(before?.sections || {})) {
+      for (let n = index.sections[section] ?? 0; n < count; n++) transaction.delete(doc(db, 'calamarLibrary', `${section}-${n}`));
+    }
+  });
 }
 
 // ---- Audience ---------------------------------------------------------------------------------
@@ -183,6 +244,11 @@ export async function audience() {
 export async function purgeAudience() {
   const snapshot = await getDocs(query(collection(db, AUDIENCE_PATH), where('minute', '<', minuteOf() - 10)));
   await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+  if (administrator()) {
+    const expired = await getDocs(query(collection(db, 'calamarLiveViewers'),
+      where('updatedAt', '<', new Date(Date.now() - 15 * 60000)), limit(100)));
+    await Promise.all(expired.docs.map(d => deleteDoc(d.ref)));
+  }
 }
 export const recordVisit = (day, key) => setDoc(doc(db, VISITS_PATH, day), { last: key, [key]: increment(1) }, { merge: true });
 /** Daily visit documents between two YYYY-MM-DD days, both included. */
@@ -209,4 +275,201 @@ export function explain(error) {
     'unavailable': 'No se pudo conectar con el catálogo. Comprueba la conexión y vuelve a intentarlo.',
   };
   return messages[error.code] || error.message || 'No se pudo completar la operación.';
+}
+
+// ---- Optional website sign-in and administrator's user directory -------------------------------
+const webAccessDoc = doc(db, 'calamarWeb', 'access');
+const policy = data => ({ requireLogin: data?.requireLogin !== false });
+export async function readWebAccess() {
+  const s = await getDocFromServer(webAccessDoc); return policy(s.exists() ? s.data() : null);
+}
+export const watchWebAccess = (next, failed) => onSnapshot(webAccessDoc, { includeMetadataChanges: true }, s => {
+  if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(policy(s.exists() ? s.data() : null));
+}, failed);
+export async function saveWebAccess(value) {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+  await setDoc(webAccessDoc, { requireLogin: value.requireLogin === true, updatedAt: serverTimestamp() });
+}
+export const watchUserAccess = (uid, next, failed) => onSnapshot(doc(db, 'calamarUserAccess', uid), { includeMetadataChanges: true }, s => {
+  if (!s.metadata.fromCache && !s.metadata.hasPendingWrites) next(s.exists() && s.data().blocked === true);
+}, failed);
+export async function recordMember() {
+  const user = auth.currentUser; if (!user || user.isAnonymous) return;
+  const token = await user.getIdTokenResult();
+  if (auth.currentUser?.uid !== user.uid) return;
+  const claims = token.claims, ref = doc(db, 'calamarMembers', user.uid);
+  await runTransaction(db, async tx => {
+    const before = await tx.get(ref);
+    const data = { name: String(user.displayName || '').slice(0, 80), email: String(claims.email || ''), photo: String(user.photoURL || '').slice(0, 2048),
+      verified: claims.email_verified === true, provider: String(claims.firebase?.sign_in_provider || ''), lastSeen: serverTimestamp() };
+    const registered = Date.parse(user.metadata?.creationTime || '');
+    if (Number.isFinite(registered)) data.registeredAt = new Date(registered);
+    if (!before.exists()) data.createdAt = serverTimestamp();
+    tx.set(ref, data, { merge: true });
+  });
+}
+export async function readUserDirectory() {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+  const [members, profiles, access] = await Promise.all(['calamarMembers', USERS_PATH, 'calamarUserAccess'].map(path => getDocs(collection(db, path))));
+  return { members: members.docs.map(s => ({ ...s.data(), uid: s.id })), profiles: profiles.docs.map(s => ({ ...s.data(), uid: s.id })), access: access.docs.map(s => ({ ...s.data(), uid: s.id })) };
+}
+export async function setUserBlocked(uid, blocked) {
+  if (!administrator() || uid === auth.currentUser.uid) throw Error('No puedes bloquear tu propia cuenta de administración.');
+  await setDoc(doc(db, 'calamarUserAccess', uid), { blocked: blocked === true, updatedAt: serverTimestamp() });
+}
+
+async function adminIdentityToken(admin) {
+  // Google checks IAM on the project. Its OAuth token is sent only to Google.
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/identitytoolkit');
+  provider.setCustomParameters({ login_hint: ADMIN_EMAIL });
+  const result = await reauthenticateWithPopup(admin, provider);
+  return GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+}
+
+export async function deleteUserAccount(uid) {
+  requireAdministrator();
+  const admin = currentUser();
+  if (!uid || uid === admin.uid) throw Error('No puedes eliminar tu propia cuenta de administración.');
+  const token = await adminIdentityToken(admin);
+  if (!token) throw Error('Google no ha autorizado la eliminación. Vuelve a intentarlo.');
+  const url = `https://identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}/accounts:delete`;
+  const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ localId: uid }) });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    if (response.status === 401 || response.status === 403) throw Error('Tu cuenta de Google necesita permiso para eliminar usuarios en el proyecto de Firebase.');
+    if (body?.error?.message !== 'USER_NOT_FOUND') throw Error('Firebase no pudo eliminar la cuenta. Vuelve a intentarlo.');
+  }
+  try {
+    await setDoc(doc(db, 'calamarUserAccess', uid), { blocked: true, deleted: true, updatedAt: serverTimestamp() });
+  } catch {
+    await setUserBlocked(uid, true).catch(() => {});
+    throw Error('Firebase eliminó la cuenta, pero el directorio no se actualizó. Publica las reglas de Firestore y vuelve a pulsar «Eliminar cuenta».');
+  }
+}
+
+export async function resendVerificationReminder(uid) {
+  requireAdministrator();
+  const admin = currentUser();
+  const access = await adminIdentityToken(admin);
+  if (!access) throw Error('Google no ha autorizado el recordatorio.');
+  const base = `https://identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}/accounts:`;
+  const authRequest = async (method, payload) => {
+    const response = await fetch(base + method, {
+      method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (response.status === 401 || response.status === 403) throw Error('La cuenta de Google necesita permiso para gestionar usuarios y generar enlaces de verificación en Firebase.');
+    if (!response.ok) throw Error('Firebase no pudo preparar el recordatorio. Vuelve a intentarlo.');
+    return response.json();
+  };
+  const { users } = await authRequest('lookup', { localId: [uid] });
+  const account = users?.find(user => user.localId === uid);
+  if (!account?.email || !account.providerUserInfo?.some(provider => provider.providerId === 'password'))
+    throw Error('Esta cuenta no tiene un registro por correo y contraseña.');
+  if (account.emailVerified) return { verified: true };
+  const { oobLink } = await authRequest('sendOobCode', { requestType: 'VERIFY_EMAIL', email: account.email, returnOobLink: true });
+  const code = verificationCode(oobLink, firebaseConfig);
+  requireAdministrator();
+  if (currentUser()?.uid !== admin.uid) throw Error('La sesión de administración ha cambiado.');
+  const available = await fetch(REMINDER_ENDPOINT, { cache: 'no-store', signal: AbortSignal.timeout(7000) })
+    .then(response => response.ok ? response.json() : null).catch(() => null);
+  if (available?.ready !== true) return { draft: verificationDraft(account.email, oobLink) };
+  const response = await fetch(REMINDER_ENDPOINT, {
+    method: 'POST', headers: { Authorization: `Bearer ${await admin.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, email: account.email }), signal: AbortSignal.timeout(25000),
+  }).catch(() => { throw Error('No se pudo confirmar el envío. Comprueba si llegó antes de repetirlo.'); });
+  const status = await response.json().catch(() => null);
+  if (!response.ok || !status?.sent) throw Error(status?.error || 'No se pudo enviar el recordatorio.');
+  return { sent: true };
+}
+
+// ---- Private viewing history and administrator live viewers -----------------------------------
+const viewingDoc = (uid, id) => doc(db, 'calamarViewing', uid, 'sessions', id);
+const liveViewerDoc = id => doc(db, 'calamarLiveViewers', id);
+const ownsViewing = uid => currentUser()?.uid === uid;
+
+export async function showViewing({ uid, id, ...details }, first) {
+  if (!ownsViewing(uid)) return false;
+  const live = { ...details, uid, updatedAt: serverTimestamp() };
+  if (first) {
+    const batch = writeBatch(db);
+    batch.set(viewingDoc(uid, id), { ...details, startedAt: serverTimestamp() });
+    batch.set(liveViewerDoc(id), live);
+    await batch.commit();
+  } else await setDoc(liveViewerDoc(id), live);
+  return true;
+}
+
+export async function hideViewing({ uid, id }, finished) {
+  if (!ownsViewing(uid)) return;
+  await Promise.all([deleteDoc(liveViewerDoc(id)), ...(finished ? [
+    setDoc(viewingDoc(uid, id), { endedAt: serverTimestamp() }, { merge: true }),
+  ] : [])]);
+}
+
+function requireAdministrator() {
+  if (!administrator()) throw Error('Entra con la cuenta de administración.');
+}
+
+export async function readUserDetails(uid) {
+  requireAdministrator();
+  const [member, account, access] = await Promise.all([
+    getDocFromServer(doc(db, 'calamarMembers', uid)),
+    readJson(doc(db, USERS_PATH, uid), null),
+    getDocFromServer(doc(db, 'calamarUserAccess', uid)),
+  ]);
+  const profiles = (Array.isArray(account?.profiles) ? account.profiles : [])
+    .filter(p => /^[a-z0-9]{1,20}$/.test(p?.id)).slice(0, 5);
+  if (access.data()?.deleted === true || (!member.exists() && !account && !access.exists())) return null;
+  const favorites = await Promise.all(profiles.map(async profile => ({
+    ...profile,
+    data: await readJson(doc(db, USERS_PATH, uid, 'profiles', profile.id), null),
+  })));
+  return { ...member.data(), uid, blocked: access.data()?.blocked === true, profiles: favorites };
+}
+
+export async function readViewingHistory(uid, cursor) {
+  requireAdministrator();
+  const items = collection(db, 'calamarViewing', uid, 'sessions');
+  const snapshot = await getDocs(query(items, orderBy('startedAt', 'desc'), ...(cursor ? [startAfter(cursor)] : []), limit(31)));
+  const page = snapshot.docs.slice(0, 30);
+  return { entries: page.map(d => d.data()), cursor: snapshot.size > 30 ? page.at(-1) : null };
+}
+
+export async function readContentViewers(users, targets, from, to) {
+  requireAdministrator();
+  // Query the existing private subcollections by target, using the single-field index.
+  const groups = [];
+  for (let i = 0; i < targets.length; i += 30) groups.push(targets.slice(i, i + 30));
+  const people = [];
+  for (let i = 0; i < users.length; i += 10) {
+    const batch = await Promise.all(users.slice(i, i + 10).map(async user => {
+      const sessions = collection(db, 'calamarViewing', user.uid, 'sessions');
+      const entries = [];
+      for (const group of groups) {
+        const snapshot = await getDocs(query(sessions, where('target', 'in', group)));
+        entries.push(...snapshot.docs.map(doc => doc.data()));
+      }
+      const summary = viewingSummary(entries, from, to);
+      return summary && { uid: user.uid, name: user.name || summary.latest.profile || 'Usuario registrado', ...summary };
+    }));
+    people.push(...batch.filter(Boolean));
+  }
+  return people.sort((a, b) => b.at - a.at || a.name.localeCompare(b.name, 'es'));
+}
+
+export async function readLiveViewers() {
+  requireAdministrator();
+  const live = await getDocs(query(collection(db, 'calamarLiveViewers'), where('updatedAt', '>=', new Date(Date.now() - 5 * 60000))));
+  const entries = live.docs.map(d => d.data());
+  const uids = [...new Set(entries.map(entry => entry.uid))];
+  const names = new Map(await Promise.all(uids.map(async uid => {
+    const member = await getDocFromServer(doc(db, 'calamarMembers', uid)).catch(() => null);
+    if (member?.data()?.name) return [uid, member.data().name];
+    const account = await readJson(doc(db, USERS_PATH, uid), null).catch(() => null);
+    return [uid, account?.profiles?.[0]?.name || ''];
+  })));
+  return entries.map(entry => ({ ...entry, name: names.get(entry.uid) || entry.profile || 'Usuario registrado' }));
 }

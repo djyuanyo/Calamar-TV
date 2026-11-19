@@ -30,10 +30,11 @@ final class AppSources {
 
   /** A link of ZicoTV (zicotv.cc or any of its subdomains). */
   static boolean zico(String address) {
+    if (address == null) return false;
     try {
       String host = URI.create(address).getHost();
       host = host == null ? "" : host.toLowerCase(Locale.ROOT);
-      return host.equals("zicotv.cc") || host.endsWith(".zicotv.cc");
+      return host.equals("zicotv.cc") || host.endsWith(".zicotv.cc") || host.equals(ProviderPlayers.ZICO_EMBED_HOST);
     } catch (IllegalArgumentException invalid) {
       return false;
     }
