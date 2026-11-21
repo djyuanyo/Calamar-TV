@@ -34,3 +34,11 @@ test('renamed Primera Federación and ACB leagues keep their original sport', ()
   assert.deepEqual(leagues.map(league=>eventSport({leagueId:league.id},{leagues},definitions)),
     ['soccer','soccer','basketball','soccer','soccer','basketball']);
 });
+
+test('3ª División Futsal adds its events to the Fútbol sala count', () => {
+  const leagues = [{ id: 'third-division', name: '3ª División Futsal' }];
+  const events = [{ leagueId: 'third-division' }, { sport: 'Futsal' }, { sport: 'Soccer' }];
+  assert.equal(eventSport(events[0], { leagues }, definitions), 'futsal');
+  assert.deepEqual(eventSportTabs(events, { leagues }, definitions).map(({ id, count }) => [id, count]),
+    [['all', 3], ['soccer', 1], ['futsal', 2]]);
+});
