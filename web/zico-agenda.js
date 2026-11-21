@@ -70,6 +70,67 @@ export function editedZicoEventStreams(item, streams) {
   return { ...event, streams, zicoStreams: [] };
 }
 
+/** Preserve explicit selections (including clearing the channel) across later imports. */
+export function selectEventChannel(item, channelId) {
+  const { zicoChannelId, zicoChannelDisabled, ...event } = item;
+  return {
+    ...event, channelId,
+    ...(!channelId && (usesZicoAgenda(item) || zicoChannelDisabled) ? { zicoChannelDisabled: true } : {}),
+  };
+}
+
+function broadcasterKey(name) {
+  return key(clean(name).replace(/^m\+\s*/i, 'Movistar '))
+    .replace(/\bla liga(?= |$)/, 'laliga')
+    .replace(/\blaliga(?=\d)/, 'laliga ')
+    .replace(/^laliga primera federacion$/, 'primera federacion')
+    .replace(/^laliga tv hypermotion(?= |$)/, 'laliga hypermotion')
+    .replace(/^movistar ligae?(?: de)? campeones(?= |$)/, 'liga campeones')
+    .replace(/ (?:espana|spain)$/, '')
+    .replace(/^((?:movistar laliga|laliga hypermotion|liga campeones|dazn baloncesto|eurosport)) 1$/, '$1');
+}
+
+function broadcasterIndex(catalog) {
+  const channels = new Map();
+  for (const channel of catalog.channels || []) {
+    if (channel.tdt || channel.hidden || !channel.streams?.length) continue;
+    const name = broadcasterKey(channel.name);
+    if (name) channels.set(name, channels.has(name) ? '' : channel.id);
+  }
+  return channels;
+}
+
+function agendaChannel(row, channels) {
+  const own = new Set(), others = new Set();
+  for (const source of Array.isArray(row.sources) ? row.sources : []) {
+    if (!source || (source.language && !/^es(?:-|$)/i.test(source.language))) continue;
+    let name = clean(source.name);
+    // Other-language listings can use the same name for a different national feed.
+    const prefix = name.indexOf('|');
+    if (prefix >= 0) {
+      const label = key(name.slice(0, prefix));
+      if (label === 'espanol' || label === 'castellano') name = name.slice(prefix + 1).trim();
+      else if (/^(?:sd|hd|fhd|uhd|4k)$/.test(label) && /\(ES\)$/i.test(name)) name = name.slice(prefix + 1).trim();
+      else continue;
+    }
+    name = name.replace(/\s*·\s*(?:sd|hd|fhd|uhd|4k)(?:\s+drm raw)?$/i, '').replace(/\s*\(ES\)$/i, '');
+    const channelId = channels.get(broadcasterKey(name));
+    if (channelId) (source.source === 'own' ? own : others).add(channelId);
+  }
+  const candidates = own.size ? own : others;
+  return candidates.size === 1 ? candidates.values().next().value : '';
+}
+
+const hasManualChannel = event => !!event?.channelId && event.channelId !== event.zicoChannelId;
+
+function assignAgendaChannel(item, channelId) {
+  if (hasManualChannel(item)) return item;
+  const shouldAssign = channelId && !item.zicoChannelDisabled && !item.streams?.length;
+  if (!shouldAssign && !item.zicoChannelId) return item;
+  const { channelId: previousChannel, zicoChannelId, ...event } = item;
+  return shouldAssign ? { ...event, channelId, zicoChannelId: channelId } : event;
+}
+
 const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis',
   'Ice Hockey': 'Hockey sobre hielo', Handball: 'Balonmano', Volleyball: 'Voleibol',
   Motorsport: 'Motor', Futsal: 'Fútbol sala', Cycling: 'Ciclismo', Fighting: 'Combate', Other: 'Otros deportes' };
@@ -161,6 +222,7 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
       manualEventIds, automaticEventId: event.zicoEventId };
   });
   const occupied = new Set(), assigned = new Map(), events = [];
+  const broadcasters = broadcasterIndex(catalog);
   let linked = 0;
   const seen = new Set();
   const payloadById = new Map(payload.data.map(row => [`zico-event-${row.id}`, row]));
@@ -171,11 +233,12 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
     const id = `zico-event-${row.id}`, startAt = new Date(start).toISOString();
     const match = matchKey(name, startAt);
     const old = previous.get(id), streams = manualEventStreams(old);
-    const hasManualSource = !!old?.channelId || streams.length > 0;
+    const hasManualSource = hasManualChannel(old) || !!old?.zicoChannelDisabled || streams.length > 0;
     if (seen.has(id) || (occupied.has(match) && !hasManualSource)) continue;
     seen.add(id);
 
     const zicoId = String(row.id);
+    const channelId = agendaChannel(row, broadcasters);
     const { league, region, formerAlias } = sourceLeague(row.league);
     const details = { start, league, region, name: key(name), home: teamKey(row.home_team, league), away: teamKey(row.away_team, league) };
     const explicit = manual.filter(candidate => candidate.manualEventIds.has(zicoId)
@@ -192,8 +255,9 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
         // League rows take precedence over duplicate broadcaster listings for these fixtures.
         const priority = linkedCompetitions.has(target.league)
           ? (target.manualEventIds.has(zicoId) ? 2 : target.league === league ? 1 : 0) : 0;
-        if (!previousLink || priority > previousLink.priority) {
-          assigned.set(target.id, { zicoEventId: zicoId, priority, sport: clean(row.sport_category).slice(0, 80) });
+        if (!previousLink || priority > previousLink.priority
+            || (priority === previousLink.priority && channelId && !previousLink.channelId)) {
+          assigned.set(target.id, { zicoEventId: zicoId, channelId, priority, sport: clean(row.sport_category).slice(0, 80) });
           if (!previousLink) linked++;
         }
       }
@@ -209,24 +273,24 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
     const leagueId = existingLeague?.id || oldLeague || addEntity(leagues, competition, null, 'zico-liga-', true);
     const homeTeamId = old?.homeTeamId || addEntity(teams, clean(row.home_team), httpsUrl(row.home_team_badge), 'zico-equipo-');
     const awayTeamId = old?.awayTeamId || addEntity(teams, clean(row.away_team), httpsUrl(row.away_team_badge), 'zico-equipo-');
-    events.push(editedZicoEventStreams({
+    events.push(assignAgendaChannel(editedZicoEventStreams({
       ...old, id, name: old?.name || name, startAt, leagueId, homeTeamId, sport: clean(row.sport_category).slice(0, 80),
       awayTeamId: awayTeamId === homeTeamId ? '' : awayTeamId,
       venue: old?.venue || clean(row.venue), status: row.status, imported: true,
       cover: old?.cover || '',
-    }, streams));
+    }, streams), channelId));
   }
   const updateMatch = item => {
     const match = assigned.get(item.id);
     if (!usesZicoAgenda(item) && !match) return item;
     const streams = manualEventStreams(item);
     const { zicoEventId, zicoStreams, zicoManualStreams, ...base } = item;
-    if (match) return { ...base, sport: base.sport || match.sport, streams, zicoEventId: match.zicoEventId, zicoStreams: [] };
+    if (match) return assignAgendaChannel({ ...base, sport: base.sport || match.sport, streams, zicoEventId: match.zicoEventId, zicoStreams: [] }, match.channelId);
     // Keep previously linked custom events editable if their only source was an automatic link.
-    if (zicoEventId && !item.channelId && !streams.length && !fixtures.includes(item)) {
-      return { ...base, streams, zicoEventId, zicoStreams: [] };
+    if (zicoEventId && !hasManualChannel(item) && !streams.length && !fixtures.includes(item)) {
+      return assignAgendaChannel({ ...base, streams, zicoEventId, zicoStreams: [] }, '');
     }
-    return { ...base, streams };
+    return assignAgendaChannel({ ...base, streams }, '');
   };
   const existingEvents = existing.map(updateMatch);
   const existingFixtures = fixtures.map(updateMatch);
@@ -250,19 +314,24 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
     if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !removedLeagues.has(id));
     return data;
   }
+  const result = (data, count, omitted = 0) => ({
+    data, count, linked, omitted,
+    assignedChannels: [...data.events, ...existingFixtures].filter(event =>
+      event.zicoChannelId && event.channelId === event.zicoChannelId).length,
+  });
   const encoder = new TextEncoder();
   const size = data => encoder.encode(JSON.stringify(data)).length;
   let budget = maxBytes - reserveBytes;
   const fits = data => budget === Infinity || size(data) <= budget;
   let data = withAgenda(events);
-  if (fits(data)) return { data, count: events.length, linked, omitted: 0 };
+  if (fits(data)) return result(data, events.length);
   data = withAgenda(events, true);
-  if (fits(data)) return { data, count: events.length, linked, omitted: 0 };
+  if (fits(data)) return result(data, events.length);
 
   // Keep saved sources and edits. Fill the remaining space with the nearest matches.
   const protectedIds = new Set(events.filter(event => {
     const old = previous.get(event.id);
-    return event.channelId || event.streams.length || old?.featured || old?.cover
+    return hasManualChannel(event) || event.zicoChannelDisabled || event.streams.length || old?.featured || old?.cover
       || old?.matchUrl || old?.description || (old && old.name !== clean(payloadById.get(event.id)?.title));
   }).map(event => event.id));
   const starts = event => Date.parse(event.startAt);
@@ -284,5 +353,5 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserve
     if (fits(candidate)) { lo = mid; data = candidate; }
     else hi = mid - 1;
   }
-  return { data, count: protectedIds.size + lo, linked, omitted: optional.length - lo };
+  return result(data, protectedIds.size + lo, optional.length - lo);
 }
