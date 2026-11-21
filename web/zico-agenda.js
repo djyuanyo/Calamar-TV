@@ -44,40 +44,6 @@ function addEntity(list, name, badge, prefix, generatedOnly = false) {
   return id;
 }
 
-// Only channels actually identified as Zico's own CDN. Never save third-party sites or video tokens.
-export function zicoChannelSources(row) {
-  const links = new Set();
-  const add = (source, provider) => {
-    if (!source || provider !== 'own') return;
-    const url = httpsUrl(source.player_url || source.url);
-    const match = url && ['https://bp.zicotv.cc', 'https://zicotv.cc', ORIGIN].includes(url.origin)
-      && /^\/(?:api\/player|channels)\/([1-9][0-9]{0,15})\/?$/.exec(url.pathname);
-    const declared = source.channel_id;
-    const validId = Number.isSafeInteger(declared) && declared > 0;
-    // A mismatched id/URL must not attach another channel to this match.
-    if (url && (!match || (declared != null && (!validId || String(declared) !== match[1])))) return;
-    const id = match?.[1] || (validId && !source.player_url && !source.url ? String(declared) : '');
-    if (id) links.add(`${ORIGIN}/api/player/${id}`);
-  };
-  for (const source of Array.isArray(row?.sources) ? row.sources : []) {
-    add(source, source?.source);
-    for (const stream of Array.isArray(source?.streams) ? source.streams : []) add(stream, stream?.source || source.source);
-  }
-  return [...links].slice(0, 50);
-}
-
-function hasEventSource(row) {
-  const playable = (source, inheritedType) => {
-    if (!source || source.locked || source.is_premium) return false;
-    const url = httpsUrl(source.player_url || source.url);
-    return !!url && url.href.length <= 2048 && !url.searchParams.has('token')
-      && !zicoEventApi(url.href) && ['direct', 'iframe'].includes(source.type || inheritedType);
-  };
-  return (Array.isArray(row.sources) ? row.sources : []).some(source => playable(source)
-    || (!source?.locked && !source?.is_premium && Array.isArray(source?.streams)
-      && source.streams.some(stream => playable(stream, source.type))));
-}
-
 function signalKey(address) {
   const url = httpsUrl(address);
   if (url && ['https://bp.zicotv.cc', 'https://zicotv.cc', ORIGIN].includes(url.origin)) {
@@ -88,23 +54,20 @@ function signalKey(address) {
   }
   return address;
 }
-function manualSignals(item, eventId = item?.zicoEventId) {
+export function manualEventStreams(item) {
+  if (!usesZicoAgenda(item)) return item?.streams || [];
   const imported = new Set((item?.zicoStreams || []).map(signalKey));
   const selected = new Set((item?.zicoManualStreams || []).map(signalKey));
-  const previousEvent = eventId || (isZicoAgendaEvent(item) ? item.id.slice('zico-event-'.length) : '');
+  const previousEvent = item?.zicoEventId || (isZicoAgendaEvent(item) ? item.id.slice('zico-event-'.length) : '');
   if (previousEvent && !Array.isArray(item?.zicoStreams)) imported.add(`${ORIGIN}/api/v1/events/${previousEvent}`);
   return (item?.streams || []).filter(url => selected.has(signalKey(url)) || !imported.has(signalKey(url)));
 }
 
-/** Keep an administrator's replacement distinct from the feed's automatically selected sources. */
+/** The editor submits only explicitly entered URLs. An empty marker also supports older Android clients. */
 export function editedZicoEventStreams(item, streams) {
   if (!usesZicoAgenda(item)) return { ...item, streams };
-  const automatic = new Set((item.zicoStreams || []).map(signalKey));
-  const selected = new Set((item.zicoManualStreams || []).map(signalKey));
-  const zicoManualStreams = streams.filter(url => selected.has(signalKey(url)) || !automatic.has(signalKey(url)));
-  // Existing Android versions use zicoStreams to recognize event lookup URLs as playable.
-  const zicoStreams = streams.filter(url => automatic.has(signalKey(url)) || zicoEventApi(url));
-  return { ...item, streams, zicoStreams, zicoManualStreams };
+  const { zicoManualStreams, ...event } = item;
+  return { ...event, streams, zicoStreams: [] };
 }
 
 const sportNames = { Soccer: 'Fútbol', Basketball: 'Baloncesto', Tennis: 'Tenis',
@@ -177,12 +140,6 @@ function matchCandidate(candidate, match) {
   return score ? { candidate, score, distance } : null;
 }
 
-function withoutZicoSignals(item, eventId) {
-  if (!item.zicoEventId && !eventId) return item;
-  const { zicoEventId, zicoStreams, ...rest } = item;
-  return { ...rest, streams: manualSignals(item, eventId || zicoEventId) };
-}
-
 export function applyZicoAgenda(catalog, payload) {
   if (!Array.isArray(payload?.data) || payload.data.length !== payload.total
     || payload.data.some(row => !Number.isSafeInteger(row?.id) || row.id < 1 || typeof row.status !== 'string')) {
@@ -197,15 +154,14 @@ export function applyZicoAgenda(catalog, payload) {
   const teamsById = new Map(teams.map(team => [team.id, team.name]));
   const manual = [...existing, ...fixtures.map(fixture => fixtureEvent(fixture, catalog))].map(event => {
     const league = leaguesById.get(event.leagueId);
-    const manualLinks = manualSignals(event);
+    const manualLinks = manualEventStreams(event);
     const manualEventIds = new Set(manualLinks.map(link => zicoEventApi(link)?.split('/').at(-1)));
     return { id: event.id, name: key(event.name), start: Date.parse(event.startAt), league,
       home: teamKey(teamsById.get(event.homeTeamId), league), away: teamKey(teamsById.get(event.awayTeamId), league),
       manualEventIds, automaticEventId: event.zicoEventId };
   });
   const occupied = new Set(), assigned = new Map(), events = [];
-  let count = 0, skipped = 0, linked = 0;
-  const channels = new Map((catalog.channels || []).map(channel => [channel.id, channel]));
+  let linked = 0;
   const seen = new Set();
   for (const row of payload.data) {
     if (!['live', 'scheduled'].includes(row.status)) continue;
@@ -213,7 +169,9 @@ export function applyZicoAgenda(catalog, payload) {
     if (!name || !Number.isFinite(start)) continue;
     const id = `zico-event-${row.id}`, startAt = new Date(start).toISOString();
     const match = matchKey(name, startAt);
-    if (seen.has(id) || occupied.has(match)) continue;
+    const old = previous.get(id), streams = manualEventStreams(old);
+    const hasManualSource = !!old?.channelId || streams.length > 0;
+    if (seen.has(id) || (occupied.has(match) && !hasManualSource)) continue;
     seen.add(id);
 
     const zicoId = String(row.id);
@@ -226,37 +184,21 @@ export function applyZicoAgenda(catalog, payload) {
     const [best, second] = ranked;
     const tied = second && best.score === second.score && best.distance === second.distance;
     const target = explicit.length === 1 ? explicit[0] : !explicit.length && !tied ? best?.candidate : null;
-    const old = previous.get(id);
-    const page = `${ORIGIN}/events/${row.id}`;
-    const channelLinks = zicoChannelSources(row);
-    const manualStreams = manualSignals(old);
-    const selectedEvents = manualStreams.filter(url => zicoEventApi(url));
-    const zicoStreams = selectedEvents.length ? selectedEvents : channelLinks.length ? channelLinks : hasEventSource(row) ? [page] : [];
-    const available = zicoStreams.length > 0;
-    if (target || explicit.length || ranked.length) {
-      if (target && available) {
+    // Keep an agenda entry with its own manual channel or URLs editable under the same ID.
+    if (!hasManualSource && (target || explicit.length || ranked.length)) {
+      if (target) {
         const previousLink = assigned.get(target.id);
         // League rows take precedence over duplicate broadcaster listings for these fixtures.
         const priority = linkedCompetitions.has(target.league)
           ? (target.manualEventIds.has(zicoId) ? 2 : target.league === league ? 1 : 0) : 0;
         if (!previousLink || priority > previousLink.priority) {
-          assigned.set(target.id, { zicoEventId: zicoId, zicoStreams, priority, sport: clean(row.sport_category).slice(0, 80) });
+          assigned.set(target.id, { zicoEventId: zicoId, priority, sport: clean(row.sport_category).slice(0, 80) });
           if (!previousLink) linked++;
         }
       }
-      if (!available) skipped++;
-      continue;
-    }
-    const channel = channels.get(old?.channelId);
-    if (!available && ![...manualStreams, ...(channel?.streams || [])].some(url => !zicoEventApi(url))) {
-      skipped++;
       continue;
     }
     occupied.add(match);
-    const manualKeys = new Set(manualStreams.map(signalKey));
-    const importedStreams = zicoStreams.filter(url => !manualKeys.has(signalKey(url)))
-      .slice(0, Math.max(0, 50 - manualStreams.length));
-    const streams = [...importedStreams, ...manualStreams];
     const competition = clean(row.league) || sportNames[row.sport_category] || clean(row.sport_category);
     const existingLeague = row.sport_category === 'Soccer' && league
       ? leagues.find(item => !item.id.startsWith('zico-liga-') && leaguesById.get(item.id) === league) : null;
@@ -266,27 +208,27 @@ export function applyZicoAgenda(catalog, payload) {
     const leagueId = existingLeague?.id || oldLeague || addEntity(leagues, competition, null, 'zico-liga-', true);
     const homeTeamId = old?.homeTeamId || addEntity(teams, clean(row.home_team), httpsUrl(row.home_team_badge), 'zico-equipo-');
     const awayTeamId = old?.awayTeamId || addEntity(teams, clean(row.away_team), httpsUrl(row.away_team_badge), 'zico-equipo-');
-    events.push({
+    events.push(editedZicoEventStreams({
       ...old, id, name: old?.name || name, startAt, leagueId, homeTeamId, sport: clean(row.sport_category).slice(0, 80),
       awayTeamId: awayTeamId === homeTeamId ? '' : awayTeamId,
       venue: old?.venue || clean(row.venue), status: row.status, imported: true,
-      cover: old?.cover || '', streams, zicoStreams: selectedEvents.length ? selectedEvents : importedStreams,
-      ...(selectedEvents.length ? { zicoManualStreams: [...new Set([
-        ...(old?.zicoManualStreams || []).filter(url => streams.includes(url)), ...selectedEvents,
-      ])] } : {}),
-    });
-    count++;
+      cover: old?.cover || '',
+    }, streams));
   }
-  const applySignals = item => {
-    const linkedSignals = assigned.get(item.id), base = withoutZicoSignals(item, linkedSignals?.zicoEventId);
-    if (!linkedSignals) return base;
-    const manualStreams = base.streams || [];
-    const manualKeys = new Set(manualStreams.map(signalKey));
-    const zicoStreams = linkedSignals.zicoStreams.filter(url => !manualKeys.has(signalKey(url))).slice(0, Math.max(0, 50 - manualStreams.length));
-    return { ...base, sport: base.sport || linkedSignals.sport, streams: [...manualStreams, ...zicoStreams], zicoEventId: linkedSignals.zicoEventId, zicoStreams };
+  const updateMatch = item => {
+    const match = assigned.get(item.id);
+    if (!usesZicoAgenda(item) && !match) return item;
+    const streams = manualEventStreams(item);
+    const { zicoEventId, zicoStreams, zicoManualStreams, ...base } = item;
+    if (match) return { ...base, sport: base.sport || match.sport, streams, zicoEventId: match.zicoEventId, zicoStreams: [] };
+    // Keep previously linked custom events editable if their only source was an automatic link.
+    if (zicoEventId && !item.channelId && !streams.length && !fixtures.includes(item)) {
+      return { ...base, streams, zicoEventId, zicoStreams: [] };
+    }
+    return { ...base, streams };
   };
-  const data = { ...catalog, events: [...existing.map(applySignals), ...events], leagues, teams };
-  if (catalog.fixtures) data.fixtures = fixtures.map(applySignals);
+  const data = { ...catalog, events: [...existing.map(updateMatch), ...events], leagues, teams };
+  if (catalog.fixtures) data.fixtures = fixtures.map(updateMatch);
   // Expired agenda entries are replaced above. Their generated teams and leagues must also
   // leave the catalog, while manual entities and those adopted by ESPN stay available.
   const matches = [...data.events, ...(data.fixtures || [])];
@@ -297,5 +239,5 @@ export function applyZicoAgenda(catalog, payload) {
     && !league.espn && !usedLeagues.has(league.id)).map(league => league.id));
   data.leagues = leagues.filter(league => !removedLeagues.has(league.id));
   if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !removedLeagues.has(id));
-  return { data, count, skipped, linked };
+  return { data, count: events.length, linked };
 }

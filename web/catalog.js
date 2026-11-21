@@ -3,7 +3,7 @@ import { dailymotionEmbed, vidaraPlayback } from './provider-players.js';
 import { zicoEventApi } from './event-sources.js';
 import { renewablePage, zicoChannelPlayer, zicoHost, zicoPublicIframe } from './zico-channel.js';
 export { renewablePage } from './zico-channel.js';
-import { isZicoAgendaEvent } from './zico-agenda.js';
+import { isZicoAgendaEvent, manualEventStreams } from './zico-agenda.js';
 import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures, madridWeek, MATCH_SPAN_MS } from './competitions.js';
@@ -392,8 +392,8 @@ export function events(channels, custom, now = Date.now(), { allWeeks = false, f
   return all.filter((e) => !e.imported || allWeeks || imported.has(e)).sort(eventOrder).flatMap((event) => {
     const target = channels.find((c) => c.id === event.channelId && c.playable);
     const shared = { ...event, id: event.id, eventId: event.id, slug: slugs.get(event.id), event: true, ...eventArt(event, custom) };
-    const streams = [...new Set([...(target?.streams || []), ...(event.streams || [])])];
-    if (isZicoAgendaEvent(event) && !streams.some(url => !zicoEventApi(url) || Array.isArray(event.zicoStreams))) return [];
+    const streams = [...new Set([...(target?.streams || []), ...manualEventStreams(event)])];
+    if (isZicoAgendaEvent(event) && !streams.length) return [];
     if (streams.length) return [{ logo: '', group: '', region: '', web: '', own: true, ...target, ...shared, channelId: target?.id || '', channelName: target?.name || 'Fuentes del evento', meta: eventMeta(event, custom),
       streams, playable: true }];
     if (ended(event)) return [{ ...shared, logo: '', group: '', region: '', web: '', own: true, streams: [], playable: false, pending: true,

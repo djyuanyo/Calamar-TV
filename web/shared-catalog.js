@@ -26,8 +26,9 @@ export function validateCatalog(data, { checkSize = true } = {}) {
   const eventIds = new Set();
   for (const event of data.events || []) {
     const agenda = isZicoAgendaEvent(event) && event.imported === true;
+    const pendingZico = typeof event?.zicoEventId === 'string' && /^\d+$/.test(event.zicoEventId);
     if (!event || typeof event.id !== 'string' || !event.id || eventIds.has(event.id)
-        || typeof event.name !== 'string' || !event.name.trim() || (agenda ? !!event.channelId && !ids.has(event.channelId) : !ids.has(event.channelId) && !event.streams?.length)
+        || typeof event.name !== 'string' || !event.name.trim() || ((agenda || pendingZico) ? !!event.channelId && !ids.has(event.channelId) : !ids.has(event.channelId) && !event.streams?.length)
         || typeof event.cover !== 'string' || (!(agenda && event.cover === '') && !validCover(event.cover))) throw new Error('Cada evento necesita nombre, portada y un canal o enlaces manuales.');
     eventIds.add(event.id);
   }
