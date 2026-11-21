@@ -138,6 +138,9 @@ class SharePreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as site:
             pages.publish(site, BASE, FIXTURES, download=lambda url: self.fail('covers are drawn, not linked'), images=images, tdt=TDT)
             root = pathlib.Path(site)
+            covers = json.loads((root / 'data/event-covers.json').read_text(encoding='utf-8'))
+            self.assertEqual(covers, {'manual': BASE + 'evento/real-betis-vs-feyenoord-1/vista.jpg',
+                                      'partido-1': BASE + 'evento/real-betis-vs-feyenoord-2/vista.jpg'})
             for folder in ('liga/laliga', 'evento/real-betis-vs-feyenoord-1', 'evento/real-betis-vs-feyenoord-2', 'canal/la-1', 'canal/la-1-2', 'canal/solo-web'):
                 with Image.open(root / folder / 'vista.jpg') as picture:
                     self.assertEqual(picture.size, (1200, 630))

@@ -90,20 +90,22 @@ export function iptvSection(el, service, user) {
   }).catch(error => { note.textContent = service.explain(error); });
   return el('section', { class: 'user-surface iptv-list' },
     el('h2', {}, 'Lista IPTV'),
-    el('p', { class: 'note' }, 'Enlace corto para WisePlay (carpetas, una por serie, con portada e iconos) con los canales, películas, series y documentales. Se actualiza sola.'),
+    el('p', { class: 'note' }, 'Enlace corto para WisePlay (carpetas, una por serie, con portada e iconos) con los canales, eventos en directo, películas, series y documentales. Se actualiza sola.'),
     link,
     el('label', { class: 'iptv-date' }, el('span', {}, 'Caduca el día y a la hora (de España); sin hora, al acabar el día. Vacío: sin caducidad'), el('span', {}, date, time, clear)),
     el('div', { class: 'actions' }, create, save, copy, wiseplay, remove), note);
 }
 
+export const IPTV_LIVE_FOLDER = 'Eventos En Directo';
 export const LIBRARY_FOLDERS = ['Películas', 'Series', 'Documentales'];
 
-/** The folders of the list: the channel categories (as the web shows them), then films, series and documentaries. */
+/** Folder icon settings for channels, live events and the library. */
 export function iptvFolders(channels = []) {
   const groups = [];
   for (const c of channels) if (c?.playable !== false && c?.group && !groups.includes(c.group)) groups.push(c.group);
   // A channel category called like a library folder keeps its own folder («Series (canales)»), as in the hosting.
-  return ['Canales', ...groups.map(g => (LIBRARY_FOLDERS.includes(g) ? `${g} (canales)` : g)), ...LIBRARY_FOLDERS];
+  const reserved = [IPTV_LIVE_FOLDER, ...LIBRARY_FOLDERS];
+  return ['Canales', ...groups.map(g => (reserved.includes(g) ? `${g} (canales)` : g)), ...reserved];
 }
 
 /** Only https icons of known folders are kept. */
