@@ -140,7 +140,7 @@ function matchCandidate(candidate, match) {
   return score ? { candidate, score, distance } : null;
 }
 
-export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, now = Date.now() } = {}) {
+export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, reserveBytes = 0, now = Date.now() } = {}) {
   if (!Array.isArray(payload?.data) || payload.data.length !== payload.total
     || payload.data.some(row => !Number.isSafeInteger(row?.id) || row.id < 1 || typeof row.status !== 'string')) {
     throw Error('ZicoTV devolvió una agenda con un formato inesperado.');
@@ -251,7 +251,9 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, now = D
     return data;
   }
   const encoder = new TextEncoder();
-  const fits = data => maxBytes === Infinity || encoder.encode(JSON.stringify(data)).length <= maxBytes;
+  const size = data => encoder.encode(JSON.stringify(data)).length;
+  let budget = maxBytes - reserveBytes;
+  const fits = data => budget === Infinity || size(data) <= budget;
   let data = withAgenda(events);
   if (fits(data)) return { data, count: events.length, linked, omitted: 0 };
   data = withAgenda(events, true);
@@ -272,7 +274,9 @@ export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, now = D
     return withAgenda(events.filter(event => protectedIds.has(event.id) || included.has(event.id)), true);
   };
   data = take(0);
-  if (!fits(data)) throw Error('El catálogo ya está lleno. Los canales y partidos guardados se han conservado.');
+  const savedSize = size(data);
+  if (savedSize > maxBytes) throw Error('El catálogo ya está lleno. Los canales y partidos guardados se han conservado.');
+  budget = Math.max(budget, savedSize);
   let lo = 0, hi = optional.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);

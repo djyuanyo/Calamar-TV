@@ -552,7 +552,10 @@ function zicoAgendaPanel(rerender, state) {
     try {
       const payload = await fetchZicoAgenda();
       if (!button.isConnected || !file || saving) return;
-      const { data, count, linked, omitted } = applyZicoAgenda(file.data, payload, { maxBytes: CATALOG_MAX_BYTES });
+      // Leave room in Firestore to assign manual channels and links after importing.
+      const { data, count, linked, omitted } = applyZicoAgenda(file.data, payload, {
+        maxBytes: CATALOG_MAX_BYTES, reserveBytes: 16_000,
+      });
       data.channels = syncTdtCopies(data, state.tdt);
       validateCatalog(data, { checkSize: false });
       if (JSON.stringify(data) !== JSON.stringify(file.data)) {

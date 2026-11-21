@@ -398,7 +398,7 @@ test('a large agenda prioritizes upcoming events and preserves the manual channe
   const manual = row(4, { start_time: old.startAt });
   const minimal = applyZicoAgenda(base, payload(nearby, manual)).data;
   const maxBytes = Buffer.byteLength(JSON.stringify(minimal));
-  const { data, count, omitted } = applyZicoAgenda(base, payload(past, upcoming, manual, nearby), { maxBytes, now });
+  const { data, count, omitted } = applyZicoAgenda(base, payload(past, upcoming, manual, nearby), { maxBytes: maxBytes + 100, reserveBytes: 100, now });
   assert.equal(count, 2);
   assert.equal(omitted, 2);
   assert.equal(data.events.find(event => event.id === old.id).channelId, channel.id);
