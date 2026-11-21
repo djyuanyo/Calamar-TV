@@ -83,6 +83,14 @@ function slug(text) {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'canal';
 }
 
+function checkYouTubeIngest(links) {
+  for (const link of links) {
+    if (/^rtmps?:\/\/(?:[a-z0-9.-]+\.)?(?:rtmp\.youtube\.com|rtmps\.youtube\.com)\//i.test(link)) {
+      throw new Error('Esa dirección de YouTube es para emitir. Pega el enlace del directo que aparece en Compartir.');
+    }
+  }
+}
+
 function validStreams(text) {
   const out = [];
   const inputs = text.split(/\r?\n/).flatMap(line => /^acestream:/i.test(line.trim()) ? [line.trim()] : line.split(/\s+/));
@@ -98,6 +106,7 @@ function validStreams(text) {
     } catch {
       throw new Error(`Enlace no válido: ${line}`);
     }
+    checkYouTubeIngest([line]);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Usa un enlace HTTP, HTTPS o Ace Stream válido: ${line}`);
     const source = zicoChannelPlayer(url.href) || url.href;
     if (!out.includes(source)) out.push(source);
@@ -107,6 +116,7 @@ function validStreams(text) {
 }
 
 function publishableStreams(links) {
+  checkYouTubeIngest(links);
   return resolveAceStreams(links, async () => {
     if (!administrator()) throw new Error('Entra con la cuenta de administración de Google.');
     return auth.currentUser.getIdToken();

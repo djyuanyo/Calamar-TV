@@ -2,7 +2,7 @@ name: Calamar TV · Web y catálogo
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'tizen/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/calamar-vidara.php', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
+    paths: ['web/**', 'tizen/**', 'data/**', 'tools/**', 'hosting/calamar-images.php', 'hosting/calamar-player.php', 'hosting/calamar-vidara.php', 'hosting/calamar-iptv.php', 'hosting/README-IPTV.txt', 'hosting/README-Imagenes-GitHub.txt', '.github/workflows/web.yml']
   schedule:
     - cron: '17 */6 * * *'
     # Event preview pages (evento/<slug>/) follow the catalog edited in the admin within ~15 minutes.
@@ -33,6 +33,7 @@ jobs:
           php -l hosting/calamar-lulu.php
           php -l hosting/calamar-vidara.php
           php -l hosting/calamar-player.php
+          php -l hosting/calamar-iptv.php
           php -l hosting/calamar-lineups.php
           php -l hosting/calamar-votes.php
           php -l hosting/calamar-cast-audio.php
@@ -71,6 +72,7 @@ jobs:
           (cd hosting && zip ../_site/downloads/Calamar-Imagenes-GitHub.zip calamar-images.php README-Imagenes-GitHub.txt)
           (cd hosting && zip ../_site/downloads/Calamar-Vidara-hosting.zip calamar-vidara.php calamar-cast-audio.php calamar-http-source.php)
           (cd hosting && zip ../_site/downloads/Calamar-Audio-Chromecast.zip calamar-lulu.php calamar-vidara.php calamar-cast-audio.php calamar-http-source.php)
+          (cd hosting && zip ../_site/downloads/Calamar-IPTV-Eventos.zip calamar-iptv.php README-IPTV.txt)
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event and channel with its card drawn as image, so shared links show it in WhatsApp.

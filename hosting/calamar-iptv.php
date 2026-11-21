@@ -4,7 +4,7 @@
 //   https://calamarmenciano.com/calamar-iptv.php?lista=…           (a user's, made in Administración → Usuarios)
 //   …&formato=wiseplay: WisePlay's own format, with the folders' icons and a folder per series.
 // The list is made again each time the app asks for it, from the published catalog: the channels
-// (yours and the TDT list), films, series and documentaries. Whatever you change in Administración
+// (yours and the TDT list), live events, films, series and documentaries. Whatever you change in Administración
 // appears on the next refresh of the app, with nothing to upload.
 //
 // It is private: some channels carry the provider's user and password in their address, and whoever
@@ -14,6 +14,8 @@
 const IPTV_PROJECT = 'menciamedia';
 const IPTV_API_KEY = 'AIzaSyB5lJLnPd79iEupekufK5x11SXSqYL4dsk'; // Public web key (web/firebase-config.js).
 const IPTV_TDT = 'https://djyuanyo.github.io/Calamar-TV/data/tdt.json';
+const IPTV_EVENT_COVERS = 'https://djyuanyo.github.io/Calamar-TV/data/event-covers.json';
+const IPTV_LIVE_FOLDER = 'Eventos En Directo';
 const IPTV_HOSTING = 'https://calamarmenciano.com';
 
 function iptvFail($code, $text) {
@@ -60,12 +62,13 @@ function iptvDocument($path) {
  */
 function iptvAddress($value, $pages) {
     $url = trim((string)$value);
+    if (preg_match('/[\x00-\x1f\x7f]/', $url)) return null;
     $u = parse_url($url);
     if (!$u || empty($u['host']) || !in_array(strtolower($u['scheme'] ?? ''), array('http', 'https'), true)) return null;
     $host = strtolower($u['host']);
     $path = $u['path'] ?? '/';
     $plain = preg_replace('/^www\./', '', $host);
-    if ($plain === 'zicotv.cc' || substr($host, -10) === '.zicotv.cc') return null;
+    if ($plain === 'zicotv.cc' || substr($host, -10) === '.zicotv.cc' || $host === 'zicotv.gcorecdn.com') return null;
     if (preg_match('/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com|dailymotion\.com|dai\.ly)$/', $host)) return null;
     if (preg_match('/^anonmp4\.[a-z]{2,10}$/', $plain)) return null;
     if (preg_match('/^(lulustream|luluvdoo?|luluvido|luluvid|lulu)\.(com|st|to|net|org|io|live|pw)$/', $plain)) {
@@ -111,18 +114,21 @@ function iptvChannels(&$folders, $custom, $tdt) {
     foreach ((array)($tdt['channels'] ?? array()) as $o) if (is_array($o)) $tdtIds[(string)($o['id'] ?? '')] = true;
     $names = array();
     foreach ((array)($custom['categories'] ?? array()) as $c) if (is_array($c) && isset($c['id'])) $names[(string)$c['id']] = (string)($c['name'] ?? $c['id']);
-    $seen = array(); $count = 0;
-    $add = function ($o, $own) use (&$folders, &$seen, &$count, $names) {
+    $stations = array();
+    $add = function ($o, $own) use (&$folders, &$stations, $names) {
         $id = (string)($o['id'] ?? '');
-        if ($id === '' || isset($seen[$id])) return;
+        if ($id === '' || isset($stations[$id])) return;
         foreach ((array)($o['streams'] ?? array()) as $stream) {
             $address = iptvAddress($stream, true);
             if ($address === null) continue;
-            $seen[$id] = true; $count++;
             $group = trim((string)($o['group'] ?? '')) ?: ($own ? 'Calamar TV' : 'Otros');
             $name = (string)($o['name'] ?? 'Canal');
-            $folder = &iptvFolder($folders, $names[$group] ?? $group);
-            $folder['stations'][] = array('name' => $name, 'full' => $name, 'image' => iptvImage($o['logo'] ?? ''), 'url' => $address, 'id' => $id);
+            $label = $names[$group] ?? $group;
+            if ($label === IPTV_LIVE_FOLDER) $label .= ' (canales)';
+            $folder = &iptvFolder($folders, $label);
+            $station = array('name' => $name, 'full' => $name, 'image' => iptvImage($o['logo'] ?? ''), 'url' => $address, 'id' => $id);
+            $stations[$id] = $station;
+            $folder['stations'][] = $station;
             return; // The first source that an IPTV app can open.
         }
     };
@@ -134,7 +140,73 @@ function iptvChannels(&$folders, $custom, $tdt) {
     foreach ((array)($tdt['channels'] ?? array()) as $o) {
         if (is_array($o) && !isset($hidden[(string)($o['id'] ?? '')])) $add($o, false);
     }
-    return $count;
+    return $stations;
+}
+
+function iptvEventStreams($event) {
+    $streams = (array)($event['streams'] ?? array());
+    if (empty($event['zicoEventId']) && !preg_match('/^zico-event-[0-9]+$/D', $event['id'])) return $streams;
+    // The player pages, including older Zico aliases, are already excluded by iptvAddress().
+    $automatic = (array)($event['zicoStreams'] ?? array());
+    $manual = (array)($event['zicoManualStreams'] ?? array());
+    return array_filter($streams, function ($link) use ($automatic, $manual) {
+        return in_array($link, $manual, true) || !in_array($link, $automatic, true);
+    });
+}
+
+/** Same Madrid-day window as Eventos En Directo, with the first source the IPTV client supports. */
+function iptvLiveEvents($catalog, $channels, $now) {
+    $teams = array_column((array)($catalog['teams'] ?? array()), null, 'id');
+    $leagues = array_column((array)($catalog['leagues'] ?? array()), null, 'id');
+    $events = (array)($catalog['events'] ?? array());
+    foreach ((array)($catalog['fixtures'] ?? array()) as $fixture) {
+        if (is_array($fixture)) $events[] = array_merge($fixture, array('imported' => true));
+    }
+    $stations = array();
+    $zone = new DateTimeZone('Europe/Madrid');
+    $day = (new DateTimeImmutable('@' . $now))->setTimezone($zone)->format('Y-m-d');
+    foreach ($events as $event) {
+        if (!is_array($event) || empty($event['id']) || in_array($event['status'] ?? '', array('finished', 'cancelled'), true)) continue;
+        $start = empty($event['startAt']) ? false : strtotime($event['startAt']);
+        if ($start === false || (!empty($event['imported']) && $now - $start >= 14400)) continue;
+        $sameDay = (new DateTimeImmutable('@' . $start))->setTimezone($zone)->format('Y-m-d') === $day;
+        if (!$sameDay && !($start < $now && $now - $start < 14400)) continue;
+
+        $id = (string)$event['id'];
+        $channel = $channels[$event['channelId'] ?? ''] ?? array();
+        $address = $channel['url'] ?? null;
+        if ($address === null) {
+            foreach (iptvEventStreams($event) as $link) {
+                $address = iptvAddress($link, true);
+                if ($address !== null) break;
+            }
+        }
+        if ($address === null) continue;
+        $home = $teams[$event['homeTeamId'] ?? ''] ?? array();
+        $away = $teams[$event['awayTeamId'] ?? ''] ?? array();
+        $league = $leagues[$event['leagueId'] ?? ''] ?? array();
+        $name = trim((string)($event['name'] ?? ''));
+        if ($name === '') $name = ($home['name'] ?? 'Local') . ' vs ' . ($away['name'] ?? 'Visitante');
+        $cover = iptvImage($event['cover'] ?? '');
+        $fallback = $cover ?: (iptvImage($league['background'] ?? '') ?: ($channel['image'] ?? ''));
+        $stations[$id] = array('id' => $id, 'name' => $name, 'full' => $name, 'url' => $address,
+            'image' => $fallback, 'start' => $start, 'needsPreview' => $cover === '' || !empty($home['logo']) || !empty($away['logo']));
+    }
+    uasort($stations, function ($a, $b) {
+        return ($a['start'] <=> $b['start']) ?: strnatcasecmp($a['name'], $b['name']);
+    });
+    return $stations;
+}
+
+function iptvAddLiveFolder(&$folders, $stations, $covers) {
+    $folder = &iptvFolder($folders, IPTV_LIVE_FOLDER);
+    foreach ($stations as $id => $station) {
+        if ($station['needsPreview']) {
+            $preview = iptvImage($covers[$id] ?? '');
+            if ($preview !== '') $station['image'] = $preview;
+        }
+        $folder['stations'][] = $station;
+    }
 }
 
 /** «Películas», «Series» and «Documentales»: inside, each series (or documentary series) is a folder. */
@@ -222,19 +294,18 @@ function iptvIcons(&$folders) {
 }
 
 /**
- * WisePlay: the channel categories inside one «Canales» folder, before Películas, Series and
- * Documentales (a category renamed «Series (canales)» shows as «Series» in there).
+ * WisePlay: channel categories inside «Canales», with live events and the library at the root.
  */
 function iptvChannelsFolder($folders, $icon) {
-    $library = array('Películas', 'Series', 'Documentales');
+    $otherFolders = array(IPTV_LIVE_FOLDER, 'Películas', 'Series', 'Documentales');
     $channels = array('stations' => array(), 'groups' => array(), 'image' => $icon);
     $out = array();
     foreach ($folders as $name => $folder) {
-        if (in_array($name, $library, true)) continue;
+        if (in_array($name, $otherFolders, true)) continue;
         $channels['groups'][preg_replace('/ \(canales\)$/u', '', (string)$name)] = $folder;
     }
     if ($channels['groups']) $out['Canales'] = $channels;
-    foreach ($library as $name) if (isset($folders[$name])) $out[$name] = $folders[$name];
+    foreach ($otherFolders as $name) if (isset($folders[$name])) $out[$name] = $folders[$name];
     return $out;
 }
 
@@ -305,6 +376,8 @@ function iptvUserList($token) {
     return is_array($doc) && isset($doc['fields']['uid']) ? 'ok' : 'missing';
 }
 
+if (defined('CALAMAR_IPTV_LIBRARY')) return;
+
 if (isset($_GET['lista']) && is_string($_GET['lista'])) {
     try { $state = iptvUserList($_GET['lista']); }
     catch (Throwable $error) { iptvFail(502, 'No se pudo comprobar la lista. Vuelve a intentarlo en unos minutos.'); }
@@ -324,6 +397,13 @@ try {
     $tdt = json_decode((string)iptvGet(IPTV_TDT), true) ?: array();
     $folders = array();
     $channels = iptvChannels($folders, $custom, $tdt);
+    $events = iptvLiveEvents($custom, $channels, time());
+    $covers = array();
+    if (array_filter($events, function ($event) { return $event['needsPreview']; })) {
+        try { $covers = json_decode((string)iptvGet(IPTV_EVENT_COVERS), true) ?: array(); }
+        catch (Throwable $noCovers) { /* Use the catalog art while the web preview is unavailable. */ }
+    }
+    iptvAddLiveFolder($folders, $events, $covers);
     $videos = (empty($_GET['solo']) || $_GET['solo'] !== 'canales') ? iptvLibrary($folders) : 0;
     $channelsIcon = '';
     try { $channelsIcon = iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
@@ -331,7 +411,7 @@ try {
     iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
 }
 
-$info = $channels . ' canales y ' . $videos . ' vídeos · ' . (new DateTime('now', new DateTimeZone('Europe/Madrid')))->format('d/m/Y H:i');
+$info = count($channels) . ' canales, ' . count($events) . ' eventos y ' . $videos . ' vídeos · ' . (new DateTime('now', new DateTimeZone('Europe/Madrid')))->format('d/m/Y H:i');
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex');
 if (($_GET['formato'] ?? '') === 'wiseplay') {

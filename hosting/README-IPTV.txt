@@ -26,7 +26,10 @@ Hace falta haber publicado las reglas nuevas de Firestore (firebase/firestore.ru
 La lista se genera de nuevo cada vez que la app la carga o la actualiza: los canales, películas, series
 y documentales que cambies en Administración salen solos, sin subir nada más.
 
-Carpetas: las categorías de los canales, «Películas», «Series» y «Documentales».
+Carpetas: las categorías de los canales, «Eventos En Directo», «Películas», «Series» y «Documentales».
+- «Eventos En Directo» incluye los eventos del día con un canal o enlace manual compatible con IPTV.
+  Cada evento abre su emisión y muestra su portada. Los partidos con escudos pueden mostrar la
+  imagen que genera la web. En M3U la categoría aparece cuando hay eventos disponibles.
 - Enlace normal (M3U, vale para cualquier app IPTV): una sola carpeta «Series» con todos los
   capítulos («Serie T1 E01 - título»), igual en «Documentales».
 - Formato WisePlay (el enlace corto, o &formato=wiseplay): dentro de «Series» una carpeta por serie
@@ -35,9 +38,13 @@ Carpetas: las categorías de los canales, «Películas», «Series» y «Documen
   categoría en su carpeta (en la lista M3U, sin subcarpetas, la categoría «Series» de canales sale como
   «Series (canales)»).
 
+ACTUALIZAR UNA INSTALACIÓN EXISTENTE
+Sustituye calamar-iptv.php por la versión nueva en el hosting. Conserva calamar-iptv-key.php y la
+carpeta «i». Después, actualiza la lista en la app IPTV usando el mismo enlace de siempre.
+
 ICONOS DE LAS CARPETAS
 Administración → «Lista IPTV»: pega el enlace de una imagen o pulsa «Subir imagen» en cada categoría,
-Películas, Series y Documentales, y «Guardar iconos». Se ven en el formato WisePlay; en la lista
+Eventos En Directo, Películas, Series y Documentales, y «Guardar iconos». Se ven en el formato WisePlay; en la lista
 M3U solo en las apps que leen «group-logo». Las imágenes subidas van a GitHub como las del catálogo.
 
 Importante:

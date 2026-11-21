@@ -290,6 +290,7 @@ def publish(site, base, catalog, download=download_cover, images=None, tdt=None)
     if images:
         images.prefetch([e.get('cover') for e in all_events(catalog)] + [x.get(k) for x in catalog.get('leagues') or [] for k in ('logo', 'background')]
                         + [t.get('logo') for t in catalog.get('teams') or []])
+    event_covers = {}
     for event in all_events(catalog):
         slug = slugs[event['id']]
         folder = site / 'evento' / slug
@@ -316,12 +317,16 @@ def publish(site, base, catalog, download=download_cover, images=None, tdt=None)
             (folder / name).write_bytes(base64.b64decode(data))
             image = f'{base}evento/{slug}/{name}'
         (folder / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+        if image:
+            event_covers[event['id']] = image
         # A link shared before the names were numbered («local-vs-visitante») opens the first one («…-1»).
         old = slug[:-2] if slug.endswith('-1') else None
         if old and old not in slugs.values():
             alias = site / 'evento' / old
             alias.mkdir(parents=True, exist_ok=True)
             (alias / 'index.html').write_text(page(event, catalog, slug, base, image), encoding='utf-8')
+    (site / 'data').mkdir(parents=True, exist_ok=True)
+    (site / 'data' / 'event-covers.json').write_text(json.dumps(event_covers, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     publish_live(site, base, catalog, images)
     publish_leagues(site, base, catalog, images)
     if tdt is not None:
