@@ -223,13 +223,57 @@ public final class Catalog {
     return event.optString("id").matches("zico-event-[0-9]+");
   }
 
-  /** The importer records a lookup URL only when the feed reports a source. */
-  private static boolean hasAgendaSource(JSONObject event, List<String> sources) {
-    if (sources.stream().anyMatch(link -> VideoResolver.eventApi(link) == null)) return true;
-    JSONArray imported = event.optJSONArray("zicoStreams");
-    if (imported != null) for (int i = 0; i < imported.length(); i++)
-      if (sources.contains(imported.optString(i))) return true;
-    return false;
+  static boolean usesZicoAgenda(JSONObject event) {
+    return event != null && (isZicoAgendaEvent(event) || !event.optString("zicoEventId").isEmpty());
+  }
+
+  private static String agendaSourceKey(String link) {
+    try {
+      java.net.URI uri = java.net.URI.create(link);
+      String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+      if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null
+          || (uri.getPort() != -1 && uri.getPort() != 443)
+          || !(host.equals("zicotv.cc") || host.equals("bp.zicotv.cc") || host.equals("zicotv.gcorecdn.com"))) return link;
+      String path = uri.getPath();
+      if (path.matches("/(?:channels|api/player)/[0-9]{1,16}/?")) {
+        return path.replaceFirst("^/(?:channels|api/player)/", "channel:").replaceFirst("/$", "");
+      }
+      if (path.matches("/(?:api/v1/)?events/[0-9]+/?")) {
+        return path.replaceFirst("^/(?:api/v1/)?events/", "event:").replaceFirst("/$", "");
+      }
+    } catch (IllegalArgumentException invalid) {
+      // Non-Zico URLs compare as originally stored.
+    }
+    return link;
+  }
+
+  private static Set<String> agendaSourceKeys(JSONArray links) {
+    Set<String> keys = new HashSet<>();
+    if (links != null) for (int i = 0; i < links.length(); i++) keys.add(agendaSourceKey(links.optString(i)));
+    return keys;
+  }
+
+  /** The web importer persists the catalog channel ID. Ignore obsolete provider links in older data. */
+  private static List<String> manualEventSources(JSONObject event) {
+    JSONArray links = event.optJSONArray("streams");
+    List<String> sources = new ArrayList<>();
+    if (links == null) return sources;
+    Set<String> imported = new HashSet<>(), selected = new HashSet<>();
+    if (usesZicoAgenda(event)) {
+      JSONArray recorded = event.optJSONArray("zicoStreams");
+      imported = agendaSourceKeys(recorded);
+      selected = agendaSourceKeys(event.optJSONArray("zicoManualStreams"));
+      String id = event.optString("zicoEventId");
+      if (id.isEmpty() && isZicoAgendaEvent(event)) id = event.optString("id").substring("zico-event-".length());
+      if (recorded == null && !id.isEmpty()) imported.add("event:" + id);
+    }
+    for (int i = 0; i < links.length(); i++) {
+      String raw = links.optString(i).trim(), key = agendaSourceKey(raw);
+      if (!selected.contains(key) && imported.contains(key)) continue;
+      String link = UserChannels.normalizeEventSource(raw);
+      if (link != null) sources.add(link);
+    }
+    return sources;
   }
 
   static List<Channel> events(List<Channel> channels, JSONObject custom, long now, boolean allWeeks, boolean includeFinished) {
@@ -248,12 +292,8 @@ public final class Catalog {
       for (Channel c : channels) if (c.id.equals(event.optString("channelId")) && c.playable()) { target = c; break; }
       List<String> sources = new ArrayList<>();
       if (target != null) sources.addAll(target.streams);
-      JSONArray extra = event.optJSONArray("streams");
-      if (extra != null) for (int i = 0; i < extra.length(); i++) {
-        String link = UserChannels.normalizeEventSource(extra.optString(i).trim());
-        if (link != null && !sources.contains(link)) sources.add(link);
-      }
-      if (isZicoAgendaEvent(event) && !hasAgendaSource(event, sources)) continue;
+      for (String link : manualEventSources(event)) if (!sources.contains(link)) sources.add(link);
+      if (isZicoAgendaEvent(event) && sources.isEmpty()) continue;
       if (target == null && sources.isEmpty() && !event.optBoolean("imported")) continue;
       try {
         JSONObject league = SportsCatalog.find(custom.optJSONArray("leagues"), event.optString("leagueId"));

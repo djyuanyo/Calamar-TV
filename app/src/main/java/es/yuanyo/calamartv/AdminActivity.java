@@ -524,6 +524,8 @@ public class AdminActivity extends Activity {
     }
     search.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, names));
     search.setText(initial, false);
+    boolean[] pickedChannel = { false };
+    search.setOnItemClickListener((parent, view, position, itemId) -> pickedChannel[0] = true);
     form.addView(search, new LinearLayout.LayoutParams(-1, -2));
     TextView error = label("Selecciona el canal de la lista de sugerencias.", 14); form.addView(error);
     ScrollView scroll = new ScrollView(this); scroll.addView(form);
@@ -533,10 +535,14 @@ public class AdminActivity extends Activity {
       try {
         String title = name.getText().toString().trim(), photo = cover.getText().toString().trim();
         if (photo.isEmpty() && cover.getTag() instanceof String) photo = (String) cover.getTag();
-        String channelId = ids.get(search.getText().toString());
+        String channelText = search.getText().toString().trim();
+        boolean agendaEvent = Catalog.usesZicoAgenda(existing);
+        String channelId = agendaEvent && channelText.isEmpty() ? "" : ids.get(channelText);
         if ((!home.getText().toString().trim().isEmpty() && referenceId(home).isEmpty()) || (!away.getText().toString().trim().isEmpty() && referenceId(away).isEmpty())) throw new JSONException("Selecciona los equipos de las sugerencias");
         if (title.isEmpty()) throw new JSONException("Escribe el nombre del evento");
-        if (!SharedCatalog.validCover(photo)) throw new JSONException("Elige una foto o pega un enlace HTTPS de portada");
+        boolean optionalCover = existing != null && Catalog.isZicoAgendaEvent(existing) && existing.optBoolean("imported");
+        if (!(optionalCover && photo.isEmpty()) && !SharedCatalog.validCover(photo))
+          throw new JSONException("Elige una foto o pega un enlace HTTPS de portada");
         if (channelId == null) throw new JSONException("Selecciona un canal de las sugerencias");
         String id = existing == null ? "evento-" + UUID.randomUUID() : existing.getString("id");
         JSONObject event = (existing == null ? new JSONObject() : new JSONObject(existing.toString())).put("id", id).put("name", title).put("cover", photo).put("channelId", channelId)
@@ -544,6 +550,11 @@ public class AdminActivity extends Activity {
             .put("featured", highlighted.isChecked()).put("leagueId", choiceId(league)).put("homeTeamId",referenceId(home)).put("awayTeamId",referenceId(away))
             .put("status",choiceId(state)).put("season",season.getText().toString().trim()).put("round",round.getText().toString().trim())
             .put("venue",venue.getText().toString().trim()).put("description",description.getText().toString().trim());
+        if (pickedChannel[0] || existing == null || !channelId.equals(existing.optString("channelId"))) {
+          event.remove("zicoChannelId");
+          if (agendaEvent && channelId.isEmpty()) event.put("zicoChannelDisabled", true);
+          else event.remove("zicoChannelDisabled");
+        }
         JSONObject next = copy();
         JSONArray events = next.optJSONArray("events");
         if (events == null) events = new JSONArray();
