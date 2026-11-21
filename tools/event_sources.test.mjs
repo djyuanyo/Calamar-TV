@@ -385,3 +385,23 @@ test('uses the existing agenda if the public embed host is temporarily down', as
   });
   assert.deepEqual(requests, ['https://zicotv.gcorecdn.com/api/v1/events', 'https://bp.zicotv.cc/api/v1/events']);
 });
+
+test('a large agenda prioritizes upcoming events and preserves the manual channel', () => {
+  const channel = { id: 'own', name: 'Mi canal', streams: [direct] };
+  const start = hours => new Date(now + hours * 3600000).toISOString();
+  const old = { id: 'zico-event-4', name: 'Partido editado', channelId: channel.id,
+    startAt: start(30), cover: '', imported: true, streams: [], zicoStreams: [] };
+  const base = { ...catalog, channels: [channel], events: [old] };
+  const nearby = row(1, { title: 'El primero', start_time: start(1) });
+  const upcoming = row(2, { title: 'Otro partido', start_time: start(4) });
+  const past = row(3, { title: 'Ya jugado', start_time: start(-10) });
+  const manual = row(4, { start_time: old.startAt });
+  const minimal = applyZicoAgenda(base, payload(nearby, manual)).data;
+  const maxBytes = Buffer.byteLength(JSON.stringify(minimal));
+  const { data, count, omitted } = applyZicoAgenda(base, payload(past, upcoming, manual, nearby), { maxBytes, now });
+  assert.equal(count, 2);
+  assert.equal(omitted, 2);
+  assert.equal(data.events.find(event => event.id === old.id).channelId, channel.id);
+  assert.ok(data.events.some(event => event.id === 'zico-event-1'));
+  assert.ok(Buffer.byteLength(JSON.stringify(data)) <= maxBytes);
+});

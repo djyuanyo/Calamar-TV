@@ -1,6 +1,6 @@
 import { zicoEventApi } from './event-sources.js';
 import { ZICO_EMBED_ORIGIN } from './zico-channel.js';
-import { COMPETITIONS, fixtureEvent } from './competitions.js';
+import { COMPETITIONS, fixtureEvent, MATCH_SPAN_MS } from './competitions.js';
 
 const ORIGIN = ZICO_EMBED_ORIGIN;
 const AGENDA = ORIGIN + '/api/v1/events';
@@ -140,7 +140,7 @@ function matchCandidate(candidate, match) {
   return score ? { candidate, score, distance } : null;
 }
 
-export function applyZicoAgenda(catalog, payload) {
+export function applyZicoAgenda(catalog, payload, { maxBytes = Infinity, now = Date.now() } = {}) {
   if (!Array.isArray(payload?.data) || payload.data.length !== payload.total
     || payload.data.some(row => !Number.isSafeInteger(row?.id) || row.id < 1 || typeof row.status !== 'string')) {
     throw Error('ZicoTV devolvió una agenda con un formato inesperado.');
@@ -163,6 +163,7 @@ export function applyZicoAgenda(catalog, payload) {
   const occupied = new Set(), assigned = new Map(), events = [];
   let linked = 0;
   const seen = new Set();
+  const payloadById = new Map(payload.data.map(row => [`zico-event-${row.id}`, row]));
   for (const row of payload.data) {
     if (!['live', 'scheduled'].includes(row.status)) continue;
     const name = clean(row.title), start = Date.parse(row.start_time);
@@ -227,17 +228,57 @@ export function applyZicoAgenda(catalog, payload) {
     }
     return { ...base, streams };
   };
-  const data = { ...catalog, events: [...existing.map(updateMatch), ...events], leagues, teams };
-  if (catalog.fixtures) data.fixtures = fixtures.map(updateMatch);
-  // Expired agenda entries are replaced above. Their generated teams and leagues must also
-  // leave the catalog, while manual entities and those adopted by ESPN stay available.
-  const matches = [...data.events, ...(data.fixtures || [])];
-  const usedTeams = new Set(matches.flatMap(item => [item.homeTeamId, item.awayTeamId]));
-  data.teams = teams.filter(team => !team.id.startsWith('zico-equipo-') || team.espnId || usedTeams.has(team.id));
-  const usedLeagues = new Set([...matches, ...data.teams].map(item => item.leagueId));
-  const removedLeagues = new Set(leagues.filter(league => league.id.startsWith('zico-liga-')
-    && !league.espn && !usedLeagues.has(league.id)).map(league => league.id));
-  data.leagues = leagues.filter(league => !removedLeagues.has(league.id));
-  if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !removedLeagues.has(id));
-  return { data, count: events.length, linked };
+  const existingEvents = existing.map(updateMatch);
+  const existingFixtures = fixtures.map(updateMatch);
+  const previousTeamIds = new Set((catalog.teams || []).map(team => team.id));
+  function withAgenda(agenda, trimLogos = false) {
+    const data = { ...catalog, events: [...existingEvents, ...agenda], leagues, teams };
+    if (catalog.fixtures) data.fixtures = existingFixtures;
+    // Remove unused generated entries, preserving teams and leagues adopted by ESPN.
+    const matches = [...data.events, ...existingFixtures];
+    const usedTeams = new Set(matches.flatMap(item => [item.homeTeamId, item.awayTeamId]));
+    data.teams = teams.filter(team => !team.id.startsWith('zico-equipo-') || team.espnId || usedTeams.has(team.id));
+    if (trimLogos) data.teams = data.teams.map(team => {
+      if (!team.logo || previousTeamIds.has(team.id)) return team;
+      const { logo, ...rest } = team;
+      return rest;
+    });
+    const usedLeagues = new Set([...matches, ...data.teams].map(item => item.leagueId));
+    const removedLeagues = new Set(leagues.filter(league => league.id.startsWith('zico-liga-')
+      && !league.espn && !usedLeagues.has(league.id)).map(league => league.id));
+    data.leagues = leagues.filter(league => !removedLeagues.has(league.id));
+    if (Array.isArray(data.leagueOrder)) data.leagueOrder = data.leagueOrder.filter(id => !removedLeagues.has(id));
+    return data;
+  }
+  const encoder = new TextEncoder();
+  const fits = data => maxBytes === Infinity || encoder.encode(JSON.stringify(data)).length <= maxBytes;
+  let data = withAgenda(events);
+  if (fits(data)) return { data, count: events.length, linked, omitted: 0 };
+  data = withAgenda(events, true);
+  if (fits(data)) return { data, count: events.length, linked, omitted: 0 };
+
+  // Keep saved sources and edits. Fill the remaining space with the nearest matches.
+  const protectedIds = new Set(events.filter(event => {
+    const old = previous.get(event.id);
+    return event.channelId || event.streams.length || old?.featured || old?.cover
+      || old?.matchUrl || old?.description || (old && old.name !== clean(payloadById.get(event.id)?.title));
+  }).map(event => event.id));
+  const starts = event => Date.parse(event.startAt);
+  const past = event => starts(event) + MATCH_SPAN_MS <= now;
+  const optional = events.filter(event => !protectedIds.has(event.id)).sort((a, b) =>
+    Number(past(a)) - Number(past(b)) || (past(a) ? starts(b) - starts(a) : starts(a) - starts(b)));
+  const take = count => {
+    const included = new Set(optional.slice(0, count).map(event => event.id));
+    return withAgenda(events.filter(event => protectedIds.has(event.id) || included.has(event.id)), true);
+  };
+  data = take(0);
+  if (!fits(data)) throw Error('El catálogo ya está lleno. Los canales y partidos guardados se han conservado.');
+  let lo = 0, hi = optional.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const candidate = take(mid);
+    if (fits(candidate)) { lo = mid; data = candidate; }
+    else hi = mid - 1;
+  }
+  return { data, count: protectedIds.size + lo, linked, omitted: optional.length - lo };
 }

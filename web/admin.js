@@ -9,7 +9,7 @@ import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
 import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
-import { validCover, validateCatalog } from './shared-catalog.js';
+import { validCover, CATALOG_MAX_BYTES, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
@@ -552,7 +552,7 @@ function zicoAgendaPanel(rerender, state) {
     try {
       const payload = await fetchZicoAgenda();
       if (!button.isConnected || !file || saving) return;
-      const { data, count, linked } = applyZicoAgenda(file.data, payload);
+      const { data, count, linked, omitted } = applyZicoAgenda(file.data, payload, { maxBytes: CATALOG_MAX_BYTES });
       data.channels = syncTdtCopies(data, state.tdt);
       validateCatalog(data, { checkSize: false });
       if (JSON.stringify(data) !== JSON.stringify(file.data)) {
@@ -561,7 +561,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${count} eventos y ${linked} coincidencias con partidos existentes.`;
+      notice = `Guardado. Agenda de ZicoTV: ${count} eventos y ${linked} coincidencias con partidos existentes.${omitted ? ` ${omitted} eventos quedaron fuera por el límite del catálogo.` : ''}`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
