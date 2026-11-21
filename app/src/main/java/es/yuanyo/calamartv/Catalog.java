@@ -426,9 +426,9 @@ public final class Catalog {
   public static List<Channel> highlights(List<Channel> channels, JSONObject custom) {
     List<Channel> out=new ArrayList<>();
     for(Channel event: events(channels,custom))if(event.highlighted)out.add(event);
-    Set<String> ids=strings(custom.optJSONArray("featured"));
+    Set<String> ids=strings(custom == null ? null : custom.optJSONArray("featured"));
     for(Channel c:channels)if(c.playable()&&ids.contains(c.id))out.add(c);
-    return out.isEmpty()?featured(channels,custom,1):out;
+    return out;
   }
 
   /** Groups in display order; unknown groups go after the known ones, alphabetically. */

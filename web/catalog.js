@@ -487,5 +487,5 @@ export function eventRows(list, custom) {
 export function homeHighlights(channels, custom) {
   const matches = events(channels, custom).filter(e => e.featured);
   const picked = (custom?.featured || []).flatMap(id => channels.filter(c => c.id === id && c.playable));
-  return matches.length || picked.length ? [...matches, ...picked] : featured(channels, custom, 1);
+  return [...matches, ...picked];
 }
