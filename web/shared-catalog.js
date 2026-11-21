@@ -3,6 +3,7 @@ import { validateFixtures } from './competitions.js';
 import { isZicoAgendaEvent } from './zico-agenda.js';
 export const ADMIN_EMAIL = 'juanjocarrillo7@gmail.com';
 export const CATALOG_PATH = 'calamarCatalog/custom';
+export const CATALOG_MAX_BYTES = 500000;
 
 export function validateCatalog(data, { checkSize = true } = {}) {
   if (!data || !['channels', 'featured', 'hidden'].every((key) => Array.isArray(data[key]))) throw new Error('El catálogo no tiene un formato válido.');
@@ -26,8 +27,9 @@ export function validateCatalog(data, { checkSize = true } = {}) {
   const eventIds = new Set();
   for (const event of data.events || []) {
     const agenda = isZicoAgendaEvent(event) && event.imported === true;
+    const pendingZico = typeof event?.zicoEventId === 'string' && /^\d+$/.test(event.zicoEventId);
     if (!event || typeof event.id !== 'string' || !event.id || eventIds.has(event.id)
-        || typeof event.name !== 'string' || !event.name.trim() || (agenda ? !!event.channelId && !ids.has(event.channelId) : !ids.has(event.channelId) && !event.streams?.length)
+        || typeof event.name !== 'string' || !event.name.trim() || ((agenda || pendingZico) ? !!event.channelId && !ids.has(event.channelId) : !ids.has(event.channelId) && !event.streams?.length)
         || typeof event.cover !== 'string' || (!(agenda && event.cover === '') && !validCover(event.cover))) throw new Error('Cada evento necesita nombre, portada y un canal o enlaces manuales.');
     eventIds.add(event.id);
   }
@@ -64,7 +66,7 @@ export function validateCatalog(data, { checkSize = true } = {}) {
     }
   }
   if (![...data.featured, ...data.hidden].every((id) => typeof id === 'string')) throw new Error('La lista de canales no es válida.');
-  if (checkSize && new TextEncoder().encode(JSON.stringify(data)).length > 500000) throw new Error('El catálogo supera el tamaño permitido.');
+  if (checkSize && new TextEncoder().encode(JSON.stringify(data)).length > CATALOG_MAX_BYTES) throw new Error('El catálogo supera el tamaño permitido.');
   return data;
 }
 

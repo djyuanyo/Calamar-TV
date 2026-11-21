@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { zicoEventApi, eventPlayerSources, expandEventSources } from '../web/event-sources.js';
-import { events, webPlayback } from '../web/catalog.js';
+import { events, liveEvents, webPlayback } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
-import { applyZicoAgenda, fetchZicoAgenda, zicoChannelSources, editedZicoEventStreams } from '../web/zico-agenda.js';
+import { applyZicoAgenda, fetchZicoAgenda, editedZicoEventStreams } from '../web/zico-agenda.js';
 const page = 'https://bp.zicotv.cc/events/98019';
 const player = 'https://bp.zicotv.cc/api/player/22';
 const data = { data: { sources: [{ name: 'LaLiga 2', player_url: player }, { url: player }, { is_premium: true, url: 'https://example.com/premium.m3u8' }, { url: 'javascript:alert(1)' }, { url: page }] } };
@@ -66,8 +66,7 @@ test('replacing an imported source with an event page stays visible and survives
   const original = { id: 'zico-event-2', name: 'Mi partido', imported: true, startAt: kickoff, cover: '',
     streams: [agendaChannel], zicoStreams: [agendaChannel] };
   const replaced = editedZicoEventStreams(original, [selected]);
-  assert.deepEqual(replaced.zicoManualStreams, [selected]);
-  assert.deepEqual(replaced.zicoStreams, [selected]);
+  assert.deepEqual(replaced.zicoStreams, []);
   assert.equal(events([], { ...catalog, events: [replaced] }, now)[0].id, original.id);
   for (const sources of [[ownSource], []]) {
     const refreshed = applyZicoAgenda({ ...catalog, events: [replaced] }, payload(row(2, { sources }))).data;
@@ -75,7 +74,7 @@ test('replacing an imported source with an event page stays visible and survives
     assert.equal(events([], refreshed, now)[0].id, original.id);
   }
   const restored = editedZicoEventStreams(replaced, [agendaChannel]);
-  assert.deepEqual(restored.zicoManualStreams, [agendaChannel]);
+  assert.deepEqual(restored.streams, [agendaChannel]);
   assert.equal(restored.streams.includes(selected), false);
   const player = 'https://bp.zicotv.cc/api/player/56429';
   const expanded = await expandEventSources(replaced.streams, { fetcher: async url => {
@@ -95,60 +94,29 @@ test('a replacement saved before the fix is displayed and kept on the next impor
   const refreshedAgain = applyZicoAgenda(refreshed, payload(row(116061, { sources: [ownSource] }))).data;
   assert.deepEqual(refreshedAgain.events[0].streams, [selected]);
   const unchanged = editedZicoEventStreams({ ...stale, streams: [agendaChannel] }, [agendaChannel]);
-  assert.deepEqual(unchanged.zicoManualStreams, []);
+  assert.deepEqual(unchanged.streams, [agendaChannel]);
 });
 
-test('imports only declared own channels, preserving all alternatives and stripping credentials', () => {
-  assert.deepEqual(zicoChannelSources({sources:[
-    {source:'own',channel_id:8,url:agendaPlayer},
-    {source:'own',channel_id:8,player_url:agendaPlayer+'?token=private'},
-    {source:'own',channel_id:15,url:'https://bp.zicotv.cc/channels/15',locked:true,is_premium:true},
-    {source:'own',channel_id:20},
-    {source:'own',streams:[{channel_id:21,url:'https://bp.zicotv.cc/api/player/21'}]},
-    {source:'manual',url:'https://bp.zicotv.cc/api/player/22'},
-    {source:'manual',url:'https://example.com/embed'},
-    {source:'own',channel_id:23,url:'https://example.com/api/player/23'},
-    {source:'own',channel_id:24,url:'https://bp.zicotv.cc/api/player/25'},
-    {source:'own',channel_id:26,url:'https://u:p@bp.zicotv.cc/api/player/26'},
-    {source:'own',channel_id:27,url:'http://bp.zicotv.cc/api/player/27'},
-    {source:'own',channel_id:0},
-  ]}), [agendaChannel,'https://zicotv.gcorecdn.com/api/player/15','https://zicotv.gcorecdn.com/api/player/20','https://zicotv.gcorecdn.com/api/player/21']);
-});
-
-test('events without own channels use the event page without storing external sources', () => {
+test('imports events with or without provider sources, and removes old automatic links', () => {
+  const official = 'https://bp.zicotv.cc/events/1';
   const old = {id:'zico-event-1',name:'Evento anterior',cover:'',imported:true,
-    streams:['https://bp.zicotv.cc/events/1'],zicoStreams:['https://bp.zicotv.cc/events/1']};
+    streams:[official],zicoStreams:[official]};
   const result = applyZicoAgenda({...catalog,events:[old]},payload(row(1,{sources:[
-    {source:'manual',type:'direct',url:direct},
-    {source:'sportsonline',type:'iframe',url:'https://example.com/other-player'},
-  ]})));
-  assert.equal(result.skipped,0);
-  assert.deepEqual(result.data.events[0].streams,['https://zicotv.gcorecdn.com/events/1']);
-  assert.deepEqual(result.data.events[0].zicoStreams,['https://zicotv.gcorecdn.com/events/1']);
-  assert.deepEqual(applyZicoAgenda(result.data,payload(row(1))).data.events,[]);
+    ownSource, {type:'direct',url:direct}, {type:'iframe',url:'https://example.com/other-player'},
+  ]}), row(2)));
+  assert.equal(result.count,2);
+  assert.deepEqual(result.data.events.map(e => e.streams), [[], []]);
+  assert.deepEqual(events([], result.data, now), []);
+  validateCatalog(result.data);
 });
 
-test('refresh switches channel to event fallback and back, replacing imported player aliases', () => {
-  const manual = 'https://example.com/my-signal.m3u8';
-  const old = {id:'zico-event-52065',name:'Mi partido',cover:'',imported:true,
-    streams:[agendaPlayer,manual],zicoStreams:[agendaChannel]};
-  const base = {...catalog,events:[old]};
-  const fallback = payload(row(52065,{sources:[{source:'manual',type:'direct',url:direct}]}));
-  const updated = applyZicoAgenda(base,fallback).data;
-  assert.deepEqual(updated.events[0].streams,['https://zicotv.gcorecdn.com/events/52065',manual]);
-  assert.deepEqual(updated.events[0].zicoStreams,['https://zicotv.gcorecdn.com/events/52065']);
-  assert.deepEqual(applyZicoAgenda(updated,fallback).data,updated);
-  const restored = applyZicoAgenda(updated,payload(row(52065,{sources:[ownSource]}))).data;
-  assert.deepEqual(restored.events[0].streams,[agendaChannel,manual]);
-});
-
-test('a pinned legacy event link on an existing match is replaced by its own channel', () => {
+test('a manually pasted Zico event URL survives matching and reimport', () => {
   const existing = {id:'my-match',name:'Mi partido',cover,startAt: new Date(kickoff).toISOString(),
     streams:['https://bp.zicotv.cc/events/52065',direct]};
-  const updated = applyZicoAgenda({...catalog,events:[existing]},payload(row(52065,{sources:[ownSource]}))).data.events[0];
-  assert.deepEqual(updated.streams,[direct,agendaChannel]);
-  const fallback = applyZicoAgenda({...catalog,events:[updated]},payload(row(52065,{sources:[{type:'direct',url:direct}]}))).data.events[0];
-  assert.deepEqual(fallback.streams,[direct,'https://zicotv.gcorecdn.com/events/52065']);
+  const feed = payload(row(52065,{sources:[ownSource]}));
+  const updated = applyZicoAgenda({...catalog,events:[existing]},feed).data;
+  assert.deepEqual(updated.events[0].streams,existing.streams);
+  assert.deepEqual(applyZicoAgenda(updated,feed).data,updated);
 });
 
 test('fetches the documented all-sports endpoint without credentials', async () => {
@@ -162,31 +130,17 @@ test('fetches the documented all-sports endpoint without credentials', async () 
   await assert.rejects(fetchZicoAgenda(async () => ({ ok: false, status: 429 })), /429/);
 });
 
-test('publishes only own channel links across sports, with no private token', () => {
+test('keeps metadata across sports and skips finished or cancelled rows', () => {
   const result = applyZicoAgenda(catalog, payload(
-    row(1, { status: 'live', sources: [
-      { type: 'direct', url: direct },
-      { type: 'iframe', url: 'https://example.com/external' },
-      { source: 'own', type: 'iframe', player_url: agendaPlayer },
-      { type: 'iframe', url: agendaPlayer + '?token=private' },
-      { type: 'direct', url: 'https://example.com/premium.m3u8', is_premium: true },
-      { type: 'direct', url: 'https://example.com/locked.m3u8', locked: true },
-    ] }),
-    row(2), row(3, { status: 'finished' }), row(4, { status: 'cancelled' }),
-    row(5, { sport_category: 'Basketball', league: '', sources: [
-      { source: 'own', type: 'iframe', url: 'https://bp.zicotv.cc/api/player/15', is_premium: true },
-    ] }),
+    row(1, { status: 'live', sources: [ownSource] }), row(2),
+    row(3, { status: 'finished' }), row(4, { status: 'cancelled' }),
+    row(5, { sport_category: 'Basketball', league: '', sources: [ownSource] }),
   ));
-  assert.equal(result.count, 2);
-  assert.deepEqual(result.data.events.map(event => event.sport), ['Soccer', 'Basketball']);
-  assert.equal(result.skipped, 1);
+  assert.equal(result.count, 3);
+  assert.deepEqual(result.data.events.map(event => event.sport), ['Soccer', 'Soccer', 'Basketball']);
+  assert.ok(result.data.events.every(event => !event.streams.length));
+  assert.equal(result.data.events[0].startAt, '2026-11-04T20:00:00.000Z');
   validateCatalog(result.data);
-  const [live, basketball] = events([], result.data, now);
-  assert.deepEqual(live.streams, [agendaChannel]);
-  assert.equal(live.startAt, '2026-11-04T20:00:00.000Z');
-  assert.equal(live.homeLogo, cover);
-  assert.deepEqual(basketball.streams, ['https://zicotv.gcorecdn.com/api/player/15']);
-  assert.match(basketball.meta, /Baloncesto/);
 });
 
 test('refresh is idempotent, preserves manual changes, skips duplicates and removes ended feed entries', () => {
@@ -208,8 +162,8 @@ test('refresh replaces the old imported websites while keeping separately added 
     streams: [official, agendaPlayer, direct, ownLink], zicoStreams: [official, agendaPlayer, direct] };
   const feed = payload(row(66520, { sources: [ownSource] }));
   const updated = applyZicoAgenda({ ...catalog, events: [event] }, feed).data.events[0];
-  assert.deepEqual(updated.streams, [agendaChannel, ownLink]);
-  assert.deepEqual(updated.zicoStreams, [agendaChannel]);
+  assert.deepEqual(updated.streams, [ownLink]);
+  assert.deepEqual(updated.zicoStreams, []);
 });
 
 test('managed agenda events prefer hosting and keep public and catalog fallbacks', async () => {
@@ -228,8 +182,8 @@ test('legacy agenda lookup-only events stay out of public lists until a source e
   const data = {...catalog, events:[item]};
   assert.deepEqual(events([], data, now, {allWeeks:true, finished:true}), []);
   const updated = applyZicoAgenda(data, payload(row(2, {sources:[ownSource]}))).data;
-  assert.equal(events([], updated, now)[0].id, item.id);
-  assert.equal(applyZicoAgenda(updated, payload(row(2))).data.events.length, 0);
+  assert.deepEqual(events([], updated, now), []);
+  assert.deepEqual(applyZicoAgenda(updated, payload(row(2))).data.events[0].streams, []);
 });
 
 test('reuses an existing league and links the matching ESPN fixture, preserving its manual signal', () => {
@@ -239,7 +193,7 @@ test('reuses an existing league and links the matching ESPN fixture, preserving 
   const fixture = {id:'partido-123',matchId:'123',leagueId:espnLeague.id,homeTeamId:'home',awayTeamId:'away',
     startAt:'2026-11-04T20:05:00.000Z',streams:[manual],round:'Jornada 4'};
   const base = {...catalog, leagues:[espnLeague], teams, fixtures:[fixture],
-    events:[{id:'zico-event-7',name:'Duplicado de ZicoTV',cover:'',imported:true,streams:[direct]}]};
+    events:[{id:'zico-event-7',name:'Duplicado de ZicoTV',cover:'',imported:true,streams:[direct],zicoStreams:[direct]}]};
   const signal = {source:'own',type:'iframe',player_url:agendaPlayer};
   const match = row(7, {title:'Anderlecht vs Red Bull Salzburg', home_team:'Anderlecht', away_team:'Red Bull Salzburg',
     league:'UEFA Europa League', sources:[signal]});
@@ -250,11 +204,11 @@ test('reuses an existing league and links the matching ESPN fixture, preserving 
   assert.equal(result.data.events.length, 1);
   assert.equal(result.data.events[0].leagueId, espnLeague.id);
   assert.deepEqual(result.data.leagues, [espnLeague]);
-  assert.deepEqual(result.data.fixtures[0], {...fixture, streams:[manual,agendaChannel],
-    sport:'Soccer',zicoEventId:'7',zicoStreams:[agendaChannel]});
+  assert.deepEqual(result.data.fixtures[0], {...fixture, streams:[manual],
+    sport:'Soccer',zicoEventId:'7',zicoStreams:[]});
   validateCatalog(result.data);
   assert.deepEqual(applyZicoAgenda(result.data, feed).data, result.data);
-  assert.deepEqual(applyZicoAgenda(result.data, payload({...match,sources:[]})).data.fixtures, [{...fixture,sport:'Soccer'}]);
+  assert.deepEqual(applyZicoAgenda(result.data, payload({...match,sources:[]})).data.fixtures, result.data.fixtures);
 });
 
 test('leaves a manually created event intact and does not attach a signal from another competition', () => {
@@ -265,8 +219,8 @@ test('leaves a manually created event intact and does not attach a signal from a
   const data = {...catalog, events:[original], leagues:[{id:'cup',name:'Champions League',espn:'uefa.champions'}]};
   const result = applyZicoAgenda(data,payload(match));
   assert.equal(result.linked, 1);
-  assert.deepEqual(result.data.events[0], {...original, sport:'Soccer', zicoEventId:'9', zicoStreams:[agendaChannel],
-    streams:[...original.streams,agendaChannel]});
+  assert.deepEqual(result.data.events[0], {...original, sport:'Soccer', zicoEventId:'9', zicoStreams:[],
+    streams:original.streams});
   const other = applyZicoAgenda(data,payload({...match,league:'UEFA Europa League'}));
   assert.equal(other.linked, 0);
   assert.deepEqual(other.data.events[0], original);
@@ -284,7 +238,7 @@ test('repairs an imported Czech second division match while Spanish aliases stil
   validateCatalog(fresh);
   assert.equal(fresh.events[0].leagueId, 'zico-liga-chequia-segunda-division');
   assert.equal(fresh.leagues.find(league => league.id === fresh.events[0].leagueId).name, czech.league);
-  assert.deepEqual(fresh.events[0].streams, [agendaChannel]);
+  assert.deepEqual(fresh.events[0].streams, []);
   assert.equal(fresh.events[0].cover, cover);
   assert.equal(fresh.events[1].leagueId, hypermotion.id);
   assert.deepEqual(applyZicoAgenda(fresh, feed).data, fresh);
@@ -338,7 +292,7 @@ test('attaches both Spanish divisions to existing fixtures and removes unused Zi
   assert.deepEqual(data.leagues, [first, second]);
   assert.deepEqual(data.leagueOrder, [second.id, first.id]);
   assert.deepEqual(data.fixtures.map(fixture => [fixture.leagueId, fixture.streams]),
-    [[first.id, [manual, agendaChannel]], [second.id, [agendaChannel]]]);
+    [[first.id, [manual]], [second.id, []]]);
   validateCatalog(data);
   assert.deepEqual(applyZicoAgenda(data, feed).data, data);
 });
@@ -366,7 +320,7 @@ test('links Liga F and the four cups to the existing competition fixtures', () =
   validateCatalog(data);
   assert.equal(linked, 5);
   assert.deepEqual(data.fixtures.map(fixture => [fixture.leagueId, ...fixture.streams]),
-    examples.map(([code]) => [code, agendaChannel]));
+    examples.map(([code]) => [code]));
   assert.equal(data.leagues.length, 6);
   assert.deepEqual(data.events.map(event => event.leagueId), ['zico-liga-europa-champions-league-femenino']);
 });
@@ -404,14 +358,19 @@ test('agenda refresh removes unused generated entities before the catalog exceed
   assert.deepEqual(applyZicoAgenda(refreshed, feed).data, refreshed);
 });
 
-test('a second import migrates the old channel URL and keeps native playback for a manual source', () => {
+test('the live page hides automatic links immediately and keeps the assigned channel after an import', () => {
   const old = {id:'zico-event-52076', name:'Rayo Vallecano vs Valencia', startAt:kickoff, imported:true,
-    streams:['https://bp.zicotv.cc/channels/4', direct], zicoStreams:['https://bp.zicotv.cc/channels/4']};
+    channelId:'my-channel', cover:'', streams:['https://bp.zicotv.cc/channels/4'], zicoStreams:['https://bp.zicotv.cc/channels/4']};
   const embed = 'https://zicotv.gcorecdn.com/api/player/4';
   const feed = payload(row(52076, {sources:[{source:'own', channel_id:4, type:'iframe', player_url:embed}]}));
-  const updated = applyZicoAgenda({...catalog, events:[old]}, feed).data;
-  assert.deepEqual(updated.events[0].streams, [embed, direct]);
-  assert.deepEqual(updated.events[0].zicoStreams, [embed]);
+  const channel = {id:'my-channel', name:'Mi canal', playable:true, streams:[direct]};
+  const base = {...catalog, channels:[channel], events:[old]};
+  assert.deepEqual(liveEvents(events([], base, now), now), []);
+  assert.deepEqual(liveEvents(events([channel], base, now), now).map(event => event.streams), [[direct]]);
+  const updated = applyZicoAgenda(base, feed).data;
+  assert.deepEqual(updated.events[0].streams, []);
+  assert.equal(updated.events[0].channelId, channel.id);
+  assert.deepEqual(liveEvents(events([channel], updated, now), now).map(event => event.id), [old.id]);
   assert.deepEqual(applyZicoAgenda(updated, feed).data, updated);
   assert.equal(webPlayback(embed, {pages:true}).kind, 'frame');
   assert.equal(webPlayback(direct, {pages:true}).kind, 'hls');
@@ -425,4 +384,24 @@ test('uses the existing agenda if the public embed host is temporarily down', as
     return requests.length === 1 ? {ok:false, status:503} : {ok:true, json:async () => payload()};
   });
   assert.deepEqual(requests, ['https://zicotv.gcorecdn.com/api/v1/events', 'https://bp.zicotv.cc/api/v1/events']);
+});
+
+test('a large agenda prioritizes upcoming events and preserves the manual channel', () => {
+  const channel = { id: 'own', name: 'Mi canal', streams: [direct] };
+  const start = hours => new Date(now + hours * 3600000).toISOString();
+  const old = { id: 'zico-event-4', name: 'Partido editado', channelId: channel.id,
+    startAt: start(30), cover: '', imported: true, streams: [], zicoStreams: [] };
+  const base = { ...catalog, channels: [channel], events: [old] };
+  const nearby = row(1, { title: 'El primero', start_time: start(1) });
+  const upcoming = row(2, { title: 'Otro partido', start_time: start(4) });
+  const past = row(3, { title: 'Ya jugado', start_time: start(-10) });
+  const manual = row(4, { start_time: old.startAt });
+  const minimal = applyZicoAgenda(base, payload(nearby, manual)).data;
+  const maxBytes = Buffer.byteLength(JSON.stringify(minimal));
+  const { data, count, omitted } = applyZicoAgenda(base, payload(past, upcoming, manual, nearby), { maxBytes: maxBytes + 100, reserveBytes: 100, now });
+  assert.equal(count, 2);
+  assert.equal(omitted, 2);
+  assert.equal(data.events.find(event => event.id === old.id).channelId, channel.id);
+  assert.ok(data.events.some(event => event.id === 'zico-event-1'));
+  assert.ok(Buffer.byteLength(JSON.stringify(data)) <= maxBytes);
 });
