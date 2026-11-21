@@ -14,7 +14,7 @@ import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCata
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
 import { libraryAdmin, fetchLibrary, itemTitle, LIBRARY_SECTIONS } from './library.js';
 import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
-import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, usesZicoAgenda, manualEventStreams, editedZicoEventStreams } from './zico-agenda.js';
+import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, usesZicoAgenda, manualEventStreams, editedZicoEventStreams, selectEventChannel } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 import { aceContentId, resolveAceStreams } from './acestream.js';
 import { vpsPanel } from './vps-panel.js';
@@ -553,7 +553,7 @@ function zicoAgendaPanel(rerender, state) {
       const payload = await fetchZicoAgenda();
       if (!button.isConnected || !file || saving) return;
       // Leave room in Firestore to assign manual channels and links after importing.
-      const { data, count, linked, omitted } = applyZicoAgenda(file.data, payload, {
+      const { data, count, linked, omitted, assignedChannels } = applyZicoAgenda(file.data, payload, {
         maxBytes: CATALOG_MAX_BYTES, reserveBytes: 16_000,
       });
       data.channels = syncTdtCopies(data, state.tdt);
@@ -564,7 +564,7 @@ function zicoAgendaPanel(rerender, state) {
         await saveFile();
       }
       if (!button.isConnected) return;
-      notice = `Guardado. Agenda de ZicoTV: ${count} eventos y ${linked} coincidencias con partidos existentes.${omitted ? ` ${omitted} eventos quedaron fuera por el límite del catálogo.` : ''}`;
+      notice = `Guardado. Agenda de ZicoTV: ${count} eventos y ${linked} coincidencias con partidos existentes. Canales asignados: ${assignedChannels}.${omitted ? ` ${omitted} eventos quedaron fuera por el límite del catálogo.` : ''}`;
       rerender();
     } catch (error) {
       status.textContent = explain(error);
@@ -574,7 +574,7 @@ function zicoAgendaPanel(rerender, state) {
     }
   } }, 'Importar / actualizar agenda de ZicoTV');
   return el('div', { class: 'form' }, el('h2', {}, 'Agenda de ZicoTV'),
-    el('p', { class: 'note' }, 'Importa los partidos sin enlaces de reproducción y retira los enlaces automáticos anteriores. Asigna un canal o añade un enlace desde Editar evento para mostrarlo en Eventos en directo el día del partido.'), button, status);
+    el('p', { class: 'note' }, 'Busca los canales que ya tienes creados a partir de los nombres de la agenda de ZicoTV. Los partidos sin coincidencia quedan pendientes y puedes asignarles un canal desde Editar evento.'), button, status);
 }
 
 function zicoTokenPanel() {
@@ -687,6 +687,7 @@ function eventForm(existing, rerender, catalogState) {
   const submit = el('button', { class: 'btn', type: 'submit' }, 'Guardar y publicar');
   let submitting = false;
   let selected = existing?.channelId || '';
+  let channelSelectedByAdmin = false;
   const chosen = el('p', { class: 'note' });
   const query = el('input', { type: 'search', placeholder: 'Buscar entre tus canales y los de TDT' });
   const options = el('div', { class: 'channel-options', role: 'group', 'aria-label': 'Elegir canal' });
@@ -699,9 +700,9 @@ function eventForm(existing, rerender, catalogState) {
     chosen.textContent = channel ? `Canal seleccionado: ${channel.name}${channel.tdt ? ' (TDT)' : ''}` : 'Añade enlaces manuales o selecciona un canal.';
     const q = query.value.trim().toLocaleLowerCase('es');
     const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
-    const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
+    const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; channelSelectedByAdmin = true; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
     const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
-    options.replaceChildren(...([el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; draw(); } }, `${selected ? '' : '✓ '}Sin canal seleccionado`)]),
+    options.replaceChildren(...([el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; channelSelectedByAdmin = true; draw(); } }, `${selected ? '' : '✓ '}Sin canal seleccionado`)]),
       ...(mine.length ? [el('p', { class: 'note channel-group' }, 'Tus canales'), ...mine.map(button)] : []),
       ...(public_.length ? [el('p', { class: 'note channel-group' }, 'Canales de TDT'), ...public_.map(button)] : []));
     if (!found.length) options.append(el('p', { class: 'note' }, choices.length ? 'Sin resultados.' : 'Puedes añadir enlaces manuales arriba.'));
@@ -726,10 +727,10 @@ function eventForm(existing, rerender, catalogState) {
       } else { delete entry.matchUrl; delete entry.matchId; delete entry.matchDate; }
       if (streams.some(aceContentId)) status.textContent = 'Preparando Ace Stream en IONOS…';
       entry = editedZicoEventStreams(entry, await publishableStreams(streams));
+      if (channelSelectedByAdmin) entry = selectEventChannel(entry, selected);
       if (fixtureImport) {
         // Only what differs from the import is kept, so the catalog stays small.
-        const raw = data.fixtures.find((f) => f.id === existing.id);
-        const fixture = { ...raw, ...entry };
+        const fixture = { ...entry };
         delete fixture.imported;
         if (!fixture.matchId) throw new Error('Los partidos importados necesitan su enlace del partido.');
         const bare = { ...fixture }; for (const key of ['name', 'matchUrl', 'matchDate', 'season']) delete bare[key];
@@ -991,14 +992,14 @@ export async function eventChannelPanel(eventId, state) {
       const raw = data.events.find((e) => e.id === eventId);
       if (raw) {
         if (!id && !raw.streams?.length) throw new Error('Este evento no tiene enlaces manuales: elige un canal.');
-        const events = data.events.map((e) => (e.id === eventId ? { ...e, channelId: id } : e));
+        const events = data.events.map((e) => (e.id === eventId ? selectEventChannel(e, id) : e));
         const channels = syncTdtCopies({ ...data, events }, state.tdt);
         validateCatalog({ ...data, channels, events }, { checkSize: false });
         data.events = events; data.channels = channels;
       } else {
         const fixtures = (data.fixtures || []).map((f) => {
           if (f.id !== eventId) return f;
-          const next = { ...f, channelId: id };
+          const next = selectEventChannel(f, id);
           if (!id) delete next.channelId;
           return next;
         });

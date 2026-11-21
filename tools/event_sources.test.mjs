@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { zicoEventApi, eventPlayerSources, expandEventSources } from '../web/event-sources.js';
 import { events, liveEvents, webPlayback } from '../web/catalog.js';
 import { validateCatalog } from '../web/shared-catalog.js';
-import { applyZicoAgenda, fetchZicoAgenda, editedZicoEventStreams } from '../web/zico-agenda.js';
+import { applyZicoAgenda, fetchZicoAgenda, editedZicoEventStreams, selectEventChannel } from '../web/zico-agenda.js';
 const page = 'https://bp.zicotv.cc/events/98019';
 const player = 'https://bp.zicotv.cc/api/player/22';
 const data = { data: { sources: [{ name: 'LaLiga 2', player_url: player }, { url: player }, { is_premium: true, url: 'https://example.com/premium.m3u8' }, { url: 'javascript:alert(1)' }, { url: page }] } };
@@ -404,4 +404,57 @@ test('a large agenda prioritizes upcoming events and preserves the manual channe
   assert.equal(data.events.find(event => event.id === old.id).channelId, channel.id);
   assert.ok(data.events.some(event => event.id === 'zico-event-1'));
   assert.ok(Buffer.byteLength(JSON.stringify(data)) <= maxBytes);
+});
+
+test('matches the local channel and its exact number without publishing provider URLs', () => {
+  const channel = (id, name, extra) => ({ id, name, streams: [direct], playable: true, ...extra });
+  const channels = [
+    channel('laliga', 'M+ LaLiga'), channel('laliga-2', 'M+ LaLiga 2'), channel('dazn', 'DAZN LaLiga'),
+    channel('dazn-1', 'DAZN 1'), channel('liga-bar', 'LaLiga TV Bar'),
+    channel('foreign', 'Eurosport 2', { tdt: true }), channel('hidden', 'DAZN 2', { hidden: true }),
+  ];
+  const source = (name, type = 'own') => ({ source: type, name, url: agendaPlayer });
+  const feed = payload(
+    row(1, { sources: [source('Movistar LaLiga 1'), source('Español | DAZN LaLiga · FHD', 'manual')] }),
+    row(2, { sources: [source('Español | Movistar La Liga 2 · FHD', 'manual')] }),
+    row(3, { sources: [source('Movistar LaLiga 20')] }),
+    row(4, { sources: [source('Português | DAZN 1 · HD', 'manual'), source('DAZN 1 Portugal')] }),
+    row(5, { sources: [source('Movistar LaLiga'), source('LaLiga TV Bar')] }),
+    row(6, { sources: [source('Eurosport 2 Spain'), source('DAZN 2 Spain')] }),
+  );
+  const { data, assignedChannels } = applyZicoAgenda({ ...catalog, channels }, feed);
+  assert.equal(assignedChannels, 2);
+  assert.deepEqual(data.events.map(e => e.channelId), ['laliga', 'laliga-2', undefined, undefined, undefined, undefined]);
+  assert.ok(data.events.every(e => !e.streams.length && !e.zicoStreams.length));
+  assert.deepEqual(liveEvents(events(channels, data, now), now).map(e => e.streams), [[direct], [direct]]);
+  assert.deepEqual(applyZicoAgenda(data, feed).data, data);
+});
+
+test('updates automatic selections and respects pinned or explicitly cleared channels', () => {
+  const channels = [
+    { id: 'one', name: 'M+ LaLiga', streams: [direct] },
+    { id: 'two', name: 'M+ LaLiga 2', streams: [direct] },
+  ];
+  const feed = name => payload(row(1, { sources: [{ source: 'own', name }] }));
+  const initial = applyZicoAgenda({ ...catalog, channels }, feed('Movistar LaLiga')).data;
+  const auto = initial.events[0];
+  assert.equal(auto.zicoChannelId, 'one');
+  const edited = channelId => ({ ...initial, events: [selectEventChannel(auto, channelId)] });
+  assert.equal(applyZicoAgenda(initial, feed('Movistar LaLiga 2')).data.events[0].channelId, 'two');
+  assert.equal(applyZicoAgenda(initial, feed('Movistar LaLiga 20')).data.events[0].channelId, undefined);
+  assert.equal(applyZicoAgenda(edited('one'), feed('Movistar LaLiga 2')).data.events[0].channelId, 'one');
+  assert.equal(applyZicoAgenda(edited(''), feed('Movistar LaLiga 2')).data.events[0].channelId, '');
+});
+
+test('assigns a channel to the existing match instead of importing a second event', () => {
+  const channel = { id: 'one', name: 'M+ LaLiga', streams: [direct] };
+  const event = { id: 'existing', name: 'Equipo 1 vs Visitante', startAt: new Date(kickoff).toISOString(), cover, zicoEventId: '1' };
+  const feed = payload(row(1, { sources: [{ source: 'own', name: 'Movistar LaLiga' }] }));
+  const { data } = applyZicoAgenda({ ...catalog, events: [event], channels: [channel] }, feed);
+  assert.equal(data.events.length, 1);
+  assert.equal(data.events[0].id, 'existing');
+  assert.equal(data.events[0].channelId, channel.id);
+  const absent = applyZicoAgenda(data, payload()).data;
+  assert.equal(absent.events[0].channelId, undefined);
+  validateCatalog(absent);
 });
