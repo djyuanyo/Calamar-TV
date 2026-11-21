@@ -80,6 +80,16 @@ public class CatalogTest {
   }
 
   @Test
+  public void highlightOnlyChannelsMarkedInTheCatalog() throws Exception {
+    JSONObject custom = new JSONObject().put("channels", new JSONArray()
+        .put(channel("champions", "Deportes", "https://example.com/champions.m3u8").put("name", "Liga Campeones")));
+    List<Catalog.Channel> channels = Catalog.merge(tdt(), custom);
+    assertTrue(Catalog.highlights(channels, custom).isEmpty());
+    custom.put("featured", new JSONArray().put("champions"));
+    assertEquals("champions", Catalog.highlights(channels, custom).get(0).id);
+  }
+
+  @Test
   public void groupsKeepCategoryOrderAndSortChannelsByName() throws Exception {
     LinkedHashMap<String, List<Catalog.Channel>> groups =
         Catalog.groups(Catalog.merge(tdt(), new JSONObject()));

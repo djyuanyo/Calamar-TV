@@ -13,7 +13,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, featured, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';

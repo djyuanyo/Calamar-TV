@@ -34,7 +34,7 @@ test('chronological events, unscheduled last; highlighted channels and events co
   const data=make(); data.events.push({...data.events[0],id:'earlier',startAt:'2026-11-01T20:00:00Z',featured:false},{...data.events[0],id:'legacy',startAt:'',featured:false});
   const all=merge(null,data);assert.deepEqual(events(all,data).map(e=>e.id),['earlier','match','legacy']);
   assert.deepEqual(homeHighlights(all,data).map(e=>e.id),['match','sports']);
-  data.featured=[];data.events[0].featured=false;assert.equal(homeHighlights(all,data).length,1);
+  data.featured=[];data.events[0].featured=false;assert.deepEqual(homeHighlights(all,data),[]);
 });
 test('validates relationships, repeated teams, dates and featured types',()=>{
   validateCatalog(make());

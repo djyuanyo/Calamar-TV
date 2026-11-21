@@ -40,13 +40,33 @@ public class CatalogEventsTest {
     assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
     String page = event.getJSONArray("streams").getString(0);
     event.put("zicoStreams", new JSONArray().put(page));
+    assertTrue(Catalog.events(Collections.emptyList(), data, now, true).isEmpty());
+    event.put("zicoManualStreams", new JSONArray().put(page));
     assertEquals(Collections.singletonList(page), Catalog.events(Collections.emptyList(), data, now, true).get(0).streams);
+    event.remove("zicoManualStreams");
     event.remove("zicoStreams");
     event.getJSONArray("streams").put("https://bp.zicotv.cc/api/player/22");
     assertEquals(1, Catalog.events(Collections.emptyList(), data, now, true).size());
     event.put("imported", false);
     try { SharedCatalog.validate(data); fail("A manual event still needs a cover"); } catch (JSONException expected) {}
   }
+  @Test public void agendaEventPlaysItsAssignedCatalogChannelAndDropsOnlyLegacyLinks() throws Exception {
+    JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
+    String legacy = "https://bp.zicotv.cc/channels/4", alias = "https://zicotv.gcorecdn.com/api/player/4";
+    String manual = "https://example.com/manual.m3u8";
+    event.put("id", "zico-event-98019").put("imported", true).put("cover", "")
+        .put("startAt", "2026-11-04T20:00:00Z").put("channelId", "sports").put("zicoChannelId", "sports")
+        .put("zicoStreams", new JSONArray().put(legacy)).put("streams", new JSONArray().put(alias).put(manual));
+    SharedCatalog.validate(data);
+    long now = SportsCatalog.instant("2026-11-04T18:00:00Z");
+    List<Catalog.Channel> live = Catalog.liveEvents(Catalog.events(Catalog.merge(null, data), data, now, false), now);
+    assertEquals("sports", live.get(0).channelId);
+    assertEquals(Arrays.asList("https://example.com/one.m3u8", manual), live.get(0).streams);
+    event.put("zicoManualStreams", new JSONArray().put(alias));
+    assertEquals(Arrays.asList("https://example.com/one.m3u8", alias, manual),
+        Catalog.events(Catalog.merge(null, data), data, now, false).get(0).streams);
+  }
+
   @Test public void agendaPlayerWithBracketsInPathSurvivesValidationAndReachesPlayback() throws Exception {
     JSONObject data = catalog(), event = data.getJSONArray("events").getJSONObject(0);
     String original = "https://example.com/embed/Football/Local-[ES]/1?quality=hd";

@@ -876,8 +876,8 @@ try {
   const heads = await page.locator('main h2').allTextContents();
   assert.equal(heads.filter((h) => h !== 'Eventos En Directo')[0], 'Continuar viendo');
   if (heads.includes('Eventos En Directo')) assert.equal(heads[0], 'Eventos En Directo', '«Eventos En Directo» is the first row of all');
-  assert.ok(await page.evaluate(() => { const slider = document.querySelector('.highlight-slider'), row = document.querySelector('.continue-rail');
-    return !!slider && !!(slider.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Continuar viendo comes under the featured slider');
+  assert.equal(await page.locator('.highlight-slider').count(), 0,
+    'An empty selection does not create a featured slider for a playable channel');
   assert.match(await page.locator('.continue-card').textContent(), /Avatar.*quedan 132 min/);
   await page.locator('.continue-card > a:first-child').click();
   await page.locator('#player:not([hidden])').waitFor();

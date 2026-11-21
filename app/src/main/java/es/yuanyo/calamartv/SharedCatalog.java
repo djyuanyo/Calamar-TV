@@ -92,7 +92,8 @@ final class SharedCatalog {
         String channel = event.optString("channelId");
         JSONArray streams = event.optJSONArray("streams");
         boolean agenda = Catalog.isZicoAgendaEvent(event) && event.optBoolean("imported");
-        boolean validSource = agenda ? channel.isEmpty() || ids.contains(channel)
+        boolean pendingZico = event.optString("zicoEventId").matches("[0-9]+");
+        boolean validSource = (agenda || pendingZico) ? channel.isEmpty() || ids.contains(channel)
             : ids.contains(channel) || (streams != null && streams.length() > 0);
         if (id.isEmpty() || !eventIds.add(id) || event.getString("name").trim().isEmpty()
             || !validSource || (!(agenda && cover.isEmpty()) && !validCover(cover)))
