@@ -129,6 +129,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   /** All official alternatives for a direct channel; a failing one moves on to the next. */
   private final List<String> directUrls = new ArrayList<>();
+  private final java.util.Set<String> checkedIptvBridges = new java.util.HashSet<>();
   /**
    * The channel's player pages, in catalog order. When every video of one page fails, the next page is
    * tried, and after the pages the direct links (pageIndex past the end means the direct links).
@@ -678,7 +679,33 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private void playDirect() {
-    if (!active) return;
+    if (!active || directUrls.isEmpty()) return;
+    selection = Math.min(selection, directUrls.size() - 1);
+    int index = selection;
+    String bridge = directUrls.get(index);
+    if (IptvOriginal.key(bridge) != null && !checkedIptvBridges.contains(bridge)) {
+      int request = ++generation;
+      status.setText("Buscando la señal original…");
+      worker.execute(() -> {
+        String original = IptvOriginal.find(getApplicationContext(), bridge);
+        handler.post(() -> {
+          if (!active || generation != request || directUrl == null || selection != index
+              || !bridge.equals(directUrls.get(index))) return;
+          checkedIptvBridges.add(bridge);
+          if (original != null) {
+            int existing = directUrls.indexOf(original);
+            if (existing < 0) directUrls.add(index, original);
+            else selection = existing;
+            if (bridge.equals(directUrl)) {
+              directUrl = original;
+              documentUrl = original;
+            }
+          }
+          playDirect();
+        });
+      });
+      return;
+    }
     webMode = false;
     clearWeb();
     lastReport = reportHeader();
@@ -1133,7 +1160,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if ((path != null && path.endsWith(".m3u8")) || source.url.startsWith(Library.LULU_ENDPOINT)
         || CastSource.onDemand(source.url) || HostingPlayback.isRelay(source.url)) item.setMimeType(MimeTypes.APPLICATION_M3U8);
     if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-    if ("ts".equals(UserChannels.kind(source.url)) || CastSource.needsBridge(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
+    if ("ts".equals(UserChannels.kind(source.url)) || CastSource.castBridge(source.url) && !UserChannels.isPage(source.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
     currentUrl = source.url;
     player.setMediaItem(item.build());
     if (progressEntry != null && resumeMs > 0) player.seekTo(resumeMs);

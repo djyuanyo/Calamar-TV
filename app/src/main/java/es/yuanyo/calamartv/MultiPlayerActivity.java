@@ -49,6 +49,7 @@ public class MultiPlayerActivity extends Activity {
     String endpoint = Library.PLAYER_ENDPOINT, signal = "";
     int sourceIndex, attempt, generation;
     boolean loading;
+    final Set<String> checkedBridges = new HashSet<>();
     long initialPosition;
     final Runnable refresh = () -> resolve(true);
     final Runnable stalled = () -> fail(new java.net.SocketTimeoutException("La ventana no ha recibido vídeo"));
@@ -85,19 +86,23 @@ public class MultiPlayerActivity extends Activity {
       if (sourceIndex >= urls.size()) { status.setText("No disponible. Quita esta pantalla o elige otro evento."); return; }
       loading = true; final int request = ++generation;
       final String page = renewal && resolved != null && resolved.page != null ? resolved.page : urls.get(sourceIndex);
+      final boolean preferOriginal = IptvOriginal.key(page) != null && !checkedBridges.contains(page);
       final String base = endpoint, selected = signal; final int round = attempt;
       final ExoPlayer decoder = player; final HlsContinuity session = continuity;
       final boolean background = renewal && decoder != null && session != null;
       if (!background && (player == null || !player.isPlaying())) status.setText("Conectando…");
       worker.execute(() -> {
         try {
-          MultiSource.Result result = MultiSource.resolve(page, base, selected, round,
+          final String original = preferOriginal ? IptvOriginal.find(getApplicationContext(), page) : null;
+          MultiSource.Result result = MultiSource.resolve(original != null ? original : page, base, selected, round,
               NetworkTransport.get(DnsProvider.SYSTEM), NetworkTransport.get(MultiPlayerActivity.this));
           final boolean renewed = background && result.hosted() && session.update(result.url,
               PlayerDocument.fetch(result.url, NetworkTransport.get(DnsProvider.SYSTEM).pageFactory(true)).html);
           handler.post(() -> {
             if (!active || generation != request || !tiles.contains(this)) return;
             loading = false;
+            if (preferOriginal) checkedBridges.add(page);
+            if (original != null) urls.add(sourceIndex, original);
             if (background && player == decoder && continuity == session) {
               if (renewed) { resolved = result; scheduleRenewal(result); }
               else handler.postDelayed(refresh, 30000);
@@ -148,7 +153,7 @@ public class MultiPlayerActivity extends Activity {
       String path = Uri.parse(result.url).getPath();
       if (hosted || result.url.startsWith(Library.LULU_ENDPOINT) || path != null && path.endsWith(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
       if (path != null && path.endsWith(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-      if ("ts".equals(UserChannels.kind(result.url)) || CastSource.needsBridge(result.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
+      if ("ts".equals(UserChannels.kind(result.url)) || CastSource.castBridge(result.url) && !UserChannels.isPage(result.url)) item.setMimeType(MimeTypes.VIDEO_MP2T);
       instance.setMediaItem(item.build()); instance.setVolume(audible == this ? 1f : 0f);
       if (initialPosition > 0 || position > 0) { instance.seekTo(initialPosition > 0 ? initialPosition : position); initialPosition = 0; }
       instance.prepare(); instance.play();

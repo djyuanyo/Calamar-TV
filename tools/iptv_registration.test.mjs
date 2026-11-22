@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { createIptvHls } from '../hosting/iptv-vps/hls.mjs';
 import { createRegistry } from '../hosting/iptv-vps/register.mjs';
+import { verifyViewer } from '../hosting/iptv-vps/access.mjs';
 import { vpsIptvSource } from '../web/http-stream.js';
 import { resolveIptvStreams } from '../web/iptv-vps.js';
 
@@ -39,7 +40,9 @@ test('the channel editor sends only IPTV transport streams to IONOS and saves th
 test('registration requires the admin account, reuses links from the playlist and survives a restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'calamar-iptv-register-'));
   const stateFile = join(root, 'registered.json');
-  const config = { seed: { [key]: seedUrl }, stateFile, accepts: vpsIptvSource, authorize: async value => value === token };
+  const viewer = 'signed.viewer.token';
+  const config = { seed: { [key]: seedUrl }, stateFile, accepts: vpsIptvSource,
+    authorize: async value => value === token, authorizeViewer: async value => value === viewer };
   let backend;
   try {
     const registry = await createRegistry(config);
@@ -51,14 +54,21 @@ test('registration requires the admin account, reuses links from the playlist an
     const request = (url, authorization = token, origin = web) => fetch(endpoint, {
       method: 'POST', headers: { Origin: origin, Authorization: `Bearer ${authorization}` }, body: JSON.stringify({ url }),
     });
+    const original = (authorization, key) => fetch(`${base}/original`, {
+      method: 'POST', headers: { Authorization: `Bearer ${authorization}` }, body: JSON.stringify({ key }),
+    });
     const preflight = await fetch(endpoint, { method: 'OPTIONS', headers: { Origin: web } });
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers.get('access-control-allow-origin'), web);
     assert.equal((await request(other, 'invalid.admin.token')).status, 401);
+    assert.equal((await request(other, viewer)).status, 401);
     assert.equal((await request(other, token, 'https://example.org')).status, 403);
     assert.equal((await request('http://localhost/live.ts')).status, 400);
     assert.equal((await request(direct)).status, 400);
     assert.deepEqual(await (await request(seedUrl)).json(), { url: `${video}/${key}/index.m3u8` });
+    assert.equal((await original('invalid.viewer.token', key)).status, 401);
+    assert.equal((await original(viewer, 'b'.repeat(32))).status, 404);
+    assert.deepEqual(await (await original(viewer, key)).json(), { url: seedUrl });
     const simultaneous = await Promise.all([request(other), request(other)]);
     const results = await Promise.all(simultaneous.map(async response => {
       assert.equal(response.status, 200);
@@ -76,4 +86,19 @@ test('registration requires the admin account, reuses links from the playlist an
     if (backend) await backend.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('viewer lookup requires a signed, verified and unblocked account', async () => {
+  const claims = { sub: 'viewer123', aud: 'menciamedia', iss: 'https://securetoken.google.com/menciamedia',
+    email_verified: true, exp: Date.now() / 1000 + 30, firebase: { sign_in_provider: 'password' } };
+  const jwt = data => `header.${Buffer.from(JSON.stringify(data)).toString('base64url')}.signature`;
+  const valid = jwt(claims);
+  assert.equal(await verifyViewer(jwt({ ...claims, email_verified: false }), () => assert.fail()), false);
+  assert.equal(await verifyViewer(valid, async () => new Response(null, { status: 403 })), false);
+  assert.equal(await verifyViewer(valid, async () => Response.json({ name: 'access', fields: { blocked: { booleanValue: true } } })), false);
+  assert.equal(await verifyViewer(valid, async (endpoint, init) => {
+    assert.ok(endpoint.endsWith('/calamarUserAccess/viewer123'));
+    assert.equal(init.headers.Authorization, `Bearer ${valid}`);
+    return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
+  }), true);
 });

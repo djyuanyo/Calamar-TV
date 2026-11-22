@@ -5,7 +5,7 @@ const maxBody = 8192;
 const keyPattern = /^[a-f0-9]{32}$/;
 const hlsOrigin = 'https://video.calamarmenciano.com';
 
-export async function createRegistry({ seed, stateFile, accepts, authorize }) {
+export async function createRegistry({ seed, stateFile, accepts, authorize, authorizeViewer }) {
   let saved = {};
   try { saved = JSON.parse(await readFile(stateFile, 'utf8')); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -49,6 +49,8 @@ export async function createRegistry({ seed, stateFile, accepts, authorize }) {
   };
 
   async function register(req, res) {
+    const lookup = req.url === '/iptv-hls/original';
+    if (lookup && !authorizeViewer) return reply(res, 404);
     if (req.method === 'OPTIONS') {
       res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -56,7 +58,7 @@ export async function createRegistry({ seed, stateFile, accepts, authorize }) {
     }
     if (req.method !== 'POST') return reply(res, 405);
     const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(req.headers.authorization || '')?.[1];
-    if (!token || token.length > 8192 || !await authorize(token)) return reply(res, 401);
+    if (!token || token.length > 8192 || !await (lookup ? authorizeViewer : authorize)(token)) return reply(res, 401);
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
@@ -64,9 +66,15 @@ export async function createRegistry({ seed, stateFile, accepts, authorize }) {
       if (size > maxBody) return reply(res, 413);
       chunks.push(chunk);
     }
-    let source;
-    try { source = JSON.parse(Buffer.concat(chunks))?.url; }
+    let body;
+    try { body = JSON.parse(Buffer.concat(chunks)); }
     catch { return reply(res, 400); }
+    if (lookup) {
+      if (typeof body?.key !== 'string' || !keyPattern.test(body.key)) return reply(res, 400);
+      if (!Object.hasOwn(channels, body.key)) return reply(res, 404);
+      return reply(res, 200, { url: channels[body.key] });
+    }
+    const source = body?.url;
     if (typeof source !== 'string' || /[\s\u0000-\u001f\u007f]/.test(source) || !accepts(source)) return reply(res, 400);
     const key = await add(new URL(source).href);
     return reply(res, 200, { url: `${hlsOrigin}/iptv-hls/${key}/index.m3u8` });
