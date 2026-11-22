@@ -20,6 +20,8 @@ export function vpsIptvSource(address) {
   try {
     const url = new URL(address);
     if (url.hostname === 'calamarmenciano.com' || url.hostname.endsWith('.calamarmenciano.com')) return false;
+    // A numbered HTTPS page such as /api/player/4 is not enough to identify an IPTV source.
+    if (url.protocol === 'https:' && url.port !== '8080' && !/^\/live\//i.test(url.pathname) && !/\.ts$/i.test(url.pathname)) return false;
     return httpTsSource(url.href.replace(/^https:/i, 'http:'));
   } catch { return false; }
 }
