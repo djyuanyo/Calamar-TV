@@ -14,3 +14,12 @@ export function httpTsSource(address) {
     return /\.ts$/i.test(u.pathname) || /^\/(?:live\/)?[^/]+\/[^/]+\/\d+(?:\.ts)?$/i.test(u.pathname);
   } catch { return false; }
 }
+
+/** Provider TS signals use the VPS. Existing Calamar relays and non-TS links stay as entered. */
+export function vpsIptvSource(address) {
+  try {
+    const url = new URL(address);
+    if (url.hostname === 'calamarmenciano.com' || url.hostname.endsWith('.calamarmenciano.com')) return false;
+    return httpTsSource(url.href.replace(/^https:/i, 'http:'));
+  } catch { return false; }
+}

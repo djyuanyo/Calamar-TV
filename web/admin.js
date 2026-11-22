@@ -17,6 +17,8 @@ import { zicoTokenStatus, saveZicoToken } from './zico-admin.js';
 import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, usesZicoAgenda, manualEventStreams, editedZicoEventStreams, selectEventChannel } from './zico-agenda.js';
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 import { aceContentId, resolveAceStreams } from './acestream.js';
+import { vpsIptvSource } from './http-stream.js';
+import { resolveIptvStreams } from './iptv-vps.js';
 import { vpsPanel } from './vps-panel.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
@@ -115,12 +117,14 @@ function validStreams(text) {
   return out;
 }
 
+async function administratorToken() {
+  if (!administrator()) throw new Error('Entra con la cuenta de administración de Google.');
+  return auth.currentUser.getIdToken();
+}
+
 function publishableStreams(links) {
   checkYouTubeIngest(links);
-  return resolveAceStreams(links, async () => {
-    if (!administrator()) throw new Error('Entra con la cuenta de administración de Google.');
-    return auth.currentUser.getIdToken();
-  });
+  return resolveAceStreams(links, administratorToken);
 }
 
 /** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
@@ -216,8 +220,8 @@ function channelForm(existing, rerender, state) {
           const highlighted = star.checked;
           status.className = 'note';
           submit.disabled = true;
-          status.textContent = channel.streams.some(aceContentId) ? 'Preparando Ace Stream en IONOS…' : 'Guardando…';
-          channel.streams = await publishableStreams(channel.streams);
+          status.textContent = channel.streams.some(link => aceContentId(link) || vpsIptvSource(link)) ? 'Preparando enlaces en IONOS…' : 'Guardando…';
+          channel.streams = await resolveIptvStreams(await publishableStreams(channel.streams), administratorToken);
           status.textContent = 'Guardando…';
           await saveChannel(data => {
             const next = { ...data };
@@ -252,7 +256,7 @@ function channelForm(existing, rerender, state) {
     field('Logo (opcional)', logo, 'Pega un enlace HTTPS o sube una imagen desde tu dispositivo.'),
     field('Subir imagen del canal', upload, 'La imagen se adapta automáticamente y conserva la transparencia.'),
     preview, clearLogo,
-    field('Enlaces', streams, 'Uno por línea. Los enlaces Ace Stream se convierten automáticamente a HLS al guardar. La web también reproduce .m3u8, .mp4 y .ts por HTTPS, los enlaces TS del servidor HTTP configurado y los vídeos de Google Drive. Los MKV/AVI y algunas páginas de reproductor se ven en la app. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. Los enlaces IPTV en MPEG-TS y Ace Stream se convierten a HLS en IONOS al guardar. También puedes pegar enlaces .m3u8, .mp4 o vídeos de Google Drive. Los MKV/AVI y algunas páginas de reproductor se ven en la app. Si hay varios, se prueban en orden.'),
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,
