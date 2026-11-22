@@ -21,14 +21,17 @@ test('the channel editor sends only IPTV transport streams to IONOS and saves th
   const already = `${video}/${key}/index.m3u8`;
   const ace = `https://video.calamarmenciano.com/ace-live/${key}.ts`;
   const youtube = 'https://www.youtube.com/watch?v=12345678901';
-  const result = await resolveIptvStreams([direct, seedUrl, seedUrl, ace, youtube, already], async () => token, async (address, init) => {
+  const zico = 'https://bp.zicotv.cc/api/player/4';
+  const result = await resolveIptvStreams([direct, seedUrl, seedUrl, ace, youtube, zico, already], async () => token, async (address, init) => {
     assert.equal(address, `${video}/register`);
     assert.equal(init.headers.Authorization, `Bearer ${token}`);
     assert.equal(init.method, 'POST');
     assert.deepEqual(JSON.parse(init.body), { url: seedUrl });
     return Response.json({ url: already });
   });
-  assert.deepEqual(result, [direct, already, ace, youtube]);
+  assert.deepEqual(result, [direct, already, ace, youtube, zico]);
+  assert.ok(vpsIptvSource('https://example.com/live/user/pass/123'));
+  assert.ok(vpsIptvSource('https://example.com:8080/user/pass/123'));
   assert.deepEqual(await resolveIptvStreams([direct, already], () => assert.fail('No need for a token')), [direct, already]);
   await assert.rejects(resolveIptvStreams([other], async () => token, async () => Response.json({ url: direct })), /no pudo preparar/);
 });
