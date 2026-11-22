@@ -76,9 +76,9 @@ jobs:
           (cd hosting && zip ../_site/downloads/Calamar-Audio-Chromecast.zip calamar-lulu.php calamar-vidara.php calamar-cast-audio.php calamar-http-source.php)
           (cd hosting && zip ../_site/downloads/Calamar-IPTV-Eventos.zip calamar-iptv.php README-IPTV.txt)
           iptv_update=$(mktemp -d)
-          cp hosting/iptv-vps/{update.sh,hls.mjs,register.mjs,calamar-iptv-vps.service} "$iptv_update/"
+          cp hosting/iptv-vps/{update.sh,hls.mjs,register.mjs,access.mjs,calamar-iptv-vps.service} "$iptv_update/"
           cp web/http-stream.js "$iptv_update/http-stream.mjs"
-          (cd "$iptv_update" && zip "$GITHUB_WORKSPACE/_site/downloads/Calamar-IPTV-Admin.zip" update.sh hls.mjs register.mjs calamar-iptv-vps.service http-stream.mjs)
+          (cd "$iptv_update" && zip "$GITHUB_WORKSPACE/_site/downloads/Calamar-IPTV-Admin.zip" update.sh hls.mjs register.mjs access.mjs calamar-iptv-vps.service http-stream.mjs)
           # Every deploy loads as a whole: without this a browser can mix new and cached old files.
           python tools/version_assets.py _site "${GITHUB_SHA::12}"
           # One page per event and channel with its card drawn as image, so shared links show it in WhatsApp.

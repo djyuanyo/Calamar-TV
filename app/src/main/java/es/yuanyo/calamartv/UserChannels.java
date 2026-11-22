@@ -74,6 +74,7 @@ public final class UserChannels {
       URI uri = new URI(url);
       if (!"https".equalsIgnoreCase(uri.getScheme())) return false;
       String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(Locale.ROOT);
+      if ((uri.getPort() == 8080 || path.startsWith("/live/")) && CastSource.castBridge(url)) return false;
       return !path.matches(".*\\.(ts|m3u8|m3u|mpd|mp4|webm|mkv)$");
     } catch (Exception invalid) {
       return false;

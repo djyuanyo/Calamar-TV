@@ -21,14 +21,20 @@ sources.json contiene los accesos originales del proveedor. Guarda el ZIP en pri
 
 Para añadir nuevos enlaces IPTV MPEG-TS, pégalos directamente en «Enlaces» y guarda.
 Administración registra la señal en el VPS con tu sesión de Google y guarda su enlace HLS.
+La APK intenta abrir la señal original del proveedor con una cuenta verificada. Cuando
+esa señal falla o no está disponible, puede usar el enlace HLS. La web usa HTTPS y
+el enlace original no se publica en el catálogo de canales.
 Si ya instalaste IPTV, ejecuta update.sh del paquete de actualización en el VPS. El
 instalador de actualización trabaja con el registro existente de 1.655 señales.
 
-La primera visita de cada canal pone en marcha la conversión. El VPS comparte una sola
+La reproducción de cada canal pone en marcha el servicio HLS. El VPS comparte una sola
 conexión al proveedor por canal y la cierra cuando deja de haber espectadores.
+Conserva el vídeo H.264 de hasta 1080p y el audio AAC cuando son compatibles. Si el
+vídeo requiere conversión, la salida es de hasta 720p a 30 fps.
 El servicio funciona sin cupos configurados de espectadores ni de canales simultáneos.
 La capacidad real depende de la CPU, el ancho de banda del VPS y las conexiones que admita
-el proveedor. La salida es de hasta 720 líneas de altura a 30 fps.
+el proveedor. En el VPS de 4 vCPU se reserva CPU para los demás servicios limitando este
+servicio IPTV a un máximo equivalente a 3 vCPU.
 
 Prueba un canal que requiera VPN con el dispositivo conectado de forma habitual. El VPS
 debe poder abrir la emisión desde su IP para entregar el vídeo.

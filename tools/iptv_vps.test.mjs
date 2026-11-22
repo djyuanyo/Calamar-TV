@@ -21,15 +21,25 @@ test('three HLS channels play concurrently and viewers of the same channel share
   const inputs = [];
   let service;
   try {
-    const sample = execFileSync('/usr/bin/ffmpeg', ['-nostdin', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25',
-      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100', '-t', '7', '-c:v', 'mpeg2video', '-c:a', 'mp2', '-f', 'mpegts', 'pipe:1'],
-    { maxBuffer: 4 * 1024 * 1024 });
+    function sample(video, audio) {
+      return execFileSync('/usr/bin/ffmpeg', ['-nostdin', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100', '-t', '7', '-c:v', video, '-g', '50',
+        '-c:a', audio, '-f', 'mpegts', 'pipe:1'], { maxBuffer: 4 * 1024 * 1024 });
+    }
+    const samples = new Map([
+      [channels[first], sample('mpeg2video', 'mp2')], [channels[second], sample('libx264', 'aac')],
+      [channels[third], sample('libx264', 'mp2')],
+    ]);
     service = await createIptvHls({ root: temp, channels,
-      input: async source => { inputs.push(source); return Readable.from([sample]); } });
+      input: async source => { inputs.push(source); return Readable.from([samples.get(source)]); } });
     const { server } = service;
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const endpoint = `http://127.0.0.1:${server.address().port}/iptv-hls`;
+    const head = await fetch(`${endpoint}/${first}/index.m3u8`, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get('content-type'), 'application/vnd.apple.mpegurl');
+    assert.deepEqual(inputs, []);
     const origin = 'https://djyuanyo.github.io';
     const viewers = [first, first, second, third];
     const manifests = await Promise.all(viewers.map(key => fetch(`${endpoint}/${key}/index.m3u8`, { headers: { Origin: origin } })));
@@ -47,9 +57,11 @@ test('three HLS channels play concurrently and viewers of the same channel share
       assert.equal(file.status, 200);
       return Buffer.from(await file.arrayBuffer());
     }));
-    for (const media of mediaFiles) {
-      const probe = execFileSync('/usr/bin/ffprobe', ['-v', 'error', '-of', 'json', '-show_entries', 'stream=codec_name', 'pipe:0'], { input: media });
-      assert.deepEqual(JSON.parse(probe).streams.map(stream => stream.codec_name), ['h264', 'aac']);
+    for (const [index, media] of mediaFiles.entries()) {
+      const probe = execFileSync('/usr/bin/ffprobe', ['-v', 'error', '-of', 'json', '-show_entries', 'stream=codec_name,r_frame_rate', 'pipe:0'], { input: media });
+      const streams = JSON.parse(probe).streams;
+      assert.deepEqual(streams.map(stream => stream.codec_name), ['h264', 'aac']);
+      assert.equal(streams[0].r_frame_rate, viewers[index] === first ? '30/1' : '25/1');
     }
     assert.equal((await fetch(`${endpoint}/${unknown}/index.m3u8`)).status, 404);
   } finally {

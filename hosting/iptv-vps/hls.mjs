@@ -2,46 +2,105 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdir, open, readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { openUpstream } from './upstream.mjs';
 import { createRegistry } from './register.mjs';
+import { verifyViewer } from './access.mjs';
 
 const route = /^\/iptv-hls\/([a-f0-9]{32})\/(index\.m3u8|seg[0-9]{1,16}\.ts)$/;
 const origins = new Set(['https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com']);
+const sampleBytes = 256 * 1024;
+
+async function inspectInput(source, signal, ffprobe) {
+  const iterator = source[Symbol.asyncIterator]();
+  const prefix = [];
+  const deadline = sleep(1500, null, { signal, ref: false });
+  let size = 0;
+  let pending;
+  while (size < sampleBytes) {
+    pending = iterator.next();
+    const chunk = await Promise.race([pending, deadline]);
+    if (!chunk) {
+      pending.catch(() => {}); // The probe can still be running if the live input closes.
+      break;
+    }
+    pending = null;
+    if (chunk.done) break;
+    prefix.push(chunk.value);
+    size += chunk.value.length;
+  }
+  const probe = spawn(ffprobe, ['-v', 'error', '-f', 'mpegts', '-protocol_whitelist', 'pipe',
+    '-probesize', String(sampleBytes), '-analyzeduration', '1000000', '-i', 'pipe:0',
+    '-show_entries', 'stream=codec_type,codec_name,pix_fmt,width,height', '-of', 'json'],
+  { signal, killSignal: 'SIGKILL', stdio: ['pipe', 'pipe', 'ignore'] });
+  const timeout = setTimeout(() => probe.kill('SIGKILL'), 1800);
+  let output = '';
+  probe.stdout.setEncoding('utf8').on('data', data => { output += data; });
+  probe.stdin.on('error', () => {});
+  const closed = new Promise(resolve => { probe.on('error', () => {}); probe.once('close', resolve); });
+  probe.stdin.end(Buffer.concat(prefix, size).subarray(0, sampleBytes));
+  await closed;
+  clearTimeout(timeout);
+  let streams;
+  try { streams = JSON.parse(output).streams; } catch { streams = []; }
+
+  // Replay the bytes inspected by FFprobe so it and the player share one provider connection.
+  const replay = Readable.from((async function* () {
+    yield* prefix;
+    let chunk = await (pending || iterator.next());
+    while (!chunk.done) {
+      yield chunk.value;
+      chunk = await iterator.next();
+    }
+  })());
+  const video = streams?.find(s => s.codec_type === 'video');
+  const audio = streams?.find(s => s.codec_type === 'audio');
+  return { replay, copyVideo: video?.codec_name === 'h264' && video.pix_fmt === 'yuv420p'
+    && video.width > 0 && video.width <= 1920 && video.height > 0 && video.height <= 1080,
+  copyAudio: audio?.codec_name === 'aac' };
+}
 
 export async function createIptvHls({ channels, root, register, input = openUpstream,
-  idleMs = 45000, startupMs = 9000, ffmpeg = '/usr/bin/ffmpeg' }) {
+  idleMs = 45000, startupMs = 9000, ffmpeg = '/usr/bin/ffmpeg', ffprobe = '/usr/bin/ffprobe' }) {
   await mkdir(root, { recursive: true, mode: 0o750 });
   for (const entry of await readdir(root, { withFileTypes: true })) {
     if (entry.isDirectory() && /^[a-f0-9]{32}$/.test(entry.name)) await rm(join(root, entry.name), { recursive: true });
   }
   const running = new Map();
 
-  async function transcode({ dir, source, stop }) {
+  async function packageStream({ dir, source, stop }) {
     await mkdir(dir, { recursive: true, mode: 0o750 });
     const stream = await input(source, stop.signal);
-    const child = spawn(ffmpeg, [
-      '-hide_banner', '-loglevel', 'error', '-nostdin', '-fflags', '+genpts+discardcorrupt',
-      '-f', 'mpegts', '-protocol_whitelist', 'pipe', '-i', 'pipe:0',
-      '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn',
-      '-vf', "scale=-2:'min(720,trunc(ih/2)*2)',fps=30", '-c:v', 'libx264', '-preset', 'veryfast',
-      '-pix_fmt', 'yuv420p', '-threads:v', '2', '-crf', '22', '-maxrate', '2500k', '-bufsize', '5000k',
-      '-force_key_frames', 'expr:gte(t,n_forced*2)', '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
-      '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8', '-hls_delete_threshold', '4',
-      '-hls_start_number_source', 'epoch', '-hls_flags', 'delete_segments+temp_file+omit_endlist+append_list+independent_segments',
-      '-hls_segment_filename', 'seg%d.ts', 'index.m3u8',
-    ], { cwd: dir, signal: stop.signal, killSignal: 'SIGKILL', stdio: ['pipe', 'ignore', 'ignore'] });
-    const closed = new Promise(resolve => { child.on('error', () => {}); child.once('close', resolve); });
-    const transfer = pipeline(stream, child.stdin, { signal: stop.signal }).catch(() => {});
-    await closed;
-    stream.destroy();
-    await transfer;
+    try {
+      const { replay, copyVideo, copyAudio } = await inspectInput(stream, stop.signal, ffprobe);
+      stop.signal.throwIfAborted();
+      const video = copyVideo ? ['-c:v', 'copy'] : [
+        '-vf', "scale=-2:'min(720,trunc(ih/2)*2)',fps=30", '-c:v', 'libx264', '-preset', 'superfast',
+        '-pix_fmt', 'yuv420p', '-threads:v', '1', '-crf', '22', '-maxrate', '2500k', '-bufsize', '5000k',
+        '-force_key_frames', 'expr:gte(t,n_forced*2)',
+      ];
+      const audio = copyAudio ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2'];
+      const child = spawn(ffmpeg, [
+        '-hide_banner', '-loglevel', 'error', '-nostdin', '-fflags', '+genpts+discardcorrupt', '-filter_threads', '1',
+        '-threads', '1', '-f', 'mpegts', '-protocol_whitelist', 'pipe', '-i', 'pipe:0',
+        '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn', ...video, ...audio,
+        '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8', '-hls_delete_threshold', '4',
+        '-hls_start_number_source', 'epoch', '-hls_flags', 'delete_segments+temp_file+omit_endlist+append_list+independent_segments',
+        '-hls_segment_filename', 'seg%d.ts', 'index.m3u8',
+      ], { cwd: dir, signal: stop.signal, killSignal: 'SIGKILL', stdio: ['pipe', 'ignore', 'ignore'] });
+      const closed = new Promise(resolve => { child.on('error', () => {}); child.once('close', resolve); });
+      const transfer = pipeline(replay, child.stdin, { signal: stop.signal }).catch(() => {});
+      await closed;
+      stream.destroy();
+      await transfer;
+    } finally { stream.destroy(); }
   }
 
   function run(session) {
-    session.work = transcode(session).catch(() => {}).finally(() => {
+    session.work = packageStream(session).catch(() => {}).finally(() => {
       session.work = null;
       session.retryAt = Date.now() + 2000;
     });
@@ -77,7 +136,7 @@ export async function createIptvHls({ channels, root, register, input = openUpst
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return reply(res, 403);
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
-    if (req.url === '/iptv-hls/register' && register) return register(req, res);
+    if ((req.url === '/iptv-hls/register' || req.url === '/iptv-hls/original') && register) return register(req, res);
     const match = route.exec(req.url.split('?', 1)[0]);
     if (!match || !Object.hasOwn(channels, match[1])) return reply(res, 404);
     if (req.method === 'OPTIONS') {
@@ -89,6 +148,10 @@ export async function createIptvHls({ channels, root, register, input = openUpst
 
     const [, key, name] = match;
     const manifest = name === 'index.m3u8';
+    if (manifest && req.method === 'HEAD') {
+      res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl' }).end();
+      return;
+    }
     let session = running.get(key);
     if (!session) {
       if (!manifest) return reply(res, 404);
@@ -97,7 +160,7 @@ export async function createIptvHls({ channels, root, register, input = openUpst
       run(session);
     }
     if (session.stop.signal.aborted) return reply(res, 503);
-    session.used = Date.now();
+    if (req.method === 'GET') session.used = Date.now();
 
     const deadline = Date.now() + startupMs;
     while (!res.destroyed && !session.stop.signal.aborted) {
@@ -147,7 +210,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const [{ verifyAdmin }, { vpsIptvSource }] = await Promise.all([
     import('file:///opt/calamar-acestream/registry.mjs'), import('./http-stream.mjs'),
   ]);
-  const registry = await createRegistry({ seed: channels, authorize: verifyAdmin, accepts: vpsIptvSource,
+  const registry = await createRegistry({ seed: channels, authorize: verifyAdmin, authorizeViewer: verifyViewer, accepts: vpsIptvSource,
     stateFile: join(process.env.STATE_DIRECTORY || '/var/lib/calamar-iptv-vps', 'registered.json') });
   const service = await createIptvHls({ ...registry,
     root: process.env.CACHE_DIRECTORY || '/var/cache/calamar-iptv-vps' });

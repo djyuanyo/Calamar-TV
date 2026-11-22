@@ -14,13 +14,15 @@ if [[ ! -f "$nginx_parent" ]]; then echo 'No se encuentra la configuración de N
 /usr/bin/node --check hls.mjs
 /usr/bin/node --check upstream.mjs
 /usr/bin/node --check register.mjs
+/usr/bin/node --check access.mjs
 /usr/bin/node --check http-stream.mjs
+test -x /usr/bin/ffprobe
 encoders=$(/usr/bin/ffmpeg -hide_banner -encoders 2>/dev/null)
 if [[ "$encoders" != *' libx264 '* || "$encoders" != *' aac '* ]]; then echo 'FFmpeg necesita los codificadores libx264 y AAC.' >&2; exit 1; fi
 nginx -t
 
 install -d -m 0755 "$app" "$config"
-install -m 0644 hls.mjs upstream.mjs register.mjs http-stream.mjs "$app/"
+install -m 0644 hls.mjs upstream.mjs register.mjs access.mjs http-stream.mjs "$app/"
 install -m 0644 nginx-location.conf "$config/"
 if [[ -f "$config/sources.json" ]]; then install -m 0600 "$config/sources.json" "$config/sources.previous.json"; fi
 install -m 0600 sources.json "$config/sources.json"
