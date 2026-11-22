@@ -1,0 +1,23 @@
+[Unit]
+Description=Calamar TV IPTV HLS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=true
+LoadCredential=sources.json:/etc/calamar-iptv-vps/sources.json
+StateDirectory=calamar-iptv-vps
+StateDirectoryMode=0700
+CacheDirectory=calamar-iptv-vps
+CacheDirectoryMode=0750
+ExecStart=/usr/bin/node /opt/calamar-iptv-vps/hls.mjs %d/sources.json
+Restart=on-failure
+RestartSec=4
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
