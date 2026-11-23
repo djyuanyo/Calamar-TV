@@ -9,6 +9,7 @@ on:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -104,5 +105,18 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      - name: Esperar a que el paquete de Pages esté disponible
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..12}; do
+            if gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              -f name=github-pages --jq '.artifacts[] | select(.expired == false) | .id' | grep -q '[0-9]'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::GitHub todavía no muestra el paquete recién subido de Pages."
+          exit 1
       - id: deploy
         uses: actions/deploy-pages@v4
