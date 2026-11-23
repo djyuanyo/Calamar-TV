@@ -8,10 +8,11 @@ export const IPTV_SHORT = 'https://calamarmenciano.com/i/?';
 export const IPTV_XTREAM_SERVER = 'https://calamarmenciano.com';
 // Lowercase letters and digits that cannot be mistaken for one another (no 0/o, 1/l/i), easy with a remote.
 const LETTERS = 'abcdefghjkmnpqrstuvwxyz23456789';
-export const PASSWORD_LENGTH = 10;
+// The deployed Firestore rules require exactly 32 alphanumeric characters.
+export const PASSWORD_LENGTH = 32;
 
 export function iptvPassword(random = n => crypto.getRandomValues(new Uint8Array(n))) {
-  // 31 letters: bytes from 248 up are skipped so every letter is equally likely (31^10 ≈ 8·10^14 codes).
+  // Skip bytes from 248 up so every character in the 31-character alphabet is equally likely.
   let out = '';
   while (out.length < PASSWORD_LENGTH) for (const n of random(24)) if (n < 248 && out.length < PASSWORD_LENGTH) out += LETTERS[n % 31];
   return out;
@@ -52,7 +53,9 @@ export function iptvSection(el, service, user) {
     for (const b of buttons) b.disabled = true;
     note.textContent = text;
     try { await action(); draw(); }
-    catch (error) { note.textContent = service.explain(error); }
+    catch (error) {
+      note.textContent = error?.code === 'permission-denied' ? 'Firebase ha rechazado el cambio de la lista IPTV.' : service.explain(error);
+    }
     finally { for (const b of buttons) b.disabled = false; }
   };
   const create = button('Crear lista', () => {

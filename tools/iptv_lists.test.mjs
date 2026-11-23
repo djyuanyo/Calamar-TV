@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { iptvPassword, iptvLink, madridEndOfDay, madridDate, iptvState } from '../web/iptv-lists.js';
 
-test('codes are 10 easy letters and digits, as the rules and the hosting expect', () => {
+test('codes use exactly 32 easy letters and digits, as required in production', () => {
   const a = iptvPassword(), b = iptvPassword();
-  assert.match(a, /^[a-hjkmnp-z2-9]{10}$/);
+  assert.match(a, /^[a-hjkmnp-z2-9]{32}$/);
   assert.notEqual(a, b);
   assert.equal(iptvLink(a), `https://calamarmenciano.com/i/?${a}`);
 });
