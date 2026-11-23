@@ -332,7 +332,8 @@ function iptvManage() {
         if (!preg_match('/^Bearer ([A-Za-z0-9_.-]{1,8192})$/D', $authorization, $m) || !imageAdministrator($m[1])) {
             iptvXcReply(401, ['error' => 'Se requiere la cuenta administradora.']);
         }
-        $data = json_decode((string)file_get_contents('php://input', false, null, 250001), true);
+        $body = file_get_contents('php://input', false, null, 0, 250001);
+        $data = is_string($body) && strlen($body) <= 250000 ? json_decode($body, true) : null;
         if (!is_array($data)) iptvXcReply(400, ['error' => 'Solicitud IPTV no válida.']);
         $action = $data['action'] ?? '';
         if ($action === 'originals') {
