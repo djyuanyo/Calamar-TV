@@ -12,8 +12,8 @@ define('CALAMAR_IPTV_LIBRARY', true);
 require 'hosting/calamar-iptv.php';
 $input = json_decode(stream_get_contents(STDIN), true);
 $folders = array();
-$channels = iptvChannels($folders, $input['catalog'], $input['tdt']);
-$events = iptvLiveEvents($input['catalog'], $channels, strtotime($input['now']));
+$channels = iptvChannels($folders, $input['catalog'], $input['tdt'], $input['originals']);
+$events = iptvLiveEvents($input['catalog'], $channels, strtotime($input['now']), $input['originals']);
 iptvAddLiveFolder($folders, $events, $input['covers']);
 iptvLibrary($folders, function ($path) use ($input) { return $input['library'][$path] ?? null; });
 if (!empty($input['xtream'])) {
@@ -29,11 +29,11 @@ if (!empty($input['xtream'])) {
 
 @unittest.skipUnless(shutil.which('php'), 'PHP CLI is required')
 class IptvEventsTest(unittest.TestCase):
-    def render(self, catalog, tdt=None, covers=None, library=None, xtream=False):
+    def render(self, catalog, tdt=None, covers=None, library=None, xtream=False, originals=None):
         result = subprocess.run(['php', '-r', PHP], cwd=ROOT, check=True, capture_output=True, text=True,
                                 input=json.dumps({'catalog': catalog, 'tdt': tdt or {}, 'covers': covers or {},
                                                   'now': '2026-11-21T23:30:00Z', 'library': library or {},
-                                                  'xtream': xtream}))
+                                                  'xtream': xtream, 'originals': originals or {}}))
         self.assertEqual(result.stderr, '')
         return json.loads(result.stdout)
 
@@ -80,6 +80,25 @@ class IptvEventsTest(unittest.TestCase):
         self.assertIn(f'tvg-logo="{cover}"', rows[2][0])
         self.assertNotIn(automatic, m3u)
         self.assertNotIn(iframe, m3u)
+
+    def test_custom_channels_and_manual_events_share_the_registered_relay(self):
+        key = 'a' * 32
+        upstream = 'http://media.example:8080/account/password/42'
+        relay = f'https://video.calamarmenciano.com/iptv-hls/{key}/index.m3u8'
+        tdt_url = 'https://media.example/tdt.m3u8'
+        custom = {
+            'channels': [{'id': 'own', 'name': 'Propio', 'streams': [upstream]},
+                         {'id': 'ready', 'name': 'Preparado', 'streams': [relay]}],
+            'events': [{'id': 'manual', 'name': 'Evento', 'startAt': '2026-11-22T10:00:00Z',
+                        'streams': [upstream]}],
+        }
+        tdt = {'channels': [{'id': 'tdt', 'name': 'La 1', 'streams': [tdt_url]}]}
+        wiseplay, m3u = self.render(custom, tdt, originals={key: upstream})
+        self.assertEqual(m3u[1::2], [relay, relay, tdt_url, relay])
+        channels, events = wiseplay['groups']
+        self.assertEqual([item['url'] for group in channels['groups'] for item in group['stations']],
+                         [relay, relay, tdt_url])
+        self.assertEqual(events['stations'][0]['url'], relay)
 
     def test_empty_wiseplay_folder_has_no_fake_m3u_entry(self):
         wiseplay, m3u = self.render({})

@@ -1,4 +1,4 @@
-import { saveIptvOriginals } from './iptv-vps.js';
+import { prepareIptvRelays, saveIptvOriginals } from './iptv-vps.js';
 
 // Private IPTV list of each account (hosting/calamar-iptv.php?lista=…), managed from its page in
 // Administración → Usuarios. The random id is the list's password; once its date passes it stops working.
@@ -137,6 +137,20 @@ export function iptvAdmin(el, service, state) {
   const inputs = new Map();
   const save = el('button', { class: 'btn', type: 'button', disabled: true }, 'Guardar iconos');
   const restore = el('button', { class: 'btn secondary', type: 'button' }, 'Recuperar enlaces originales');
+  const prepare = el('button', { class: 'btn secondary', type: 'button' }, 'Preparar canales en el VPS');
+  prepare.addEventListener('click', async () => {
+    prepare.disabled = true;
+    status.textContent = 'Preparando las señales IPTV en IONOS…';
+    try {
+      const channels = (state.custom?.channels || []).filter(channel => !channel.tdt);
+      const events = state.custom?.events || [];
+      const links = [...channels, ...events].flatMap(item => item.streams || []);
+      const result = await prepareIptvRelays(links, () => service.auth.currentUser.getIdToken());
+      status.textContent = `Señales preparadas en el VPS: ${result.saved}.`
+        + (result.missing ? ` Pendientes: ${result.missing}.` : '');
+    } catch (error) { status.textContent = service.explain(error); }
+    finally { prepare.disabled = false; }
+  });
   restore.addEventListener('click', async () => {
     restore.disabled = true;
     status.textContent = 'Recuperando los enlaces de los canales preparados en IONOS…';
@@ -197,5 +211,5 @@ export function iptvAdmin(el, service, state) {
     el('a', { class: 'ghost user-back', href: '#/admin' }, '‹ Administración'),
     el('h1', {}, 'Lista IPTV'),
     el('p', { class: 'note' }, 'Icono de cada carpeta de la lista: «Canales» y cada categoría de canales que hay dentro, Películas, Series y Documentales. Se ven en WisePlay con el enlace en su formato (&formato=wiseplay); las apps que leen «group-logo» también los muestran en la lista M3U.'),
-    rows, el('div', { class: 'actions' }, save, restore), status)];
+    rows, el('div', { class: 'actions' }, save, restore, prepare), status)];
 }

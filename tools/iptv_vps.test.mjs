@@ -63,6 +63,11 @@ test('three HLS channels play concurrently and viewers of the same channel share
       assert.deepEqual(streams.map(stream => stream.codec_name), ['h264', 'aac']);
       assert.equal(streams[0].r_frame_rate, viewers[index] === first ? '30/1' : '25/1');
     }
+    // Only the later viewer requests another segment after all original responses have finished.
+    const stillWatching = await fetch(`${endpoint}/${first}/${segments[1]}`);
+    assert.equal(stillWatching.status, 200);
+    assert.deepEqual(Buffer.from(await stillWatching.arrayBuffer()), mediaFiles[1]);
+    assert.equal(inputs.filter(source => source === channels[first]).length, 1);
     assert.equal((await fetch(`${endpoint}/${unknown}/index.m3u8`)).status, 404);
   } finally {
     if (service) await service.close();

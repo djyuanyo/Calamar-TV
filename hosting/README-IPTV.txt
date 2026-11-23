@@ -47,9 +47,9 @@ INSTALAR EN EL HOSTING E IBO PLAYER
    calamar-iptv-private, que el instalador crea fuera de public_html al recibir una conexión.
 2. Edita el .htaccess actual de public_html. Añade el contenido de REGLAS-IPTV-HTACCESS.txt
    antes de # BEGIN WordPress (o al principio si no hay un bloque de WordPress).
-3. En Calamar TV → Administración → Lista IPTV, pulsa «Recuperar enlaces originales» para
-   los canales que ya se habían preparado en IONOS. Se usa el registro existente del VPS
-   únicamente para recuperar la URL. Las URL se guardan de forma privada en el hosting.
+3. En Calamar TV → Administración → Lista IPTV, pulsa «Preparar canales en el VPS» para
+   registrar las fuentes MPEG-TS compatibles de los canales propios y eventos. El hosting
+   guarda las direcciones originales en privado. Las señales ya preparadas usan su URL de IONOS.
 4. En Calamar TV → Administración → Usuarios → usuario → Lista IPTV, copia los datos de
    «Copiar acceso Xtream (IBO Player)». En IBO elige una lista Xtream Codes, con servidor
    https://calamarmenciano.com, usuario calamar y la contraseña de la lista de ese usuario.
@@ -58,12 +58,15 @@ INSTALAR EN EL HOSTING E IBO PLAYER
 Las películas y documentales sueltos aparecen en Películas. Las series y documentales
 por episodios aparecen en Series, con las temporadas. El catálogo se actualiza al recargar.
 
-Los canales usan el enlace original compatible. Si un canal solo tiene una página web o un
-relay sin original registrado, se omite hasta añadirle una fuente directa compatible.
+En IPTV, los canales propios registrados en IONOS se sirven en HLS desde el VPS. Los TDT
+compatibles usan su enlace directo. El primer espectador inicia la señal en el VPS. Quienes
+sintonizan la misma fuente comparten una conexión de entrada y una sesión de FFmpeg. La señal
+sigue activa mientras se soliciten segmentos y se detiene tras unos 45 segundos sin peticiones.
+Cada espectador recibe su propia copia de los segmentos por la red.
 Los vídeos bajo demanda que dependen del conector de Drive, Vidara o LuluStream siguen
 usando ese conector. El endpoint IPTV solo redirige: no descarga ni convierte el vídeo.
 
-Las listas personales registran la apertura antes de enviar al reproductor al proveedor.
+Las listas personales registran la apertura antes de redirigir al reproductor a la señal.
 Las aperturas se ven en las visitas, en el desglose por usuario del contenido y en su historial
 como «App IPTV · apertura» (hasta 2.000 por cuenta). La app externa no confirma que reprodujo
 ni comunica la duración o el cierre. Estas aperturas no aparecen en el contador de En vivo ahora.

@@ -36,6 +36,44 @@ export async function saveIptvOriginals(links, getToken, request = fetch) {
   return { saved, missing: keys.length - saved };
 }
 
+async function registerIptvSource(url, token, request) {
+  let response;
+  try {
+    response = await request(register, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }), redirect: 'error', signal: AbortSignal.timeout(12000),
+    });
+  } catch {
+    throw new Error('No se pudo conectar con el registro IPTV de IONOS. Comprueba que el VPS tenga instalada la actualización.');
+  }
+  if (response.status === 401) throw new Error('Vuelve a entrar con tu cuenta de administración de Google.');
+  if ([404, 405].includes(response.status)) throw new Error('Falta actualizar el registro IPTV de IONOS.');
+  if (response.status === 400) throw new Error('IONOS solo admite enlaces IPTV MPEG-TS públicos.');
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !hlsLink.test(data?.url)) throw new Error('IONOS no pudo preparar el enlace IPTV. Vuelve a intentar guardar.');
+  return data.url;
+}
+
+export async function prepareIptvRelays(links, getToken, request = fetch) {
+  const sources = [...new Set(links.filter(vpsIptvSource))];
+  if (!sources.length) return { saved: 0, missing: 0 };
+  const token = await getToken();
+  let saved = 0;
+  let firstError;
+  for (let i = 0; i < sources.length; i += 8) {
+    const results = await Promise.allSettled(sources.slice(i, i + 8).map(async source => {
+      const relay = await registerIptvSource(source, token, request);
+      return [hlsLink.exec(relay)[1], source];
+    }));
+    const originals = Object.fromEntries(results.filter(result => result.status === 'fulfilled').map(result => result.value));
+    if (Object.keys(originals).length) saved += (await iptvManagement('originals', { originals }, token, request)).saved;
+    firstError ??= results.find(result => result.status === 'rejected')?.reason;
+  }
+  if (!saved && firstError) throw firstError;
+  return { saved, missing: sources.length - saved };
+}
+
 export async function resolveIptvStreams(links, getToken, request = fetch, saveOriginals = false) {
   const unique = [...new Set(links)];
   if (!unique.some(vpsIptvSource)) return unique;
@@ -45,23 +83,9 @@ export async function resolveIptvStreams(links, getToken, request = fetch, saveO
   const originals = {};
   for (const url of unique) {
     if (!vpsIptvSource(url)) { result.push(url); continue; }
-    let response;
-    try {
-      response = await request(register, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }), redirect: 'error', signal: AbortSignal.timeout(12000),
-      });
-    } catch {
-      throw new Error('No se pudo conectar con el registro IPTV de IONOS. Comprueba que el VPS tenga instalada la actualización.');
-    }
-    if (response.status === 401) throw new Error('Vuelve a entrar con tu cuenta de administración de Google.');
-    if ([404, 405].includes(response.status)) throw new Error('Falta actualizar el registro IPTV de IONOS.');
-    if (response.status === 400) throw new Error('IONOS solo admite enlaces IPTV MPEG-TS públicos.');
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !hlsLink.test(data?.url)) throw new Error('IONOS no pudo preparar el enlace IPTV. Vuelve a intentar guardar.');
-    result.push(data.url);
-    originals[hlsLink.exec(data.url)[1]] = url;
+    const relay = await registerIptvSource(url, token, request);
+    result.push(relay);
+    originals[hlsLink.exec(relay)[1]] = url;
   }
   // Registered originals remain recoverable through the admin sync if cPanel is being updated.
   if (saveOriginals) await iptvManagement('originals', { originals }, token, request).catch(() => {});

@@ -8,7 +8,7 @@ import { createIptvHls } from '../hosting/iptv-vps/hls.mjs';
 import { createRegistry } from '../hosting/iptv-vps/register.mjs';
 import { verifyViewer } from '../hosting/iptv-vps/access.mjs';
 import { vpsIptvSource } from '../web/http-stream.js';
-import { resolveIptvStreams } from '../web/iptv-vps.js';
+import { prepareIptvRelays, resolveIptvStreams } from '../web/iptv-vps.js';
 
 const video = 'https://video.calamarmenciano.com/iptv-hls';
 const key = 'a'.repeat(32);
@@ -17,6 +17,22 @@ const seedUrl = 'http://example.com:8080/provider-user/provider-pass/4';
 const other = 'https://example.com/live/next.ts';
 const token = 'signed.admin.token';
 const web = 'https://djyuanyo.github.io';
+
+test('bulk registration saves shared HLS addresses for IPTV and leaves compatible direct HLS alone', async () => {
+  const calls = [];
+  const result = await prepareIptvRelays([seedUrl, direct, seedUrl, other], async () => token, async (address, init) => {
+    assert.equal(init.headers.Authorization, `Bearer ${token}`);
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (address === `${video}/register`) {
+      if (body.url === other) return new Response(null, { status: 400 });
+      return Response.json({ url: `${video}/${key}/index.m3u8` });
+    }
+    return Response.json({ saved: 1 });
+  });
+  assert.deepEqual(calls, [{ url: seedUrl }, { url: other }, { action: 'originals', originals: { [key]: seedUrl } }]);
+  assert.deepEqual(result, { saved: 1, missing: 1 });
+});
 
 test('the channel editor sends only IPTV transport streams to IONOS and saves the returned HTTPS link', async () => {
   const already = `${video}/${key}/index.m3u8`;

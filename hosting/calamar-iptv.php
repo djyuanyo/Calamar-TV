@@ -120,7 +120,7 @@ function iptvChannels(&$folders, $custom, $tdt, $originals = array()) {
         $id = (string)($o['id'] ?? '');
         if ($id === '' || isset($stations[$id])) return;
         foreach ((array)($o['streams'] ?? array()) as $stream) {
-            $address = iptvDirectChannel($stream, $originals);
+            $address = $own ? iptvChannelAddress($stream, $originals) : iptvDirectChannel($stream, $originals);
             if ($address === null) continue;
             $group = trim((string)($o['group'] ?? '')) ?: ($own ? 'Calamar TV' : 'Otros');
             $name = (string)($o['name'] ?? 'Canal');
@@ -179,7 +179,7 @@ function iptvLiveEvents($catalog, $channels, $now, $originals = array()) {
         $address = $channel['url'] ?? null;
         if ($address === null) {
             foreach (iptvEventStreams($event) as $link) {
-                $address = iptvDirectChannel($link, $originals);
+                $address = iptvChannelAddress($link, $originals);
                 if ($address !== null) break;
             }
         }

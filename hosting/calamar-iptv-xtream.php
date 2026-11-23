@@ -12,6 +12,16 @@ function iptvMediaUrl($url) {
         && !isset($p['user']) && !isset($p['pass']);
 }
 
+function iptvChannelAddress($source, $originals) {
+    if (iptvRelayId($source) !== null) return $source;
+    $key = array_search($source, $originals, true);
+    if ($key !== false) {
+        $url = 'https://video.calamarmenciano.com/iptv-hls/' . $key . '/index.m3u8';
+        if (iptvRelayId($url) !== null) return $url;
+    }
+    return iptvDirectChannel($source, $originals);
+}
+
 function iptvDirectChannel($source, $originals = []) {
     $relay = iptvRelayId($source);
     if ($relay !== null) $source = $originals[$relay] ?? null;
