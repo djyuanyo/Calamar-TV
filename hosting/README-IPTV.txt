@@ -30,13 +30,15 @@ Carpetas: las categorías de los canales, «Eventos En Directo», «Películas»
 - «Eventos En Directo» incluye los eventos del día con un canal o enlace manual compatible con IPTV.
   Cada evento abre su emisión y muestra su portada. Los partidos con escudos pueden mostrar la
   imagen que genera la web. En M3U la categoría aparece cuando hay eventos disponibles.
-- Enlace normal (M3U, vale para cualquier app IPTV): una sola carpeta «Series» con todos los
-  capítulos («Serie T1 E01 - título»), igual en «Documentales».
+- Enlace normal (M3U): cada entrada indica si es un directo, una película o un capítulo.
+  Los capítulos llevan serie, temporada y número («Serie S01E01 - título»). Los documentales
+  individuales se etiquetan como películas y los documentales por capítulos, como series.
+  Cada reproductor decide qué etiquetas lee y en qué sección muestra cada título.
 - Formato WisePlay (el enlace corto, o &formato=wiseplay): dentro de «Series» una carpeta por serie
   con su portada y, dentro, «Capítulo 1», «Capítulo 2»… (con varias temporadas, una carpeta por
   temporada). Igual en «Documentales». Los canales van todos dentro de la carpeta «Canales», cada
-  categoría en su carpeta (en la lista M3U, sin subcarpetas, la categoría «Series» de canales sale como
-  «Series (canales)»).
+  categoría en su carpeta. En M3U, la categoría «Series» de canales se llama «Cine y ficción TV» para
+  evitar que los reproductores la confundan con las series bajo demanda.
 
 ACTUALIZAR UNA INSTALACIÓN EXISTENTE
 Sustituye calamar-iptv.php por la versión nueva en el hosting. Conserva calamar-iptv-key.php y la

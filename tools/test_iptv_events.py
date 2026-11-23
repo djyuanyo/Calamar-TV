@@ -15,16 +15,17 @@ $folders = array();
 $channels = iptvChannels($folders, $input['catalog'], $input['tdt']);
 $events = iptvLiveEvents($input['catalog'], $channels, strtotime($input['now']));
 iptvAddLiveFolder($folders, $events, $input['covers']);
+iptvLibrary($folders, function ($path) use ($input) { return $input['library'][$path] ?? null; });
 echo json_encode(array(iptvWisePlay(iptvChannelsFolder($folders, ''), ''), iptvM3u($folders)));
 '''
 
 
 @unittest.skipUnless(shutil.which('php'), 'PHP CLI is required')
 class IptvEventsTest(unittest.TestCase):
-    def render(self, catalog, tdt=None, covers=None):
+    def render(self, catalog, tdt=None, covers=None, library=None):
         result = subprocess.run(['php', '-r', PHP], cwd=ROOT, check=True, capture_output=True, text=True,
                                 input=json.dumps({'catalog': catalog, 'tdt': tdt or {}, 'covers': covers or {},
-                                                  'now': '2026-11-21T23:30:00Z'}))
+                                                  'now': '2026-11-21T23:30:00Z', 'library': library or {}}))
         self.assertEqual(result.stderr, '')
         return json.loads(result.stdout)
 
@@ -76,3 +77,55 @@ class IptvEventsTest(unittest.TestCase):
         wiseplay, m3u = self.render({})
         self.assertEqual(wiseplay['groups'], [{'name': 'Eventos En Directo', 'stations': []}])
         self.assertEqual(m3u, [])
+
+
+    def test_m3u_classifies_channels_movies_and_episodes(self):
+        base = 'https://media.example/'
+        channels = {'channels': [
+            {'id': 'lineal', 'name': 'Canal Hollywood', 'group': 'Series', 'streams': [base + 'live.m3u8']},
+        ]}
+        library = {
+            'calamarLibrary/index': {'sections': {'movies': 1, 'series': 1, 'documentaries': 1}},
+            'calamarLibrary/movies-0': {'items': [{'title': 'Una película', 'url': base + 'movie.m3u8'}]},
+            'calamarLibrary/series-0': {'items': [{'id': 'serie42', 'title': 'Una serie', 'episodes': [
+                {'season': 2, 'episode': 1, 'url': base + 'episode2.m3u8'},
+                {'season': 1, 'episode': 3, 'name': 'Piloto', 'url': base + 'episode1.m3u8'},
+                {'season': 2, 'episode': 2, 'aired': '2099-01-01', 'url': base + 'future.m3u8'},
+            ]}]},
+            'calamarLibrary/documentaries-0': {'items': [
+                {'title': 'Un documental', 'url': base + 'documentary.mp4'},
+                {'title': 'Otra serie', 'episodes': [{'season': 1, 'episode': 1, 'url': base + 'doc-ep.mp4'}]},
+            ]},
+        }
+        wiseplay, m3u = self.render(channels, library=library)
+        rows = dict(zip(m3u[1::2], m3u[::2]))
+
+        live = rows[base + 'live.m3u8']
+        self.assertTrue(live.startswith('#EXTINF:-1 '))
+        self.assertIn('tvg-type="live"', live)
+        self.assertIn('group-title="Cine y ficción TV"', live)
+        self.assertEqual(wiseplay['groups'][0]['groups'][0]['name'], 'Series')
+        for url, group in [('movie.m3u8', 'Películas'), ('documentary.mp4', 'Documentales')]:
+            row = rows[base + url]
+            self.assertTrue(row.startswith('#EXTINF:0 '))
+            self.assertIn('tvg-type="movie"', row)
+            self.assertIn(f'group-title="{group}"', row)
+
+        first, second = rows[base + 'episode1.m3u8'], rows[base + 'episode2.m3u8']
+        self.assertIn('tvg-type="serie"', first)
+        self.assertIn('serie-title="Una serie"', first)
+        self.assertIn('tvg-season="1" tvg-episode="3"', first)
+        self.assertTrue(first.endswith(',Una serie S01E03 - Piloto'))
+        self.assertTrue(second.endswith(',Una serie S02E01'))
+        self.assertEqual(first.split('tvg-serie="')[1].split('"')[0], second.split('tvg-serie="')[1].split('"')[0])
+        self.assertIn('tvg-type="serie"', rows[base + 'doc-ep.mp4'])
+        self.assertIn('group-title="Documentales"', rows[base + 'doc-ep.mp4'])
+        self.assertNotIn(base + 'future.m3u8', rows)
+
+    def test_wiseplay_keeps_linear_series_group_without_vod(self):
+        channels = {'channels': [
+            {'id': 'lineal', 'name': 'Canal Hollywood', 'group': 'Series',
+             'streams': ['https://media.example/hollywood.m3u8']},
+        ]}
+        wiseplay, _ = self.render(channels)
+        self.assertEqual(wiseplay['groups'][0]['groups'][0]['name'], 'Series')
