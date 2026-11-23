@@ -1,14 +1,48 @@
 import { vpsIptvSource } from './http-stream.js';
 
 const register = 'https://video.calamarmenciano.com/iptv-hls/register';
-const hlsLink = /^https:\/\/video\.calamarmenciano\.com\/iptv-hls\/[a-f0-9]{32}\/index\.m3u8$/;
+const hlsLink = /^https:\/\/video\.calamarmenciano\.com\/iptv-hls\/([a-f0-9]{32})\/index\.m3u8$/;
+const management = 'https://calamarmenciano.com/calamar-iptv.php?iptv_admin=1';
 
-export async function resolveIptvStreams(links, getToken, request = fetch) {
+export async function iptvManagement(action, data, token, request = fetch) {
+  const response = await request(management, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...data }), redirect: 'error', signal: AbortSignal.timeout(15000),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result) throw Error(result?.error || 'El hosting aún no tiene habilitada la gestión IPTV.');
+  return result;
+}
+
+export async function saveIptvOriginals(links, getToken, request = fetch) {
+  const keys = [...new Set(links.map(url => hlsLink.exec(url)?.[1]).filter(Boolean))];
+  if (!keys.length) return { saved: 0, missing: 0 };
+  const token = await getToken();
+  let saved = 0;
+  for (let i = 0; i < keys.length; i += 8) {
+    const results = await Promise.allSettled(keys.slice(i, i + 8).map(async key => {
+      const response = await request('https://video.calamarmenciano.com/iptv-hls/original', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }), redirect: 'error', signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) throw Error('La señal original no está disponible.');
+      const { url } = await response.json();
+      if (!vpsIptvSource(url)) throw Error('La señal original no es válida.');
+      return [key, url];
+    }));
+    const originals = Object.fromEntries(results.filter(result => result.status === 'fulfilled').map(result => result.value));
+    if (Object.keys(originals).length) saved += (await iptvManagement('originals', { originals }, token, request)).saved;
+  }
+  return { saved, missing: keys.length - saved };
+}
+
+export async function resolveIptvStreams(links, getToken, request = fetch, saveOriginals = false) {
   const unique = [...new Set(links)];
   if (!unique.some(vpsIptvSource)) return unique;
 
   const token = await getToken();
   const result = [];
+  const originals = {};
   for (const url of unique) {
     if (!vpsIptvSource(url)) { result.push(url); continue; }
     let response;
@@ -27,6 +61,9 @@ export async function resolveIptvStreams(links, getToken, request = fetch) {
     const data = await response.json().catch(() => null);
     if (!response.ok || !hlsLink.test(data?.url)) throw new Error('IONOS no pudo preparar el enlace IPTV. Vuelve a intentar guardar.');
     result.push(data.url);
+    originals[hlsLink.exec(data.url)[1]] = url;
   }
+  // Registered originals remain recoverable through the admin sync if cPanel is being updated.
+  if (saveOriginals) await iptvManagement('originals', { originals }, token, request).catch(() => {});
   return [...new Set(result)];
 }

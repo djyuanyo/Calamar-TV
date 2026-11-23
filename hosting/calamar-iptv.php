@@ -109,25 +109,26 @@ function &iptvFolder(&$folders, $name) {
 }
 
 /** Channels as the web lists them (web/catalog.js merge): yours first, then the TDT ones not hidden. */
-function iptvChannels(&$folders, $custom, $tdt) {
+function iptvChannels(&$folders, $custom, $tdt, $originals = array()) {
     $hidden = array_flip(array_map('strval', (array)($custom['hidden'] ?? array())));
     $tdtIds = array();
     foreach ((array)($tdt['channels'] ?? array()) as $o) if (is_array($o)) $tdtIds[(string)($o['id'] ?? '')] = true;
     $names = array();
     foreach ((array)($custom['categories'] ?? array()) as $c) if (is_array($c) && isset($c['id'])) $names[(string)$c['id']] = (string)($c['name'] ?? $c['id']);
     $stations = array();
-    $add = function ($o, $own) use (&$folders, &$stations, $names) {
+    $add = function ($o, $own) use (&$folders, &$stations, $names, $originals) {
         $id = (string)($o['id'] ?? '');
         if ($id === '' || isset($stations[$id])) return;
         foreach ((array)($o['streams'] ?? array()) as $stream) {
-            $address = iptvAddress($stream, true);
+            $address = iptvDirectChannel($stream, $originals);
             if ($address === null) continue;
             $group = trim((string)($o['group'] ?? '')) ?: ($own ? 'Calamar TV' : 'Otros');
             $name = (string)($o['name'] ?? 'Canal');
             $label = $names[$group] ?? $group;
             if ($label === IPTV_LIVE_FOLDER || in_array($label, IPTV_LIBRARY_FOLDERS, true)) $label .= ' (canales)';
             $folder = &iptvFolder($folders, $label);
-            $station = array('name' => $name, 'full' => $name, 'image' => iptvImage($o['logo'] ?? ''), 'url' => $address, 'id' => $id);
+            $station = array('name' => $name, 'full' => $name, 'image' => iptvImage($o['logo'] ?? ''),
+                'url' => $address, 'id' => $id, 'target' => 'c:' . $id);
             $stations[$id] = $station;
             $folder['stations'][] = $station;
             return; // The first source that an IPTV app can open.
@@ -156,7 +157,7 @@ function iptvEventStreams($event) {
 }
 
 /** Same Madrid-day window as Eventos En Directo, with the first source the IPTV client supports. */
-function iptvLiveEvents($catalog, $channels, $now) {
+function iptvLiveEvents($catalog, $channels, $now, $originals = array()) {
     $teams = array_column((array)($catalog['teams'] ?? array()), null, 'id');
     $leagues = array_column((array)($catalog['leagues'] ?? array()), null, 'id');
     $events = (array)($catalog['events'] ?? array());
@@ -178,7 +179,7 @@ function iptvLiveEvents($catalog, $channels, $now) {
         $address = $channel['url'] ?? null;
         if ($address === null) {
             foreach (iptvEventStreams($event) as $link) {
-                $address = iptvAddress($link, true);
+                $address = iptvDirectChannel($link, $originals);
                 if ($address !== null) break;
             }
         }
@@ -190,7 +191,7 @@ function iptvLiveEvents($catalog, $channels, $now) {
         if ($name === '') $name = ($home['name'] ?? 'Local') . ' vs ' . ($away['name'] ?? 'Visitante');
         $cover = iptvImage($event['cover'] ?? '');
         $fallback = $cover ?: (iptvImage($league['background'] ?? '') ?: ($channel['image'] ?? ''));
-        $stations[$id] = array('id' => $id, 'name' => $name, 'full' => $name, 'url' => $address,
+        $stations[$id] = array('id' => $id, 'target' => 'e:' . $id, 'name' => $name, 'full' => $name, 'url' => $address,
             'image' => $fallback, 'start' => $start, 'needsPreview' => $cover === '' || !empty($home['logo']) || !empty($away['logo']));
     }
     uasort($stations, function ($a, $b) {
@@ -244,7 +245,7 @@ function iptvLibrary(&$folders, $readDocument = 'iptvDocument') {
                         if (!empty($e['name'])) $full .= ' - ' . $e['name'];
                         $seasons[$season][] = array(
                             'name' => 'Capítulo ' . $number, 'full' => $full, 'image' => $poster, 'url' => $address, 'id' => '',
-                            'type' => 'series', 'seriesId' => $seriesId, 'seriesTitle' => $title,
+                            'type' => 'series', 'seriesId' => $seriesId, 'seriesTitle' => $title, 'target' => 'l:' . $seriesKey,
                             'season' => $season, 'episode' => $number, 'episodeTitle' => (string)($e['name'] ?? ''),
                         );
                     }
@@ -268,7 +269,8 @@ function iptvLibrary(&$folders, $readDocument = 'iptvDocument') {
                     $name = $year !== '' ? "$title ($year)" : $title;
                     $folder = &iptvFolder($library, $label);
                     $folder['stations'][] = array(
-                        'name' => $name, 'full' => $name, 'image' => $poster, 'url' => $address, 'id' => '', 'type' => 'movie',
+                        'name' => $name, 'full' => $name, 'image' => $poster, 'url' => $address, 'id' => '',
+                        'type' => 'movie', 'target' => 'l:' . ($item['id'] ?? $name),
                     );
                     unset($folder);
                     $count++;
@@ -381,24 +383,35 @@ function iptvWisePlay($folders, $info) {
  * A user's list (?lista=…), made in Administración → Usuarios: calamarIptvLists/<password>, with its
  * expiry date (none: it always works). Returns null when it does not exist or has expired.
  */
-function iptvUserList($token) {
-    if (!preg_match('/^[A-Za-z0-9]{10,32}$/D', $token)) return 'missing';
+function iptvSubscription($token) {
+    if (!is_string($token) || !preg_match('/^[A-Za-z0-9]{10,32}$/D', $token)) return null;
     $body = iptvGet('https://firestore.googleapis.com/v1/projects/' . IPTV_PROJECT . '/databases/(default)/documents/calamarIptvLists/'
         . $token . '?key=' . IPTV_API_KEY);
-    if ($body === null) return 'missing';
+    if ($body === null) return null;
     $doc = json_decode($body, true);
     $expires = $doc['fields']['expires']['timestampValue'] ?? null;
-    if (is_string($expires) && strtotime($expires) !== false && strtotime($expires) <= time()) return 'expired';
-    return is_array($doc) && isset($doc['fields']['uid']) ? 'ok' : 'missing';
+    $uid = $doc['fields']['uid']['stringValue'] ?? '';
+    if (!preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $uid)) return null;
+    return array('uid' => $uid, 'expires' => is_string($expires) ? (strtotime($expires) ?: null) : null);
 }
 
+function iptvUserList($token) {
+    $list = iptvSubscription($token);
+    return !$list ? 'missing' : (($list['expires'] ?? PHP_INT_MAX) <= time() ? 'expired' : 'ok');
+}
+
+require_once __DIR__ . '/calamar-iptv-xtream.php';
 if (defined('CALAMAR_IPTV_LIBRARY')) return;
 
+$token = null;
+$subscription = null;
+if (isset($_GET['iptv_admin'])) iptvManage();
 if (isset($_GET['lista']) && is_string($_GET['lista'])) {
-    try { $state = iptvUserList($_GET['lista']); }
+    $token = $_GET['lista'];
+    try { $subscription = iptvSubscription($token); }
     catch (Throwable $error) { iptvFail(502, 'No se pudo comprobar la lista. Vuelve a intentarlo en unos minutos.'); }
-    if ($state === 'expired') iptvFail(403, 'Esta lista de Calamar TV ha caducado. Contacta con el administrador.');
-    if ($state !== 'ok') { usleep(500000); iptvFail(403, 'Lista no válida.'); }
+    if ($subscription && ($subscription['expires'] ?? PHP_INT_MAX) <= time()) iptvFail(403, 'Esta lista de Calamar TV ha caducado. Contacta con el administrador.');
+    if (!$subscription) { usleep(500000); iptvFail(403, 'Lista no válida.'); }
 } else {
     // The administrator's own list, with the key of calamar-iptv-key.php.
     $key = iptvKey();
@@ -407,27 +420,36 @@ if (isset($_GET['lista']) && is_string($_GET['lista'])) {
     if (!hash_equals($key, $given)) { usleep(500000); iptvFail(403, 'Clave no válida.'); }
 }
 
+if ($subscription && isset($_GET['play'])) iptvSignedPlayback($token, $subscription['uid'], $_GET['play']);
 try {
+    $withVideos = ($_GET['solo'] ?? '') !== 'canales';
+    list($folders, $info, $channelsIcon) = iptvCachedCatalog($withVideos);
+} catch (Throwable $error) {
+    iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
+}
+
+function iptvBuildCatalog($withVideos) {
     $custom = iptvDocument('calamarCatalog/custom');
     if (!$custom) $custom = json_decode((string)iptvGet('https://djyuanyo.github.io/Calamar-TV/data/custom.json'), true) ?: array();
     $tdt = json_decode((string)iptvGet(IPTV_TDT), true) ?: array();
     $folders = array();
-    $channels = iptvChannels($folders, $custom, $tdt);
-    $events = iptvLiveEvents($custom, $channels, time());
+    $originals = iptvStateRead('originals.json');
+    $channels = iptvChannels($folders, $custom, $tdt, $originals);
+    $events = iptvLiveEvents($custom, $channels, time(), $originals);
     $covers = array();
     if (array_filter($events, function ($event) { return $event['needsPreview']; })) {
         try { $covers = json_decode((string)iptvGet(IPTV_EVENT_COVERS), true) ?: array(); }
         catch (Throwable $noCovers) { /* Use the catalog art while the web preview is unavailable. */ }
     }
     iptvAddLiveFolder($folders, $events, $covers);
-    $videos = (empty($_GET['solo']) || $_GET['solo'] !== 'canales') ? iptvLibrary($folders) : 0;
+    $videos = $withVideos ? iptvLibrary($folders) : 0;
     $channelsIcon = '';
     try { $channelsIcon = iptvIcons($folders); } catch (Throwable $noIcons) { /* The list works without its icons. */ }
-} catch (Throwable $error) {
-    iptvFail(502, 'No se pudo leer el catálogo de Calamar TV. Vuelve a intentarlo en unos minutos.');
+    $info = count($channels) . ' canales, ' . count($events) . ' eventos y ' . $videos . ' vídeos · ' . (new DateTime('now', new DateTimeZone('Europe/Madrid')))->format('d/m/Y H:i');
+    return array($folders, $info, $channelsIcon);
 }
 
-$info = count($channels) . ' canales, ' . count($events) . ' eventos y ' . $videos . ' vídeos · ' . (new DateTime('now', new DateTimeZone('Europe/Madrid')))->format('d/m/Y H:i');
+if ($subscription) iptvTrackedFolders($folders, $token);
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex');
 if (($_GET['formato'] ?? '') === 'wiseplay') {

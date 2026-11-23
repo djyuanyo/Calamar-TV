@@ -4,6 +4,7 @@ import { ADMIN_EMAIL, CATALOG_PATH, validateCatalog } from './shared-catalog.js'
 import { AUDIENCE_PATH, VISITS_PATH, presence, liveBeats, liveFrom, minuteOf, viewingSummary } from './audience.js';
 import { DEVICE_LOGIN_PATH } from './device-login.js';
 import { REMINDER_ENDPOINT, verificationCode, verificationDraft } from './verification-reminder.js';
+import { iptvManagement } from './iptv-vps.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
@@ -479,13 +480,25 @@ export async function readUserDetails(uid) {
 export async function readViewingHistory(uid, cursor) {
   requireAdministrator();
   const items = collection(db, 'calamarViewing', uid, 'sessions');
-  const snapshot = await getDocs(query(items, orderBy('startedAt', 'desc'), ...(cursor ? [startAfter(cursor)] : []), limit(31)));
-  const page = snapshot.docs.slice(0, 30);
-  return { entries: page.map(d => d.data()), cursor: snapshot.size > 30 ? page.at(-1) : null };
+  const [snapshot, iptv] = await Promise.all([
+    cursor?.firebase === null ? null
+      : getDocs(query(items, orderBy('startedAt', 'desc'), ...(cursor?.firebase ? [startAfter(cursor.firebase)] : []), limit(31))),
+    cursor?.iptv === null ? null : readIptvActivity('history', { uid, cursor: cursor?.iptv ?? null }),
+  ]);
+  const page = snapshot?.docs.slice(0, 30) || [];
+  const next = { firebase: snapshot?.size > 30 ? page.at(-1) : null, iptv: iptv?.next ?? null };
+  return { entries: [...page.map(d => d.data()), ...(iptv?.entries || [])], cursor: next.firebase || next.iptv ? next : null };
+}
+
+export async function readIptvActivity(action, params) {
+  requireAdministrator();
+  try { return await iptvManagement(action, params, await auth.currentUser.getIdToken()); }
+  catch { return null; }
 }
 
 export async function readContentViewers(users, targets, from, to) {
   requireAdministrator();
+  const iptv = readIptvActivity('report', { targets, from, to });
   // Query the existing private subcollections by target, using the single-field index.
   const groups = [];
   for (let i = 0; i < targets.length; i += 30) groups.push(targets.slice(i, i + 30));
@@ -503,7 +516,17 @@ export async function readContentViewers(users, targets, from, to) {
     }));
     people.push(...batch.filter(Boolean));
   }
-  return people.sort((a, b) => b.at - a.at || a.name.localeCompare(b.name, 'es'));
+  const byUid = new Map(people.map(person => [person.uid, person]));
+  const openings = (await iptv)?.people || {};
+  for (const user of users) {
+    if (!Object.hasOwn(openings, user.uid)) continue;
+    const entry = openings[user.uid];
+    const person = byUid.get(user.uid) || { uid: user.uid, name: user.name || 'Usuario registrado', count: 0, at: 0 };
+    person.iptvCount = entry.count;
+    if (entry.at > person.at) { person.at = entry.at; person.latest = entry.latest; }
+    byUid.set(user.uid, person);
+  }
+  return [...byUid.values()].sort((a, b) => b.at - a.at || a.name.localeCompare(b.name, 'es'));
 }
 
 export async function readLiveViewers() {

@@ -1,8 +1,11 @@
+import { saveIptvOriginals } from './iptv-vps.js';
+
 // Private IPTV list of each account (hosting/calamar-iptv.php?lista=…), managed from its page in
 // Administración → Usuarios. The random id is the list's password; once its date passes it stops working.
 export const IPTV_ENDPOINT = 'https://calamarmenciano.com/calamar-iptv.php';
 // Short address (hosting/i/index.php): WisePlay's format, or M3U for other apps with «&m3u».
 export const IPTV_SHORT = 'https://calamarmenciano.com/i/?';
+export const IPTV_XTREAM_SERVER = 'https://calamarmenciano.com';
 // Lowercase letters and digits that cannot be mistaken for one another (no 0/o, 1/l/i), easy with a remote.
 const LETTERS = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const PASSWORD_LENGTH = 10;
@@ -70,14 +73,19 @@ export function iptvSection(el, service, user) {
     try { await navigator.clipboard.writeText(address); note.textContent = 'Enlace M3U copiado: para TiviMate, IPTV Smarters, VLC…'; }
     catch { note.textContent = address; }
   });
+  const xtream = button('Copiar acceso Xtream (IBO Player)', async () => {
+    const values = `Servidor: ${IPTV_XTREAM_SERVER}\nUsuario: calamar\nContraseña: ${list.token}`;
+    try { await navigator.clipboard.writeText(values); note.textContent = 'Datos de Xtream copiados.'; }
+    catch { note.textContent = values; }
+  });
   const remove = button('Borrar lista', () => {
     if (!window.confirm('El enlace dejará de funcionar. ¿Borrar la lista IPTV?')) return;
     busy('Borrando…', async () => { await service.deleteIptvList(user.uid); list = null; date.value = ''; time.value = ''; });
   });
-  const buttons = [create, save, clear, copy, wiseplay, remove];
+  const buttons = [create, save, clear, copy, wiseplay, xtream, remove];
   const draw = () => {
     link.value = list ? iptvLink(list.token) : '';
-    link.hidden = copy.hidden = wiseplay.hidden = save.hidden = remove.hidden = !list;
+    link.hidden = copy.hidden = wiseplay.hidden = xtream.hidden = save.hidden = remove.hidden = !list;
     create.textContent = list ? 'Nueva contraseña' : 'Crear lista';
     note.textContent = iptvState(list);
   };
@@ -93,7 +101,7 @@ export function iptvSection(el, service, user) {
     el('p', { class: 'note' }, 'Enlace corto para WisePlay (carpetas, una por serie, con portada e iconos) con los canales, eventos en directo, películas, series y documentales. Se actualiza sola.'),
     link,
     el('label', { class: 'iptv-date' }, el('span', {}, 'Caduca el día y a la hora (de España); sin hora, al acabar el día. Vacío: sin caducidad'), el('span', {}, date, time, clear)),
-    el('div', { class: 'actions' }, create, save, copy, wiseplay, remove), note);
+    el('div', { class: 'actions' }, create, save, copy, wiseplay, xtream, remove), note);
 }
 
 export const IPTV_LIVE_FOLDER = 'Eventos En Directo';
@@ -125,6 +133,18 @@ export function iptvAdmin(el, service, state) {
   const folders = iptvFolders(state.channels);
   const inputs = new Map();
   const save = el('button', { class: 'btn', type: 'button', disabled: true }, 'Guardar iconos');
+  const restore = el('button', { class: 'btn secondary', type: 'button' }, 'Recuperar enlaces originales');
+  restore.addEventListener('click', async () => {
+    restore.disabled = true;
+    status.textContent = 'Recuperando los enlaces de los canales preparados en IONOS…';
+    try {
+      const links = (state.channels || []).flatMap(channel => channel.streams || []);
+      const result = await saveIptvOriginals(links, () => service.auth.currentUser.getIdToken());
+      status.textContent = result.saved + ' enlaces originales guardados para IPTV.'
+        + (result.missing ? ' Pendientes de volver a pegar en el canal: ' + result.missing + '.' : '');
+    } catch (error) { status.textContent = service.explain(error); }
+    finally { restore.disabled = false; }
+  });
   const row = (name, url) => {
     const preview = el('img', { class: url ? 'iptv-icon-preview' : 'iptv-icon-preview empty', alt: '', src: url || null });
     const input = el('input', { type: 'url', placeholder: 'https://…', value: url || '', 'aria-label': `Icono de ${name}` });
@@ -174,5 +194,5 @@ export function iptvAdmin(el, service, state) {
     el('a', { class: 'ghost user-back', href: '#/admin' }, '‹ Administración'),
     el('h1', {}, 'Lista IPTV'),
     el('p', { class: 'note' }, 'Icono de cada carpeta de la lista: «Canales» y cada categoría de canales que hay dentro, Películas, Series y Documentales. Se ven en WisePlay con el enlace en su formato (&formato=wiseplay); las apps que leen «group-logo» también los muestran en la lista M3U.'),
-    rows, el('div', { class: 'actions' }, save), status)];
+    rows, el('div', { class: 'actions' }, save, restore), status)];
 }

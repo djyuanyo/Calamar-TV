@@ -40,9 +40,33 @@ Carpetas: las categorías de los canales, «Eventos En Directo», «Películas»
   categoría en su carpeta. En M3U, la categoría «Series» de canales se llama «Cine y ficción TV» para
   evitar que los reproductores la confundan con las series bajo demanda.
 
-ACTUALIZAR UNA INSTALACIÓN EXISTENTE
-Sustituye calamar-iptv.php por la versión nueva en el hosting. Conserva calamar-iptv-key.php y la
-carpeta «i». Después, actualiza la lista en la app IPTV usando el mismo enlace de siempre.
+INSTALAR EN EL HOSTING E IBO PLAYER
+1. Sube calamar-iptv-xtream.php, calamar-iptv-play.php, player_api.php y get.php a public_html.
+   Después sustituye calamar-iptv.php en esa misma carpeta. Conserva calamar-iptv-key.php,
+   calamar-images.php y la carpeta i. La cuenta PHP debe poder escribir en la carpeta privada
+   calamar-iptv-private, que el instalador crea fuera de public_html al recibir una conexión.
+2. Edita el .htaccess actual de public_html. Añade el contenido de REGLAS-IPTV-HTACCESS.txt
+   antes de # BEGIN WordPress (o al principio si no hay un bloque de WordPress).
+3. En Calamar TV → Administración → Lista IPTV, pulsa «Recuperar enlaces originales» para
+   los canales que ya se habían preparado en IONOS. Se usa el registro existente del VPS
+   únicamente para recuperar la URL. Las URL se guardan de forma privada en el hosting.
+4. En Calamar TV → Administración → Usuarios → usuario → Lista IPTV, copia los datos de
+   «Copiar acceso Xtream (IBO Player)». En IBO elige una lista Xtream Codes, con servidor
+   https://calamarmenciano.com, usuario calamar y la contraseña de la lista de ese usuario.
+   La lista antigua M3U/WisePlay sigue sirviendo en las apps que usan ese formato.
+
+Las películas y documentales sueltos aparecen en Películas. Las series y documentales
+por episodios aparecen en Series, con las temporadas. El catálogo se actualiza al recargar.
+
+Los canales usan el enlace original compatible. Si un canal solo tiene una página web o un
+relay sin original registrado, se omite hasta añadirle una fuente directa compatible.
+Los vídeos bajo demanda que dependen del conector de Drive, Vidara o LuluStream siguen
+usando ese conector. El endpoint IPTV solo redirige: no descarga ni convierte el vídeo.
+
+Las listas personales registran la apertura antes de enviar al reproductor al proveedor.
+Las aperturas se ven en las visitas, en el desglose por usuario del contenido y en su historial
+como «App IPTV · apertura» (hasta 2.000 por cuenta). La app externa no confirma que reprodujo
+ni comunica la duración o el cierre. Estas aperturas no aparecen en el contador de En vivo ahora.
 
 ICONOS DE LAS CARPETAS
 Administración → «Lista IPTV»: pega el enlace de una imagen o pulsa «Subir imagen» en cada categoría,

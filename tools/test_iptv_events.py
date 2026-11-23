@@ -16,16 +16,24 @@ $channels = iptvChannels($folders, $input['catalog'], $input['tdt']);
 $events = iptvLiveEvents($input['catalog'], $channels, strtotime($input['now']));
 iptvAddLiveFolder($folders, $events, $input['covers']);
 iptvLibrary($folders, function ($path) use ($input) { return $input['library'][$path] ?? null; });
-echo json_encode(array(iptvWisePlay(iptvChannelsFolder($folders, ''), ''), iptvM3u($folders)));
+if (!empty($input['xtream'])) {
+    $catalog = iptvXcCatalog($folders);
+    $series = iptvXcRows($catalog, 'series');
+    $first = $series ? iptvXcSeriesInfo($catalog, $series[0]['series_id']) : null;
+    echo json_encode([iptvXcRows($catalog, 'live'), iptvXcRows($catalog, 'movie'), $series, $first]);
+} else {
+    echo json_encode(array(iptvWisePlay(iptvChannelsFolder($folders, ''), ''), iptvM3u($folders)));
+}
 '''
 
 
 @unittest.skipUnless(shutil.which('php'), 'PHP CLI is required')
 class IptvEventsTest(unittest.TestCase):
-    def render(self, catalog, tdt=None, covers=None, library=None):
+    def render(self, catalog, tdt=None, covers=None, library=None, xtream=False):
         result = subprocess.run(['php', '-r', PHP], cwd=ROOT, check=True, capture_output=True, text=True,
                                 input=json.dumps({'catalog': catalog, 'tdt': tdt or {}, 'covers': covers or {},
-                                                  'now': '2026-11-21T23:30:00Z', 'library': library or {}}))
+                                                  'now': '2026-11-21T23:30:00Z', 'library': library or {},
+                                                  'xtream': xtream}))
         self.assertEqual(result.stderr, '')
         return json.loads(result.stdout)
 
@@ -129,3 +137,37 @@ class IptvEventsTest(unittest.TestCase):
         ]}
         wiseplay, _ = self.render(channels)
         self.assertEqual(wiseplay['groups'][0]['groups'][0]['name'], 'Series')
+
+    def test_xtream_exposes_live_movies_and_season_episode_data(self):
+        media = 'https://media.example/'
+        channels = {'channels': [{'id': 'lineal', 'name': 'Hollywood', 'group': 'Series',
+                                  'streams': [media + 'live.m3u8']}]}
+        library = {
+            'calamarLibrary/index': {'sections': {'series': 1, 'documentaries': 1}},
+            'calamarLibrary/series-0': {'items': [{'id': 's', 'title': 'Una serie', 'episodes': [
+                {'season': 2, 'episode': 2, 'url': media + 's2e2.mp4'},
+                {'season': 2, 'episode': 1, 'name': 'Inicio', 'url': media + 's2e1.m3u8'},
+            ]}]},
+            'calamarLibrary/documentaries-0': {'items': [{'id': 'd', 'title': 'Un documental',
+                                                        'url': media + 'documentary.mp4'}]},
+        }
+        live, movies, series, info = self.render(channels, library=library, xtream=True)
+        self.assertEqual([entry['name'] for entry in live], ['Hollywood'])
+        self.assertEqual([entry['name'] for entry in movies], ['Un documental'])
+        self.assertEqual([entry['name'] for entry in series], ['Una serie'])
+        self.assertEqual(info['seasons'][0]['season_number'], 2)
+        self.assertEqual([(ep['episode_num'], ep['container_extension']) for ep in info['episodes']['2']],
+                         [(1, 'm3u8'), (2, 'mp4')])
+        self.assertEqual(info['episodes']['2'][0]['direct_source'], '')
+
+    def test_iptv_uses_registered_original_and_skips_uncached_relay(self):
+        php = r"""
+define('CALAMAR_IPTV_LIBRARY', true);
+require 'hosting/calamar-iptv.php';
+$id = str_repeat('a', 32);
+$relay = 'https://video.calamarmenciano.com/iptv-hls/' . $id . '/index.m3u8';
+$source = 'http://media.example:8080/user/pass/777';
+echo json_encode([iptvDirectChannel($relay), iptvDirectChannel($relay, [$id => $source])]);
+"""
+        result = subprocess.run(['php', '-r', php], cwd=ROOT, check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [None, 'http://media.example:8080/user/pass/777'])

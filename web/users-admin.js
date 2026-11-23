@@ -145,7 +145,7 @@ function historyPanel(el, service, uid) {
   more.hidden = true;
   const draw = () => {
     const groups = new Map();
-    for (const entry of entries) {
+    for (const entry of [...entries].sort((a, b) => asDate(b.startedAt) - asDate(a.startedAt))) {
       const day = asDate(entry.startedAt);
       const key = day ? madridDay(day) : '';
       if (!groups.has(key)) groups.set(key, []);

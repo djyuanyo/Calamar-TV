@@ -221,7 +221,7 @@ function channelForm(existing, rerender, state) {
           status.className = 'note';
           submit.disabled = true;
           status.textContent = channel.streams.some(link => aceContentId(link) || vpsIptvSource(link)) ? 'Preparando enlaces en IONOS…' : 'Guardando…';
-          channel.streams = await resolveIptvStreams(await publishableStreams(channel.streams), administratorToken);
+          channel.streams = await resolveIptvStreams(await publishableStreams(channel.streams), administratorToken, fetch, true);
           status.textContent = 'Guardando…';
           await saveChannel(data => {
             const next = { ...data };
@@ -1135,7 +1135,7 @@ function viewingDialog(findPeople, showGraph) {
   const graph = el('button', { type: 'button', class: 'ghost' }, 'Ver evolución');
   const close = el('button', { type: 'button', class: 'btn secondary', autofocus: '' }, 'Cerrar');
   const dialog = el('dialog', { class: 'stats-viewers-dialog', 'aria-labelledby': 'stats-viewers-title' },
-    title, el('p', { class: 'note' }, 'Cuentas con reproducción registrada en el periodo seleccionado.'), body,
+    title, el('p', { class: 'note' }, 'Cuentas con una reproducción o una apertura desde IPTV en el periodo seleccionado.'), body,
     el('div', { class: 'actions' }, graph, close));
   close.addEventListener('click', () => dialog.close());
   const format = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Madrid' });
@@ -1153,7 +1153,8 @@ function viewingDialog(findPeople, showGraph) {
         people.length ? plural(people.length, 'usuario', 'usuarios') : 'No hay usuarios identificados en este periodo.'));
       if (people.length) body.append(el('ul', { class: 'stats-viewer-names' }, people.map(person =>
         el('li', {}, el('a', { href: '#/admin/usuarios/' + encodeURIComponent(person.uid) }, person.name),
-          el('small', {}, [plural(person.count, 'reproducción', 'reproducciones'), format.format(person.at),
+          el('small', {}, [person.count ? plural(person.count, 'reproducción', 'reproducciones') : '',
+            person.iptvCount ? plural(person.iptvCount, 'apertura IPTV', 'aperturas IPTV') : '', format.format(person.at),
             viewerDevice(person.latest.device), person.latest.profile !== person.name ? person.latest.profile : ''].filter(Boolean).join(' · '))))));
     } catch (error) {
       if (mine === request && dialog.open) body.replaceChildren(el('p', { class: 'error' }, `No se pudo leer el historial: ${explain(error)}`));
@@ -1278,7 +1279,20 @@ function statsPanel(state) {
     report = null;
     history.replaceChildren(el('p', { class: 'note' }, 'Cargando visitas…'));
     try {
-      const days = await visits(from, to);
+      const [webDays, iptv] = await Promise.all([visits(from, to), userService.readIptvActivity?.('activity', { from, to })]);
+      const eventChannels = new Map([...channelEvents].flatMap(([key, events]) => events.map(event => [event, key])));
+      const iptvDays = Object.entries(iptv?.days || {}).map(([id, openings]) => {
+        const data = {};
+        for (const [target, count] of Object.entries(openings)) {
+          const kind = target.startsWith('e:') ? 'event' : target.startsWith('l:') ? 'library' : 'channel';
+          const key = visitKey(kind, target.slice(2));
+          data[key] = (data[key] || 0) + count;
+          const channel = eventChannels.get(target);
+          if (channel) data[channel] = (data[channel] || 0) + count;
+        }
+        return { id, data };
+      });
+      const days = [...webDays, ...iptvDays];
       if (mine === request) { report = { days, from, to }; drawReport(); }
     } catch (error) { if (mine === request) history.replaceChildren(el('p', { class: 'error' }, `No se pudieron leer las visitas: ${explain(error)}`)); }
   };
@@ -1288,7 +1302,7 @@ function statsPanel(state) {
     el('p', { class: 'stats-total' }, liveTotal, ' personas viendo en este momento'),
     liveBody,
     el('div', { class: 'section-head' }, el('h2', {}, 'Visitas')),
-    el('p', { class: 'note' }, 'Cada vez que alguien abre un canal, un evento, una película o una serie cuenta como una visita; la visita a un evento también suma a su canal, y todos los capítulos de una serie suman a la serie (días según el horario de Madrid).'),
+    el('p', { class: 'note' }, 'Las visitas incluyen las aperturas desde apps IPTV. Cada evento también suma a su canal y cada capítulo a su serie. Las fechas siguen la hora de Madrid.'),
     el('div', { class: 'stats-controls' }, modeButtons, picker),
     history, viewers.dialog,
   ];

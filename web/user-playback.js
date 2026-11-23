@@ -49,4 +49,4 @@ export function viewingSession(shared, item, id = sessionId(), publicPresence = 
   };
 }
 
-export const viewerDevice = device => ({ web: 'Web', android: 'Android', tv: 'Android TV' })[device] || 'Dispositivo desconocido';
+export const viewerDevice = device => ({ web: 'Web', android: 'Android', tv: 'Android TV', iptv: 'App IPTV · apertura' })[device] || 'Dispositivo desconocido';
