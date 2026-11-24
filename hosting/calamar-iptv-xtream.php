@@ -215,7 +215,17 @@ function iptvXcExtension($url) {
 
 function iptvXcRows($catalog, $type, $category = '') {
     $rows = [];
-    foreach ($catalog[$type] as $id => $item) {
+    $items = $catalog[$type];
+    if ($type === 'live') {
+        // Sort the live channel list across categories, preserving the schedule order of events.
+        uasort($items, function ($a, $b) {
+            $eventA = strncmp($a['target'] ?? '', 'e:', 2) === 0;
+            $eventB = strncmp($b['target'] ?? '', 'e:', 2) === 0;
+            if ($eventA || $eventB) return $eventA <=> $eventB;
+            return iptvCompareChannelNames($a['name'], $b['name']);
+        });
+    }
+    foreach ($items as $id => $item) {
         if ($category !== '' && $item['category'] !== $category) continue;
         $row = ['num' => count($rows) + 1, 'name' => $item['name'], 'category_id' => $item['category'],
             'added' => '0', 'direct_source' => ''];

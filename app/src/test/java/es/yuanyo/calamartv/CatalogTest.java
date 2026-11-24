@@ -106,6 +106,21 @@ public class CatalogTest {
   }
 
   @Test
+  public void sortsChannelNumbersInNaturalOrder() throws Exception {
+    String url = "https://example.com/live.m3u8";
+    JSONObject data = new JSONObject().put("channels", new JSONArray()
+        .put(channel("ten", "Deportes", url).put("name", "Liga de Campeones 10"))
+        .put(channel("two", "Deportes", url).put("name", "Liga de Campeones 02"))
+        .put(channel("nine", "Deportes", url).put("name", "Liga de Campeones 9"))
+        .put(channel("agora", "Deportes", url).put("name", "Ágora")));
+    List<Catalog.Channel> channels = Catalog.merge(data, null);
+    List<String> ids = new ArrayList<>();
+    for (Catalog.Channel station : Catalog.groups(channels).get("Deportes")) ids.add(station.id);
+    assertEquals(Arrays.asList("agora", "two", "nine", "ten"), ids);
+    assertEquals("ten", channels.get(0).id);
+  }
+
+  @Test
   public void generatedCatalogParsesWithPlayableChannels() throws Exception {
     java.io.File file = new java.io.File("../data/tdt.json");
     if (!file.isFile()) file = new java.io.File("data/tdt.json");

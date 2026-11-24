@@ -13,7 +13,7 @@ import { fetchScores, fetchSummary, matchExpired, matchDeadline, shouldPollMatch
 import { parseMatchCenter, renderMatchCenter, eventMatchModel, withPlayerExtras, LINEUPS_ENDPOINT } from './match-center.js';
 import { fetchOdds, fetchGoalMarkets, fetchHistory } from './polymarket.js';
 import { matchKey, votingOpen, tally, voterId, myPick, rememberPick, fetchVotes, sendVote, VOTES_MS } from './votes.js';
-import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
+import { findBySlug, leagueSlugs, leagueEvents, merge, byChannelName, setLogoCopies, events, catalogEvents, PENDING, FINISHED, eventRows, liveEvents, todayLeagueEvents, thisWeekEvents, LIVE_ROW, homeHighlights, groups, categoryList, webPlayback, findChannel, explainStreamError, streamFailureReport, PLAYER_ENDPOINT } from './catalog.js';
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
@@ -458,7 +458,7 @@ function home() {
   // «Especial Halloween» until 2 November: every horror title, with «Descubrir todo».
   if (libraryShown() && halloweenOn()) nodes.push(...halloweenRow(el, library));
   // The favourite channels of the profile watching.
-  const favorites = state.channels.filter((c) => isFavorite(c.id));
+  const favorites = state.channels.filter((c) => isFavorite(c.id)).sort(byChannelName);
   if (favorites.length) nodes.push(sectionHead('Tus canales favoritos', el('span', {}, favorites.length === 1 ? '1 canal' : `${favorites.length} canales`)), rail(favorites, { limit: favorites.length }));
   // Only events on the home page: one row per league, each in date order (soonest first), with this
   // week's events only: a league whose next matches are in two weeks does not appear yet.
@@ -634,7 +634,9 @@ function multiPage() {
   const watch = el('button', { class: 'btn', type: 'button' });
   const clear = el('button', { class: 'ghost', type: 'button' }, 'Quitar selección');
   const grid = el('div', { class: 'grid' });
-  const candidates = [...events(state.channels, state.custom, Date.now(), { allWeeks: true }), ...state.channels].filter(multiPlayable);
+  const matches = events(state.channels, state.custom, Date.now(), { allWeeks: true }).filter(multiPlayable);
+  const channels = state.channels.filter(multiPlayable).sort(byChannelName);
+  const candidates = [...matches, ...channels];
   const norm = (s) => s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '');
   const draw = () => {
     multiPicks = multiPicks.filter((key) => candidates.some((c) => multiKey(c) === key));
@@ -689,7 +691,7 @@ function results(query, homeSearch) {
   const q = norm(query);
   const matches = (c) => norm(`${c.name} ${c.region} ${c.group}`).includes(q);
   const league = homeSearch ? todayLeagueEvents(state.channels, state.custom, query) : null;
-  const found = [...(league ?? events(state.channels, state.custom).filter(matches)), ...state.channels.filter(matches)];
+  const found = [...(league ?? events(state.channels, state.custom).filter(matches)), ...state.channels.filter(matches).sort(byChannelName)];
   // Films, series and documentaries too, under the channels, once the library has loaded.
   const titles = el('div', { class: 'search-titles' });
   if (libraryShown()) {

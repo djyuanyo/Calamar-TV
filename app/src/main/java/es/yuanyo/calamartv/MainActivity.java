@@ -846,7 +846,7 @@ public class MainActivity extends Activity {
       heading("Favoritos", "Mantén pulsado para quitar");
       List<Catalog.Channel> saved = new ArrayList<>();
       for (Catalog.Channel c : channels) if (favorites.contains(c.channelId) && matches(c.name)) saved.add(c);
-      channelGrid(saved);
+      channelGrid(Catalog.channelsByName(saved));
       if (saved.isEmpty()) list.addView(label("Mantén pulsado un canal para añadirlo a favoritos.", 15, Ui.MUTED));
       return;
     }
@@ -861,7 +861,7 @@ public class MainActivity extends Activity {
       } else {
         for (Catalog.Channel c : Catalog.events(channels, custom)) if (matches(c.name)) found.add(c);
       }
-      for (Catalog.Channel c : channels) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
+      for (Catalog.Channel c : Catalog.channelsByName(channels)) if (matches(c.name + " " + c.group + " " + c.region)) found.add(c);
       channelGrid(found);
       // Films, series and documentaries too, as on the web.
       List<Library.Item> titles = new ArrayList<>();
@@ -1448,7 +1448,7 @@ public class MainActivity extends Activity {
     if (!contentAdmitted) return;
     final List<Catalog.Channel> options = new ArrayList<>();
     for (Catalog.Channel c : Catalog.events(channels, custom)) if (directMedia(c)) options.add(c);
-    for (Catalog.Channel c : channels) if (directMedia(c)) options.add(c);
+    for (Catalog.Channel c : Catalog.channelsByName(channels)) if (directMedia(c)) options.add(c);
     if (options.size() < 2) {
       Toast.makeText(this, "No hay suficientes canales para la multipantalla", Toast.LENGTH_LONG).show();
       return;

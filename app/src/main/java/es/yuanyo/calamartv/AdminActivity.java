@@ -192,9 +192,13 @@ public class AdminActivity extends Activity {
     if (!adminSection.equals("channels")) return;
     JSONArray channels = catalog.optJSONArray("channels");
     body.addView(label("CANALES PUBLICADOS · " + channels.length(), 18));
+    ArrayList<JSONObject> ordered = new ArrayList<>();
     for (int i = 0; i < channels.length(); i++) {
       JSONObject channel = channels.optJSONObject(i);
-      if (channel == null) continue;
+      if (channel != null) ordered.add(channel);
+    }
+    ordered.sort(java.util.Comparator.comparing(channel -> channel.optString("name"), Catalog.channelNameOrder()));
+    for (JSONObject channel : ordered) {
       String id = channel.optString("id");
       body.addView(
           label(
@@ -557,6 +561,7 @@ public class AdminActivity extends Activity {
       names.add(label); ids.put(label, c.optString("id"));
       if (existing != null && c.optString("id").equals(existing.optString("channelId"))) initial = label;
     }
+    names.sort(Catalog.channelNameOrder());
     search.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, names));
     search.setText(initial, false);
     boolean[] pickedChannel = { false };
