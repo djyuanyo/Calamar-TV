@@ -577,18 +577,17 @@ export async function render(state) {
 }
 
 /**
- * Who the app offers its new versions to: everyone, or only the administrator (to try them before the
- * others get one more update). Part of the catalog, so the app reads it with the channels.
+ * Rollout preference for older APKs that still use optional update notices.
  */
 function appUpdatesPanel(rerender) {
   const mode = file.data.appUpdates === 'admin' ? 'admin' : 'all';
   const choose = (next) => guarded(async () => { file.data.appUpdates = next; await saveFile(); notice = next === 'admin'
-    ? 'Guardado: las versiones nuevas de la app solo te avisan a ti.' : 'Guardado: todos recibirán el aviso de la versión nueva de la app.'; }, rerender);
+    ? 'Guardado: las APK antiguas solo te avisarán a ti.' : 'Guardado: las APK antiguas con avisos se los mostrarán a todos.'; }, rerender);
   const option = (value, label) => el('button', { class: `chip${mode === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(mode === value), onclick: () => { if (mode !== value) choose(value); } }, label);
-  return el('div', { class: 'app-updates' }, el('b', {}, 'Actualizaciones de la app'),
-    el('div', { class: 'chips', role: 'group', 'aria-label': 'Quién recibe las actualizaciones de la app' }, option('all', 'Para todos'), option('admin', 'Solo para mí')),
-    el('p', { class: 'note' }, mode === 'admin' ? 'Solo tú (con la cuenta de administración) recibes el aviso de cada versión nueva. Los demás siguen con la suya hasta que elijas «Para todos».'
-      : 'Cada versión nueva de la app avisa a todos los usuarios.'));
+  return el('div', { class: 'app-updates' }, el('b', {}, 'Avisos en APK antiguas'),
+    el('div', { class: 'chips', role: 'group', 'aria-label': 'Quién recibe los avisos en las APK antiguas' }, option('all', 'Para todos'), option('admin', 'Solo para mí')),
+    el('p', { class: 'note' }, mode === 'admin' ? 'Las APK antiguas solo avisan a tu cuenta de administración. A partir de la 2.21.30, las actualizaciones publicadas son obligatorias.'
+      : 'A partir de la 2.21.30, las actualizaciones publicadas son obligatorias.'));
 }
 
 /** True when some pixel is not fully opaque (RGBA data of a canvas). */

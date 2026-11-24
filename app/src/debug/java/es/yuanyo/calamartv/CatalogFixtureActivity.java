@@ -2,10 +2,16 @@ package es.yuanyo.calamartv;
 
 import org.json.*;
 import java.util.Set;
+import android.os.Bundle;
 import android.view.View;
 
 /** Emulator fixture: a large offline catalog, without live services or update prompts. */
 public final class CatalogFixtureActivity extends MainActivity {
+  @Override public void onCreate(Bundle state) {
+    AppUpdater.isolateTestProcess();
+    super.onCreate(state);
+  }
+
   @Override void restore() {
     try {
       JSONArray entries = new JSONArray();
@@ -20,6 +26,5 @@ public final class CatalogFixtureActivity extends MainActivity {
   @Override void load() {}
   @Override void observeSharedCatalog() {}
   @Override void refreshSharedCatalog() {}
-  @Override AppUpdater createUpdater() { return null; }
   @Override void collectAudienceTargets(View view, Set<String> out) {}
 }
