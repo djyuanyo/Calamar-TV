@@ -9,6 +9,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.isEnabled;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.hamcrest.Matchers.allOf;
 
+import android.app.Instrumentation;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -24,18 +25,17 @@ public final class RequiredUpdateTest {
         .put("sha256", new String(new char[64]).replace('\0', 'a'))
         .put("apkUrl", "https://github.com/djyuanyo/Calamar-TV/releases/download/v9.0.0/Calamar-TV-9.0.0.apk")
         .toString();
-    CalamarApp app = (CalamarApp) InstrumentationRegistry.getInstrumentation().getTargetContext().getApplicationContext();
-    try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-      try {
-        scenario.onActivity(activity -> app.updates.useTestUpdate(manifest));
-        onView(withText(RequiredUpdateActivity.MESSAGE)).check(matches(isDisplayed()));
-        onView(withText("Actualizar")).check(matches(allOf(isDisplayed(), isEnabled())));
-        onView(withText("Ahora no")).check(doesNotExist());
-        pressBackUnconditionally();
-        onView(withText(RequiredUpdateActivity.MESSAGE)).check(matches(isDisplayed()));
-      } finally {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> app.updates.useTestUpdate(null));
-      }
+    Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+    CalamarApp app = (CalamarApp) instrumentation.getTargetContext().getApplicationContext();
+    instrumentation.runOnMainSync(() -> app.updates.useTestUpdate(manifest));
+    try (ActivityScenario<RequiredUpdateActivity> scenario = ActivityScenario.launch(RequiredUpdateActivity.class)) {
+      onView(withText(RequiredUpdateActivity.MESSAGE)).check(matches(isDisplayed()));
+      onView(withText("Actualizar")).check(matches(allOf(isDisplayed(), isEnabled())));
+      onView(withText("Ahora no")).check(doesNotExist());
+      pressBackUnconditionally();
+      onView(withText(RequiredUpdateActivity.MESSAGE)).check(matches(isDisplayed()));
+    } finally {
+      instrumentation.runOnMainSync(() -> app.updates.useTestUpdate(null));
     }
   }
 }
