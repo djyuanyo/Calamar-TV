@@ -772,14 +772,14 @@ const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
 let stopRenewable = null, sourceLookup = null, stopStallWatch = null, closeChannelReport = null;
 
-function offerReport(channel) {
+function offerReport(channel, automatic = true) {
   if (channel.vod || channel.pending || !channel.id) return;
   closeChannelReport?.();
   const { button, open, close } = offerChannelReport(el, player, channel,
     async item => (await shared()).sendChannelReport(item));
   closeChannelReport = close;
   playerStatus.append(' ', button);
-  open();
+  if (automatic) open();
 }
 function stop() {
   if (!casting) watching?.privateViewing.watching(false);
@@ -966,12 +966,15 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     playerStatus.replaceChildren(...(source.how.youtube
       ? [el('a', { href: source.how.youtube, target: '_blank', rel: 'noopener' }, 'Abrir en YouTube')]
       : []));
+    offerReport(c, false);
   };
   if (source.how.kind === 'event') {
+    if (position + 1 < playable.length) { next({ details: 'manifestLoadError' }); return; }
     const message = c.sourceErrors?.[source.url] || 'No se pudieron obtener las fuentes de este evento.';
     playerStatus.replaceChildren(message, ' ', el('button', { type: 'button', class: 'ghost', onclick: () => {
       playSource({ ...c, streams: c.originalStreams || c.streams, eventSourcesExpanded: false }, 0);
     } }, '↻ Consultar de nuevo'));
+    offerReport(c);
     return;
   }
   const zicoFrame = zicoPlayerIframe(source.url);
@@ -983,12 +986,15 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       const address = await premiumZicoIframe(source.url, PLAYER_ENDPOINT, { event: c.sourceEvents?.[source.url], signal: lookup.signal });
       if (generation === playbackGeneration) showFrame(address, 'origin');
     } catch (error) {
-      if (generation === playbackGeneration) playerStatus.replaceChildren(
-        lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
-          : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
-        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
-        ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
-      );
+      if (generation === playbackGeneration) {
+        playerStatus.replaceChildren(
+          lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
+            : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
+          ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
+          ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
+        );
+        offerReport(c, false);
+      }
     } finally {
       clearTimeout(timeout);
       if (sourceLookup === lookup) sourceLookup = null;
@@ -1009,8 +1015,9 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
           streams.indexOf(source.url), chosen => playSource(c, chosen));
       },
       onAttach: (instance) => { hls = instance; controls.attach(instance); },
+      onNoVideo: c.vod ? null : () => next({ details: 'liveStartupTimeout' }),
       onStatus: (message) => { if (generation === playbackGeneration) playerStatus.textContent = message; },
-      onFallback: () => { if (generation === playbackGeneration) { video.pause(); video.removeAttribute('src'); video.load(); playerStatus.textContent = 'Este navegador no admite la reproducción HLS. Prueba con un navegador compatible.'; } },
+      onFallback: () => next({ details: 'codecUnsupported', userMessage: 'Este navegador no admite la reproducción HLS.' }),
     });
     return;
   }

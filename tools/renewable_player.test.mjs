@@ -264,3 +264,31 @@ test('a media network reset tries the owned www relay before the direct provider
   assert.deepEqual(calls.map(u=>u.hostname), ['calamarmenciano.com','www.calamarmenciano.com']);
   assert.equal(new URL(f.engines[1].url).hostname,'www.calamarmenciano.com'); f.stop();
 });
+
+test('a persistent provider outage advances to the next source when requested by the channel player', async () => {
+  let unavailable = 0;
+  const f = fixture(async () => { throw Error('offline'); }, true, {
+    onNoVideo: () => { unavailable++; },
+  });
+  await flush();
+  await f.tick(44000);
+  assert.equal(unavailable, 0);
+  await f.tick(1000);
+  assert.equal(unavailable, 1);
+  assert.equal(f.jobs.size, 0);
+  assert.equal(f.listeners.size, 0);
+});
+
+test('a playable channel cancels the no-video notice until it encounters a new outage', async () => {
+  let unavailable = 0;
+  const f = fixture(async () => response(media(1793041200)), true, {
+    onNoVideo: () => { unavailable++; },
+  });
+  await flush();
+  f.emit('playing');
+  await f.tick(45000);
+  assert.equal(unavailable, 0);
+  f.engines[0].emitError();
+  await f.tick(45000);
+  assert.equal(unavailable, 1);
+});

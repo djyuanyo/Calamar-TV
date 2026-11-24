@@ -26,5 +26,5 @@ export function offerChannelReport(el, player, channel, submit) {
     else dialog.setAttribute('open', '');
   };
   const button = el('button', { type: 'button', class: 'ghost', onclick: open }, 'Avisar al administrador');
-  return { button, open, close: () => dialog.remove() };
+  return { button, open, close: () => { dialog.remove(); button.remove(); } };
 }
