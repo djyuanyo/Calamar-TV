@@ -6,7 +6,7 @@ import androidx.test.runner.AndroidJUnitRunner;
 public final class CalamarTestRunner extends AndroidJUnitRunner {
   @Override public void onCreate(Bundle arguments) {
     AppAccess.useTestState(AppAccess.State.ALLOWED);
-    AppUpdater.isolateInstrumentation();
+    AppUpdater.isolateTestProcess();
     super.onCreate(arguments);
   }
 }

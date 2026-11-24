@@ -277,7 +277,7 @@ final class AppUpdater implements Application.ActivityLifecycleCallbacks {
 
   private void toast(String message) { Toast.makeText(app, message, Toast.LENGTH_LONG).show(); }
 
-  static void isolateInstrumentation() {
+  static void isolateTestProcess() {
     if (!BuildConfig.DEBUG) throw new IllegalStateException("Instrumentation only");
     instrumentation = true;
   }
