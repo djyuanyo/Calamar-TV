@@ -25,12 +25,19 @@ test('relay URL never contains IPTV path credentials and preserves their bytes i
 });
 
 function fixture() {
-  const players = [], tasks = new Map(), events = new Map(), failures = [];
+  const players = [], tasks = new Map(), startupTimers = new Map(), events = new Map(), failures = [];
+  let nextTimer = 0;
   const video = { paused: false, error: null, ended: false, readyState: 3, buffered: { length: 0 }, currentTime: 0,
     addEventListener: (name, callback) => events.set(name, callback),
     removeEventListener: name => events.delete(name) };
-  const timers = { setTimeout: callback => { const id = tasks.size + 1; tasks.set(id, callback); return id; },
-    clearTimeout: id => tasks.delete(id) };
+  const timers = {
+    setTimeout: (callback, delay) => {
+      const id = ++nextTimer;
+      (delay === 30000 ? startupTimers : tasks).set(id, callback);
+      return id;
+    },
+    clearTimeout(id) { tasks.delete(id); startupTimers.delete(id); },
+  };
   const library = { getFeatureList: () => ({ mseLivePlayback: true }),
     Events: { ERROR: 'error', LOADING_COMPLETE: 'complete' }, ErrorTypes: { NETWORK_ERROR: 'NetworkError' },
     createPlayer: () => {
@@ -42,7 +49,7 @@ function fixture() {
     } };
   const stop = mountTs({ library, video, address: 'https://example.com/a.ts', timers,
     onFailure: data => failures.push(data) });
-  return { players, tasks, failures, stop, library, video, events };
+  return { players, tasks, startupTimers, failures, stop, library, video, events };
 }
 
 test('closing a channel cancels relay renewal and destroys its player', () => {
@@ -178,4 +185,30 @@ test('a picture frozen 20 seconds without errors reconnects by itself', () => {
   assert.equal(f.failures.length, 0);
   f.stop();
   assert.equal(f.tasks.size, 0);
+});
+
+test('a live TS connection with no playable video fails once even if it keeps reopening', () => {
+  const f = fixture();
+  const [id, timeout] = [...f.startupTimers.entries()][0];
+  f.players[0].handlers.complete();
+  const [retry, reconnect] = [...f.tasks.entries()][0];
+  f.tasks.delete(retry); reconnect();
+  f.startupTimers.delete(id); timeout();
+  assert.deepEqual(f.failures, [{ details: 'liveStartupTimeout' }]);
+  assert.equal(f.players[1].destroyed, true);
+  assert.equal(f.tasks.size, 0);
+  f.stop();
+});
+
+test('the initial timeout is cancelled once the video is ready or the viewer leaves', () => {
+  for (const exit of ['canplay', 'close']) {
+    const f = fixture();
+    const timeout = [...f.startupTimers.values()][0];
+    if (exit === 'canplay') f.events.get('canplay')();
+    else f.stop();
+    timeout();
+    assert.equal(f.startupTimers.size, 0);
+    assert.equal(f.failures.length, 0);
+    f.stop();
+  }
 });

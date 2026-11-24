@@ -130,6 +130,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   /** All official alternatives for a direct channel; a failing one moves on to the next. */
   private final List<String> directUrls = new ArrayList<>();
   private final java.util.Set<String> checkedIptvBridges = new java.util.HashSet<>();
+  private final java.util.Map<String, String> iptvFallbacks = new java.util.HashMap<>();
   /**
    * The channel's player pages, in catalog order. When every video of one page fails, the next page is
    * tried, and after the pages the direct links (pageIndex past the end means the direct links).
@@ -693,6 +694,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               || !bridge.equals(directUrls.get(index))) return;
           checkedIptvBridges.add(bridge);
           if (original != null) {
+            iptvFallbacks.put(original, bridge);
             int existing = directUrls.indexOf(original);
             if (existing < 0) directUrls.add(index, original);
             else selection = existing;
@@ -1136,6 +1138,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                 || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || detail.contains("RESET")) {
               if (retryHostingAddress(source, error) || retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
             }
+            if (tryIptvFallback(source)) return;
             if (directUrl != null
                 && BrowserPlayback.supports(source.url)
                 && !mediaHttp1
@@ -1185,6 +1188,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (tryCompatibleDrive(source)) return;
       if (retryHostingAddress(source, new java.net.SocketTimeoutException("Hosting sin vídeo"))) return;
       if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
+      if (tryIptvFallback(source)) return;
       if (directUrl != null && BrowserPlayback.supports(source.url)) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
@@ -1195,6 +1199,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       }
     };
     handler.postDelayed(bufferingTimeout, timeout);
+  }
+
+  private boolean tryIptvFallback(VideoResolver.Source source) {
+    String bridge = iptvFallbacks.get(source.url);
+    if (directUrl == null || bridge == null) return false;
+    int backup = directUrls.indexOf(bridge);
+    if (backup < 0 || backup == selection) return false;
+    selection = backup;
+    playDirect();
+    status.setText("La señal original no responde. Probando el enlace HLS…");
+    return true;
   }
 
   private boolean retryHostingAddress(VideoResolver.Source source, Throwable error) {

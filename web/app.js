@@ -868,7 +868,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     } else if (position + 1 < playable.length) {
       playerStatus.textContent = 'Esta fuente no responde. Probando la siguiente…';
       playSource(c, playable[position + 1].index, positionToKeep);
-    } else if ((!compatible || data?.response?.code !== 429) && recoveryRound(c)) {
+    } else if (data?.details !== 'liveStartupTimeout' && (!compatible || data?.response?.code !== 429) && recoveryRound(c)) {
       // Back to the first source: a server that failed a moment ago often answers again.
       if (hls) hls.stopLoad();
       if (stopTs) { stopTs(); stopTs = null; }
