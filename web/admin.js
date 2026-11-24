@@ -18,7 +18,7 @@ import { applyZicoAgenda, fetchZicoAgenda, isZicoAgendaEvent, usesZicoAgenda, ma
 import { COMPETITIONS, competitionFromLink, fetchSeason, applySeason, fixtureEvent } from './competitions.js';
 import { aceContentId, resolveAceStreams } from './acestream.js';
 import { vpsIptvSource } from './http-stream.js';
-import { resolveIptvStreams } from './iptv-vps.js';
+import { findIptvOriginal, iptvHlsKey, resolveIptvStreams } from './iptv-vps.js';
 import { vpsPanel } from './vps-panel.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
@@ -170,6 +170,34 @@ function channelForm(existing, rerender, state) {
   const streams = el('textarea', { required: true, placeholder: 'https://servidor/canal/index.m3u8', spellcheck: 'false' }, existing ? (existing.streams || []).join('\n') : '');
   const star = el('input', { type: 'checkbox', checked: existing ? file.data.featured.includes(existing.id) : false });
   const status = el('p', { class: 'note', 'aria-live': 'polite' });
+  const registeredLinks = new Map();
+  const originalLinks = existing?.streams?.some(iptvHlsKey)
+    ? el('button', { class: 'ghost', type: 'button', onclick: async () => {
+      const before = streams.value;
+      originalLinks.disabled = true;
+      status.className = 'note';
+      status.textContent = 'Cargando enlaces originales…';
+      try {
+        const token = await administratorToken();
+        const links = before.split('\n');
+        const originals = await Promise.all(links.map(link => findIptvOriginal(link.trim(), token)));
+        if (!streams.isConnected || submitting) return;
+        if (streams.value !== before) {
+          status.textContent = 'Se ha conservado lo que estás editando.';
+          return;
+        }
+        originals.forEach((original, i) => {
+          if (original) registeredLinks.set(original, links[i].trim());
+        });
+        streams.value = links.map((link, i) => originals[i] || link).join('\n');
+        const missing = links.filter((link, i) => iptvHlsKey(link.trim()) && !originals[i]).length;
+        status.textContent = missing ? 'Algún enlace original no está disponible en el VPS.'
+          : 'Ya puedes ver y editar los enlaces originales.';
+      } catch (error) {
+        if (!submitting) { status.className = 'error'; status.textContent = explain(error); }
+      } finally { originalLinks.disabled = false; }
+    } }, 'Ver enlaces originales')
+    : null;
   const upload = el('input', { type: 'file', accept: 'image/*', onchange: async () => {
     const image = upload.files?.[0]; if (!image) return;
     const request = ++imageRevision; preparingLogo = true; submit.disabled = true;
@@ -212,7 +240,7 @@ function channelForm(existing, rerender, state) {
             name: name.value.trim(),
             group: group.value.trim(),
             logo: selectedLogo,
-            streams: validStreams(streams.value),
+            streams: validStreams(streams.value).map(link => registeredLinks.get(link) || link),
           };
           if (!channel.name) throw new Error('Escribe el nombre del canal.');
           if (!channel.group) throw new Error('Escribe el nombre de la nueva categoría.');
@@ -256,7 +284,8 @@ function channelForm(existing, rerender, state) {
     field('Logo (opcional)', logo, 'Pega un enlace HTTPS o sube una imagen desde tu dispositivo.'),
     field('Subir imagen del canal', upload, 'La imagen se adapta automáticamente y conserva la transparencia.'),
     preview, clearLogo,
-    field('Enlaces', streams, 'Uno por línea. Los enlaces IPTV en MPEG-TS y Ace Stream se convierten a HLS en IONOS al guardar. También puedes pegar enlaces .m3u8, .mp4 o vídeos de Google Drive. Los MKV/AVI y algunas páginas de reproductor se ven en la app. Si hay varios, se prueban en orden.'),
+    field('Enlaces', streams, 'Uno por línea. IONOS registra la señal IPTV original y devuelve un enlace HTTPS para el catálogo. También puedes pegar HLS, MP4, Ace Stream o enlaces de Google Drive. Si hay varios, se prueban en orden.'),
+    originalLinks,
     el('label', { class: 'actions' }, star, 'Destacar en la portada'),
     el('div', { class: 'actions' }, submit, existing ? el('a', { class: 'ghost', href: '#/admin' }, 'Cancelar') : null),
     status,

@@ -1,8 +1,25 @@
 import { vpsIptvSource } from './http-stream.js';
 
-const register = 'https://video.calamarmenciano.com/iptv-hls/register';
+const base = 'https://video.calamarmenciano.com/iptv-hls';
+const register = `${base}/register`;
 const hlsLink = /^https:\/\/video\.calamarmenciano\.com\/iptv-hls\/([a-f0-9]{32})\/index\.m3u8$/;
 const management = 'https://calamarmenciano.com/calamar-iptv.php?iptv_admin=1';
+
+export const iptvHlsKey = link => hlsLink.exec(link)?.[1] || null;
+
+export async function findIptvOriginal(link, token, request = fetch) {
+  const key = iptvHlsKey(link);
+  if (!key || !token) return null;
+  try {
+    const response = await request(`${base}/original`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }), redirect: 'error', signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const { url } = await response.json();
+    return vpsIptvSource(url) ? url : null;
+  } catch { return null; }
+}
 
 export async function iptvManagement(action, data, token, request = fetch) {
   const response = await request(management, {
@@ -15,25 +32,19 @@ export async function iptvManagement(action, data, token, request = fetch) {
 }
 
 export async function saveIptvOriginals(links, getToken, request = fetch) {
-  const keys = [...new Set(links.map(url => hlsLink.exec(url)?.[1]).filter(Boolean))];
-  if (!keys.length) return { saved: 0, missing: 0 };
+  const registered = [...new Set(links.filter(iptvHlsKey))];
+  if (!registered.length) return { saved: 0, missing: 0 };
   const token = await getToken();
   let saved = 0;
-  for (let i = 0; i < keys.length; i += 8) {
-    const results = await Promise.allSettled(keys.slice(i, i + 8).map(async key => {
-      const response = await request('https://video.calamarmenciano.com/iptv-hls/original', {
-        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }), redirect: 'error', signal: AbortSignal.timeout(8000),
-      });
-      if (!response.ok) throw Error('La señal original no está disponible.');
-      const { url } = await response.json();
-      if (!vpsIptvSource(url)) throw Error('La señal original no es válida.');
-      return [key, url];
+  for (let i = 0; i < registered.length; i += 8) {
+    const originals = {};
+    await Promise.all(registered.slice(i, i + 8).map(async link => {
+      const original = await findIptvOriginal(link, token, request);
+      if (original) originals[iptvHlsKey(link)] = original;
     }));
-    const originals = Object.fromEntries(results.filter(result => result.status === 'fulfilled').map(result => result.value));
     if (Object.keys(originals).length) saved += (await iptvManagement('originals', { originals }, token, request)).saved;
   }
-  return { saved, missing: keys.length - saved };
+  return { saved, missing: registered.length - saved };
 }
 
 async function registerIptvSource(url, token, request) {
@@ -64,7 +75,7 @@ export async function prepareIptvRelays(links, getToken, request = fetch) {
   for (let i = 0; i < sources.length; i += 8) {
     const results = await Promise.allSettled(sources.slice(i, i + 8).map(async source => {
       const relay = await registerIptvSource(source, token, request);
-      return [hlsLink.exec(relay)[1], source];
+      return [iptvHlsKey(relay), source];
     }));
     const originals = Object.fromEntries(results.filter(result => result.status === 'fulfilled').map(result => result.value));
     if (Object.keys(originals).length) saved += (await iptvManagement('originals', { originals }, token, request)).saved;
@@ -85,7 +96,7 @@ export async function resolveIptvStreams(links, getToken, request = fetch, saveO
     if (!vpsIptvSource(url)) { result.push(url); continue; }
     const relay = await registerIptvSource(url, token, request);
     result.push(relay);
-    originals[hlsLink.exec(relay)[1]] = url;
+    originals[iptvHlsKey(relay)] = url;
   }
   // Registered originals remain recoverable through the admin sync if cPanel is being updated.
   if (saveOriginals) await iptvManagement('originals', { originals }, token, request).catch(() => {});

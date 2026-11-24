@@ -17,6 +17,7 @@ import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, ca
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
+import { findIptvOriginal, iptvHlsKey } from './iptv-vps.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -991,8 +992,8 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     return;
   }
   if (source.how.kind === 'frame') { showFrame(); return; }
-  const watchStall = () => {
-    stopStallWatch = watchPlaybackStall(video, () => next({ details: 'playbackStalled',
+  const watchStall = (onFailure = next) => {
+    stopStallWatch = watchPlaybackStall(video, () => onFailure({ details: 'playbackStalled',
       userMessage: 'El vídeo se ha detenido y no se pudo reconectar.' })).stop;
   };
   if (source.how.kind === 'ts') {
@@ -1050,6 +1051,33 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
   const round = roundOf(c);
   const address = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
+  const registeredIptv = !c.vod && iptvHlsKey(address);
+  let tryingOriginal = false;
+  const failHls = async data => {
+    if (generation !== playbackGeneration || failureHandled || tryingOriginal) return;
+    const user = registeredIptv ? webAccess.current().user : null;
+    if (!user || user.isAnonymous) { next(data); return; }
+
+    tryingOriginal = true;
+    stopStallWatch?.();
+    stopStallWatch = null;
+    video.onerror = video.onplaying = null;
+    if (hls) { hls.destroy(); hls = null; }
+    controls.attach(null);
+    video.removeAttribute('src');
+    video.load();
+    playerStatus.textContent = 'El HLS del VPS no responde. Probando la señal original…';
+    const original = await user.getIdToken().then(token => findIptvOriginal(address, token)).catch(() => null);
+    if (generation !== playbackGeneration) return;
+    if (!original) { next(data); return; }
+
+    // The HTTPS bridge forwards the original MPEG-TS and keeps the address out of the catalog.
+    stopTs = mountTs({ library: window.mpegts, video, address: original, relay: true,
+      onFailure: error => queueMicrotask(() => next(error)),
+      onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la señal original…'; },
+      onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
+    });
+  };
   if (c.vod && resumeAt > 0) video.onloadedmetadata = () => {
     if (generation !== playbackGeneration) return;
     video.onloadedmetadata = null;
@@ -1065,7 +1093,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
       if (data.fatal && compatible && data.response?.code === 429) data.userMessage = 'Google Drive ha alcanzado la cuota de descarga de este vídeo.';
       if (data.fatal && compatible && data.response?.code === 503) data.userMessage = 'El hosting está adaptando otros vídeos. Pulsa Reintentar en un momento.';
-      if (data.fatal) next(data);
+      if (data.fatal || (registeredIptv && data.response?.code === 503 && /^(manifest|level)/i.test(data.details || ''))) void failHls(data);
     });
     hls.loadSource(address);
     hls.attachMedia(video);
@@ -1074,10 +1102,10 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   }
   controls.attach(hls);
   video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
-  video.onerror = () => { const failure = videoFailure(video.error); if (failure) next(failure); };
-  watchStall();
+  video.onerror = () => { const failure = videoFailure(video.error); if (failure) void failHls(failure); };
+  watchStall(failHls);
   autoplay(video).catch(() => {
-    if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = 'Pulsa ▶ para empezar.';
+    if (generation === playbackGeneration && !failureHandled && !tryingOriginal) playerStatus.textContent = 'Pulsa ▶ para empezar.';
   });
 }
 
