@@ -24,7 +24,6 @@ public class MainActivity extends Activity {
   final int FG = Ui.FG, MUTED = Ui.MUTED;
   LinearLayout root, list, filters;
   ScrollView catalogScroll;
-  AppUpdater updater;
   boolean television;
   final List<LazySection> lazySections = new ArrayList<>();
   final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
@@ -183,7 +182,6 @@ public class MainActivity extends Activity {
     imageWorker.execute(MainActivity::trimImageCache);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-    updater = createUpdater();
     showAccessBackground();
     getWindow().setStatusBarColor(Ui.BG);
     getWindow().setNavigationBarColor(Ui.BG);
@@ -616,7 +614,7 @@ public class MainActivity extends Activity {
     addButton(mast, refreshButton);
     Button updates = Ui.pill(this, "↓", Ui.Kind.SURFACE, true);
     updates.setContentDescription("Actualizaciones");
-    updates.setOnClickListener(v -> { if (updater != null) updater.check(true); });
+    updates.setOnClickListener(v -> ((CalamarApp) getApplication()).updates.check(true));
     addButton(mast, updates);
     if (Profiles.user(this) == null) {
       Button signIn = Ui.pill(this, "Entrar", Ui.Kind.SURFACE, true);
@@ -1569,7 +1567,6 @@ public class MainActivity extends Activity {
 
   private void pauseContent() {
     if (embeddedSleepTimer != null) embeddedSleepTimer.pause();
-    if (updater != null) updater.pause();
     sharedSession++;
     handler.removeCallbacks(heroAdvance); handler.removeCallbacks(browseAdvance); handler.removeCallbacks(scoreRefresh); handler.removeCallbacks(expiryCheck);handler.removeCallbacks(audienceRefresh);
     handler.removeCallbacks(refresh);
@@ -1590,7 +1587,6 @@ public class MainActivity extends Activity {
 
   private void resumeContent() {
     if (embeddedSleepTimer != null) embeddedSleepTimer.resume();
-    if (updater != null) updater.resume();
     // «Elige tu perfil» still open (back from «Añadir» or «Modificar»): its titles go on changing.
     if (gate != null && gate.isShowing() && gateSlide != null) { handler.removeCallbacks(gateSlide); handler.postDelayed(gateSlide, 6000); }
     // Signing in or out as administrator shows or hides the library while it is hidden.
@@ -1609,8 +1605,6 @@ public class MainActivity extends Activity {
     // «Continuar viendo» of the signed-in account: what its other devices left half watched.
     ProgressSync.sync(this, changed -> { if (changed && !isFinishing() && custom != null) render(); });
   }
-
-  AppUpdater createUpdater() { return new AppUpdater(this, () -> UpdateInfo.offered(custom, SharedCatalog.administrator(Profiles.user(this)))); }
 
   void observeSharedCatalog() {
     final int session = ++sharedSession;
@@ -1667,7 +1661,6 @@ public class MainActivity extends Activity {
     Profiles.forget(profilesChanged);
     if (stopAccess != null) stopAccess.run();
     if (gate != null && gate.isShowing()) gate.dismiss();
-    if (updater != null) updater.close();
     handler.removeCallbacksAndMessages(null);
     imageGeneration++;
     imageWorker.shutdownNow();
