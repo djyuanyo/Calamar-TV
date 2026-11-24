@@ -2,6 +2,8 @@ package es.yuanyo.calamartv;
 
 import java.text.Collator;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.json.*;
 
 /**
@@ -431,6 +433,37 @@ public final class Catalog {
     return out;
   }
 
+  private static final Pattern CHANNEL_NUMBER = Pattern.compile("[0-9]+");
+
+  /** Keep Spanish alphabetical order and place digit runs by their value, even with leading zeroes. */
+  static Comparator<String> channelNameOrder() {
+    Collator names = Collator.getInstance(Locale.forLanguageTag("es-ES"));
+    names.setStrength(Collator.PRIMARY);
+    return Comparator.comparing(Catalog::channelNameKey, names);
+  }
+
+  private static String channelNameKey(String name) {
+    Matcher number = CHANNEL_NUMBER.matcher(name);
+    StringBuffer key = new StringBuffer();
+    while (number.find()) {
+      String digits = number.group();
+      int first = 0;
+      while (first < digits.length() - 1 && digits.charAt(first) == '0') first++;
+      StringBuilder token = new StringBuilder();
+      // A longer run starts with more ones, before the zero separator and the significant digits.
+      for (int i = first + 1; i < digits.length(); i++) token.append('1');
+      token.append('0').append(digits, first, digits.length());
+      number.appendReplacement(key, token.toString());
+    }
+    return number.appendTail(key).toString();
+  }
+
+  static List<Channel> channelsByName(List<Channel> channels) {
+    List<Channel> ordered = new ArrayList<>(channels);
+    ordered.sort(Comparator.comparing(channel -> channel.name, channelNameOrder()));
+    return ordered;
+  }
+
   /** Groups in display order; unknown groups go after the known ones, alphabetically. */
   public static LinkedHashMap<String, List<Channel>> groups(List<Channel> channels) {
     return groups(channels, null);
@@ -453,10 +486,8 @@ public final class Catalog {
     out.putAll(extra);
     Iterator<Map.Entry<String, List<Channel>>> it = out.entrySet().iterator();
     while (it.hasNext()) if (it.next().getValue().isEmpty()) it.remove();
-    Collator names = Collator.getInstance(Locale.forLanguageTag("es-ES"));
-    names.setStrength(Collator.PRIMARY);
-    for (List<Channel> bucket : out.values())
-      Collections.sort(bucket, (a, b) -> names.compare(a.name, b.name));
+    Comparator<Channel> order = Comparator.comparing(channel -> channel.name, channelNameOrder());
+    for (List<Channel> bucket : out.values()) bucket.sort(order);
     return out;
   }
 

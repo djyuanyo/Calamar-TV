@@ -99,6 +99,32 @@ function iptvAddress($value, $pages) {
 function iptvText($value) { return trim(preg_replace('/[\s",]+/u', ' ', (string)$value)); }
 function iptvImage($value) { return is_string($value) && strpos($value, 'https://') === 0 ? $value : ''; }
 
+function iptvCompareChannelNames($a, $b) {
+    static $collator = null;
+    if ($collator === null) {
+        $collator = false;
+        if (class_exists('Collator')) {
+            $collator = Collator::create('es_ES');
+            if ($collator) {
+                $collator->setStrength(Collator::PRIMARY);
+                $collator->setAttribute(Collator::NUMERIC_COLLATION, Collator::ON);
+            }
+        }
+    }
+    if ($collator) {
+        $order = $collator->compare($a, $b);
+        if ($order !== false) return $order;
+    }
+    $key = function ($name) {
+        $name = strtr($name, [
+            'Á' => 'a', 'á' => 'a', 'É' => 'e', 'é' => 'e', 'Í' => 'i', 'í' => 'i', 'Ó' => 'o', 'ó' => 'o',
+            'Ú' => 'u', 'ú' => 'u', 'Ü' => 'u', 'ü' => 'u', 'Ñ' => 'n~', 'ñ' => 'n~',
+        ]);
+        return preg_replace('/(?<![0-9])0+(?=[0-9])/', '', $name);
+    };
+    return strnatcasecmp($key($a), $key($b));
+}
+
 /**
  * The list as folders: [name => ['stations' => [...], 'groups' => [name => folder]]]. Each station is
  * ['name', 'full' (the name with its series, for M3U), 'image', 'url', 'id'].
@@ -142,6 +168,10 @@ function iptvChannels(&$folders, $custom, $tdt, $originals = array()) {
     foreach ((array)($tdt['channels'] ?? array()) as $o) {
         if (is_array($o) && !isset($hidden[(string)($o['id'] ?? '')])) $add($o, false);
     }
+    foreach ($folders as &$folder) {
+        usort($folder['stations'], function ($a, $b) { return iptvCompareChannelNames($a['name'], $b['name']); });
+    }
+    unset($folder);
     return $stations;
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findChannel, merge, slugify } from '../web/catalog.js';
+import { byChannelName, findChannel, groups, merge, slugify } from '../web/catalog.js';
 
 const tdt = {
   channels: [
@@ -44,4 +44,14 @@ test('logos with a copy on this web show the copy', async () => {
   assert.equal(dazn.logo, 'logos/d1d2ae4b65ac88a49c29625c.png');
   assert.equal(other.logo, 'https://other.example/e.png');
   setLogoCopies({});
+});
+
+test('channel displays sort accents and numbers naturally without changing shared slugs', () => {
+  const names = ['Liga de Campeones 10', 'Liga de Campeones 2', 'Liga de Campeones 9', 'Ágora', 'Zeta'];
+  const channels = merge(null, { channels: names.map((name, i) => own(String(i), name)) });
+  const expected = ['Ágora', 'Liga de Campeones 2', 'Liga de Campeones 9', 'Liga de Campeones 10', 'Zeta'];
+  assert.deepEqual(groups(channels).get('Calamar TV').map(c => c.name), expected);
+  assert.deepEqual([...channels].sort(byChannelName).map(c => c.name), expected);
+  assert.equal(findChannel(channels, 'liga-de-campeones-10').id, '0');
+  assert.deepEqual(channels.map(c => c.name), names);
 });

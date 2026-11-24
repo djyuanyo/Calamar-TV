@@ -100,6 +100,23 @@ class IptvEventsTest(unittest.TestCase):
                          [relay, relay, tdt_url])
         self.assertEqual(events['stations'][0]['url'], relay)
 
+    def test_channel_numbers_sort_naturally_in_all_formats(self):
+        names = ['Liga de Campeones 10', 'Liga de Campeones 02', 'Liga de Campeones 9', 'Ágora']
+        channels = [{'id': f'channel-{i}', 'name': name, 'group': 'Deportes',
+                     'streams': [f'https://media.example/{i}.m3u8']}
+                    for i, name in enumerate(names)]
+        catalog = {'channels': channels, 'events': [
+            {'id': 'first', 'name': 'Zeta', 'channelId': 'channel-0', 'startAt': '2026-11-22T10:00:00Z'},
+            {'id': 'second', 'name': 'Alfa', 'channelId': 'channel-0', 'startAt': '2026-11-22T11:00:00Z'},
+        ]}
+        expected = [names[i] for i in (3, 1, 2, 0)]
+        wiseplay, m3u = self.render(catalog)
+        self.assertEqual([item['name'] for item in wiseplay['groups'][0]['groups'][0]['stations']], expected)
+        self.assertEqual([row.rsplit(',', 1)[-1] for row in m3u[::2]], expected + ['Zeta', 'Alfa'])
+        live, *_ = self.render(catalog, xtream=True)
+        self.assertEqual([item['name'] for item in live], expected + ['Zeta', 'Alfa'])
+        self.assertEqual([item['num'] for item in live], list(range(1, 7)))
+
     def test_empty_wiseplay_folder_has_no_fake_m3u_entry(self):
         wiseplay, m3u = self.render({})
         self.assertEqual(wiseplay['groups'], [{'name': 'Eventos En Directo', 'stations': []}])

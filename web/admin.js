@@ -8,7 +8,7 @@ import { coverFromFile } from './image-file.js';
 import { resolveMatch, googleMatchUrl, listMatches, googleSearchFor, matchResult } from './match-scores.js';
 import { eventOrder, eventMeta, eventPath, eventShareLink, localDateTime, madridInstant, EVENT_STATES } from './sports.js';
 import { el, fetchJson } from './app.js';
-import { OWN_GROUP, merge, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
+import { OWN_GROUP, merge, byChannelName, categoryList, resolveCategory, defaultColor, eventSlugs, syncTdtCopies } from './catalog.js';
 import { validCover, CATALOG_MAX_BYTES, validateCatalog } from './shared-catalog.js';
 import { auth, ready, administrator, watchAuth, logout, readCatalog, publishCatalog, explain, audience, purgeAudience, visits, imageService, connectImageService, readLibrarySettings, saveLibrarySettings, publishLibraryParts } from './firebase.js';
 import { liveCounts, summarize, visitKey, madridDay } from './audience.js';
@@ -295,7 +295,7 @@ function channelForm(existing, rerender, state) {
 
 function ownList(rerender) {
   const data = file.data;
-  const own = data.channels.filter((c) => !c.tdt); // TDT copies kept for events are not channels of yours
+  const own = data.channels.filter((c) => !c.tdt).sort(byChannelName); // TDT copies kept for events are not channels of yours
   if (!own.length) return el('p', { class: 'note' }, 'Aún no has añadido canales propios.');
   return el(
     'div',
@@ -762,7 +762,7 @@ function eventForm(existing, rerender, catalogState) {
     const channel = choices.find((c) => c.id === selected) || data.channels.find((c) => c.id === selected);
     chosen.textContent = channel ? `Canal seleccionado: ${channel.name}${channel.tdt ? ' (TDT)' : ''}` : 'Añade enlaces manuales o selecciona un canal.';
     const q = query.value.trim().toLocaleLowerCase('es');
-    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
+    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q)).sort(byChannelName);
     const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => { selected = c.id; channelSelectedByAdmin = true; draw(); } }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
     const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
     options.replaceChildren(...([el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(!selected), onclick: () => { selected = ''; channelSelectedByAdmin = true; draw(); } }, `${selected ? '' : '✓ '}Sin canal seleccionado`)]),
@@ -1078,7 +1078,7 @@ export async function eventChannelPanel(eventId, state) {
   };
   const draw = () => {
     const q = query.value.trim().toLocaleLowerCase('es');
-    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q));
+    const found = choices.filter((c) => c.name.toLocaleLowerCase('es').includes(q)).sort(byChannelName);
     const button = (c) => el('button', { class: 'btn secondary', type: 'button', 'aria-pressed': String(c.id === selected), onclick: () => save(c.id) }, `${c.id === selected ? '✓ ' : ''}${c.name}`);
     const mine = found.filter((c) => !c.tdt), public_ = found.filter((c) => c.tdt);
     options.replaceChildren(
