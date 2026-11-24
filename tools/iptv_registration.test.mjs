@@ -8,7 +8,7 @@ import { createIptvHls } from '../hosting/iptv-vps/hls.mjs';
 import { createRegistry } from '../hosting/iptv-vps/register.mjs';
 import { verifyViewer } from '../hosting/iptv-vps/access.mjs';
 import { vpsIptvSource } from '../web/http-stream.js';
-import { prepareIptvRelays, resolveIptvStreams } from '../web/iptv-vps.js';
+import { findIptvOriginal, prepareIptvRelays, resolveIptvStreams } from '../web/iptv-vps.js';
 
 const video = 'https://video.calamarmenciano.com/iptv-hls';
 const key = 'a'.repeat(32);
@@ -51,6 +51,22 @@ test('the channel editor sends only IPTV transport streams to IONOS and saves th
   assert.ok(vpsIptvSource('https://example.com:8080/user/pass/123'));
   assert.deepEqual(await resolveIptvStreams([direct, already], () => assert.fail('No need for a token')), [direct, already]);
   await assert.rejects(resolveIptvStreams([other], async () => token, async () => Response.json({ url: direct })), /no pudo preparar/);
+});
+
+test('a signed-in player can recover the original of a registered HLS source', async () => {
+  const link = `${video}/${key}/index.m3u8`;
+  const request = async (address, options) => {
+    assert.equal(address, `${video}/original`);
+    assert.equal(options.headers.Authorization, `Bearer ${token}`);
+    assert.deepEqual(JSON.parse(options.body), { key });
+    assert.equal(options.redirect, 'error');
+    return Response.json({ url: seedUrl });
+  };
+  assert.equal(await findIptvOriginal(link, token, request), seedUrl);
+  assert.equal(await findIptvOriginal(link, null, () => assert.fail()), null);
+  assert.equal(await findIptvOriginal(direct, token, () => assert.fail()), null);
+  assert.equal(await findIptvOriginal(link, token, async () => new Response(null, { status: 401 })), null);
+  assert.equal(await findIptvOriginal(link, token, async () => Response.json({ url: 'http://127.0.0.1/live.ts' })), null);
 });
 
 test('registration requires the admin account, reuses links from the playlist and survives a restart', async () => {
