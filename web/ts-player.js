@@ -18,7 +18,7 @@ export function videoFailure(error) {
 }
 
 export function mountTs({ library, video, address, relay = false, onFailure, onPlaying,
-  onRecovering, timers = globalThis }) {
+  onRecovering, recoveryTimeout = false, timers = globalThis }) {
   if (!library?.getFeatureList().mseLivePlayback) {
     onFailure({ details: 'codecUnsupported' });
     return () => {};
@@ -26,8 +26,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
   let current = null, timer = null, active = true, serial = 0, retries = 0, wantsPlay = true;
   let startup = null;
   const clearStartup = () => { timers.clearTimeout(startup); startup = null; };
-  // Once the channel has played, a cut is never final: it reconnects (1.5 s, 3 s, 6 s, then every 10 s)
-  // until the viewer leaves. Before that, two tries, so a dead link moves on to the next one.
+  // After playback starts, reconnect until the recovery timer expires or the viewer leaves.
   let played = false, watch = null, lastTime = -1, still = 0;
   const clear = () => {
     timers.clearTimeout(timer);
@@ -37,12 +36,25 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     current = null; // Teardown may synchronously emit pause/error callbacks.
     if (old) { old.pause(); old.destroy(); }
   };
+  const waitForVideo = () => {
+    if (startup !== null) return;
+    startup = timers.setTimeout(() => {
+      if (!active || startup === null) return;
+      startup = null;
+      clear();
+      onFailure({ details: 'liveStartupTimeout' });
+    }, 30000);
+  };
+  const recovering = () => {
+    if (played && recoveryTimeout) waitForVideo();
+    onRecovering?.();
+  };
   const fail = (request, network, data) => {
     if (!active || request !== serial || !current) return;
     if (network && (played || retries < 2)) {
       const wait = Math.min(10000, 1500 * 2 ** Math.min(retries++, 3));
       clear();
-      onRecovering?.();
+      recovering();
       timer = timers.setTimeout(start, wait);
       return;
     }
@@ -91,7 +103,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     if (wantsPlay && current && !video.paused && video.currentTime === lastTime) still++;
     else still = 0;
     lastTime = video.currentTime;
-    if (still >= 4) { still = 0; onRecovering?.(); start(); }
+    if (still >= 4) { still = 0; recovering(); start(); }
     watch = timers.setTimeout(check, 5000);
   };
   const playing = () => {
@@ -113,15 +125,11 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     // Let the engine process the same event first; its retries invalidate this callback.
     queueMicrotask(() => fail(request, data.mediaCode === 2, data));
   };
-  const listeners = [['canplay', clearStartup], ['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]];
+  const canPlay = () => { if (!played || !recoveryTimeout) clearStartup(); };
+  const listeners = [['canplay', canPlay], ['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]];
   for (const [name, listener] of listeners) video.addEventListener(name, listener);
   // A live connection can stay open without producing a playable frame or sending an error.
-  startup = timers.setTimeout(() => {
-    if (!active || startup === null) return;
-    startup = null;
-    clear();
-    onFailure({ details: 'liveStartupTimeout' });
-  }, 30000);
+  waitForVideo();
   start();
   return () => {
     active = false;

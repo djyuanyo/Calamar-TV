@@ -119,6 +119,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private final List<HostingPlayback.Option> hostingOptions = new ArrayList<>();
   private String hostingSourceId = "";
   private AlertDialog sourceDialog;
+  private AlertDialog reportDialog;
+
+  private String channelReportTarget() {
+    String target = getIntent().getStringExtra("audience_target");
+    return target != null && target.matches("^[ce]:[A-Za-z0-9_-]{1,200}$") ? target : null;
+  }
+
+  private void offerChannelReport() {
+    String target = channelReportTarget();
+    if (!active || isFinishing() || target == null || title == null || title.trim().isEmpty()
+        || (reportDialog != null && reportDialog.isShowing())) return;
+    reportDialog = ChannelReports.offer(this, target, title, isTelevision() ? "tv" : "android");
+  }
   private boolean mediaSystemRetry;
   private Runnable bufferingTimeout;
   private String mediaProgress = "Sin descargas de vídeo registradas.";
@@ -887,7 +900,10 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
                   } else if (sources.isEmpty() && Library.Media.hosting(pageUrl) != null) {
                     playThroughHosting();
                   } else if (sources.isEmpty() && (zicoPage() || AppSources.zico(documentUrl))) {
-                    if (!tryNextZicoSource()) problem("No hay señales disponibles para este canal.");
+                    if (!tryNextZicoSource()) {
+                      problem("No hay señales disponibles para este canal.");
+                      offerChannelReport();
+                    }
                   } else if (sources.isEmpty()) {
                     openWeb();
                     status.setText("Pulsa ▶ en la página para detectar un vídeo compatible.");
@@ -1148,7 +1164,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               playSource(source);
               return;
             }
-            if (directUrl != null && BrowserPlayback.supports(source.url)) {
+            if (directUrl != null && BrowserPlayback.supports(source.url) && channelReportTarget() == null) {
               openDirectWeb();
               status.setText(
                   "La reproducción nativa falló (" + detail + "). Probando el reproductor web…");
@@ -1189,7 +1205,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       if (retryHostingAddress(source, new java.net.SocketTimeoutException("Hosting sin vídeo"))) return;
       if (retryChromiumNetwork(source) || retrySystemNetwork(source) || tryNextZicoSource()) return;
       if (tryIptvFallback(source)) return;
-      if (directUrl != null && BrowserPlayback.supports(source.url)) {
+      if (directUrl != null && BrowserPlayback.supports(source.url) && channelReportTarget() == null) {
         openDirectWeb();
         status.setText("La conexión nativa no responde. Probando el reproductor web…");
       } else {
@@ -1281,7 +1297,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   private void refreshAutomatically(String message) {
     if (!active || resolving || webMode) return;
     long now = android.os.SystemClock.elapsedRealtime();
-    if (now - attemptWindow > 120000) {
+    if (channelReportTarget() == null && now - attemptWindow > 120000) {
       automaticAttempts = 0;
       attemptWindow = now;
     }
@@ -1291,6 +1307,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         hostingPlayback = false;
         if (switchChannelSource()) return;
         problem("No se pudo conectar con esta fuente desde tu red. Prueba otra fuente en Fuentes.");
+        offerChannelReport();
         return;
       }
       if (sources.size() > 1) selection = (selection + 1) % sources.size();
@@ -1313,10 +1330,19 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
         status.setText("La fuente directa falló. Modo web del proveedor.");
         return;
       }
+      if (directUrl != null && channelReportTarget() != null) {
+        for (int i = 0; i < directUrls.size(); i++) {
+          if (!BrowserPlayback.supports(directUrls.get(i))) continue;
+          selection = i;
+          openDirectWeb();
+          return;
+        }
+      }
       problem(
           directUrl != null
               ? "No se pudo reproducir el enlace. Comprueba el enlace o vuelve a abrir el canal."
               : "No se pudo recuperar la emisión. Prueba otra opción en Fuentes o vuelve a abrir el canal.");
+      offerChannelReport();
       return;
     }
     status.setText(message);
@@ -1791,10 +1817,12 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
           @Override
           public void onPageFinished(WebView view, String url) {
-            if (active && webMode && generation == request && browser == view)
+            if (active && webMode && generation == request && browser == view) {
+              if (channelReportTarget() != null) watchDirectWebFailure(view, request, 9);
               status.setText(
                   "Reproductor web · Si no empieza, pulsa Reproducir. Atrás sale de pantalla"
                       + " completa.");
+            }
           }
 
           @Override
@@ -1802,15 +1830,31 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
               WebView view,
               android.webkit.WebResourceRequest resource,
               android.webkit.WebResourceError error) {
-            if (resource.isForMainFrame() && active && generation == request && browser == view)
-              problem(
-                  "No se pudo cargar el reproductor web. Comprueba la conexión y vuelve a abrir el canal.");
+            if (resource.isForMainFrame() && active && generation == request && browser == view) {
+              problem("No se pudo cargar el reproductor web. Comprueba la conexión y vuelve a abrir el canal.");
+              offerChannelReport();
+            }
           }
         });
     stage.addView(browser, new FrameLayout.LayoutParams(-1, -1));
     status.setText("Abriendo el reproductor web integrado…");
     browser.loadUrl(BrowserPlayback.page(address));
     browser.requestFocus();
+  }
+
+  private void watchDirectWebFailure(WebView view, int request, int remaining) {
+    handler.postDelayed(() -> {
+      if (!active || generation != request || browser != view) return;
+      view.evaluateJavascript("document.getElementById('status')?.dataset.playbackState", state -> {
+        if (!active || generation != request || browser != view) return;
+        if ("\"failed\"".equals(state) || (remaining <= 1 && !"\"playing\"".equals(state)
+            && !"\"requires-input\"".equals(state))) {
+          offerChannelReport();
+        } else if (!"\"playing\"".equals(state) && remaining > 1) {
+          watchDirectWebFailure(view, request, remaining - 1);
+        }
+      });
+    }, 4000);
   }
 
   private void detected(String address) {
@@ -1911,6 +1955,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
 
   @Override
   protected void onStop() {
+    if (reportDialog != null) { reportDialog.dismiss(); reportDialog = null; }
     if (sleepTimer != null) sleepTimer.pause();
     if (stopAccess != null) { stopAccess.run(); stopAccess = null; }
     if (multiPicker != null) { multiPicker.dismiss(); multiPicker = null; }

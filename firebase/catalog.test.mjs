@@ -299,3 +299,37 @@ test('IPTV folder icons: public to read, only the administrator saves them', asy
   await assertFails(getDocs(collection(guest, 'calamarIptv')));
   await assertFails(deleteDoc(doc(admin(), path)));
 });
+
+test('verified viewers can report a channel, only the administrator can read it or clear its unread state', async () => {
+  const member = env.authenticatedContext('viewer', claims({ email: 'viewer@example.com' })).firestore();
+  const ref = db => doc(db, 'calamarChannelReports', 'A'.repeat(20));
+  const report = {
+    target: 'c:channel-1', title: 'Canal 1', device: 'tv',
+    createdAt: serverTimestamp(), readAt: null,
+  };
+  const inbox = db => query(collection(db, 'calamarChannelReports'), where('readAt', '==', null));
+  for (const db of [
+    env.unauthenticatedContext().firestore(),
+    env.authenticatedContext('unverified', claims({ email_verified: false })).firestore(),
+    env.authenticatedContext('anonymous', claims({ firebase: { sign_in_provider: 'anonymous' } })).firestore(),
+  ]) await assertFails(setDoc(ref(db), report));
+
+  const access = doc(admin(), 'calamarUserAccess/viewer');
+  await assertSucceeds(setDoc(access, { blocked: true, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(ref(member), report));
+  await assertSucceeds(setDoc(access, { blocked: false, updatedAt: serverTimestamp() }));
+
+  for (const invalid of [{ url: 'https://example.test/live' }, { readAt: serverTimestamp() },
+    { target: 'l:film' }, { device: 'unknown' }, { title: '' }, { createdAt: new Date(0) }]) {
+    await assertFails(setDoc(ref(member), { ...report, ...invalid }));
+  }
+  await assertSucceeds(setDoc(ref(member), report));
+  await assertFails(getDoc(ref(member)));
+  await assertFails(getDocs(inbox(member)));
+  await assertFails(setDoc(ref(member), { readAt: serverTimestamp() }, { merge: true }));
+  assert.equal((await assertSucceeds(getDocs(inbox(admin())))).size, 1);
+  await assertFails(setDoc(ref(admin()), { title: 'Changed', readAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(ref(admin()), { readAt: serverTimestamp() }, { merge: true }));
+  assert.equal((await assertSucceeds(getDocs(inbox(admin())))).size, 0);
+  assert.equal((await assertSucceeds(getDoc(ref(admin())))).data().title, 'Canal 1');
+});

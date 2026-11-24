@@ -17,6 +17,7 @@ import { findBySlug, leagueSlugs, leagueEvents, merge, setLogoCopies, events, ca
 import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShareLink, EVENT_STATES } from './sports.js';
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
+import { offerChannelReport } from './channel-reports.js';
 import { findIptvOriginal, iptvHlsKey } from './iptv-vps.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
@@ -769,10 +770,22 @@ const sleepTimer = playbackTimer(player.querySelector('.player-toolbar'), () => 
 // While the player is open nothing behind it can be reached with the keyboard or a screen reader.
 const behind = () => document.querySelectorAll('.skip, .top, main, .foot');
 
-let stopRenewable = null, sourceLookup = null, stopStallWatch = null;
+let stopRenewable = null, sourceLookup = null, stopStallWatch = null, closeChannelReport = null;
+
+function offerReport(channel) {
+  if (channel.vod || channel.pending || !channel.id) return;
+  closeChannelReport?.();
+  const { button, open, close } = offerChannelReport(el, player, channel,
+    async item => (await shared()).sendChannelReport(item));
+  closeChannelReport = close;
+  playerStatus.append(' ', button);
+  open();
+}
 function stop() {
   if (!casting) watching?.privateViewing.watching(false);
   playbackGeneration++;
+  closeChannelReport?.();
+  closeChannelReport = null;
   if (sourceLookup) { sourceLookup.abort(); sourceLookup = null; }
   if (stopRenewable) { stopRenewable(); stopRenewable = null; }
   if (stopStallWatch) { stopStallWatch(); stopStallWatch = null; }
@@ -798,10 +811,16 @@ function stop() {
  */
 const recovery = { key: '', rounds: 0, since: 0 };
 function recoveryRound(c, now = Date.now()) {
-  if (recovery.key !== c.id || now - recovery.since > 120000) Object.assign(recovery, { key: c.id, rounds: 0, since: now });
+  if (recovery.key !== c.id || (c.vod && now - recovery.since > 120000)) Object.assign(recovery, { key: c.id, rounds: 0, since: now });
   return ++recovery.rounds <= 3 ? recovery.rounds : 0;
 }
-const roundOf = (c) => (recovery.key === c.id && Date.now() - recovery.since <= 120000 ? recovery.rounds : 0);
+const roundOf = (c) => (recovery.key === c.id && (!c.vod || Date.now() - recovery.since <= 120000) ? recovery.rounds : 0);
+
+function latestPlayback(c) {
+  if (c.vod) return c;
+  const list = c.event ? events(state.channels, state.custom, Date.now(), { allWeeks: true, finished: true }) : state.channels;
+  return list.find(item => item.id === c.id) || c;
+}
 
 async function playSource(c, index, resumeAt = 0, compatible = false) {
   stop();
@@ -826,6 +845,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     sourceLookup = null;
     if (c.event && resolved.length && resolved.every(source => source.unavailable)) {
       playerStatus.textContent = 'Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.';
+      offerReport(c);
       return;
     }
     const sources = resolved.filter(source => !source.unavailable);
@@ -850,6 +870,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   if (candidates.length && !playable.length) {
     const when = new Date(Math.max(...candidates.map((s) => s.expiry))).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     playerStatus.textContent = `El enlace de este canal caducó el ${when}. Los enlaces con token duran pocas horas y el administrador tiene que renovarlo.`;
+    offerReport(c);
     return;
   }
   if (!playable.length) {
@@ -877,7 +898,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       playerStatus.textContent = playable.length > 1 ? 'Ninguna fuente responde. Volviendo a probar desde la primera…' : reconnecting;
       setTimeout(() => {
         if (generation !== playbackGeneration) return;
-        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        const latest = latestPlayback(c);
         playSource(latest, playable[0].index, positionToKeep, compatible && source.index === playable[0].index);
       }, 2000);
     } else {
@@ -902,7 +923,8 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
         report.expiresAt ? el('p', {}, `Caducidad indicada por el enlace: ${new Date(report.expiresAt).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })} (España).`) : null);
       const retry = el('button', { type: 'button', class: 'ghost', onclick: () => {
         // Firebase may have delivered fresh URLs since playback began.
-        const latest = c.vod ? c : state.channels.find((item) => item.id === c.id) || c;
+        const latest = latestPlayback(c);
+        recovery.key = '';
         playSource(latest, 0, positionToKeep);
       } }, '↻ Reintentar');
       // Direct navigation may work even when hls.js fetches from GitHub Pages are
@@ -923,6 +945,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
         c.web ? el('span', {}, ' ', el('a', { href: c.web, rel: 'noopener', target: '_blank' }, 'Web oficial')) : '',
         webAccess.current().administrator === true ? diagnosis : null,
       );
+      offerReport(c);
     }
   };
   playerStatus.textContent = compatible && compatibility ? 'Preparando vídeo compatible…' : 'Conectando…';
@@ -1030,7 +1053,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       video.onplaying = () => { if (generation === playbackGeneration && !failureHandled) playerStatus.textContent = ''; };
       video.onerror = null; // mountTs owns media errors and retries; do not preempt it.
       controls.attach(null);
-      stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay,
+      stopTs = mountTs({ library: window.mpegts, video, address: source.url, relay: source.how.relay, recoveryTimeout: !c.vod,
         onFailure: (data) => queueMicrotask(async () => {
           if (generation !== playbackGeneration) return;
           if (!source.how.relay || !/codec|decode|buffer/i.test(data?.details || '')) { next(data); return; }
@@ -1072,7 +1095,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
     if (!original) { next(data); return; }
 
     // The HTTPS bridge forwards the original MPEG-TS and keeps the address out of the catalog.
-    stopTs = mountTs({ library: window.mpegts, video, address: original, relay: true,
+    stopTs = mountTs({ library: window.mpegts, video, address: original, relay: true, recoveryTimeout: true,
       onFailure: error => queueMicrotask(() => next(error)),
       onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con la señal original…'; },
       onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
@@ -1221,6 +1244,7 @@ function open(c, fromRoute = false) {
   if (c.skip && c.skipSource) withIntroDb(c.skip, c.skipSource).then((marks) => { if (current === c) { c.skip = marks; paintSkip(); } });
   // Films and episodes continue where this browser left them.
   const resume = c.vod && !c.restart ? loadProgress()[c.progress?.key]?.position || 0 : 0;
+  recovery.key = '';
   playSource(c, 0, resume);
   lastSaved = 0;
 }
@@ -1632,6 +1656,7 @@ webAccess.start();
 // A signed-in account seen in an earlier visit: «Elige tu perfil» at once, before Firebase answers.
 showGate();
 if (isSamsungTizen(navigator.userAgent)) updateAppDownload();
+let adminModule;
 async function route() {
   const admission = webAccess.current();
   const accessPage = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0];
@@ -1677,6 +1702,7 @@ async function route() {
   // Account and administration routes must release the player's overlay/inert lock too.
   if (['admin', 'cuenta', 'tv'].includes(page) && !player.hidden) hidePlayer();
   // Films, series and documentaries have their own search box: the channels and events one hides there.
+  if (page !== 'admin') adminModule?.then(admin => { if (!location.hash.startsWith('#/admin')) admin.closeNotifications(); }).catch(() => {});
   if (page !== 'musica' && stopMusic) { stopMusic(); stopMusic = null; }
   search.closest('.search').hidden = !!sectionByPage(page) || [HALLOWEEN_PAGE, PLATFORM_PAGE, 'musica', 'admin', 'cuenta', 'tv'].includes(page);
   for (const a of document.querySelectorAll('[data-route]'))
@@ -1716,7 +1742,7 @@ async function route() {
   }
   if (page === 'admin') {
     try {
-      const admin = await import('./admin.js');
+      const admin = await (adminModule ||= import('./admin.js'));
       if (version !== routeVersion) return;
       const nodes = await admin.render(state);
       if (version !== routeVersion) return;

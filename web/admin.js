@@ -20,6 +20,7 @@ import { aceContentId, resolveAceStreams } from './acestream.js';
 import { vpsIptvSource } from './http-stream.js';
 import { findIptvOriginal, iptvHlsKey, resolveIptvStreams } from './iptv-vps.js';
 import { vpsPanel } from './vps-panel.js';
+import { notificationsPanel } from './admin-notifications.js';
 
 // Imported competitions keep only their next five weeks (applySeason): once a day, opening the admin
 // reads their calendars from ESPN again and publishes the weeks that come in, in a single save.
@@ -487,9 +488,19 @@ function githubImagesPanel(rerender) {
     el('button', { class: 'ghost', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Guardar catálogo y liberar espacio de las portadas antiguas'));
 }
 
+let stopUnreadReports, stopReports;
+export function closeNotifications() {
+  stopUnreadReports?.();
+  stopReports?.();
+  stopUnreadReports = stopReports = null;
+}
+
 export async function render(state) {
   const view = document.getElementById('view');
-  const rerender = async () => view.replaceChildren(...(await render(state)));
+  const rerender = async () => {
+    const nodes = await render(state);
+    if (location.hash.startsWith('#/admin')) view.replaceChildren(...nodes);
+  };
   await ready;
   if (!fallbackLoaded) {
     fallback = await fetchJson('data/custom.json');
@@ -502,6 +513,8 @@ export async function render(state) {
       if (location.hash.startsWith('#/admin')) rerender();
     });
   }
+  if (!location.hash.startsWith('#/admin')) return [];
+  closeNotifications();
   if (!administrator()) return loginView(rerender);
   if (!file) {
     try { await loadFile(); }
@@ -526,7 +539,14 @@ export async function render(state) {
   const userRoute = location.hash.match(/^#\/admin\/usuarios(?:\/([a-zA-Z0-9_-]{1,128}))?\/?$/);
   if (userRoute) return usersAdmin(el, userService, state, userRoute[1]);
   if (/^#\/admin\/iptv\/?$/.test(location.hash)) return iptvAdmin(el, userService, state);
-  const section = location.hash === '#/admin/servidor' ? 'vps' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  const inbox = location.hash === '#/admin/notificaciones';
+  const section = inbox ? 'notifications' : location.hash === '#/admin/servidor' ? 'vps' : location.hash.startsWith('#/admin/biblioteca') ? 'library' : location.hash.startsWith('#/admin/estadisticas') ? 'stats' : location.hash.startsWith('#/admin/ligas') ? 'leagues' : location.hash.startsWith('#/admin/equipos') ? 'teams' : eventRoute ? 'events' : 'channels';
+  if (!location.hash.startsWith('#/admin') || !administrator()) return [];
+  closeNotifications();
+  const unreadDot = el('span', { class: 'report-unread', hidden: true, role: 'img', 'aria-label': 'Hay notificaciones sin leer' });
+  stopUnreadReports = userService.watchUnreadChannelReports(unread => { unreadDot.hidden = !unread; }, () => {});
+  const notifications = inbox ? notificationsPanel(el, userService) : null;
+  stopReports = notifications?.stop;
   const shown = notice;
   notice = '';
   return [
@@ -539,8 +559,8 @@ export async function render(state) {
       appUpdatesPanel(rerender),
       githubImagesPanel(rerender),
       file.revision === 0 ? el('button', { class: 'btn', type: 'button', onclick: () => guarded(() => saveFile(), rerender) }, 'Activar catálogo compartido') : null,
-      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca'], ['iptv','Lista IPTV','#/admin/iptv']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'iptv' ? el('b', {}, '📺') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
-      ...(section === 'vps' ? [vpsPanel(el, () => auth.currentUser.getIdToken())] : section === 'library' ? libraryAdmin(el, {
+      el('div', { class: 'admin-stats' }, [['channels','Canales','#/admin'], ['events','Eventos','#/admin/evento'], ['leagues','Ligas','#/admin/ligas'], ['teams','Equipos','#/admin/equipos'], ['stats','Estadísticas','#/admin/estadisticas'], ['vps','Servidor','#/admin/servidor'], ['users','Usuarios','#/admin/usuarios'], ['library','Pelis y series','#/admin/biblioteca'], ['iptv','Lista IPTV','#/admin/iptv'], ['notifications','Notificaciones','#/admin/notificaciones']].map(([key,label,href]) => el('a', { href, 'aria-current': section === key ? 'page' : null }, key === 'notifications' ? el('b', {}, '🔔', unreadDot) : key === 'stats' ? liveTile() : key === 'vps' ? el('b', {}, 'CPU') : key === 'users' ? el('b', {}, '👤') : key === 'iptv' ? el('b', {}, '📺') : key === 'library' ? el('b', {}, file.data.libraryVisible ? 'On' : 'Off') : el('b', {}, file.data[key].length), label))),
+      ...(inbox ? [notifications.panel] : section === 'vps' ? [vpsPanel(el, () => auth.currentUser.getIdToken())] : section === 'library' ? libraryAdmin(el, {
         unidentified: !!reviewRoute, unidentifiedSection: reviewRoute?.[1] || '',
         visible: file.data.libraryVisible === true,
         // The switch is part of the catalog, so the web and the app pick it up like any other change.

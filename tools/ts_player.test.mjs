@@ -24,7 +24,7 @@ test('relay URL never contains IPTV path credentials and preserves their bytes i
   assert.equal(tsRequest('https://example.com/a.ts').url, 'https://example.com/a.ts');
 });
 
-function fixture() {
+function fixture(recoveryTimeout = false) {
   const players = [], tasks = new Map(), startupTimers = new Map(), events = new Map(), failures = [];
   let nextTimer = 0;
   const video = { paused: false, error: null, ended: false, readyState: 3, buffered: { length: 0 }, currentTime: 0,
@@ -47,7 +47,7 @@ function fixture() {
         attachMediaElement() {}, load() { video.error = null; }, play() { this.plays = (this.plays || 0) + 1; video.paused = false; return Promise.resolve(); }, handlers };
       players.push(p); return p;
     } };
-  const stop = mountTs({ library, video, address: 'https://example.com/a.ts', timers,
+  const stop = mountTs({ library, video, address: 'https://example.com/a.ts', timers, recoveryTimeout,
     onFailure: data => failures.push(data) });
   return { players, tasks, startupTimers, failures, stop, library, video, events };
 }
@@ -211,4 +211,16 @@ test('the initial timeout is cancelled once the video is ready or the viewer lea
     assert.equal(f.failures.length, 0);
     f.stop();
   }
+});
+
+
+test('a channel outage after playback is passed on if the recovery timer expires', () => {
+  const f = fixture(true);
+  f.events.get('playing')();
+  f.players[0].handlers.error('NetworkError', 'error', { code: 503 });
+  const [, expiry] = [...f.startupTimers.entries()][0];
+  expiry();
+  assert.deepEqual(f.failures, [{ details: 'liveStartupTimeout' }]);
+  assert.equal(f.players[0].destroyed, true);
+  f.stop();
 });

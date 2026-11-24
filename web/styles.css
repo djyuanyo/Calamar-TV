@@ -1540,3 +1540,9 @@ body.gate-open { overflow: hidden; }
 .iptv-icon-preview { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.06); }
 .iptv-icon-preview.empty { visibility: hidden; }
 @media (max-width: 700px) { .iptv-icon-row { grid-template-columns: 48px 1fr; } .iptv-icon-row input[type=url] { grid-column: 1 / -1; } }
+
+.report-unread { display: inline-block; width: 9px; height: 9px; margin-inline-start: 8px; vertical-align: middle; border-radius: 50%; background: #ffd43b; }
+.report-unread[hidden] { display: none; }
+.report-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.report-row p { margin: 4px 0 0; }
+.channel-report-dialog .actions { justify-content: flex-end; }
