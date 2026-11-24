@@ -52,10 +52,11 @@ export function hostedPage(address) {
 }
 
 /** Use the 2.20.67 device route, with signed hosting as an independent fallback. */
-export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null,
+export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus = () => {}, onFallback = () => {}, onSources = null, onNoVideo = null,
   fetcher = globalThis.fetch, timers = globalThis, now = Date.now, preferDirect = true }) {
   const original = hostedPage(page);
   let stopped = false, request = null, menu = null, menuTimer = null, refreshTimer = null, engine = null;
+  let noVideoTimer = null;
   let address = '', failures = 0, loaded = false, recovering = false, menuStarted = false, deviceRoute = false, continuity = null;
   const selected = new URL(original && !renewablePage(page) ? page : hostedRequest(original || ''));
   selected.searchParams.set('cast', '1');
@@ -65,11 +66,21 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const clearRefresh = () => { timers.clearTimeout(refreshTimer); refreshTimer = null; };
   const schedule = delay => { clearRefresh(); refreshTimer = timers.setTimeout(() => { void refresh(); }, delay); };
   const destroyEngine = () => { if (engine) engine.destroy(); engine = null; onAttach(null); };
+  const clearNoVideo = () => { timers.clearTimeout(noVideoTimer); noVideoTimer = null; };
+  const waitForVideo = () => {
+    if (!onNoVideo || noVideoTimer !== null) return;
+    noVideoTimer = timers.setTimeout(() => {
+      if (stopped || noVideoTimer === null) return;
+      cleanup();
+      onNoVideo();
+    }, 45000);
+  };
   const retry = (networkFailure = false) => {
     if (stopped || recovering) return;
     if (!request && networkFailure && !deviceRoute && !alternateHosting) alternateHosting = true;
     else if (!request && automatic && networkFailure) deviceRoute = !deviceRoute;
     failures++; recovering = true;
+    waitForVideo();
     onStatus('Probando otra señal disponible…');
     // Initial source failures switch promptly. Backoff only protects a continuing provider outage.
     if (!request) schedule(failures <= 3 ? 250 : Math.min(10000, 1000 * 2 ** Math.min(failures - 3, 4)));
@@ -167,6 +178,7 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   }
   const playing = () => {
     if (stopped) return;
+    clearNoVideo();
     failures = 0; onStatus('');
     // Populate the optional selector after playback, so metadata never delays the first picture.
     if (!onSources || menuStarted || deviceRoute) return;
@@ -179,11 +191,15 @@ export function mountRenewable({ page, video, Hls, onAttach = () => {}, onStatus
   const failed = () => { if (!stopped) retry(); };
   const watch = watchPlaybackStall(video, failed, { timers });
   video.addEventListener('playing', playing);
+  video.addEventListener('canplay', clearNoVideo);
   video.addEventListener('error', failed);
   function cleanup() {
     stopped = true; request?.abort(); menu?.abort(); clearRefresh(); timers.clearTimeout(menuTimer); watch.stop(); destroyEngine();
+    clearNoVideo();
     video.removeEventListener('playing', playing);
+    video.removeEventListener('canplay', clearNoVideo);
     video.removeEventListener('error', failed);
   }
+  waitForVideo();
   onStatus('Conectando con la primera señal disponible…'); void refresh(); return cleanup;
 }
