@@ -238,6 +238,28 @@ service cloud.firestore {
         && request.resource.data.endedAt == request.time;
       allow delete: if false;
     }
+    function canReportChannel() {
+      let uid = request.auth.uid;
+      let access = /databases/$(database)/documents/calamarUserAccess/$(uid);
+      return viewer(uid) && (!exists(access) || !get(access).data.get('blocked', false));
+    }
+    match /calamarChannelReports/{id} {
+      allow read: if administrator();
+      allow create: if request.auth != null && canReportChannel()
+        && id.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.keys().hasOnly(['target', 'title', 'device', 'createdAt', 'readAt'])
+        && request.resource.data.target is string
+        && request.resource.data.target.matches('^[ce]:[A-Za-z0-9_-]{1,200}$')
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 250
+        && request.resource.data.device in ['web', 'android', 'tv']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.readAt == null;
+      allow update: if administrator() && resource.data.readAt == null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+        && request.resource.data.readAt == request.time;
+      allow delete: if false;
+    }
     match /{document=**} {
       allow read, write: if false;
     }

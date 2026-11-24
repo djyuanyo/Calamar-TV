@@ -32,12 +32,16 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
   const start = () => {
     stop();
     failed = false;
+    const state = value => { if (status.dataset) status.dataset.playbackState = value; };
+    state('loading');
     if (!address) {
+      state('failed');
       status.textContent = 'Enlace HLS no válido.';
       return;
     }
     const expiry = streamExpiry(source);
     if (expiry && expiry <= Date.now()) {
+      state('failed');
       status.textContent = 'El enlace ha caducado. Actualízalo en el catálogo.';
       return;
     }
@@ -45,6 +49,7 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
     const fail = (data) => {
       if (request !== generation || failed) return;
       failed = true;
+      state('failed');
       if (hls) hls.stopLoad();
       video.pause();
       status.textContent = data ? explainStreamError({
@@ -54,9 +59,9 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
     };
     status.textContent = 'Conectando…';
     video.onerror = () => fail();
-    video.onplaying = () => { if (!failed && request === generation) status.textContent = 'En directo'; };
+    video.onplaying = () => { if (!failed && request === generation) { state('playing'); status.textContent = 'En directo'; } };
     const begin = () => video.play().catch(() => {
-      if (!failed && request === generation) status.textContent = 'Pulsa Reproducir para empezar.';
+      if (!failed && request === generation) { state('requires-input'); status.textContent = 'Pulsa Reproducir para empezar.'; }
     });
     if (Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
@@ -68,6 +73,7 @@ export function mount({ video, status, play, retry, fragment, Hls }) {
       video.src = address;
       begin();
     } else {
+      state('failed');
       status.textContent = 'Actualiza Android System WebView para usar el reproductor web.';
     }
   };

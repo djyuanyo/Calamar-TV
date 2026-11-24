@@ -17,6 +17,9 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.Source;
 import java.io.File;
 import java.util.ArrayList;
@@ -36,6 +39,11 @@ public class AdminActivity extends Activity {
   private Runnable pendingCoverReady;
   private String adminSection = "events";
   private FirebaseAuth.AuthStateListener authListener;
+  private ListenerRegistration unreadReports, reportList;
+  private TextView notificationDot;
+  private boolean hasUnreadReports;
+  private boolean watchingReports;
+  private int reportLimit = 30;
 
   @Override
   public void onCreate(Bundle state) {
@@ -47,9 +55,28 @@ public class AdminActivity extends Activity {
         auth -> {
           catalog = null;
           if (SharedCatalog.administrator(auth.getCurrentUser())) load();
-          else draw();
+          else {
+            stopWatchingReports();
+            hasUnreadReports = false;
+            draw();
+          }
         };
     SharedCatalog.auth(this).addAuthStateListener(authListener);
+  }
+
+  @Override
+  protected void onStart() {
+    super.onStart();
+    watchingReports = true;
+    watchUnreadReports();
+    if ("notifications".equals(adminSection)) draw();
+  }
+
+  @Override
+  protected void onStop() {
+    watchingReports = false;
+    stopWatchingReports();
+    super.onStop();
   }
 
   @Override
@@ -61,6 +88,8 @@ public class AdminActivity extends Activity {
 
   private void draw() {
     if (isFinishing()) return;
+    if (reportList != null) { reportList.remove(); reportList = null; }
+    notificationDot = null;
     stopPhoneLogin();
     ScrollView scroll = new ScrollView(this);
     scroll.setBackgroundColor(BG);
@@ -99,6 +128,12 @@ public class AdminActivity extends Activity {
     addButton("Cerrar sesión de Google", () -> SharedCatalog.auth(this).signOut());
     addButton("Recargar catálogo", this::load);
     addButton("Usuarios y acceso", () -> startActivity(new android.content.Intent(this, UsersActivity.class)));
+    showNotificationsButton();
+    watchUnreadReports();
+    if ("notifications".equals(adminSection)) {
+      showNotifications();
+      return;
+    }
     if (loading) {
       status.setText("Cargando catálogo…");
       return;
@@ -860,6 +895,85 @@ public class AdminActivity extends Activity {
     } catch (com.google.zxing.WriterException impossible) {
       throw new IllegalStateException(impossible);
     }
+  }
+
+  private void stopWatchingReports() {
+    if (unreadReports != null) { unreadReports.remove(); unreadReports = null; }
+    if (reportList != null) { reportList.remove(); reportList = null; }
+  }
+
+  private void watchUnreadReports() {
+    if (!watchingReports || unreadReports != null
+        || !SharedCatalog.administrator(SharedCatalog.auth(this).getCurrentUser())) return;
+    unreadReports = ChannelReports.inbox(this).whereEqualTo("readAt", null).limit(1)
+        .addSnapshotListener((snapshot, failure) -> {
+          if (snapshot == null) return;
+          hasUnreadReports = !snapshot.isEmpty();
+          paintNotificationDot();
+        });
+  }
+
+  private void paintNotificationDot() {
+    if (notificationDot != null) {
+      notificationDot.setVisibility(hasUnreadReports ? android.view.View.VISIBLE : android.view.View.GONE);
+    }
+  }
+
+  private void showNotificationsButton() {
+    LinearLayout main = body;
+    LinearLayout bar = new LinearLayout(this);
+    bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+    main.addView(bar);
+    LinearLayout action = new LinearLayout(this);
+    action.setOrientation(LinearLayout.VERTICAL);
+    bar.addView(action, new LinearLayout.LayoutParams(0, -2, 1));
+    body = action;
+    addButton("Notificaciones", () -> { adminSection = "notifications"; reportLimit = 30; draw(); });
+    body = main;
+    notificationDot = label("●", 18);
+    notificationDot.setTextColor(0xffffd43b);
+    notificationDot.setPadding(dp(10), 0, 0, 0);
+    notificationDot.setContentDescription("Hay notificaciones sin leer");
+    bar.addView(notificationDot);
+    paintNotificationDot();
+  }
+
+  private void showNotifications() {
+    addButton("‹ Volver al catálogo", () -> { adminSection = "events"; draw(); });
+    body.addView(label("Notificaciones", 22));
+    final TextView message = label("Cargando notificaciones…", 15);
+    body.addView(message);
+    final LinearLayout items = new LinearLayout(this);
+    items.setOrientation(LinearLayout.VERTICAL);
+    body.addView(items);
+    if (!watchingReports) return;
+    reportList = ChannelReports.inbox(this).orderBy("createdAt", Query.Direction.DESCENDING)
+        .limit(reportLimit).addSnapshotListener((snapshot, failure) -> {
+          if (!items.isAttachedToWindow()) return;
+          if (failure != null || snapshot == null) {
+            message.setText("No se pudieron cargar las notificaciones.");
+            return;
+          }
+          message.setText(snapshot.isEmpty() ? "Todavía no hay avisos de reproducción." : "");
+          items.removeAllViews();
+          LinearLayout main = body;
+          body = items;
+          for (DocumentSnapshot report : snapshot.getDocuments()) {
+            String device = report.getString("device");
+            String platform = "tv".equals(device) ? "Android TV" : "android".equals(device) ? "Android" : "Web";
+            String target = report.getString("target");
+            java.util.Date date = report.getDate("createdAt");
+            String when = date == null ? "" : " · " + java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(date);
+            items.addView(label(report.getString("title") + "\n" + (target != null && target.startsWith("e:") ? "Evento" : "Canal") + " · " + platform + when, 16));
+            if (report.get("readAt") == null) {
+              addButton("Marcar como leída", () -> ChannelReports.markRead(report).addOnFailureListener(
+                  error -> message.setText("No se pudo marcar el aviso como leído.")));
+            }
+          }
+          if (snapshot.size() == reportLimit) addButton("Ver más", () -> { reportLimit += 30; draw(); });
+          body = main;
+        });
   }
 
   private int dp(int n) {

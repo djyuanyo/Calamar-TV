@@ -7,7 +7,7 @@ import { REMINDER_ENDPOINT, verificationCode, verificationDraft } from './verifi
 import { iptvManagement } from './iptv-vps.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
+import { getFirestore, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, deleteDoc, increment, collection, query, where, documentId, getDocs, getCountFromServer, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -542,3 +542,23 @@ export async function readLiveViewers() {
   })));
   return entries.map(entry => ({ ...entry, name: names.get(entry.uid) || entry.profile || 'Usuario registrado' }));
 }
+
+const channelReports = collection(db, 'calamarChannelReports');
+export async function sendChannelReport(channel) {
+  const user = currentUser();
+  if (!user || user.isAnonymous) {
+    throw Object.assign(Error('Inicia sesión para enviar el aviso.'), { code: 'report-signin' });
+  }
+  await setDoc(doc(channelReports), {
+    target: `${channel.event ? 'e' : 'c'}:${channel.eventId || channel.id}`,
+    title: channel.name.slice(0, 250), device: 'web', createdAt: serverTimestamp(), readAt: null,
+  });
+}
+export const watchUnreadChannelReports = (next, failed) =>
+  onSnapshot(query(channelReports, where('readAt', '==', null), limit(1)),
+    snapshot => next(!snapshot.empty), failed);
+export const watchChannelReports = (size, next, failed) =>
+  onSnapshot(query(channelReports, orderBy('createdAt', 'desc'), limit(size)),
+    snapshot => next(snapshot.docs.map(item => ({ ...item.data(), id: item.id }))), failed);
+export const markChannelReportRead = id =>
+  updateDoc(doc(channelReports, id), { readAt: serverTimestamp() });
