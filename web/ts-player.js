@@ -24,6 +24,8 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     return () => {};
   }
   let current = null, timer = null, active = true, serial = 0, retries = 0, wantsPlay = true;
+  let startup = null;
+  const clearStartup = () => { timers.clearTimeout(startup); startup = null; };
   // Once the channel has played, a cut is never final: it reconnects (1.5 s, 3 s, 6 s, then every 10 s)
   // until the viewer leaves. Before that, two tries, so a dead link moves on to the next one.
   let played = false, watch = null, lastTime = -1, still = 0;
@@ -45,6 +47,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
       return;
     }
     clear();
+    clearStartup();
     onFailure(data);
   };
   const start = () => {
@@ -77,6 +80,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     } catch {
       if (active && request === serial) {
         clear();
+        clearStartup();
         onFailure({ details: 'codecUnsupported' });
       }
     }
@@ -92,6 +96,7 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
   };
   const playing = () => {
     if (!active) return;
+    clearStartup();
     retries = 0; wantsPlay = true;
     if (!played) { played = true; watch = timers.setTimeout(check, 5000); }
     onPlaying?.();
@@ -108,16 +113,21 @@ export function mountTs({ library, video, address, relay = false, onFailure, onP
     // Let the engine process the same event first; its retries invalidate this callback.
     queueMicrotask(() => fail(request, data.mediaCode === 2, data));
   };
-  for (const [name, listener] of [['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]]) {
-    video.addEventListener(name, listener);
-  }
+  const listeners = [['canplay', clearStartup], ['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]];
+  for (const [name, listener] of listeners) video.addEventListener(name, listener);
+  // A live connection can stay open without producing a playable frame or sending an error.
+  startup = timers.setTimeout(() => {
+    if (!active || startup === null) return;
+    startup = null;
+    clear();
+    onFailure({ details: 'liveStartupTimeout' });
+  }, 30000);
   start();
   return () => {
     active = false;
     timers.clearTimeout(watch);
+    clearStartup();
     clear();
-    for (const [name, listener] of [['playing', playing], ['play', play], ['pause', pause], ['error', mediaError]]) {
-      video.removeEventListener(name, listener);
-    }
+    for (const [name, listener] of listeners) video.removeEventListener(name, listener);
   };
 }

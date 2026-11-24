@@ -31,6 +31,8 @@ test('errors are explained in plain language', () => {
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 403 }), /rechaza.*caducó/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 401 }), /rechaza/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 404 }), /ya no existe/);
+  assert.match(explainStreamError({ details: 'fragLoadError', code: 404 }), /fragmento de vídeo/);
+  assert.match(explainStreamError({ details: 'liveStartupTimeout' }), /vídeo reproducible a tiempo/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 410 }), /ya no existe/);
   assert.match(explainStreamError({ details: 'manifestLoadError', code: 0 }), /CORS/);
   assert.match(explainStreamError({ details: 'manifestLoadError' }), /CORS/);

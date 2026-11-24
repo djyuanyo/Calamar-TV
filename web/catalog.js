@@ -196,7 +196,9 @@ export function explainStreamError({ details = '', code = 0, expiry = null, now 
     if (expiry && expiry <= now) return `El enlace ha caducado y el servidor rechaza la solicitud (HTTP ${code}).`;
     return 'El servidor rechaza este enlace: no está autorizado o ya caducó.';
   }
+  if ((code === 404 || code === 410) && /^frag/i.test(details)) return 'El servidor ha dejado de entregar un fragmento de vídeo. Pulsa Reintentar para volver al directo.';
   if (code === 404 || code === 410) return 'El enlace ya no existe en el servidor.';
+  if (details === 'liveStartupTimeout') return 'La emisión no ha enviado vídeo reproducible a tiempo. Pulsa Reintentar para volver a conectar.';
   if (code >= 500) return 'El servidor del canal o el puente HTTPS ha devuelto un error. Pulsa Reintentar para volver a conectar.';
   if (/mediaNetwork/i.test(details)) return 'La conexión del vídeo se ha interrumpido después de conectar.';
   if (/load/i.test(details)) return 'El servidor del canal no permite cargarlo desde otra web (CORS), no responde o está bloqueado en tu red.';
