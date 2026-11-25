@@ -29,6 +29,17 @@ test('single sources stay in the catalog and empty catalogs have no selection', 
   assert.equal(selectedSource(sourceOptions(['https://one.example/a.m3u8?e=1000000000']), 0), null);
 });
 
+test('public ZicoTV links are distinguishable from links that request a Premium signature', () => {
+  const sources = sourceOptions([
+    'https://example.com/source.m3u8',
+    'https://zicotv.gcorecdn.com/api/player/4',
+    'https://bp.zicotv.cc/channels/4',
+  ]);
+  assert.deepEqual(sources.map(source => source.label), ['Opción 1', 'ZicoTV · público', 'ZicoTV']);
+  assert.equal(sources[1].how.address, 'https://zicotv.gcorecdn.com/api/player/4');
+  assert.ok(sources.every(source => source.available));
+});
+
 test('Ace Stream sources are normalized, registered once and stored as playable HLS', async () => {
   const id = 'a123456789'.repeat(4);
   const direct = `acestream://${id.toUpperCase()}`;
