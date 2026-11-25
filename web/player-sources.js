@@ -7,10 +7,12 @@ export function sourceOptions(streams, now = Date.now()) {
     const how = webPlayback(url, { pages: true });
     const expiry = streamExpiry(url);
     const expired = !!expiry && expiry <= now;
+    const zico = how.kind === 'event' || zicoPlayerIframe(url);
+    const publicZico = zicoPublicIframe(url);
     return {
       url, index, how, expiry,
       available: how.ok && !expired,
-      label: how.kind === 'event' || zicoPlayerIframe(url) || zicoPublicIframe(url) ? 'ZicoTV' : `Opción ${index + 1}`,
+      label: zico ? 'ZicoTV' : publicZico ? 'ZicoTV · público' : `Opción ${index + 1}`,
       reason: expired ? 'Caducada' : how.ok ? '' : how.reason,
     };
   });
