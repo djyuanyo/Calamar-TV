@@ -1045,7 +1045,7 @@ try {
   await page.locator('#player-close').click();
   eventReady = false;
   await page.goto(base + '/?event-zico=2#/evento/evento-zico-manual');
-  await page.getByText('Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.', { exact: true }).waitFor();
+  await page.locator('#player-status').filter({hasText:'Zico TV todavía no ofrece una señal disponible para este evento. Vuelve a intentarlo en unos minutos.'}).waitFor();
   assert.ok(page.url().endsWith('#/evento/evento-zico-manual'));
   assert.equal(await page.locator('#player').isVisible(), true);
   assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('catalog')).events.some(event => event.id === 'manual-zico')), true);

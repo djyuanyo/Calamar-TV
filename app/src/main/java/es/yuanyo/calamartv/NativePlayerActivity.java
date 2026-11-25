@@ -150,7 +150,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
    */
   private final List<String> channelPages = new ArrayList<>();
   private int pageIndex = -1;
-  private boolean directTried;
+  private boolean directTried, officialZicoSelected;
 
   private int generation, selection, automaticAttempts;
   private long attemptWindow;
@@ -748,7 +748,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
       playDirect();
       return;
     }
-    if (ProviderPlayers.zicoFramePage(pageUrl) != null) {
+    if (zicoFramePage() != null) {
       openWeb();
       return;
     }
@@ -1239,7 +1239,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
   }
 
   private boolean zicoPage() {
-    if (ProviderPlayers.zicoFramePage(pageUrl) != null) return false;
+    if (zicoFramePage() != null) return false;
     return directUrl == null && (VideoResolver.renewablePage(pageUrl) || VideoResolver.eventApi(pageUrl) != null);
   }
 
@@ -1543,15 +1543,17 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     for (String address : directUrls) {
       if (address.equals(currentUrl) || (currentUrl.isEmpty() && address.equals(directUrl))) checked = names.size();
       names.add(HostingPlayback.label(title, "Canal") + (directUrls.size() + pages.size() > 1 ? " · Señal " + (++number) : ""));
-      actions.add(() -> selectChannelAddress(address, false));
+      actions.add(() -> { officialZicoSelected = false; selectChannelAddress(address, false); });
     }
     for (String address : pages) {
-      if (zicoPage() && AppSources.zico(address) && address.equals(pageUrl)) continue;
       if (directUrl == null && !hostingPlayback && address.equals(pageUrl)) checked = names.size();
       String label = HostingPlayback.label(eventSourceNames.get(address), HostingPlayback.label(title, "Canal") + " · Señal " + (++number));
       boolean zico = ProviderPlayers.zicoFramePage(address) != null || VideoResolver.eventApi(address) != null;
       names.add(zico ? "ZicoTV · " + label : label);
-      actions.add(() -> selectChannelAddress(address, true));
+      actions.add(() -> {
+        officialZicoSelected = zico;
+        selectChannelAddress(address, true);
+      });
     }
     if (zicoPage()) {
       for (HostingPlayback.Option option : hostingOptions) {
@@ -1637,9 +1639,16 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     resolveFresh();
   }
 
+  private String zicoFramePage() {
+    if (pageUrl == null) return null;
+    // The source picker explicitly opts into ZicoTV's player, including any event it resolves.
+    if (!officialZicoSelected && !ProviderPlayers.ZICO_EMBED_HOST.equalsIgnoreCase(Uri.parse(pageUrl).getHost())) return null;
+    return ProviderPlayers.zicoFramePage(pageUrl, eventSourceOrigins.get(pageUrl));
+  }
+
   private void openWeb() {
     if (!active) return;
-    final String zicoFrame = ProviderPlayers.zicoFramePage(pageUrl, eventSourceOrigins.get(pageUrl));
+    final String zicoFrame = zicoFramePage();
     if (zicoFrame == null && (AppSources.zico(pageUrl) || AppSources.zico(documentUrl))) {
       problem("No hay una señal de Zico TV disponible. Prueba otra fuente.");
       return;
