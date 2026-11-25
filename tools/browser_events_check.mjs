@@ -1056,11 +1056,11 @@ try {
   // A player link from the provider can carry its short-lived signature.
   await page.evaluate(() => {
     const saved = JSON.parse(sessionStorage.getItem('catalog'));
-    saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4?st=example'];
+    saved.channels.find(c => c.id === 'zico').streams = ['https://bp.zicotv.cc/api/player/4?st=example-signed-link-for-test'];
     sessionStorage.setItem('catalog', JSON.stringify(saved));
   });
   await page.goto(base + '/?without-hosting=1#/canal/canal-zico');
-  await expectZicoFrame(4, '?st=example');
+  await expectZicoFrame(4, '?st=example-signed-link-for-test');
   await page.locator('#player-close').click();
   // Dailymotion is shown in the video screen with the original provider configuration.
   const dmPage = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
