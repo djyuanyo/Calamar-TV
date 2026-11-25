@@ -40,7 +40,7 @@ await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
 const base = `http://127.0.0.1:${server.address().port}`;
 let browser;
 try {
-  browser = await chromium.launch({headless:true,...(process.env.CALAMAR_CHROME_CHANNEL?{channel:process.env.CALAMAR_CHROME_CHANNEL}:{})});
+  browser = await chromium.launch({headless:true,...(process.env.CALAMAR_CHROME_EXECUTABLE ? { executablePath:process.env.CALAMAR_CHROME_EXECUTABLE, args:['--no-sandbox'] } : process.env.CALAMAR_CHROME_CHANNEL ? {channel:process.env.CALAMAR_CHROME_CHANNEL} : {})});
   const page = await browser.newPage({viewport:{width:390,height:844}}), requests=[],errors=[];
   // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
   await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
@@ -65,12 +65,12 @@ try {
     if (['bp.zicotv.cc', 'zicotv.gcorecdn.com'].includes(u.hostname) && ['/api/player/1','/api/player/4','/api/player/56429'].includes(u.pathname))
       return route.fulfill({contentType:'text/html',body:testPlayer});
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('zico_embed')) {
-      assert.equal(route.request().method(),'POST');
-      assert.equal(u.searchParams.get('zico_mode'),'token');
+      assert.equal(route.request().method(),'GET');
+      assert.equal(u.searchParams.get('zico_mode'),'signed');
       if (!premiumConfigured) return route.fulfill({headers,status:409,json:{zicoEmbed:1,error:'Falta configurar ZicoTV Premium en el panel.'}});
       const player = u.searchParams.get('zico_embed');
       if (player.endsWith('/56429')) assert.equal(u.searchParams.get('zico_event'),'https://bp.zicotv.cc/events/116061');
-      return route.fulfill({headers,json:{zicoEmbed:1,mode:'token',url:player+'?token=sample-embed-token-test'}});
+      return route.fulfill({headers,json:{zicoEmbed:1,url:player+'?st=sample-embed-signature-test'}});
     }
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('event'))
       return route.fulfill({headers,status:403});
@@ -88,29 +88,40 @@ try {
   const embedded = async channel => {
     const frame = page.locator('#player iframe');
     await frame.waitFor();
-    assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}?token=sample-embed-token-test`);
+    assert.equal(await frame.getAttribute('src'), `https://bp.zicotv.cc/api/player/${channel}?st=sample-embed-signature-test`);
     assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
     assert.equal(await frame.getAttribute('sandbox'), channel === 4 ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : null);
     assert.ok((await frame.getAttribute('allow')).includes('fullscreen'));
     await frame.contentFrame().getByText('Reproductor oficial de prueba').waitFor();
     assert.equal(requests.some(url=>new URL(url).searchParams.has('page')),false);
   };
+  const direct = 'https://cdn.example/fallback.m3u8';
+  const waitForVideo = () => page.waitForFunction(() => {
+    const video = document.querySelector('#video');
+    return video?.videoWidth > 0 && video.currentTime > .2;
+  }, null, {timeout:20000});
   await page.goto(base+'/#/admin/nuevo');
   await page.getByLabel('Nombre',{exact:true}).fill('Prueba Zico');
-  await page.getByLabel('Enlaces',{exact:true}).fill('https://bp.zicotv.cc/channels/4');
+  await page.getByLabel('Enlaces',{exact:true}).fill(direct+'\nhttps://bp.zicotv.cc/channels/4');
   await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
   await page.waitForFunction(()=>window.__published?.channels.length===1);
-  assert.deepEqual(await page.evaluate(()=>window.__published.channels[0].streams),['https://bp.zicotv.cc/api/player/4']);
+  assert.deepEqual(await page.evaluate(()=>window.__published.channels[0].streams),[direct,'https://bp.zicotv.cc/api/player/4']);
   await page.goto(base+'/#/canales');
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
+  await waitForVideo();
+  await page.getByLabel('Cambiar fuente').selectOption({label:'ZicoTV'});
   await embedded(4);
   await blockedPopupAndPlaying(page.locator('#player iframe'));
   assert.equal(requests.some(u=>u.includes('/channels/')||u.includes('/premium')),false);
   assert.deepEqual(errors,[]);
-  console.log('PASS: admin channel page -> saved player id -> channel card -> official iframe');
+  await page.getByLabel('Cambiar fuente').selectOption('0');
+  await waitForVideo();
+  assert.equal(await page.locator('#player iframe').count(),0);
+  console.log('PASS: channel switches between direct HLS and the signed official iframe');
   await page.locator('#player-close').click();
   premiumConfigured = false;
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
+  await page.getByLabel('Cambiar fuente').selectOption({label:'ZicoTV'});
   await page.getByText('Falta configurar ZicoTV Premium en el panel.').waitFor();
   assert.equal(await page.locator('#player iframe').count(),0);
   await page.getByRole('button',{name:'Ver con publicidad'}).click();
@@ -150,33 +161,39 @@ try {
   assert.deepEqual(await page.evaluate(()=>window.__published.events.find(e=>e.id==='zico-event-700').streams), []);
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
+  await page.getByLabel('Cambiar fuente').selectOption({label:'ZicoTV'});
   await embedded(4);
   await page.locator('#player-close').click();
   await page.goto(base+'/#/admin/editar-evento/zico-event-700');
   await page.getByRole('button',{name:'Sin canal seleccionado',exact:true}).click();
-  await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://bp.zicotv.cc/events/116061');
+  const event = 'https://bp.zicotv.cc/events/116061';
+  await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill(direct + '\n' + event);
   await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
-  await page.waitForFunction(()=>window.__published?.events.find(event=>event.id==='zico-event-700')?.streams[0]==='https://bp.zicotv.cc/events/116061');
+  await page.waitForFunction(()=>window.__published?.events.find(event=>event.id==='zico-event-700')?.streams.length===2);
   assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').zicoStreams),[]);
   await page.goto(base+'/#/admin/evento');
   await page.getByRole('button',{name:'Importar / actualizar agenda de ZicoTV',exact:true}).click();
   await page.getByText(/^Guardado\. Agenda de ZicoTV:/).waitFor();
-  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').streams),['https://bp.zicotv.cc/events/116061']);
+  assert.deepEqual(await page.evaluate(()=>window.__published.events.find(event=>event.id==='zico-event-700').streams),[direct,event]);
   await page.goto(base+'/#/directo');
   await page.locator('.event-card').filter({hasText:'Partido editado con canal'}).click();
+  await waitForVideo();
+  assert.equal(await page.locator('#player iframe').count(),0);
+  assert.equal(requests.includes('https://bp.zicotv.cc/api/v1/events/116061'),false);
+  await page.getByLabel('Cambiar fuente').selectOption({label:'ZicoTV'});
   await embedded(56429);
+  await page.getByLabel('Cambiar fuente').selectOption('0');
+  await waitForVideo();
+  assert.equal(await page.locator('#player iframe').count(),0);
   assert.ok(requests.includes('https://bp.zicotv.cc/api/v1/events/116061'));
   assert.deepEqual(errors,[]);
   await page.locator('#player-close').click();
-  await page.goto(base+'/#/admin/editar-evento/zico-event-701');
-  await page.getByLabel('Enlaces adicionales del evento',{exact:true}).fill('https://cdn.example/fallback.m3u8');
-  await page.getByRole('button',{name:'Guardar y publicar',exact:true}).click();
-  await page.waitForFunction(()=>window.__published.events.find(e=>e.id==='zico-event-701').streams.length===1);
-  await page.goto(base+'/#/directo');
-  await page.locator('.event-card').filter({hasText:'Partido solo externo'}).click();
-  await page.waitForFunction(()=>{const v=document.querySelector('#video');return v?.videoWidth>0&&v.currentTime>.2;},null,{timeout:20000});
-  assert.equal(await page.locator('#player iframe').count(),0);
-  assert.ok(requests.includes('https://cdn.example/fallback.m3u8'));
   assert.equal(requests.some(url=>new URL(url).hostname==='ads.example'),false);
-  console.log('PASS: Zico channels and events mount the official iframe; direct HLS keeps our player');
+  await page.goto(base+'/zico-player.html#premium/4');
+  const wrapper = page.locator('iframe');
+  await wrapper.waitFor();
+  assert.equal(await wrapper.getAttribute('src'),'https://bp.zicotv.cc/api/player/4?st=sample-embed-signature-test');
+  assert.equal(await wrapper.getAttribute('referrerpolicy'),'origin');
+  assert.deepEqual(errors,[]);
+  console.log('PASS: both channel and event switch between direct HLS and the signed Zico iframe');
 } finally {await browser?.close();await new Promise(ok=>server.close(ok));}

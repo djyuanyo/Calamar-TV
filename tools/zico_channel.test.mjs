@@ -38,20 +38,20 @@ test('saved channel pages enter the catalog as renewable players with duplicate 
   assert.deepEqual(channels[0].streams, ['https://bp.zicotv.cc/api/player/1']);
 });
 
-test('premium iframe accepts a single token from the hosting for the selected channel', async () => {
+test('premium iframe accepts only a signed link for the selected channel', async () => {
   const endpoint = 'https://calamarmenciano.com/calamar-player.php';
   const player = 'https://bp.zicotv.cc/api/player/4';
-  const valid = player + '?token=sample-token%2Bwith%2Fslash';
+  const valid = player + '?st=sample-signature-with-encoded%2Fslash';
   const fetcher = url => async (request, options) => {
     const target = new URL(request);
     assert.equal(target.origin + target.pathname, endpoint);
     assert.equal(target.searchParams.get('zico_embed'), player);
-    assert.equal(target.searchParams.get('zico_mode'), 'token');
-    assert.equal(options.method, 'POST');
-    return Response.json({ zicoEmbed: 1, mode: 'token', url });
+    assert.equal(target.searchParams.get('zico_mode'), 'signed');
+    assert.equal(options.method, 'GET');
+    return Response.json({ zicoEmbed: 1, url });
   };
   assert.equal(await premiumZicoIframe(player + '?token=from-catalog', endpoint, { fetcher: fetcher(valid) }), valid);
-  for (const url of [valid.replace('/4?', '/5?'), valid.replace('bp.zicotv.cc', 'example.com'), valid + '&other=1']) {
+  for (const url of [valid.replace('/4?', '/5?'), valid.replace('bp.zicotv.cc', 'example.com'), valid + '&other=1', player + '?token=private-reusable-key']) {
     await assert.rejects(premiumZicoIframe(player, endpoint, { fetcher: fetcher(url) }), /enlace Premium no válido/);
   }
 });

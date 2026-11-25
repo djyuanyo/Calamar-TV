@@ -1,4 +1,5 @@
 import { webPlayback, streamExpiry } from './catalog.js';
+import { zicoPlayerIframe, zicoPublicIframe } from './zico-channel.js';
 
 /** Keep catalog numbering, including unavailable alternatives, so a source never silently vanishes. */
 export function sourceOptions(streams, now = Date.now()) {
@@ -9,7 +10,7 @@ export function sourceOptions(streams, now = Date.now()) {
     return {
       url, index, how, expiry,
       available: how.ok && !expired,
-      label: `Opción ${index + 1}`,
+      label: how.kind === 'event' || zicoPlayerIframe(url) || zicoPublicIframe(url) ? 'ZicoTV' : `Opción ${index + 1}`,
       reason: expired ? 'Caducada' : how.ok ? '' : how.reason,
     };
   });

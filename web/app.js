@@ -835,9 +835,9 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   }
   const generation = playbackGeneration;
   const requestedStreams = c.vod ? c.streams.slice(0, 1) : c.streams;
-  if (requestedStreams.some(zicoEventApi) && !c.eventSourcesExpanded) {
+  if (zicoEventApi(requestedStreams[index]) && !c.eventSourcesExpanded) {
     playerStatus.textContent = 'Consultando fuentes del evento…';
-    renderSourcePicker(playerSources, [], 0, () => {});
+    renderSourcePicker(playerSources, sourceOptions(requestedStreams), index, (chosen) => playSource(c, chosen));
     const lookup = sourceLookup = new AbortController();
     const timeout = setTimeout(() => lookup.abort(), 15000);
     const requested = c.streams[index];
@@ -850,14 +850,14 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       offerReport(c);
       return;
     }
-    const sources = resolved.filter(source => !source.unavailable);
+    const sources = resolved.map(source => source.unavailable ? { ...source, error: 'ZicoTV aún no ofrece una señal para este evento.' } : source);
     c = { ...c, streams: sources.map(s => s.url), eventSourcesExpanded: true,
       sourceNames: Object.fromEntries(sources.map(s => [s.url, s.name])),
       sourceEvents: Object.fromEntries(sources.filter(s => s.origin).map(s => [s.url, s.origin])),
       sourceErrors: Object.fromEntries(sources.filter(s => s.error).map(s => [s.url, s.error])),
       originalStreams: c.streams };
-    const chosen = sources.findIndex(s => !s.error && (s.url === requested || s.origin === requested));
-    index = chosen >= 0 ? chosen : Math.max(0, sources.findIndex(s => !s.error));
+    const chosen = sources.findIndex(s => s.url === requested || s.origin === requested);
+    index = chosen >= 0 ? chosen : 0;
   }
   const streams = c.vod ? c.streams.slice(0, 1) : c.streams;
   const allSources = sourceOptions(streams).map(s => ({ ...s, label: c.sourceNames?.[s.url] || s.label }));

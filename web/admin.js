@@ -1,7 +1,7 @@
 import { usersAdmin } from './users-admin.js';
 import { iptvAdmin } from './iptv-lists.js';
 import { mergeUserDirectory } from './access-policy.js';
-import { zicoChannelPlayer } from './zico-channel.js';
+import { zicoPlayerIframe } from './zico-channel.js';
 import { viewerDevice } from './user-playback.js';
 import * as userService from './firebase.js';
 import { coverFromFile } from './image-file.js';
@@ -111,7 +111,7 @@ function validStreams(text) {
     }
     checkYouTubeIngest([line]);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Usa un enlace HTTP, HTTPS o Ace Stream válido: ${line}`);
-    const source = zicoChannelPlayer(url.href) || url.href;
+    const source = zicoPlayerIframe(url.href)?.split('?')[0] || url.href;
     if (!out.includes(source)) out.push(source);
   }
   if (!out.length) throw new Error('Añade al menos un enlace');
@@ -125,7 +125,8 @@ async function administratorToken() {
 
 function publishableStreams(links) {
   checkYouTubeIngest(links);
-  return resolveAceStreams(links, administratorToken);
+  const sources = [...new Set(links.map(link => zicoPlayerIframe(link)?.split('?')[0] || link))];
+  return resolveAceStreams(sources, administratorToken);
 }
 
 /** Saved categories in order, then any other category a channel uses (TDT or own), with its default colour. */
@@ -664,7 +665,7 @@ function zicoTokenPanel() {
     show(result); save.disabled = false;
   }).catch(error => { status.textContent = explain(error); });
   return el('form', { class: 'form', onsubmit: event => { event.preventDefault(); if (!save.disabled && input.value.trim()) update(input.value.trim()); } },
-    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y es visible en la URL del reproductor de ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
+    el('h2', {}, 'ZicoTV Premium'), field('Token Premium', input, 'Se guarda en el hosting y se usa para pedir enlaces firmados al reproductor de ZicoTV.'), el('div', { class: 'actions' }, save, remove), status);
 }
 
 function eventForm(existing, rerender, catalogState) {
