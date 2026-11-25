@@ -1003,13 +1003,13 @@ try {
     const url = new URL(route.request().url());
     const player = url.searchParams.get('zico_embed');
     if (!player) return route.fulfill({status:403});
-    assert.equal(url.searchParams.get('zico_mode'), 'token');
+    assert.equal(url.searchParams.get('zico_mode'), 'signed');
     premiumZicoRequests++;
-    return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{zicoEmbed:1,mode:'token',url:player+'?token=sample-embed-token-test'}});
+    return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{zicoEmbed:1,url:player+'?st=sample-embed-signature-test'}});
   });
   await page.route('https://bp.zicotv.cc/api/player/*', route =>
     route.fulfill({ contentType: 'text/html', body: '<p>Reproductor Zico de prueba</p>' }));
-  const expectZicoFrame = async (channel, query = '?token=sample-embed-token-test') => {
+  const expectZicoFrame = async (channel, query = '?st=sample-embed-signature-test') => {
     const frame = page.locator(`#player-frame[src="https://bp.zicotv.cc/api/player/${channel}${query}"]`);
     await frame.contentFrame().getByText('Reproductor Zico de prueba').waitFor();
     assert.equal(await frame.getAttribute('referrerpolicy'), 'origin');
