@@ -33,6 +33,7 @@ export const viewers = async target => [...present.values()].filter(t => t === t
 export const audience = async () => [...present.values()].map(target => ({ target, minute: Math.floor(Date.now() / 60000) }));
 export const viewersOf = async targets => new Map(targets.map(target => [target, [...present.values()].filter(t => t === target).length]));
 export const purgeAudience = async () => {};
+export const watchUnreadChannelReports = next => { next(false); return () => {}; };
 export const recordVisit = async (day, key) => { window.__visits.push([day, key]); };
 export const visits = async () => window.__statsVisitDays || [{ id: '2026-11-30', data: { 'c_sport-one': 3, last: 'c_sport-one' } }];
 export const readLibrarySettings = async () => window.__librarySettings || { tmdb: 'abcdef0123456789abcdef0123456789', folders: { movies: 'https://drive.google.com/drive/folders/PELISPELISPELISPELIS12345' } };

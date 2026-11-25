@@ -59,12 +59,28 @@ final class ProviderPlayers {
   static final String ZICO_EMBED_HOST = "zicotv.gcorecdn.com";
   private static final Pattern ZICO_CHANNEL = Pattern.compile("/(?:api/player|channels)/([1-9][0-9]{0,15})/?");
 
-  /** The wrapper on our own web origin embeds only the public player for this channel ID. */
-  static String zicoFramePage(String address) {
+  /** Load the official iframe from Calamar TV’s authorised web origin. */
+  static String zicoFramePage(String address) { return zicoFramePage(address, null); }
+
+  static String zicoFramePage(String address, String event) {
     URI uri = https(address);
-    if (uri == null || !ZICO_EMBED_HOST.equalsIgnoreCase(uri.getHost())) return null;
+    if (uri == null) return null;
     Matcher channel = ZICO_CHANNEL.matcher(uri.getRawPath());
-    return channel.matches() ? SportsCatalog.WEB + "zico-player.html#" + channel.group(1) : null;
+    if (!channel.matches()) return null;
+    String wrapper = SportsCatalog.WEB + "zico-player.html#";
+    String host = uri.getHost().toLowerCase(Locale.ROOT);
+    if (ZICO_EMBED_HOST.equals(host)) return wrapper + channel.group(1);
+    if (!host.equals("bp.zicotv.cc") && !host.equals("zicotv.cc")) return null;
+    String fragment = wrapper + "premium/" + channel.group(1);
+    String proof = uri.getRawQuery();
+    if (proof != null && proof.matches("(?:ct_event=[0-9]{1,16}&ct_sig=[a-f0-9]{32}|st=[A-Za-z0-9_.~%+=/-]{16,8192})"))
+      return fragment + "?" + proof;
+    URI origin = https(event);
+    if (origin != null && (origin.getHost().equalsIgnoreCase("bp.zicotv.cc") || origin.getHost().equalsIgnoreCase("zicotv.cc"))) {
+      Matcher eventId = Pattern.compile("/events/([0-9]{1,16})/?").matcher(origin.getRawPath());
+      if (eventId.matches()) return fragment + "?event=" + eventId.group(1);
+    }
+    return fragment;
   }
 
   static String embed(String address) { return dailymotion(address); }

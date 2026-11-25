@@ -16,6 +16,17 @@ public class ProviderPlayersTest {
       assertNull(ProviderPlayers.zicoFramePage(address));
   }
 
+  @Test public void premiumZicoFramesUseTheOfficialChannelAndEventOnly() {
+    String wrapper = SportsCatalog.WEB + "zico-player.html#premium/6";
+    assertEquals(wrapper, ProviderPlayers.zicoFramePage("https://bp.zicotv.cc/channels/6?token=private"));
+    assertEquals(wrapper + "?event=701", ProviderPlayers.zicoFramePage(
+        "https://zicotv.cc/api/player/6", "https://bp.zicotv.cc/events/701"));
+    String proof = "ct_event=700&ct_sig=1234567890abcdef1234567890abcdef";
+    assertEquals(wrapper + "?" + proof, ProviderPlayers.zicoFramePage("https://bp.zicotv.cc/api/player/6?" + proof));
+    assertEquals(wrapper, ProviderPlayers.zicoFramePage("https://bp.zicotv.cc/api/player/6", "https://example.com/events/701"));
+    assertNull(ProviderPlayers.zicoFramePage("https://bp.zicotv.cc.example.com/api/player/6"));
+  }
+
   @Test public void normalizesOnlyKnownPlayerLinks() {
     String daily = "https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W";
     assertEquals(daily, ProviderPlayers.embed(daily));

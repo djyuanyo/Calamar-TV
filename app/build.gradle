@@ -8,8 +8,8 @@ android {
         testInstrumentationRunner 'es.yuanyo.calamartv.CalamarTestRunner'
         minSdk 24
         targetSdk 35
-        versionCode 185
-        versionName '2.21.30'
+        versionCode 186
+        versionName '2.21.31'
     }
     if (System.getenv('CALAMAR_KEYSTORE_PATH')) {
         signingConfigs {
