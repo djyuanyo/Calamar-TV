@@ -989,11 +989,13 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       if (generation === playbackGeneration) showFrame(address, 'origin');
     } catch (error) {
       if (generation === playbackGeneration) {
+        const channel = new URL(zicoFrame).pathname.split('/').pop();
         playerStatus.replaceChildren(
           lookup.signal.aborted ? 'El hosting tardó demasiado en devolver el enlace Premium.'
             : error.message || 'No se pudo pedir el enlace Premium de ZicoTV.',
           ' ', el('button', { type: 'button', class: 'ghost', onclick: () => playSource(c, source.index) }, 'Reintentar'),
-          ' ', el('button', { type: 'button', class: 'ghost', onclick: () => showFrame(zicoFrame, 'origin') }, 'Ver con publicidad'),
+          ' ', el('a', { class: 'ghost', href: `https://bp.zicotv.cc/channels/${channel}`,
+            target: '_blank', rel: 'noopener noreferrer' }, 'Abrir en ZicoTV'),
         );
         offerReport(c, false);
       }

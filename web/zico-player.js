@@ -38,7 +38,9 @@ async function openPremium(channel, query) {
     const retry = document.createElement('button');
     retry.textContent = 'Reintentar';
     retry.addEventListener('click', () => openPremium(channel, query), { once: true });
-    document.body.replaceChildren(message, retry);
+    const other = document.createElement('p');
+    other.textContent = 'Puedes elegir otra señal desde Fuentes.';
+    document.body.replaceChildren(message, retry, other);
   }
 }
 

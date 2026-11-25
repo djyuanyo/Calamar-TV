@@ -44,7 +44,8 @@ try {
   const page = await browser.newPage({viewport:{width:390,height:844}}), requests=[],errors=[];
   // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
   await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
-  let premiumConfigured = true;
+  let rejectPremium = false;
+  const rejection = 'ZicoTV rechazó la solicitud de firma desde el hosting (HTTP 403).';
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=> {
     const u = new URL(route.request().url());
@@ -67,7 +68,7 @@ try {
     if (u.hostname==='calamarmenciano.com' && u.searchParams.has('zico_embed')) {
       assert.equal(route.request().method(),'GET');
       assert.equal(u.searchParams.get('zico_mode'),'signed');
-      if (!premiumConfigured) return route.fulfill({headers,status:409,json:{zicoEmbed:1,error:'Falta configurar ZicoTV Premium en el panel.'}});
+      if (rejectPremium) return route.fulfill({headers,status:502,json:{zicoEmbed:1,error:rejection}});
       const player = u.searchParams.get('zico_embed');
       if (player.endsWith('/56429')) assert.equal(u.searchParams.get('zico_event'),'https://bp.zicotv.cc/events/116061');
       return route.fulfill({headers,json:{zicoEmbed:1,url:player+'?st=sample-embed-signature-test'}});
@@ -119,17 +120,20 @@ try {
   assert.equal(await page.locator('#player iframe').count(),0);
   console.log('PASS: channel switches between direct HLS and the signed official iframe');
   await page.locator('#player-close').click();
-  premiumConfigured = false;
+  rejectPremium = true;
   await page.locator('.card').filter({hasText:'Prueba Zico'}).click();
   await page.getByLabel('Cambiar fuente').selectOption({label:'ZicoTV'});
-  await page.getByText('Falta configurar ZicoTV Premium en el panel.').waitFor();
+  await page.getByText(rejection).waitFor();
   assert.equal(await page.locator('#player iframe').count(),0);
-  await page.getByRole('button',{name:'Ver con publicidad'}).click();
-  await page.locator('#player iframe').waitFor();
-  assert.equal(await page.locator('#player iframe').getAttribute('src'),'https://bp.zicotv.cc/api/player/4');
-  await blockedPopupAndPlaying(page.locator('#player iframe'));
+  const official = page.getByRole('link',{name:'Abrir en ZicoTV'});
+  assert.equal(await official.getAttribute('href'),'https://bp.zicotv.cc/channels/4');
+  assert.equal(await official.getAttribute('target'),'_blank');
+  assert.equal(requests.includes('https://bp.zicotv.cc/api/player/4'),false);
+  await page.getByLabel('Cambiar fuente').selectOption('0');
+  await waitForVideo();
+  console.log('PASS: refused Premium grants preserve the error and the direct source');
   await page.locator('#player-close').click();
-  premiumConfigured = true;
+  rejectPremium = false;
   const start_time = await page.evaluate(() => new Date(Date.now()+3600000).toISOString());
   await page.route('https://zicotv.gcorecdn.com/api/v1/events',route=>route.fulfill({headers:{'access-control-allow-origin':'*'},json:{total:3,data:[
     {id:700,title:'Partido con canal propio',status:'scheduled',sport_category:'Soccer',league:'Liga de prueba',start_time,sources:[
