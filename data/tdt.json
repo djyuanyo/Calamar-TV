@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1794768842406,
+ "updated_at": 1795681540948,
  "channels": [
   {
    "id": "la-1",
@@ -4965,18 +4965,6 @@
    "geo": false
   },
   {
-   "id": "conexion-berazategui-argentina",
-   "name": "Conexión Berazategui Argentina",
-   "group": "Música",
-   "region": "",
-   "logo": "https://graph.facebook.com/conexionberatv/picture?width=200&height=200",
-   "web": "https://www.conexionberazategui.com.ar/tvenvivo/",
-   "streams": [
-    "https://lbgo.bozztv.com/ssh101/ssh101/conexionbera/playlist.m3u8"
-   ],
-   "geo": false
-  },
-  {
    "id": "radio-italia-tv",
    "name": "Radio Italia TV",
    "group": "Música",
@@ -5482,7 +5470,7 @@
    "name": "The K-POP Corea del Sur",
    "group": "Música",
    "region": "",
-   "logo": "https://pbs.twimg.com/profile_images/2059096893515542528/2cuVWylU_200x200.jpg",
+   "logo": "https://pbs.twimg.com/profile_images/2122147677467271168/d5X_USZr_200x200.png",
    "web": "https://www.bigc.im",
    "streams": [],
    "geo": false
