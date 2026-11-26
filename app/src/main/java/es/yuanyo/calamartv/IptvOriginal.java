@@ -4,6 +4,9 @@ import android.content.Context;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseUser;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,6 +22,7 @@ final class IptvOriginal {
   private IptvOriginal() {}
 
   private static final String BASE = "https://video.calamarmenciano.com/iptv-hls/";
+  private static final String PILOT_FINGERPRINT = "c81ed917604c0f1a8e1a77ccac8fbb1763dab796eebf7f374ac6ab31852f3256";
   private static final Pattern LINK = Pattern.compile(Pattern.quote(BASE) + "([a-f0-9]{32})/index\\.m3u8");
   private static final OkHttpClient CLIENT = new OkHttpClient.Builder().followRedirects(false)
       .followSslRedirects(false).callTimeout(5, TimeUnit.SECONDS).build();
@@ -26,6 +30,25 @@ final class IptvOriginal {
   static String key(String source) {
     Matcher match = LINK.matcher(source == null ? "" : source);
     return match.matches() ? match.group(1) : null;
+  }
+
+  /** The fingerprint limits playback to the configured Bunny pilot. */
+  static String pilotCdn(String source) {
+    String key = key(source);
+    if (key == null) return null;
+    try {
+      byte[] hash = MessageDigest.getInstance("SHA-256").digest(key.getBytes(StandardCharsets.UTF_8));
+      StringBuilder fingerprint = new StringBuilder(hash.length * 2);
+      for (byte value : hash) {
+        fingerprint.append(Character.forDigit((value & 0xff) >>> 4, 16));
+        fingerprint.append(Character.forDigit(value & 0xf, 16));
+      }
+      return PILOT_FINGERPRINT.contentEquals(fingerprint) ? "https://calamartv.b-cdn.net/iptv-hls/" + key + "/index.m3u8" : null;
+    } catch (NoSuchAlgorithmException unavailable) { return null; }
+  }
+
+  static boolean preferOriginal(String source) {
+    return key(source) != null && pilotCdn(source) == null;
   }
 
   /** Called on a playback worker. A guest or an unavailable lookup can still use the HLS playlist. */

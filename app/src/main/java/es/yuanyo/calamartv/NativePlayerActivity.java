@@ -697,7 +697,7 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     selection = Math.min(selection, directUrls.size() - 1);
     int index = selection;
     String bridge = directUrls.get(index);
-    if (IptvOriginal.key(bridge) != null && !checkedIptvBridges.contains(bridge)) {
+    if (IptvOriginal.preferOriginal(bridge) && !checkedIptvBridges.contains(bridge)) {
       int request = ++generation;
       status.setText("Buscando la señal original…");
       worker.execute(() -> {

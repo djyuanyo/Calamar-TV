@@ -20,4 +20,10 @@ public class AppSourcesTest {
       AppSources.forAndroid(Arrays.asList("https://bp.zicotv.cc/api/player/22", "https://iptv.example/live/canal.m3u8")));
   assertEquals(Collections.singletonList(links.get(0)), AppSources.forAndroid(Arrays.asList(links.get(0),links.get(0),"invalid")));
  }
+ @Test public void unrelatedIptvBridgeKeepsItsOriginalSourcePreference() {
+  String bridge = "https://video.calamarmenciano.com/iptv-hls/0123456789abcdef0123456789abcdef/index.m3u8";
+  assertNull(IptvOriginal.pilotCdn(bridge));
+  assertTrue(IptvOriginal.preferOriginal(bridge));
+  assertEquals(Collections.singletonList(bridge), AppSources.forAndroid(Collections.singletonList(bridge)));
+ }
 }

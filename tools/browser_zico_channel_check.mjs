@@ -45,6 +45,11 @@ try {
   // The fixture schedules a match an hour ahead, which must stay on the same Madrid day.
   await page.clock.install({ time: new Date('2026-11-13T12:00:00Z') });
   let rejectPremium = false;
+  let rejectPilot = false;
+  const pilotKey = 'b'.repeat(32);
+  const pilotPath = `/iptv-hls/${pilotKey}/`;
+  const pilotOrigin = `https://video.calamarmenciano.com${pilotPath}index.m3u8`;
+  const pilotCdn = `https://calamartv.b-cdn.net${pilotPath}index.m3u8`;
   const rejection = 'ZicoTV rechazó la solicitud de firma desde el hosting (HTTP 403).';
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=> {
@@ -53,6 +58,13 @@ try {
     requests.push(u.href);
     const headers={'access-control-allow-origin':'*'};
     if (u.hostname==='cdn.jsdelivr.net' && u.pathname.includes('/hls.js@')) return route.fulfill({contentType:'text/javascript',body:hls});
+    if (u.href === pilotOrigin || u.href === pilotCdn) {
+      if (u.href === pilotCdn && rejectPilot) return route.fulfill({headers,status:404});
+      return route.fulfill({headers,contentType:'application/vnd.apple.mpegurl',body:'#EXTM3U\n#EXT-X-TARGETDURATION:9\n#EXTINF:8.023,\nvideo.ts\n#EXT-X-ENDLIST\n'});
+    }
+    if (['video.calamarmenciano.com','calamartv.b-cdn.net'].includes(u.hostname) && u.pathname === pilotPath + 'video.ts') {
+      return route.fulfill({headers,contentType:'video/mp2t',body:segment});
+    }
     if (u.href==='https://bp.zicotv.cc/api/v1/events/116061') return route.fulfill({headers,json:{data:{sources:[
       {source:'own',channel_id:56429,name:'[RAVEN] DAZN EVENTOS 17',player_url:'https://bp.zicotv.cc/api/player/56429',is_premium:false},
     ]}}});
@@ -200,4 +212,28 @@ try {
   assert.equal(await wrapper.getAttribute('referrerpolicy'),'origin');
   assert.deepEqual(errors,[]);
   console.log('PASS: both channel and event switch between direct HLS and the signed Zico iframe');
+
+  fixture.channels.push({id:'piloto-cdn',name:'Canal CDN de prueba',streams:[pilotOrigin]});
+  // Target the public pilot fingerprint using a synthetic registry key.
+  await page.addInitScript(key => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const fingerprint = 'c81ed917604c0f1a8e1a77ccac8fbb1763dab796eebf7f374ac6ab31852f3256';
+    crypto.subtle.digest = (algorithm, data) => new TextDecoder().decode(data) === key
+      ? Promise.resolve(Uint8Array.from(fingerprint.match(/../g), pair => parseInt(pair, 16)).buffer)
+      : digest(algorithm, data);
+  }, pilotKey);
+  await page.evaluate(() => sessionStorage.removeItem('catalog'));
+  await page.goto(base+'/?pilot=fixture#/canales');
+  const pilotCard = page.locator('.card').filter({hasText:'Canal CDN de prueba'});
+  await pilotCard.click();
+  await waitForVideo();
+  assert.deepEqual(requests.filter(url => url === pilotCdn || url === pilotOrigin), [pilotCdn]);
+  await page.locator('#player-close').click();
+  rejectPilot = true;
+  const beforeRetry = requests.length;
+  await pilotCard.click();
+  await waitForVideo();
+  assert.deepEqual(requests.slice(beforeRetry).filter(url => url === pilotCdn || url === pilotOrigin), [pilotCdn,pilotOrigin]);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: IPTV pilot plays through Bunny and falls back to its origin');
 } finally {await browser?.close();await new Promise(ok=>server.close(ok));}

@@ -18,7 +18,7 @@ import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShare
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { offerChannelReport } from './channel-reports.js';
-import { findIptvOriginal, iptvHlsKey } from './iptv-vps.js';
+import { findIptvOriginal, iptvHlsKey, iptvPilotCdn } from './iptv-vps.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -824,7 +824,7 @@ function latestPlayback(c) {
   return list.find(item => item.id === c.id) || c;
 }
 
-async function playSource(c, index, resumeAt = 0, compatible = false) {
+async function playSource(c, index, resumeAt = 0, compatible = false, useIptvOrigin = false) {
   stop();
   // An imported match without a channel yet: the match page alone, with no video.
   if (c.pending) {
@@ -1084,11 +1084,18 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
   }
   // LuluStream videos come through the hosting (source.how.address): LuluStream only serves who opened its page.
   const round = roundOf(c);
-  const address = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
-  const registeredIptv = !c.vod && iptvHlsKey(address);
+  const origin = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
+  const registeredIptv = !c.vod && iptvHlsKey(origin);
+  const cdn = registeredIptv && !useIptvOrigin ? await iptvPilotCdn(origin) : null;
+  if (generation !== playbackGeneration) return;
+  const address = cdn || origin;
   let tryingOriginal = false;
   const failHls = async data => {
     if (generation !== playbackGeneration || failureHandled || tryingOriginal) return;
+    if (cdn) {
+      failureHandled = true;
+      return playSource(c, source.index, resumeAt, compatible, true);
+    }
     const user = registeredIptv ? webAccess.current().user : null;
     if (!user || user.isAnonymous) { next(data); return; }
 
@@ -1127,7 +1134,7 @@ async function playSource(c, index, resumeAt = 0, compatible = false) {
       if (data.fatal && source.how.page && /^manifest/i.test(data.details || '')) data.userMessage = pagePlaybackError(data.response?.code);
       if (data.fatal && compatible && data.response?.code === 429) data.userMessage = 'Google Drive ha alcanzado la cuota de descarga de este vídeo.';
       if (data.fatal && compatible && data.response?.code === 503) data.userMessage = 'El hosting está adaptando otros vídeos. Pulsa Reintentar en un momento.';
-      if (data.fatal || (registeredIptv && data.response?.code === 503 && /^(manifest|level)/i.test(data.details || ''))) void failHls(data);
+      if (data.fatal || (registeredIptv && !cdn && data.response?.code === 503 && /^(manifest|level)/i.test(data.details || ''))) void failHls(data);
     });
     hls.loadSource(address);
     hls.attachMedia(video);
