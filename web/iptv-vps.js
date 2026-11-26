@@ -7,6 +7,19 @@ const management = 'https://calamarmenciano.com/calamar-iptv.php?iptv_admin=1';
 
 export const iptvHlsKey = link => hlsLink.exec(link)?.[1] || null;
 
+const bunnyPilot = 'c81ed917604c0f1a8e1a77ccac8fbb1763dab796eebf7f374ac6ab31852f3256';
+
+/** Reuse the configured pilot without publishing the channel's playback address. */
+export async function iptvPilotCdn(link) {
+  const key = iptvHlsKey(link);
+  if (!key || !globalThis.crypto?.subtle) return null;
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+    const fingerprint = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+    return fingerprint === bunnyPilot ? `https://calamartv.b-cdn.net/iptv-hls/${key}/index.m3u8` : null;
+  } catch { return null; }
+}
+
 export async function findIptvOriginal(link, token, request = fetch) {
   const key = iptvHlsKey(link);
   if (!key || !token) return null;

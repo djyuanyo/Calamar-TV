@@ -22,6 +22,8 @@ final class AppSources {
     if (sources != null) for (String candidate : sources) {
       String url = UserChannels.normalize(candidate);
       if (url == null || webOnly(url) || out.contains(url) || zico.contains(url)) continue;
+      String cdn = IptvOriginal.pilotCdn(url);
+      if (cdn != null && !out.contains(cdn)) out.add(cdn);
       (zico(url) ? zico : out).add(url);
     }
     out.addAll(zico);

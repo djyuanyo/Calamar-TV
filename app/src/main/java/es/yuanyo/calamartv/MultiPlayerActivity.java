@@ -86,7 +86,7 @@ public class MultiPlayerActivity extends Activity {
       if (sourceIndex >= urls.size()) { status.setText("No disponible. Quita esta pantalla o elige otro evento."); return; }
       loading = true; final int request = ++generation;
       final String page = renewal && resolved != null && resolved.page != null ? resolved.page : urls.get(sourceIndex);
-      final boolean preferOriginal = IptvOriginal.key(page) != null && !checkedBridges.contains(page);
+      final boolean preferOriginal = IptvOriginal.preferOriginal(page) && !checkedBridges.contains(page);
       final String base = endpoint, selected = signal; final int round = attempt;
       final ExoPlayer decoder = player; final HlsContinuity session = continuity;
       final boolean background = renewal && decoder != null && session != null;
