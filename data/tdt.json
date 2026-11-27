@@ -1,6 +1,6 @@
 {
  "source": "TDTChannels · https://github.com/LaQuay/TDTChannels",
- "updated_at": 1795681540948,
+ "updated_at": 1795768835578,
  "channels": [
   {
    "id": "la-1",
@@ -148,8 +148,10 @@
    "group": "Generalistas",
    "region": "",
    "logo": "https://pbs.twimg.com/profile_images/1868605710218514432/98bLWAHa_200x200.jpg",
-   "web": "https://squirreltv.es",
-   "streams": [],
+   "web": "https://www.squirrelplus.com/videos/428849-squirrel",
+   "streams": [
+    "https://squirrel.cdn.plenitas.pro/squirrel-es/hls/master.m3u8"
+   ],
    "geo": false
   },
   {
@@ -158,8 +160,22 @@
    "group": "Generalistas",
    "region": "",
    "logo": "https://pbs.twimg.com/profile_images/2007038154994294784/NqJe7hvI_200x200.jpg",
-   "web": "https://squirrel2.tv",
-   "streams": [],
+   "web": "https://www.squirrelplus.com/videos/428850-squirreldos",
+   "streams": [
+    "https://squirrel.cdn.plenitas.pro/squirreldos/hls/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "bom-cine",
+   "name": "BOM Cine",
+   "group": "Generalistas",
+   "region": "",
+   "logo": "https://pbs.twimg.com/profile_images/1450728866377568257/B8HFyLJe_200x200.jpg",
+   "web": "https://www.squirrelplus.com/videos/428852-bom-cine",
+   "streams": [
+    "https://squirrel.cdn.plenitas.pro/bomcine/hls/master.m3u8"
+   ],
    "geo": false
   },
   {
@@ -179,16 +195,6 @@
    "region": "",
    "logo": "https://graph.facebook.com/DKissTV/picture?width=200&height=200",
    "web": "https://www.dkiss.es",
-   "streams": [],
-   "geo": false
-  },
-  {
-   "id": "bom-cine",
-   "name": "BOM Cine",
-   "group": "Generalistas",
-   "region": "",
-   "logo": "https://pbs.twimg.com/profile_images/1450728866377568257/B8HFyLJe_200x200.jpg",
-   "web": "https://www.bomcine.com",
    "streams": [],
    "geo": false
   },
@@ -785,6 +791,30 @@
    "logo": "https://graph.facebook.com/cazaflixoficial/picture?width=200&height=200",
    "web": "https://cazaflix.com/tv-directo/",
    "streams": [],
+   "geo": false
+  },
+  {
+   "id": "horse-tv",
+   "name": "Horse TV",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/horsetvES/picture?width=200&height=200",
+   "web": "https://www.squirrelplus.com/videos/419921-horse-tv",
+   "streams": [
+    "https://squirrel.cdn.plenitas.pro/hprse-es/hls/master.m3u8"
+   ],
+   "geo": false
+  },
+  {
+   "id": "nautical-channel",
+   "name": "Nautical Channel",
+   "group": "Deportes",
+   "region": "",
+   "logo": "https://graph.facebook.com/nauticalchannelesp/picture?width=200&height=200",
+   "web": "https://www.squirrelplus.com/videos/419922-nautical-channel",
+   "streams": [
+    "https://squirrel.cdn.plenitas.pro/nautical-es/hls/master.m3u8"
+   ],
    "geo": false
   },
   {
@@ -4542,12 +4572,12 @@
    "geo": false
   },
   {
-   "id": "futbola-euskal-selekzioa-etb-on",
-   "name": "Futbola Euskal selekzioa (ETB On)",
+   "id": "herri-txiki-infernu-handi-etb-on",
+   "name": "Herri Txiki Infernu Handi (ETB On)",
    "group": "Autonómicos",
    "region": "País Vasco",
    "logo": "https://play-lh.googleusercontent.com/GUW-ipQpsCCLhoJwWarfUDYO_vr3-5rpxhfipNSHAAvlaaWdfBwdUtVVUzs3PPyQzrSBVepKSqPzNAwDHvljII0=w200",
-   "web": "https://etbon.eus/ch/futbola-euskal-selekzioa",
+   "web": "https://etbon.eus/ch/herri-txiki-infernu-handi",
    "streams": [],
    "geo": false
   },
