@@ -8,6 +8,7 @@ import { matchExpired } from './match-scores.js';
 import { eventOrder, eventMeta } from './sports.js';
 import { fixtureEvent, weekFixtures, madridWeek, MATCH_SPAN_MS } from './competitions.js';
 import { httpTsSource } from './http-stream.js';
+import { isIptvOverflow } from './iptv-vps.js';
 import { youtubeVideo } from './trailer.js';
 // Containers whose sound (often AC3/DTS) browsers cannot play: only the app plays them.
 const VIDEO_FILE = /\.(mkv|avi|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)$/i;
@@ -308,7 +309,7 @@ export function webPlayback(url, { pages = false } = {}) {
     return address ? { ok: true, kind: 'hls', address } : { ok: true, kind: 'hls' };
   }
   if (/\.(mp4|webm)$/.test(path)) return { ok: true, kind: 'video' };
-  if (path.endsWith('.ts')) return { ok: true, kind: 'ts', relay: false };
+  if (path.endsWith('.ts') || isIptvOverflow(url)) return { ok: true, kind: 'ts', relay: false };
   if (/\.(mpd|m3u)$/.test(path)) return { ok: false, reason: 'Formato no compatible con el navegador' };
   const iframe = pages && zicoPublicIframe(url);
   if (iframe) return { ok: true, kind: 'frame', page: true, address: iframe };

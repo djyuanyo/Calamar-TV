@@ -50,6 +50,7 @@ public final class UserChannels {
 
   /** Media type hint from the path; null lets the player detect the container. */
   public static String kind(String address) {
+    if (IptvOriginal.isOverflow(address)) return "ts";
     try {
       String path = new URI(address).getPath();
       if (path == null) return null;
@@ -68,6 +69,7 @@ public final class UserChannels {
    * channels are resolved and renewed from the page instead of being played as a media file.
    */
   public static boolean isPage(String address) {
+    if (IptvOriginal.isOverflow(address)) return false;
     String url = normalize(address);
     if (url == null) return false;
     try {

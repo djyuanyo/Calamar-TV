@@ -18,7 +18,7 @@ import { eventPath, eventShareLink, channelShareLink, leagueShareLink, liveShare
 import { initControls, icon } from './player-controls.js';
 import { mountTs, videoFailure } from './ts-player.js';
 import { offerChannelReport } from './channel-reports.js';
-import { findIptvOriginal, iptvHlsKey, iptvPilotCdn } from './iptv-vps.js';
+import { findIptvOriginal, iptvHlsKey, iptvPilotCdn, iptvOverflow } from './iptv-vps.js';
 import { autoplay, soundChosen } from './autoplay.js';
 import { watchPlaybackStall } from './playback-stall.js';
 import { prepareCastSource } from './cast-adapter.js';
@@ -721,6 +721,7 @@ let stopTs = null;
 let returnFocus = null;
 let playbackGeneration = 0;
 let currentSourceUrl = '';
+let overflowDecisions = new Map();
 const controls = initControls({ root: player, video, onClose: () => closePlayer(), canClose: () => !player.hidden, onDemand: () => !!current?.vod });
 let inlineMulti = null;
 function chooseMultiEvent(selected, onChoose, parent) {
@@ -1086,6 +1087,27 @@ async function playSource(c, index, resumeAt = 0, compatible = false, useIptvOri
   const round = roundOf(c);
   const origin = source.how.page && round ? `${source.how.address}&intento=${round}` : source.how.address || source.url;
   const registeredIptv = !c.vod && iptvHlsKey(origin);
+  const decisions = overflowDecisions;
+  if (registeredIptv && !useIptvOrigin && !decisions.has(origin) && window.mpegts?.getFeatureList().mseLivePlayback) {
+    decisions.set(origin, iptvOverflow(origin));
+  }
+  const backup = registeredIptv && !useIptvOrigin ? await decisions.get(origin) : null;
+  if (generation !== playbackGeneration) return;
+  if (backup) {
+    video.onerror = null;
+    controls.attach(null);
+    stopTs = mountTs({ library: window.mpegts, video, address: backup, recoveryTimeout: true,
+      onFailure: () => queueMicrotask(() => {
+        if (generation === playbackGeneration) {
+          decisions.set(origin, null);
+          void playSource(c, source.index, resumeAt, compatible, true);
+        }
+      }),
+      onRecovering: () => { if (generation === playbackGeneration) playerStatus.textContent = 'Reconectando con el hosting…'; },
+      onPlaying: () => { if (generation === playbackGeneration) playerStatus.textContent = ''; },
+    });
+    return;
+  }
   const cdn = registeredIptv && !useIptvOrigin ? await iptvPilotCdn(origin) : null;
   if (generation !== playbackGeneration) return;
   const address = cdn || origin;
@@ -1232,6 +1254,7 @@ function open(c, fromRoute = false) {
     pushed = true;
   }
   if (player.hidden) returnFocus = document.activeElement;
+  overflowDecisions = new Map();
   current = c;
   document.getElementById('ctl-multi').hidden = !!c.vod;
   document.getElementById('ctl-multi').disabled = !multiPlayable(c);

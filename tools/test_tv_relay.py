@@ -41,6 +41,27 @@ def pcrs(data):
 
 @unittest.skipUnless(shutil.which('php'), 'Requires PHP CLI')
 class SpliceTest(unittest.TestCase):
+    def test_overflow_requires_opt_in_and_bounds_concurrent_connections(self):
+        key = 'a' * 32
+        same_vps = 'b' * 32
+        with tempfile.TemporaryDirectory() as folder:
+            config = {'maxViewers': 1, 'sources': {
+                key: 'https://media.example/live.ts',
+                same_vps: 'https://video.calamarmenciano.com/live.ts',
+            }}
+            (pathlib.Path(folder) / 'overflow.json').write_text(json.dumps(config))
+            program = ('define("CALAMAR_RELAY_TEST_ONLY", true); require ' + json.dumps(str(PHP)) + ';'
+                       '$ready=relayBackupConfig(str_repeat("a",32));'
+                       '$sameVps=relayBackupConfig(str_repeat("b",32));'
+                       '$missing=relayBackupConfig(str_repeat("c",32));'
+                       '$slot=relayBackupSlot($ready[1],$ready[2]);'
+                       '$full=relayBackupSlot($ready[1],$ready[2]);'
+                       'fclose($slot); $free=relayBackupSlot($ready[1],$ready[2]);'
+                       'echo json_encode([$ready[0]!==null,$sameVps[0],$missing[0],$full,is_resource($free)]);')
+            result = subprocess.check_output(['php', '-r', program], text=True,
+                env={**os.environ, 'CALAMAR_IPTV_STATE': folder})
+        self.assertEqual(json.loads(result), [True, None, None, None, True])
+
     def test_public_endpoint_accepts_iptv_without_missing_validator(self):
         # Exercise relayMain, not only the splice helpers: the version endpoint never called
         # tsSourceAllowed, so it could look healthy while every playback returned HTTP 500.

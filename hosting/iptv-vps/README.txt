@@ -36,5 +36,28 @@ La capacidad real depende de la CPU, el ancho de banda del VPS y las conexiones 
 el proveedor. En el VPS de 4 vCPU se reserva CPU para los demás servicios limitando este
 servicio IPTV a un máximo equivalente a 3 vCPU.
 
+Respaldo opcional en el hosting
+
+1. Actualiza calamar-tv-relay.php en calamarmenciano.com. Necesita calamar-http-source.php
+   y calamar-iptv-xtream.php, que ya forman parte de Calamar TV.
+2. Instala la actualización de IPTV en IONOS durante una ventana sin emisiones en uso.
+   El instalador reinicia el servicio HLS. La detección de carga funciona después del reinicio.
+3. Crea overflow.json en la carpeta privada calamar-iptv-private, fuera de public_html.
+   Usa maxViewers para reservar conexiones PHP del plan. Comienza por dos y prueba con
+   una señal por separado. Usa como clave la ruta de 32 caracteres de su enlace IONOS.
+
+   {"maxViewers":2,"sources":{"0123456789abcdef0123456789abcdef":"https://origen.example/canal.ts"}}
+
+   Usa una señal MPEG-TS que el hosting pueda abrir directamente y que haya funcionado
+   a la vez que IONOS. Dos conexiones a una cuenta limitada a una pueden cortarse.
+   El código de acceso de la señal y overflow.json se guardan fuera de la web pública.
+
+Cada reproducción nueva consulta el hosting una vez por fuente. El VPS indica presión
+después de tres muestras de dos segundos a partir del 75 % de la CPU disponible del
+sistema o del cupo de IPTV. Vuelve a admitir conexiones normalmente después de ocho
+muestras consecutivas al 60 % o menos. El hosting también admite nuevas conexiones
+para estas señales si IONOS deja de responder. Si falta la configuración de un canal
+o el hosting agota sus conexiones, se mantiene la ruta habitual.
+
 Prueba un canal que requiera VPN con el dispositivo conectado de forma habitual. El VPS
 debe poder abrir la emisión desde su IP para entregar el vídeo.

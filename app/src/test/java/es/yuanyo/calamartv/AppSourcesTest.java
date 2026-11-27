@@ -26,4 +26,12 @@ public class AppSourcesTest {
   assertTrue(IptvOriginal.preferOriginal(bridge));
   assertEquals(Collections.singletonList(bridge), AppSources.forAndroid(Collections.singletonList(bridge)));
  }
+ @Test public void hostingOverflowIsNativeMediaForRegisteredChannels() {
+  String key = "0123456789abcdef0123456789abcdef";
+  String hosting = "https://calamarmenciano.com/calamar-tv-relay.php?stream=1&backup=" + key;
+  assertEquals("ts", UserChannels.kind(hosting));
+  assertFalse(UserChannels.isPage(hosting));
+  assertEquals(key, IptvOriginal.overflowKey("https://video.calamarmenciano.com/iptv-hls/" + key + "/index.m3u8"));
+  assertNull(IptvOriginal.overflowKey("https://calamartv.b-cdn.net/iptv-hls/" + key + "/index.m3u8"));
+ }
 }
