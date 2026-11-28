@@ -76,8 +76,8 @@ function iptvAddress($value, $pages) {
         if (!preg_match('#^/(?:e/|d/|v/)?([A-Za-z0-9]{8,20})(?:\.html)?/?$#', $path, $m) || $m[1] === 'api') return null;
         return IPTV_HOSTING . '/calamar-lulu.php?code=' . $m[1] . '&hls=1';
     }
-    if (preg_match('/^vidara\.(to|so)$/', $plain)) {
-        if (!preg_match('#^/(?:v/|e/)?([A-Za-z0-9]{8,24})/?$#', $path, $m)) return null;
+    if (preg_match('/^(?:vidara\.(?:to|so)|vidaraa\.cc)$/D', $plain)) {
+        if (!preg_match('#^/(?:v/|e/)?([A-Za-z0-9_-]{8,24})/?$#D', $path, $m)) return null;
         return IPTV_HOSTING . '/calamar-vidara.php?code=' . $m[1] . '&hls=1';
     }
     if ($plain === 'calamarmenciano.com') {

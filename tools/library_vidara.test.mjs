@@ -6,6 +6,7 @@ import { scanFolders } from '../web/library-folders.js';
 import { libraryFromScan } from '../web/library-lulu.js';
 import { suggestedVidaraSection, vidaraVideos, VIDARA_ENDPOINT } from '../web/library-vidara.js';
 import { videoKey } from '../web/library-sync.js';
+import { validVideoLink } from '../web/library.js';
 
 const daily = 'https://geo.dailymotion.com/player/x1k3pa.html?video=k5cyQ3rl70nCl7Fhb5W';
 const video = 'https://vidara.to/v/KILxn38HjQjsv';
@@ -19,6 +20,21 @@ test('Dailymotion and Vidara resolve to their own players inside Calamar', () =>
   assert.equal(vidaraPlayback('https://vidara.to.evil.test/v/KILxn38HjQjsv'), null);
   assert.equal(videoKey('https://vidara.so/e/KILxn38HjQjsv'), videoKey(video));
   assert.notEqual(videoKey('https://luluvido.com/e/KILxn38HjQjsv'), videoKey(video));
+});
+
+test('the manual library accepts the current Vidara share links and keeps their full code', async () => {
+  const code = 'Ab_12-xyz567';
+  const share = `https://vidaraa.cc/v/${code}`;
+  const playback = `https://calamarmenciano.com/calamar-vidara.php?code=${code}&hls=1`;
+  assert.equal(validVideoLink(share), true);
+  assert.deepEqual(webPlayback(share), { ok: true, kind: 'hls', address: playback });
+  assert.equal(videoKey(share), videoKey(`https://vidara.to/e/${code}`));
+  assert.equal(validVideoLink(share.replace('vidaraa.cc', 'vidaraa.cc.example.com')), false);
+  assert.equal(validVideoLink(share.replace('_', '%2F')), false);
+  const [file] = await vidaraVideos('12', 'private-test-key', async () => Response.json({
+    complete_inventory: true, page: 1, total_pages: 1, total: 1, videos: [{ filecode: code, title: 'Test.mp4' }],
+  }));
+  assert.equal(videoKey(file.link), videoKey(share));
 });
 
 const key = 'private-test-key';

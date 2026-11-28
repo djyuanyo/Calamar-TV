@@ -2,7 +2,7 @@
 // Vidara catalogue and playback. The catalogue key arrives in POST and is never stored or returned.
 const VIDARA_ORIGINS = ['https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com'];
 const VIDARA_BASE = 'https://api.vidara.so/v1/';
-const VIDARA_BRIDGE = 4;
+const VIDARA_BRIDGE = 5;
 const VIDARA_PLAYER = 'https://vidara.to';
 
 function vidaraReply($body, $status = 200) {
@@ -69,7 +69,7 @@ function vidaraCastPlaylist($url, $language, $label) {
 }
 
 function vidaraPlayback($code) {
-    if (!is_string($code) || !preg_match('/^[A-Za-z0-9]{8,24}$/D', $code)) vidaraReply(['error' => 'video_code'], 400);
+    if (!is_string($code) || !preg_match('/^[A-Za-z0-9_-]{8,24}$/D', $code)) vidaraReply(['error' => 'video_code'], 400);
     if (!function_exists('curl_init')) vidaraReply(['error' => 'curl'], 503);
     $body = '';
     $curl = curl_init(VIDARA_PLAYER . '/api/stream');

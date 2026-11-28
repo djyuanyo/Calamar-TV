@@ -20,10 +20,13 @@ export function dailymotionEmbed(address) {
   return id ? `https://www.dailymotion.com/embed/video/${id}` : null;
 }
 
+export const validVidaraCode = code => typeof code === 'string' && /^[A-Za-z0-9_-]{8,24}$/.test(code);
+
 export function vidaraCode(address) {
   const url = httpsUrl(address);
-  if (!url || !/^(?:www\.)?vidara\.(?:to|so)$/.test(url.hostname)) return null;
-  return url.pathname.match(/^\/(?:v\/|e\/)?([A-Za-z0-9]{8,24})\/?$/)?.[1] || null;
+  if (!url || !/^(?:www\.)?(?:vidara\.(?:to|so)|vidaraa\.cc)$/.test(url.hostname)) return null;
+  const code = url.pathname.match(/^\/(?:v\/|e\/)?([^/]+)\/?$/)?.[1];
+  return validVidaraCode(code) ? code : null;
 }
 
 export const vidaraVideo = code => `https://vidara.to/v/${code}`;

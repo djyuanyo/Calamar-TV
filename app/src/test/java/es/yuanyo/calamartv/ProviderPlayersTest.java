@@ -41,4 +41,13 @@ public class ProviderPlayersTest {
     assertEquals("application/x-mpegURL", CastSource.contentType(stream));
     assertTrue(Library.Media.allowed("https://vidara.to/v/KILxn38HjQjsv"));
   }
+
+  @Test public void acceptsVidaraaLibraryLinksWithUrlSafeCodes() {
+    String share = "https://vidaraa.cc/v/Ab_12-xyz567";
+    assertTrue(Library.Media.allowed(share));
+    String playback = ProviderPlayers.vidaraStream(share);
+    assertEquals("https://calamarmenciano.com/calamar-vidara.php?code=Ab_12-xyz567&hls=1", playback);
+    assertTrue(ProviderPlayers.isVidaraStream(playback));
+    assertNull(ProviderPlayers.vidaraStream(share.replace("vidaraa.cc", "vidaraa.cc.example.com")));
+  }
 }
