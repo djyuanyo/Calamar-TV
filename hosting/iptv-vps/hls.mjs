@@ -1,4 +1,7 @@
 import { createServer } from 'node:http';
+import { cpus } from 'node:os';
+import { readFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import { spawn } from 'node:child_process';
 import { mkdir, open, readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,6 +16,63 @@ import { verifyViewer } from './access.mjs';
 const route = /^\/iptv-hls\/([a-f0-9]{32})\/(index\.m3u8|seg[0-9]{1,16}\.ts)$/;
 const origins = new Set(['https://djyuanyo.github.io', 'https://calamarmenciano.com', 'https://www.calamarmenciano.com']);
 const sampleBytes = 256 * 1024;
+
+function serviceCpu() {
+  try {
+    const group = /^0::(.+)$/m.exec(readFileSync('/proc/self/cgroup', 'utf8'))?.[1];
+    if (!group) return null;
+    const dir = join('/sys/fs/cgroup', group);
+    const [quota, period] = readFileSync(join(dir, 'cpu.max'), 'utf8').trim().split(/\s+/).map(Number);
+    const used = Number(/^usage_usec (\d+)$/m.exec(readFileSync(join(dir, 'cpu.stat'), 'utf8'))?.[1]);
+    return quota > 0 && period > 0 && Number.isFinite(used) ? { used, cores: quota / period } : null;
+  } catch { return null; }
+}
+
+function snapshot() {
+  let idle = 0;
+  let total = 0;
+  for (const { times } of cpus()) {
+    idle += times.idle;
+    total += Object.values(times).reduce((sum, time) => sum + time, 0);
+  }
+  return { idle, total, service: serviceCpu(), at: performance.now() };
+}
+
+function cpuLoad(before, after) {
+  const elapsed = after.at - before.at;
+  const total = after.total - before.total;
+  const system = total > 0 ? 1 - (after.idle - before.idle) / total : 0;
+  const service = elapsed > 0 && before.service && after.service
+    ? (after.service.used - before.service.used) / (1000 * elapsed * after.service.cores) : 0;
+  return Math.max(system, service);
+}
+
+export function createPressureGate() {
+  let busy = false;
+  let consecutive = 0;
+  return load => {
+    const beyondThreshold = busy ? load <= 0.60 : load >= 0.75;
+    consecutive = beyondThreshold ? consecutive + 1 : 0;
+    if (consecutive >= (busy ? 8 : 3)) {
+      busy = !busy;
+      consecutive = 0;
+    }
+    return busy;
+  };
+}
+
+function startPressureSampler() {
+  const observe = createPressureGate();
+  let previous = snapshot();
+  let busy = false;
+  const timer = setInterval(() => {
+    const next = snapshot();
+    busy = observe(cpuLoad(previous, next));
+    previous = next;
+  }, 2000);
+  timer.unref();
+  return { busy: () => busy, close: () => clearInterval(timer) };
+}
 
 async function inspectInput(source, signal, ffprobe) {
   const iterator = source[Symbol.asyncIterator]();
@@ -63,7 +123,7 @@ async function inspectInput(source, signal, ffprobe) {
   copyAudio: audio?.codec_name === 'aac' };
 }
 
-export async function createIptvHls({ channels, root, register, input = openUpstream,
+export async function createIptvHls({ channels, root, register, input = openUpstream, underPressure = () => false,
   idleMs = 45000, startupMs = 9000, ffmpeg = '/usr/bin/ffmpeg', ffprobe = '/usr/bin/ffprobe' }) {
   await mkdir(root, { recursive: true, mode: 0o750 });
   for (const entry of await readdir(root, { withFileTypes: true })) {
@@ -149,6 +209,9 @@ export async function createIptvHls({ channels, root, register, input = openUpst
     const [, key, name] = match;
     const manifest = name === 'index.m3u8';
     if (manifest && req.method === 'HEAD') {
+      if (new URL(req.url, 'http://localhost').searchParams.get('admission') === '1') {
+        res.setHeader('X-Calamar-Admission', underPressure() ? 'busy' : 'normal');
+      }
       res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl' }).end();
       return;
     }
@@ -212,8 +275,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   ]);
   const registry = await createRegistry({ seed: channels, authorize: verifyAdmin, authorizeViewer: verifyViewer, accepts: vpsIptvSource,
     stateFile: join(process.env.STATE_DIRECTORY || '/var/lib/calamar-iptv-vps', 'registered.json') });
-  const service = await createIptvHls({ ...registry,
+  const pressure = startPressureSampler();
+  const service = await createIptvHls({ ...registry, underPressure: pressure.busy,
     root: process.env.CACHE_DIRECTORY || '/var/cache/calamar-iptv-vps' });
   service.server.listen(6883, '127.0.0.1');
-  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => void service.close());
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+    pressure.close();
+    void service.close();
+  });
 }

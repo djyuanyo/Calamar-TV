@@ -11,7 +11,7 @@ function failure($message, $code = 502) {
 require_once __DIR__ . '/calamar-http-source.php';
 
 // Raised with each change, so the version running on the hosting can be checked (?version=1).
-const RELAY_VERSION = 6;
+const RELAY_VERSION = 7;
 const RELAY_PIECE = 1048576;     // A new piece every ~1 MiB, always starting at a keyframe.
 const RELAY_PIECES = 24;         // Pieces kept per channel (~24 MiB).
 const RELAY_IDLE = 15;           // Seconds without viewers before the provider connection closes.
@@ -48,14 +48,75 @@ function relayMain() {
                 'random_bytes', 'flock', 'scandir', 'set_time_limit', 'connection_aborted', 'usleep', 'getmypid'), function ($f) { return !function_exists($f); }))));
         exit;
     }
+    if (isset($_GET['admission'])) relayAdmission($_GET['admission']);
     if (!isset($_GET['stream'])) failure('Abre este puente desde Calamar TV.', 400);
     if (!function_exists('curl_init')) failure('cURL no disponible.');
-    $source = base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
+    $source = isset($_GET['backup']) ? relayBackup($_GET['backup']) : base64_decode($_SERVER['HTTP_X_CALAMAR_SOURCE'] ?? '', true);
     if (!is_string($source) || strlen($source) > 2048) failure('Falta el enlace de la prueba.', 400);
     if (!tsSourceAllowed($source) && !relayTestUpstream()) failure('Enlace IPTV HTTP no válido para el puente.', 400);
     @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) { if (!@ob_end_clean()) break; }
     relayServe($source);
+}
+
+function relayBackupConfig($key) {
+    if (!is_string($key) || !preg_match('/^[a-f0-9]{32}$/D', $key)) return [null, null, 0];
+    require_once __DIR__ . '/calamar-iptv-xtream.php';
+    $dir = iptvStateDir();
+    $config = $dir ? iptvStateRead('overflow.json') : [];
+    $source = $config['sources'][$key] ?? null;
+    $limit = $config['maxViewers'] ?? 0;
+    if (!is_int($limit) || $limit < 1 || $limit > 20 || !tsSourceAllowed($source)) return [null, null, 0];
+    $host = strtolower(parse_url($source, PHP_URL_HOST));
+    if ($host === 'calamarmenciano.com' || str_ends_with($host, '.calamarmenciano.com') || $host === 'calamartv.b-cdn.net') {
+        return [null, null, 0];
+    }
+    return [$source, $dir, $limit];
+}
+
+/** One lock per connection keeps the overflow from consuming all PHP workers. */
+function relayBackupSlot($dir, $limit) {
+    for ($i = 0; $i < $limit; $i++) {
+        $lock = @fopen("$dir/overflow-slot-$i.lock", 'c');
+        if (!$lock) continue;
+        if (flock($lock, LOCK_EX | LOCK_NB)) return $lock;
+        fclose($lock);
+    }
+    return null;
+}
+
+function relayAdmission($key) {
+    [$source, $dir, $limit] = relayBackupConfig($key);
+    $hosting = false;
+    if ($source && function_exists('curl_init') && ($slot = relayBackupSlot($dir, $limit))) {
+        fclose($slot);
+        $curl = curl_init("https://video.calamarmenciano.com/iptv-hls/$key/index.m3u8?admission=1");
+        $busy = false;
+        curl_setopt_array($curl, [
+            CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT_MS => 450, CURLOPT_TIMEOUT_MS => 900,
+            CURLOPT_HEADERFUNCTION => static function ($curl, $line) use (&$busy) {
+                if (strcasecmp(trim($line), 'X-Calamar-Admission: busy') === 0) $busy = true;
+                return strlen($line);
+            },
+        ]);
+        $answered = curl_exec($curl) !== false;
+        $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $hosting = !$answered || in_array($status, [502, 503, 504], true) || ($status === 200 && $busy);
+        curl_close($curl);
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['hosting' => $hosting]);
+    exit;
+}
+
+function relayBackup($key) {
+    [$source, $dir, $limit] = relayBackupConfig($key);
+    if (!$source) failure('Este canal no tiene respaldo en el hosting.', 404);
+    $slot = relayBackupSlot($dir, $limit);
+    if (!$slot) failure('El respaldo del hosting está ocupado.', 503);
+    register_shutdown_function(static function () use ($slot) { fclose($slot); });
+    return $source;
 }
 
 /** Only PHP's own test server may read a local test stream (tools/test_tv_relay.py), never the hosting. */

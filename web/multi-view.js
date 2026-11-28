@@ -2,7 +2,7 @@
 // make a grid on a horizontal screen. Every video starts muted except the one with sound, which the
 // viewer picks by tapping it. The app applies the same layout (MultiScreen.java).
 import { sourceOptions } from './player-sources.js';
-import { iptvPilotCdn } from './iptv-vps.js';
+import { iptvPilotCdn, iptvOverflow } from './iptv-vps.js';
 import { mountTs } from './ts-player.js';
 import { mountRenewable } from './renewable-player.js';
 import { expandEventSources, zicoEventApi } from './event-sources.js';
@@ -85,7 +85,8 @@ export function playTile(video, channel, onStatus) {
     }
     const addresses = await Promise.all(streams.map(async address => {
       const cdn = await iptvPilotCdn(address);
-      return cdn ? [cdn, address] : [address];
+      const backup = window.mpegts?.getFeatureList().mseLivePlayback ? await iptvOverflow(address) : null;
+      return [backup, cdn, address].filter(Boolean);
     }));
     if (stopped) return;
     sources = sourceOptions([...new Set(addresses.flat())]).filter(s => s.available && ['hls', 'ts', 'video'].includes(s.how.kind));

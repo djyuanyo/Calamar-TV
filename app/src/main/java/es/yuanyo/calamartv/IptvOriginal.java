@@ -22,10 +22,14 @@ final class IptvOriginal {
   private IptvOriginal() {}
 
   private static final String BASE = "https://video.calamarmenciano.com/iptv-hls/";
+  private static final String BUNNY = "https://calamartv.b-cdn.net/iptv-hls/";
+  private static final String HOSTING = "https://calamarmenciano.com/calamar-tv-relay.php";
+  private static final String OVERFLOW = HOSTING + "?stream=1&backup=";
   private static final String PILOT_FINGERPRINT = "c81ed917604c0f1a8e1a77ccac8fbb1763dab796eebf7f374ac6ab31852f3256";
   private static final Pattern LINK = Pattern.compile(Pattern.quote(BASE) + "([a-f0-9]{32})/index\\.m3u8");
   private static final OkHttpClient CLIENT = new OkHttpClient.Builder().followRedirects(false)
       .followSslRedirects(false).callTimeout(5, TimeUnit.SECONDS).build();
+  private static final OkHttpClient ADMISSION = CLIENT.newBuilder().callTimeout(1400, TimeUnit.MILLISECONDS).build();
 
   static String key(String source) {
     Matcher match = LINK.matcher(source == null ? "" : source);
@@ -43,12 +47,33 @@ final class IptvOriginal {
         fingerprint.append(Character.forDigit((value & 0xff) >>> 4, 16));
         fingerprint.append(Character.forDigit(value & 0xf, 16));
       }
-      return PILOT_FINGERPRINT.contentEquals(fingerprint) ? "https://calamartv.b-cdn.net/iptv-hls/" + key + "/index.m3u8" : null;
+      return PILOT_FINGERPRINT.contentEquals(fingerprint) ? BUNNY + key + "/index.m3u8" : null;
     } catch (NoSuchAlgorithmException unavailable) { return null; }
   }
 
   static boolean preferOriginal(String source) {
     return key(source) != null && pilotCdn(source) == null;
+  }
+
+  static String overflowKey(String source) {
+    if (source == null || !source.startsWith(BUNNY)) return key(source);
+    String primary = BASE + source.substring(BUNNY.length());
+    return source.equals(pilotCdn(primary)) ? key(primary) : null;
+  }
+
+  static boolean isOverflow(String source) {
+    return source != null && source.startsWith(OVERFLOW) && source.substring(OVERFLOW.length()).matches("[a-f0-9]{32}");
+  }
+
+  static String overflow(String source) {
+    String key = overflowKey(source);
+    if (key == null) return null;
+    Request request = new Request.Builder().url(HOSTING + "?admission=" + key).build();
+    try (Response response = ADMISSION.newCall(request).execute()) {
+      if (response.isSuccessful() && response.body() != null
+          && Boolean.TRUE.equals(new JSONObject(response.body().string()).opt("hosting"))) return OVERFLOW + key;
+    } catch (Exception unavailable) { /* IONOS remains available if the hosting is offline. */ }
+    return null;
   }
 
   /** Called on a playback worker. A guest or an unavailable lookup can still use the HLS playlist. */

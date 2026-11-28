@@ -697,11 +697,13 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     selection = Math.min(selection, directUrls.size() - 1);
     int index = selection;
     String bridge = directUrls.get(index);
-    if (IptvOriginal.preferOriginal(bridge) && !checkedIptvBridges.contains(bridge)) {
+    if (IptvOriginal.overflowKey(bridge) != null && !checkedIptvBridges.contains(bridge)) {
       int request = ++generation;
-      status.setText("Buscando la señal original…");
+      status.setText("Conectando con el canal…");
       worker.execute(() -> {
-        String original = IptvOriginal.find(getApplicationContext(), bridge);
+        String backup = IptvOriginal.overflow(bridge);
+        String original = backup != null ? backup
+            : IptvOriginal.preferOriginal(bridge) ? IptvOriginal.find(getApplicationContext(), bridge) : null;
         handler.post(() -> {
           if (!active || generation != request || directUrl == null || selection != index
               || !bridge.equals(directUrls.get(index))) return;
@@ -1226,7 +1228,8 @@ public final class NativePlayerActivity extends androidx.appcompat.app.AppCompat
     if (backup < 0 || backup == selection) return false;
     selection = backup;
     playDirect();
-    status.setText("La señal original no responde. Probando el enlace HLS…");
+    status.setText(IptvOriginal.isOverflow(source.url)
+        ? "El hosting no responde. Probando el enlace HLS…" : "La señal original no responde. Probando el enlace HLS…");
     return true;
   }
 

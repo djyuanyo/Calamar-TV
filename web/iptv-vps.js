@@ -4,8 +4,24 @@ const base = 'https://video.calamarmenciano.com/iptv-hls';
 const register = `${base}/register`;
 const hlsLink = /^https:\/\/video\.calamarmenciano\.com\/iptv-hls\/([a-f0-9]{32})\/index\.m3u8$/;
 const management = 'https://calamarmenciano.com/calamar-iptv.php?iptv_admin=1';
+const overflowRelay = 'https://calamarmenciano.com/calamar-tv-relay.php';
+const overflowStream = `${overflowRelay}?stream=1&backup=`;
 
 export const iptvHlsKey = link => hlsLink.exec(link)?.[1] || null;
+
+export const isIptvOverflow = link => typeof link === 'string' && link.startsWith(overflowStream)
+  && /^[a-f0-9]{32}$/.test(link.slice(overflowStream.length));
+
+export async function iptvOverflow(link, request = fetch) {
+  const key = iptvHlsKey(link);
+  if (!key) return null;
+  try {
+    const response = await request(`${overflowRelay}?admission=${key}`, {
+      cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(1400),
+    });
+    return response.ok && (await response.json())?.hosting === true ? overflowStream + key : null;
+  } catch { return null; }
+}
 
 const bunnyPilot = 'c81ed917604c0f1a8e1a77ccac8fbb1763dab796eebf7f374ac6ab31852f3256';
 

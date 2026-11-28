@@ -86,14 +86,16 @@ public class MultiPlayerActivity extends Activity {
       if (sourceIndex >= urls.size()) { status.setText("No disponible. Quita esta pantalla o elige otro evento."); return; }
       loading = true; final int request = ++generation;
       final String page = renewal && resolved != null && resolved.page != null ? resolved.page : urls.get(sourceIndex);
-      final boolean preferOriginal = IptvOriginal.preferOriginal(page) && !checkedBridges.contains(page);
+      final boolean checkBridge = IptvOriginal.overflowKey(page) != null && !checkedBridges.contains(page);
       final String base = endpoint, selected = signal; final int round = attempt;
       final ExoPlayer decoder = player; final HlsContinuity session = continuity;
       final boolean background = renewal && decoder != null && session != null;
       if (!background && (player == null || !player.isPlaying())) status.setText("Conectando…");
       worker.execute(() -> {
         try {
-          final String original = preferOriginal ? IptvOriginal.find(getApplicationContext(), page) : null;
+          final String backup = checkBridge ? IptvOriginal.overflow(page) : null;
+          final String original = backup != null ? backup
+              : checkBridge && IptvOriginal.preferOriginal(page) ? IptvOriginal.find(getApplicationContext(), page) : null;
           MultiSource.Result result = MultiSource.resolve(original != null ? original : page, base, selected, round,
               NetworkTransport.get(DnsProvider.SYSTEM), NetworkTransport.get(MultiPlayerActivity.this));
           final boolean renewed = background && result.hosted() && session.update(result.url,
@@ -101,7 +103,7 @@ public class MultiPlayerActivity extends Activity {
           handler.post(() -> {
             if (!active || generation != request || !tiles.contains(this)) return;
             loading = false;
-            if (preferOriginal) checkedBridges.add(page);
+            if (checkBridge) checkedBridges.add(page);
             if (original != null) urls.add(sourceIndex, original);
             if (background && player == decoder && continuity == session) {
               if (renewed) { resolved = result; scheduleRenewal(result); }
