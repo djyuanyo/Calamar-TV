@@ -1,8 +1,7 @@
-import { vidaraVideo } from './provider-players.js';
+import { validVidaraCode, vidaraVideo } from './provider-players.js';
 
 export const VIDARA_ENDPOINT = 'https://calamarmenciano.com/calamar-vidara.php';
 const folderId = /^[1-9]\d{0,11}$/;
-const fileCode = /^[A-Za-z0-9]{8,24}$/;
 const folderPath = name => name.split('/').map(part => part.trim()).filter(Boolean);
 const seasonSuffix = /(?:^|[\s._(-])(?:temporada|season|t)[ ._-]*\d{1,2}\s*\)?$/iu;
 
@@ -98,7 +97,7 @@ export async function vidaraVideos(id, key, fetcher = globalThis.fetch) {
     total = count;
     for (const video of data.videos) {
       const code = video?.filecode;
-      if (!fileCode.test(code || '') || typeof video.title !== 'string' || !video.title.trim() || seen.has(code)) {
+      if (!validVidaraCode(code) || typeof video.title !== 'string' || !video.title.trim() || seen.has(code)) {
         throw Error('Vidara devolvió un vídeo duplicado o no válido. No se ha actualizado el catálogo.');
       }
       seen.add(code);

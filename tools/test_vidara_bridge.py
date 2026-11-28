@@ -60,7 +60,7 @@ class VidaraBridgeTests(unittest.TestCase):
         return metadata["http"], json.loads(stdout)
 
     def test_playback_uses_vidara_hls_and_never_returns_ads_or_non_media(self):
-        query = {"hls": "1", "code": "TestVidara123"}
+        query = {"hls": "1", "code": "Test_Vidara-123"}
         media = {"filecode": query["code"], "streaming_url": "https://s1.vidara.so/hls/master.m3u8?token=one",
                  "vast_ads": "https://ads.example.com/vast"}
         metadata, stdout = self.call_bridge(media, method="GET", query=query)
@@ -84,7 +84,7 @@ class VidaraBridgeTests(unittest.TestCase):
                 http, response = self.run_bridge(body, http=upstream)
                 self.assertEqual(http, 200)
                 self.assertEqual(response, {
-                    "bridge": 4, "complete_inventory": True, "videos": [],
+                    "bridge": 5, "complete_inventory": True, "videos": [],
                     "page": 1, "total_pages": 0, "total": 0,
                 })
 

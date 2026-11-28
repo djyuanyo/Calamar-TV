@@ -11,7 +11,8 @@ final class ProviderPlayers {
   private static final Pattern DM_PLAYER = Pattern.compile("/player(?:/[A-Za-z0-9]{2,24})?\\.html");
   private static final Pattern DM_VIDEO = Pattern.compile("/(?:embed/)?video/([A-Za-z0-9]{5,32})(?:_[^/]*)?/?");
   private static final Pattern DM_SHORT = Pattern.compile("/([A-Za-z0-9]{5,32})/?");
-  private static final Pattern VIDARA_VIDEO = Pattern.compile("/(?:v/|e/)?([A-Za-z0-9]{8,24})/?");
+  private static final String VIDARA_CODE = "[A-Za-z0-9_-]{8,24}";
+  private static final Pattern VIDARA_VIDEO = Pattern.compile("/(?:v/|e/)?(" + VIDARA_CODE + ")/?");
   private static final String VIDARA_PLAYBACK = "https://calamarmenciano.com/calamar-vidara.php?code=";
 
   private ProviderPlayers() {}
@@ -41,7 +42,7 @@ final class ProviderPlayers {
 
   static String vidara(String address) {
     URI uri = https(address);
-    if (uri == null || !uri.getHost().toLowerCase(Locale.ROOT).matches("(?:www\\.)?vidara\\.(?:to|so)")) return null;
+    if (uri == null || !uri.getHost().toLowerCase(Locale.ROOT).matches("(?:www\\.)?(?:vidara\\.(?:to|so)|vidaraa\\.cc)")) return null;
     Matcher match = VIDARA_VIDEO.matcher(uri.getPath());
     return match.matches() ? "https://vidara.to/e/" + match.group(1) : null;
   }
@@ -53,7 +54,7 @@ final class ProviderPlayers {
 
   static boolean isVidaraStream(String address) {
     return address != null && address.startsWith(VIDARA_PLAYBACK)
-        && address.substring(VIDARA_PLAYBACK.length()).matches("[A-Za-z0-9]{8,24}&hls=1");
+        && address.substring(VIDARA_PLAYBACK.length()).matches(VIDARA_CODE + "&hls=1");
   }
 
   static final String ZICO_EMBED_HOST = "zicotv.gcorecdn.com";
